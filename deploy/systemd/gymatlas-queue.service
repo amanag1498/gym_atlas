@@ -1,0 +1,16 @@
+[Unit]
+Description=Gym Atlas Laravel Queue Worker
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+Restart=always
+ExecStart=/usr/bin/php /var/www/gym-atlas/backend_laravel/artisan queue:work --sleep=3 --tries=3 --timeout=120
+WorkingDirectory=/var/www/gym-atlas/backend_laravel
+StandardOutput=append:/var/log/gymatlas-queue.log
+StandardError=append:/var/log/gymatlas-queue-error.log
+
+[Install]
+WantedBy=multi-user.target
+

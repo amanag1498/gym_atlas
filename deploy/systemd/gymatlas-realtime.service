@@ -1,0 +1,19 @@
+[Unit]
+Description=Gym Atlas Realtime Server
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/gym-atlas/realtime_server
+ExecStart=/usr/bin/node /var/www/gym-atlas/realtime_server/dist/index.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+StandardOutput=append:/var/log/gymatlas-realtime.log
+StandardError=append:/var/log/gymatlas-realtime-error.log
+
+[Install]
+WantedBy=multi-user.target
+
