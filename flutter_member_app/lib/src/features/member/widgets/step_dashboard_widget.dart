@@ -1,0 +1,694 @@
+import 'package:flutter/material.dart';
+
+import '../../../../core/widgets/common_widgets.dart';
+
+class StepDashboardData {
+  const StepDashboardData({
+    required this.today,
+    required this.goal,
+    required this.progressPercent,
+    required this.distanceKm,
+    required this.calories,
+    required this.streakDays,
+    required this.lastSyncedAt,
+  });
+
+  final int today;
+  final int goal;
+  final int progressPercent;
+  final double distanceKm;
+  final int calories;
+  final int streakDays;
+  final String? lastSyncedAt;
+}
+
+class StepDashboardWidget extends StatelessWidget {
+  const StepDashboardWidget({
+    super.key,
+    required this.steps,
+    required this.permissionStatus,
+    required this.loading,
+    required this.onRefresh,
+    required this.onRequestPermission,
+    this.statusMessage,
+  });
+
+  final StepDashboardData? steps;
+  final String permissionStatus;
+  final bool loading;
+  final VoidCallback onRefresh;
+  final VoidCallback onRequestPermission;
+  final String? statusMessage;
+
+  static const _ink = Color(0xFF18202A);
+  static const _muted = Color(0xFF758092);
+  static const _mint = Color(0xFF19D6A6);
+  static const _blue = Color(0xFF67A7FF);
+  static const _coral = Color(0xFFFF8D5C);
+  static const _cream = Color(0xFFFFF7EA);
+
+  @override
+  Widget build(BuildContext context) {
+    final supported = permissionStatus != 'unavailable';
+    final granted = permissionStatus == 'granted';
+    final needsPermission =
+        permissionStatus == 'denied' || permissionStatus == 'unknown';
+    final stepData = steps ??
+        const StepDashboardData(
+          today: 0,
+          goal: 10000,
+          progressPercent: 0,
+          distanceKm: 0,
+          calories: 0,
+          streakDays: 0,
+          lastSyncedAt: null,
+        );
+    final progress = (stepData.progressPercent / 100).clamp(0.0, 1.0);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(36),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.92),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF6F7C92).withValues(alpha: 0.14),
+              blurRadius: 28,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              top: -64,
+              right: -50,
+              child: _StepGlowOrb(size: 188, color: _blue, opacity: 0.18),
+            ),
+            Positioned(
+              bottom: -78,
+              left: -74,
+              child: _StepGlowOrb(size: 220, color: _mint, opacity: 0.14),
+            ),
+            Positioned(
+              top: 18,
+              right: 18,
+              child: Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: _cream.withValues(alpha: 0.82),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            Container(
+              height: 6,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(colors: [_coral, _mint, _blue]),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Today\'s Steps',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: _ink,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              granted
+                                  ? 'Daily movement score'
+                                  : supported
+                                      ? 'Connect health access'
+                                      : 'Health steps unavailable',
+                              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                color: _muted,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _StepRefreshButton(loading: loading, onRefresh: onRefresh),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  if (!supported)
+                    _StepUnavailableState(onRefresh: onRefresh)
+                  else if (needsPermission)
+                    _StepPermissionState(
+                      denied: permissionStatus == 'denied',
+                      onRequestPermission: onRequestPermission,
+                    )
+                  else
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final compact = constraints.maxWidth < 350;
+                        final ring = _StepProgressRing(
+                          progress: progress,
+                          percent: stepData.progressPercent,
+                          size: compact ? 126 : 148,
+                        );
+                        final count = Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _formatCount(stepData.today),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                                color: _ink,
+                                fontWeight: FontWeight.w900,
+                                height: 0.92,
+                                letterSpacing: -1.8,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'steps today',
+                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                color: _muted,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _mint.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                '${stepData.progressPercent}% of ${_formatCount(stepData.goal)}',
+                                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                  color: const Color(0xFF0C9F7A),
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            compact
+                                ? Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      count,
+                                      const SizedBox(height: 18),
+                                      Center(child: ring),
+                                    ],
+                                  )
+                                : Row(
+                                    children: [
+                                      Expanded(child: count),
+                                      const SizedBox(width: 16),
+                                      ring,
+                                    ],
+                                  ),
+                            const SizedBox(height: 18),
+                            Wrap(
+                              spacing: 9,
+                              runSpacing: 9,
+                              children: [
+                                _StepStatPill(
+                                  icon: Icons.route_rounded,
+                                  label: 'Distance',
+                                  value: '${stepData.distanceKm.toStringAsFixed(1)} km',
+                                  color: _blue,
+                                ),
+                                _StepStatPill(
+                                  icon: Icons.local_fire_department_rounded,
+                                  label: 'Calories',
+                                  value: '${stepData.calories}',
+                                  color: _coral,
+                                ),
+                                _StepStatPill(
+                                  icon: Icons.bolt_rounded,
+                                  label: 'Streak',
+                                  value: '${stepData.streakDays} d',
+                                  color: _mint,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            _StepSyncFooter(
+                              text: _lastSyncedLabel(
+                                stepData.lastSyncedAt,
+                                statusMessage,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatCount(int value) {
+    return value.toString().replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (match) => ',',
+    );
+  }
+
+  String _lastSyncedLabel(String? raw, String? statusMessage) {
+    if (statusMessage != null && statusMessage.trim().isNotEmpty) {
+      return statusMessage;
+    }
+
+    if (raw == null || raw.isEmpty) {
+      return 'Waiting for first device sync';
+    }
+
+    final parsed = DateTime.tryParse(raw)?.toLocal();
+    if (parsed == null) {
+      return 'Last synced just now';
+    }
+
+    final diff = DateTime.now().difference(parsed);
+    if (diff.inMinutes < 1) {
+      return 'Last synced just now';
+    }
+    if (diff.inHours < 1) {
+      return 'Last synced ${diff.inMinutes} min ago';
+    }
+    if (diff.inDays < 1) {
+      return 'Last synced ${diff.inHours} hr ago';
+    }
+    return 'Last synced ${diff.inDays} day${diff.inDays == 1 ? '' : 's'} ago';
+  }
+}
+
+class _StepGlowOrb extends StatelessWidget {
+  const _StepGlowOrb({
+    required this.size,
+    required this.color,
+    required this.opacity,
+  });
+
+  final double size;
+  final Color color;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [
+              color.withValues(alpha: opacity),
+              color.withValues(alpha: 0),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StepProgressRing extends StatelessWidget {
+  const _StepProgressRing({
+    required this.progress,
+    required this.percent,
+    required this.size,
+  });
+
+  final double progress;
+  final int percent;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: progress),
+      duration: const Duration(milliseconds: 520),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return SizedBox(
+          width: size,
+          height: size,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.86),
+                  boxShadow: [
+                    BoxShadow(
+                      color: StepDashboardWidget._blue.withValues(alpha: 0.15),
+                      blurRadius: 24,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
+                width: size - 18,
+                height: size - 18,
+                child: CircularProgressIndicator(
+                  value: value,
+                  strokeWidth: 12,
+                  strokeCap: StrokeCap.round,
+                  backgroundColor: const Color(0xFFE9EEF4),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    StepDashboardWidget._mint,
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: size - 50,
+                height: size - 50,
+                child: CircularProgressIndicator(
+                  value: (value * 0.82).clamp(0.0, 1.0),
+                  strokeWidth: 7,
+                  strokeCap: StrokeCap.round,
+                  backgroundColor: Colors.transparent,
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    StepDashboardWidget._blue,
+                  ),
+                ),
+              ),
+              child!,
+            ],
+          ),
+        );
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$percent%',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              color: StepDashboardWidget._ink,
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
+          ),
+          Text(
+            'goal',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: StepDashboardWidget._muted,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StepRefreshButton extends StatelessWidget {
+  const _StepRefreshButton({
+    required this.loading,
+    required this.onRefresh,
+  });
+
+  final bool loading;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: loading ? null : onRefresh,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: 46,
+        height: 46,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [StepDashboardWidget._mint, StepDashboardWidget._blue],
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: StepDashboardWidget._blue.withValues(alpha: 0.22),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: loading
+            ? const Center(
+                child: SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
+              )
+            : const Icon(
+                Icons.refresh_rounded,
+                color: Colors.white,
+                size: 21,
+              ),
+      ),
+    );
+  }
+}
+
+class _StepSyncFooter extends StatelessWidget {
+  const _StepSyncFooter({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F7FA),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.sync_rounded,
+            color: StepDashboardWidget._blue,
+            size: 17,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: StepDashboardWidget._muted,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StepStatPill extends StatelessWidget {
+  const _StepStatPill({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 96),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                value,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: StepDashboardWidget._ink,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: StepDashboardWidget._muted,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StepPermissionState extends StatelessWidget {
+  const _StepPermissionState({
+    required this.denied,
+    required this.onRequestPermission,
+  });
+
+  final bool denied;
+  final VoidCallback onRequestPermission;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _StepStatePanel(
+          icon: Icons.directions_walk_rounded,
+          title: denied ? 'Step access is denied' : 'Connect step tracking',
+          message: denied
+              ? 'Allow health permissions from device settings to sync movement.'
+              : 'Grant health access to show today\'s steps, distance, and streak.',
+        ),
+        const SizedBox(height: 14),
+        GradientButton(
+          label: denied ? 'Allow Steps Access' : 'Connect Step Tracking',
+          icon: Icons.lock_open_rounded,
+          expanded: true,
+          onPressed: onRequestPermission,
+        ),
+      ],
+    );
+  }
+}
+
+class _StepUnavailableState extends StatelessWidget {
+  const _StepUnavailableState({required this.onRefresh});
+
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const _StepStatePanel(
+          icon: Icons.mobile_off_rounded,
+          title: 'Health steps unavailable',
+          message: 'Use Health Connect on Android or HealthKit on iPhone to sync movement.',
+        ),
+        const SizedBox(height: 14),
+        GradientButton(
+          label: 'Try Again',
+          icon: Icons.refresh_rounded,
+          variant: GradientButtonVariant.secondary,
+          expanded: true,
+          onPressed: onRefresh,
+        ),
+      ],
+    );
+  }
+}
+
+class _StepStatePanel extends StatelessWidget {
+  const _StepStatePanel({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F7FA),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: StepDashboardWidget._blue.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: StepDashboardWidget._blue),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: StepDashboardWidget._ink,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  message,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: StepDashboardWidget._muted,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

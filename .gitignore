@@ -1,0 +1,45 @@
+.DS_Store
+
+# Environment and local secrets
+**/.env
+**/.env.local
+**/.env.*.local
+
+# PHP / Laravel
+**/vendor/
+**/node_modules/
+**/storage/logs/
+**/storage/framework/cache/
+**/storage/framework/sessions/
+**/storage/framework/testing/
+**/storage/framework/views/
+**/bootstrap/cache/*.php
+
+# Flutter / Dart
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/build/
+**/.pub-cache/
+**/.metadata
+**/android/.gradle/
+**/ios/Pods/
+**/ios/.symlinks/
+**/macos/Pods/
+**/linux/flutter/ephemeral/
+**/windows/flutter/ephemeral/
+
+# JS / Node
+**/dist/
+**/.parcel-cache/
+**/.next/
+**/.nuxt/
+**/.vite/
+**/.turbo/
+
+# IDE / OS
+**/.idea/
+**/.vscode/
+**/*.iml
+**/Thumbs.db

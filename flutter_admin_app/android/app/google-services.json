@@ -1,0 +1,142 @@
+{
+  "project_info": {
+    "project_number": "707275991691",
+    "project_id": "gym-atlas-39d94",
+    "storage_bucket": "gym-atlas-39d94.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:707275991691:android:89f4fe906ad2a50211828e",
+        "android_client_info": {
+          "package_name": "com.techybugs.gymatlas.admin"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "707275991691-q8705vq2ne7pjugjjstnlsmfahtskl7u.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.techybugs.gymatlas.admin",
+            "certificate_hash": "92ad77fd4f9813a512d294c064009a6f59f3e18d"
+          }
+        },
+        {
+          "client_id": "707275991691-mheei9urcte498qjdcel0v223965bgpm.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBjuueZ7v3lBSkgoDmJqEWDEw51YePAJDY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "707275991691-mheei9urcte498qjdcel0v223965bgpm.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "707275991691-ahngg4h77g5qq81h87hkh1elcknsiis6.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.techybugs.gymatlas.trainer"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:707275991691:android:1ad442d87b442f7e11828e",
+        "android_client_info": {
+          "package_name": "com.techybugs.gymatlas.member"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "707275991691-1krf5ksjsgktnk169qt12fp660b256k3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.techybugs.gymatlas.member",
+            "certificate_hash": "92ad77fd4f9813a512d294c064009a6f59f3e18d"
+          }
+        },
+        {
+          "client_id": "707275991691-mheei9urcte498qjdcel0v223965bgpm.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBjuueZ7v3lBSkgoDmJqEWDEw51YePAJDY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "707275991691-mheei9urcte498qjdcel0v223965bgpm.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "707275991691-ahngg4h77g5qq81h87hkh1elcknsiis6.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.techybugs.gymatlas.trainer"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:707275991691:android:40ecf41d43a080b811828e",
+        "android_client_info": {
+          "package_name": "com.techybugs.gymatlas.trainer"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "707275991691-53pqsmdc82qif61pi0hvpq6244417qn5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.techybugs.gymatlas.trainer",
+            "certificate_hash": "92ad77fd4f9813a512d294c064009a6f59f3e18d"
+          }
+        },
+        {
+          "client_id": "707275991691-mheei9urcte498qjdcel0v223965bgpm.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBjuueZ7v3lBSkgoDmJqEWDEw51YePAJDY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "707275991691-mheei9urcte498qjdcel0v223965bgpm.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "707275991691-ahngg4h77g5qq81h87hkh1elcknsiis6.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.techybugs.gymatlas.trainer"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

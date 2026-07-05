@@ -1,0 +1,1 @@
+<x-confirmation-modal />

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>707275991691-catqhsa9ln8j9e87975oikl7ds8gdcs3.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.707275991691-catqhsa9ln8j9e87975oikl7ds8gdcs3</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>707275991691-1krf5ksjsgktnk169qt12fp660b256k3.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyBWzIx3e1-F3zXTx9kz7chy44zLIIX_3RU</string>
+	<key>GCM_SENDER_ID</key>
+	<string>707275991691</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.techybugs.gymatlas.member</string>
+	<key>PROJECT_ID</key>
+	<string>gym-atlas-39d94</string>
+	<key>STORAGE_BUCKET</key>
+	<string>gym-atlas-39d94.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:707275991691:ios:143ddb02e097da9911828e</string>
+</dict>
+</plist>
