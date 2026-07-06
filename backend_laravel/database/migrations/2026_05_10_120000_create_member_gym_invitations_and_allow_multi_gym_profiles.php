@@ -9,8 +9,16 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('member_profiles', function (Blueprint $table): void {
+            $table->dropForeign(['user_id']);
+        });
+
+        Schema::table('member_profiles', function (Blueprint $table): void {
             $table->dropUnique('member_profiles_user_id_unique');
             $table->unique(['user_id', 'gym_id'], 'member_profiles_user_gym_unique');
+        });
+
+        Schema::table('member_profiles', function (Blueprint $table): void {
+            $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
         });
 
         Schema::create('member_gym_invitations', function (Blueprint $table): void {
@@ -36,8 +44,16 @@ return new class extends Migration
         Schema::dropIfExists('member_gym_invitations');
 
         Schema::table('member_profiles', function (Blueprint $table): void {
+            $table->dropForeign(['user_id']);
+        });
+
+        Schema::table('member_profiles', function (Blueprint $table): void {
             $table->dropUnique('member_profiles_user_gym_unique');
             $table->unique('user_id', 'member_profiles_user_id_unique');
+        });
+
+        Schema::table('member_profiles', function (Blueprint $table): void {
+            $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
         });
     }
 };
