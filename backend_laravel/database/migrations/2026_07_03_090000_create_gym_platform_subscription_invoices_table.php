@@ -12,9 +12,9 @@ return new class extends Migration
     {
         Schema::create('gym_platform_subscription_invoices', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('gym_platform_subscription_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('gym_platform_subscription_id');
             $table->foreignId('gym_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('platform_subscription_plan_id')->nullable()->constrained('platform_subscription_plans')->nullOnDelete();
+            $table->foreignId('platform_subscription_plan_id')->nullable();
             $table->foreignId('generated_by_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('paid_by_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->string('invoice_number')->unique();
@@ -39,6 +39,14 @@ return new class extends Migration
             $table->index(['status', 'due_at']);
             $table->index(['gym_id', 'status', 'due_at']);
             $table->index(['paid_at', 'status']);
+            $table->foreign('gym_platform_subscription_id', 'gps_invoices_subscription_fk')
+                ->references('id')
+                ->on('gym_platform_subscriptions')
+                ->cascadeOnDelete();
+            $table->foreign('platform_subscription_plan_id', 'gps_invoices_plan_fk')
+                ->references('id')
+                ->on('platform_subscription_plans')
+                ->nullOnDelete();
         });
 
         $subscriptions = DB::table('gym_platform_subscriptions')->orderBy('id')->get();
