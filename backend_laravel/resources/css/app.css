@@ -1189,6 +1189,7 @@
         }
 
         body.panel-sidebar-mobile-open #app-sidebar {
+            translate: 0 !important;
             transform: translateX(0) !important;
         }
 
