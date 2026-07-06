@@ -1189,11 +1189,11 @@
         }
 
         body.panel-sidebar-mobile-open #app-sidebar {
-            transform: translateX(0);
+            transform: translateX(0) !important;
         }
 
         body.panel-sidebar-mobile-open #mobile-sidebar-backdrop {
-            display: block;
+            display: block !important;
         }
     }
 }
