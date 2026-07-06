@@ -25,8 +25,8 @@ return new class extends Migration
             $table->json('feature_highlights')->nullable();
             $table->timestamps();
 
-            $table->index(['status', 'is_default']);
-            $table->index(['billing_period', 'billing_interval_count']);
+            $table->index(['status', 'is_default'], 'platform_sub_plans_status_default_idx');
+            $table->index(['billing_period', 'billing_interval_count'], 'platform_sub_plans_period_interval_idx');
         });
 
         Schema::create('gym_platform_subscriptions', function (Blueprint $table): void {
@@ -47,9 +47,9 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->timestamps();
 
-            $table->index(['gym_id', 'status']);
-            $table->index(['platform_subscription_plan_id', 'status']);
-            $table->index(['renews_at', 'status']);
+            $table->index(['gym_id', 'status'], 'gym_platform_subs_gym_status_idx');
+            $table->index(['platform_subscription_plan_id', 'status'], 'gym_platform_subs_plan_status_idx');
+            $table->index(['renews_at', 'status'], 'gym_platform_subs_renews_status_idx');
         });
     }
 
