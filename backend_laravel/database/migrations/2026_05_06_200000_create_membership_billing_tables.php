@@ -21,7 +21,7 @@ return new class extends Migration
             $table->string('status')->default('active');
             $table->foreignId('created_by_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
-            $table->index(['gym_id', 'branch_id', 'status']);
+            $table->index(['gym_id', 'branch_id', 'status'], 'membership_plans_scope_status_idx');
         });
 
         Schema::create('member_memberships', function (Blueprint $table): void {
@@ -51,7 +51,7 @@ return new class extends Migration
             $table->text('custom_fee_reason')->nullable();
             $table->foreignId('approved_by_admin_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
-            $table->index(['gym_id', 'branch_id', 'member_id', 'payment_status']);
+            $table->index(['gym_id', 'branch_id', 'member_id', 'payment_status'], 'member_memberships_scope_pay_idx');
         });
 
         Schema::create('payments', function (Blueprint $table): void {
@@ -68,7 +68,7 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->timestamp('paid_at')->nullable();
             $table->timestamps();
-            $table->index(['member_membership_id', 'status']);
+            $table->index(['member_membership_id', 'status'], 'payments_membership_status_idx');
         });
 
         Schema::create('payment_receipts', function (Blueprint $table): void {
