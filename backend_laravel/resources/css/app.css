@@ -1184,6 +1184,10 @@
     }
 
     @media (max-width: 1279px) {
+        body.panel-sidebar-mobile-open {
+            overflow: hidden;
+        }
+
         body.panel-sidebar-mobile-open #app-sidebar {
             transform: translateX(0);
         }

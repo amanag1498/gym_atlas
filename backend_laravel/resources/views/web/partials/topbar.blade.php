@@ -14,7 +14,7 @@
             <i class="ti ti-layout-sidebar text-base"></i>
         </button>
 
-        <button type="button" id="sidebar-toggle-mobile" class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white xl:hidden">
+        <button type="button" id="sidebar-toggle-mobile" onclick="document.body.classList.add('panel-sidebar-mobile-open')" class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white xl:hidden">
             <i class="ti ti-menu-2 text-base"></i>
         </button>
 

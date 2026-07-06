@@ -103,7 +103,7 @@
             <x-layout.brand-mark :title="$panel === 'admin' ? 'Gym Atlas' : config('app.name')" :subtitle="$panel === 'admin' ? 'Platform Admin' : 'Gym Workspace'" />
         </a>
 
-        <button type="button" id="sidebar-close-mobile" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 dark:border-gray-800 dark:text-gray-400 xl:hidden">
+        <button type="button" id="sidebar-close-mobile" onclick="document.body.classList.remove('panel-sidebar-mobile-open')" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 dark:border-gray-800 dark:text-gray-400 xl:hidden">
             <i class="ti ti-x text-xl"></i>
         </button>
     </div>

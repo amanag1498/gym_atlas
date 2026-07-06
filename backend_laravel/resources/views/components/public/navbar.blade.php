@@ -8,6 +8,8 @@
         ['label' => 'Pricing', 'route' => 'public.pricing'],
         ['label' => 'About', 'route' => 'public.about'],
         ['label' => 'Contact', 'route' => 'public.contact'],
+        ['label' => 'Privacy', 'route' => 'public.privacy-policy'],
+        ['label' => 'Terms', 'route' => 'public.terms'],
     ];
 
     $actions = [

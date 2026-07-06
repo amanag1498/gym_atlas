@@ -47,7 +47,7 @@
         <div class="h-16 w-16 animate-spin rounded-full border-4 border-solid border-brand-500 border-t-transparent"></div>
     </div>
 
-    <div id="mobile-sidebar-backdrop" class="fixed inset-0 z-40 hidden bg-gray-900/50 xl:hidden"></div>
+    <div id="mobile-sidebar-backdrop" onclick="document.body.classList.remove('panel-sidebar-mobile-open')" class="fixed inset-0 z-40 hidden bg-gray-900/50 xl:hidden"></div>
 
     <div class="min-h-screen xl:flex">
         <x-admin.sidebar :panel-context="$panelContext" />

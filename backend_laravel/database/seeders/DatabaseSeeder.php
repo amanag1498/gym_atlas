@@ -17,10 +17,13 @@ class DatabaseSeeder extends Seeder
         $this->call([
             PermissionSeeder::class,
             PlatformAdminSeeder::class,
+            CitySeeder::class,
             CommonFacilitySeeder::class,
+            FitnessGoalSeeder::class,
+            TrainerSpecializationSeeder::class,
             WorkoutBookSeeder::class,
-            DemoDataSeeder::class,
             PlatformSubscriptionSeeder::class,
+            PlatformBannerSeeder::class,
         ]);
     }
 }
