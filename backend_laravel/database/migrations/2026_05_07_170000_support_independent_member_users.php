@@ -9,7 +9,6 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('workout_sessions', function (Blueprint $table): void {
-            $table->dropIndex('workout_sessions_scope_member_status_idx');
             $table->dropConstrainedForeignId('gym_id');
             $table->dropConstrainedForeignId('branch_id');
         });
@@ -21,7 +20,6 @@ return new class extends Migration
         });
 
         Schema::table('weight_logs', function (Blueprint $table): void {
-            $table->dropIndex('weight_logs_scope_member_log_idx');
             $table->dropConstrainedForeignId('gym_id');
             $table->dropConstrainedForeignId('branch_id');
         });
@@ -33,7 +31,6 @@ return new class extends Migration
         });
 
         Schema::table('body_measurements', function (Blueprint $table): void {
-            $table->dropIndex('body_measurements_scope_member_measured_idx');
             $table->dropConstrainedForeignId('gym_id');
             $table->dropConstrainedForeignId('branch_id');
         });
@@ -45,7 +42,6 @@ return new class extends Migration
         });
 
         Schema::table('progress_photos', function (Blueprint $table): void {
-            $table->dropIndex('progress_photos_scope_member_captured_idx');
             $table->dropConstrainedForeignId('gym_id');
             $table->dropConstrainedForeignId('branch_id');
         });
@@ -57,7 +53,6 @@ return new class extends Migration
         });
 
         Schema::table('personal_records', function (Blueprint $table): void {
-            $table->dropIndex('personal_records_scope_member_idx');
             $table->dropConstrainedForeignId('gym_id');
             $table->dropConstrainedForeignId('branch_id');
         });
@@ -85,7 +80,6 @@ return new class extends Migration
         Schema::dropIfExists('saved_gyms');
 
         Schema::table('personal_records', function (Blueprint $table): void {
-            $table->dropIndex('personal_records_scope_member_idx');
             $table->dropConstrainedForeignId('gym_id');
             $table->dropConstrainedForeignId('branch_id');
         });
@@ -97,7 +91,6 @@ return new class extends Migration
         });
 
         Schema::table('progress_photos', function (Blueprint $table): void {
-            $table->dropIndex('progress_photos_scope_member_captured_idx');
             $table->dropConstrainedForeignId('gym_id');
             $table->dropConstrainedForeignId('branch_id');
         });
@@ -109,7 +102,6 @@ return new class extends Migration
         });
 
         Schema::table('body_measurements', function (Blueprint $table): void {
-            $table->dropIndex('body_measurements_scope_member_measured_idx');
             $table->dropConstrainedForeignId('gym_id');
             $table->dropConstrainedForeignId('branch_id');
         });
@@ -121,7 +113,6 @@ return new class extends Migration
         });
 
         Schema::table('weight_logs', function (Blueprint $table): void {
-            $table->dropIndex('weight_logs_scope_member_log_idx');
             $table->dropConstrainedForeignId('gym_id');
             $table->dropConstrainedForeignId('branch_id');
         });
@@ -133,7 +124,6 @@ return new class extends Migration
         });
 
         Schema::table('workout_sessions', function (Blueprint $table): void {
-            $table->dropIndex('workout_sessions_scope_member_status_idx');
             $table->dropConstrainedForeignId('gym_id');
             $table->dropConstrainedForeignId('branch_id');
         });
