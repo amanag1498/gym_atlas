@@ -37,3 +37,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: TablerIcons
+      fonts:
+        - asset: ../backend_laravel/public/tailadmin/fonts/tabler/tabler-icons.ttf

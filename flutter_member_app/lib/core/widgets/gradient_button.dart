@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
-import '../theme/app_radii.dart';
+import 'atlas_icon.dart';
 
 enum GradientButtonVariant {
   primary,
   secondary,
+  danger,
 }
 
 class GradientButton extends StatefulWidget {
@@ -36,8 +37,9 @@ class _GradientButtonState extends State<GradientButton> {
   @override
   Widget build(BuildContext context) {
     final disabled = widget.onPressed == null || widget.loading;
-    final primary = widget.variant == GradientButtonVariant.primary;
-    final radius = BorderRadius.circular(AppRadii.md);
+    final variant = widget.variant;
+    final primary = variant == GradientButtonVariant.primary;
+    final radius = BorderRadius.circular(12);
 
     final child = AnimatedScale(
       duration: const Duration(milliseconds: 120),
@@ -50,82 +52,58 @@ class _GradientButtonState extends State<GradientButton> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
-          constraints: const BoxConstraints(minHeight: 58),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: _buildDecoration(primary: primary, disabled: disabled, radius: radius),
-          child: Stack(
-            alignment: Alignment.center,
+          constraints: const BoxConstraints(minHeight: 40),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: _buildDecoration(
+            variant: variant,
+            disabled: disabled,
+            radius: radius,
+          ),
+          child: Row(
+            mainAxisSize: widget.expanded ? MainAxisSize.max : MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: widget.icon != null || widget.loading ? 44 : 14,
+              if (widget.loading) ...[
+                SizedBox.square(
+                  dimension: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      primary || variant == GradientButtonVariant.danger
+                          ? Colors.white
+                          : AppColors.textPrimary,
+                    ),
+                  ),
                 ),
+                const SizedBox(width: 8),
+              ] else if (widget.icon != null) ...[
+                Icon(
+                  widget.icon,
+                  size: 16,
+                  color: _foregroundColor(variant, disabled),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Flexible(
                 child: Text(
                   widget.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: disabled
-                            ? AppColors.textMuted
-                            : primary
-                                ? Colors.white
-                                : AppColors.primary,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.05,
+                        color: _foregroundColor(variant, disabled),
+                        fontWeight: FontWeight.w500,
                         height: 1.0,
                       ),
                 ),
               ),
-              if (widget.loading)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: _ButtonOrb(
-                    primary: primary,
-                    disabled: disabled,
-                    child: SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          primary ? Colors.white : AppColors.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                )
-              else ...[
-                if (!primary && widget.icon != null)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: _ButtonOrb(
-                      primary: primary,
-                      disabled: disabled,
-                      child: Icon(
-                        widget.icon,
-                        size: 16,
-                        color: disabled ? AppColors.textMuted : AppColors.primary,
-                      ),
-                    ),
-                  ),
-                if (!primary && widget.icon != null)
-                  const Align(
-                    alignment: Alignment.centerRight,
-                    child: SizedBox(width: 40, height: 40),
-                  ),
-                if (primary)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: _ButtonOrb(
-                      primary: true,
-                      disabled: disabled,
-                      child: Icon(
-                        widget.icon ?? Icons.arrow_forward_rounded,
-                        size: 16,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
+              if (primary && widget.icon == null && !widget.loading) ...[
+                const SizedBox(width: 8),
+                Icon(
+                  AtlasIcons.chevronRight,
+                  size: 16,
+                  color: _foregroundColor(variant, disabled),
+                ),
               ],
             ],
           ),
@@ -149,99 +127,66 @@ class _GradientButtonState extends State<GradientButton> {
   }
 
   BoxDecoration _buildDecoration({
-    required bool primary,
+    required GradientButtonVariant variant,
     required bool disabled,
     required BorderRadius radius,
   }) {
+    final primary = variant == GradientButtonVariant.primary;
+    final secondary = variant == GradientButtonVariant.secondary;
+
     return BoxDecoration(
-      gradient: disabled
+      gradient: disabled || !primary
           ? null
-          : primary
-              ? const LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [
-                    AppColors.primaryBright,
-                    AppColors.primary,
-                  ],
-                )
-              : LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppColors.primaryBright.withValues(alpha: 0.18),
-                    AppColors.surfaceStrong,
-                  ],
-                ),
+          : const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppColors.primary,
+                AppColors.primaryBright,
+              ],
+            ),
       color: disabled
           ? AppColors.surfaceSoft
           : primary
               ? null
-              : AppColors.surfaceStrong,
+              : secondary
+                  ? AppColors.surface
+                  : AppColors.error.withValues(alpha: 0.92),
       borderRadius: radius,
       border: Border.all(
         color: disabled
             ? AppColors.stroke
             : primary
-                ? Colors.white.withValues(alpha: 0.16)
-                : AppColors.primary.withValues(alpha: 0.34),
+                ? Colors.transparent
+                : secondary
+                    ? AppColors.strokeStrong
+                    : AppColors.error.withValues(alpha: 0.94),
       ),
       boxShadow: disabled
           ? const []
           : [
               BoxShadow(
                 color: primary
-                    ? AppColors.primary.withValues(alpha: _pressed ? 0.16 : 0.24)
-                    : AppColors.primary.withValues(alpha: _pressed ? 0.06 : 0.10),
-                blurRadius: _pressed ? 12 : 20,
-                offset: Offset(0, _pressed ? 5 : 10),
+                    ? AppColors.primary.withValues(alpha: _pressed ? 0.16 : 0.22)
+                    : AppColors.shadow.withValues(alpha: _pressed ? 0.04 : 0.07),
+                blurRadius: _pressed ? 10 : 18,
+                offset: Offset(0, _pressed ? 6 : 10),
               ),
-              if (primary)
-                BoxShadow(
-                  color: AppColors.primaryBright.withValues(alpha: _pressed ? 0.08 : 0.14),
-                  blurRadius: _pressed ? 10 : 18,
-                  offset: const Offset(0, 3),
-                ),
             ],
     );
   }
-}
 
-class _ButtonOrb extends StatelessWidget {
-  const _ButtonOrb({
-    required this.primary,
-    required this.disabled,
-    required this.child,
-  });
+  Color _foregroundColor(GradientButtonVariant variant, bool disabled) {
+    if (disabled) {
+      return AppColors.textMuted;
+    }
 
-  final bool primary;
-  final bool disabled;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOutCubic,
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: disabled
-            ? Colors.white.withValues(alpha: 0.44)
-            : primary
-                ? Colors.white.withValues(alpha: 0.18)
-                : Colors.white.withValues(alpha: 0.75),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: disabled
-              ? AppColors.stroke
-              : primary
-                  ? Colors.white.withValues(alpha: 0.18)
-                  : AppColors.primary.withValues(alpha: 0.22),
-        ),
-      ),
-      alignment: Alignment.center,
-      child: child,
-    );
+    switch (variant) {
+      case GradientButtonVariant.primary:
+      case GradientButtonVariant.danger:
+        return Colors.white;
+      case GradientButtonVariant.secondary:
+        return AppColors.textSecondary;
+    }
   }
 }

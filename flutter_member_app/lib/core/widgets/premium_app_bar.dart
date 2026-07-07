@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
+import 'atlas_icon.dart';
 
 class PremiumAppBar extends StatelessWidget implements PreferredSizeWidget {
   const PremiumAppBar({
@@ -40,32 +41,29 @@ class PremiumAppBar extends StatelessWidget implements PreferredSizeWidget {
                 leading!
               else if (canPop)
                 _AppBarIconButton(
-                  icon: Icons.arrow_back_ios_new_rounded,
+                  icon: AtlasIcons.arrowLeft,
                   onTap: () => Navigator.of(context).maybePop(),
                 )
               else
                 Container(
-                  width: 50,
-                  height: 50,
+                  width: 46,
+                  height: 46,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [AppColors.primaryBright, AppColors.primary],
-                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    color: AppColors.surface,
+                    border: Border.all(color: AppColors.stroke),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primaryBright.withValues(alpha: 0.28),
-                        blurRadius: 24,
-                        offset: const Offset(0, 10),
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 14,
+                        offset: const Offset(0, 8),
                       ),
                     ],
                   ),
                   child: const Icon(
-                    Icons.fitness_center_rounded,
-                    color: Colors.white,
-                    size: 22,
+                    AtlasIcons.layoutSidebar,
+                    color: AppColors.textPrimary,
+                    size: 20,
                   ),
                 ),
               const Spacer(),
@@ -82,20 +80,13 @@ class PremiumAppBar extends StatelessWidget implements PreferredSizeWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(AppSpacing.lg),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withValues(alpha: 0.82),
-                  Colors.white.withValues(alpha: 0.64),
-                ],
-              ),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.72)),
+              borderRadius: BorderRadius.circular(16),
+              color: AppColors.surface,
+              border: Border.all(color: AppColors.stroke),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 20,
+                  blurRadius: 16,
                   offset: const Offset(0, 10),
                 ),
               ],
@@ -159,16 +150,16 @@ class _AppBarIconButton extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        width: 46,
-        height: 46,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
-          color: AppColors.surfaceStrong,
-          borderRadius: BorderRadius.circular(16),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.stroke),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 12,
+              blurRadius: 10,
               offset: const Offset(0, 6),
             ),
           ],

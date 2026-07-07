@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/common_widgets.dart';
 
 class StepDashboardData {
@@ -40,12 +41,15 @@ class StepDashboardWidget extends StatelessWidget {
   final VoidCallback onRequestPermission;
   final String? statusMessage;
 
-  static const _ink = Color(0xFF18202A);
-  static const _muted = Color(0xFF758092);
-  static const _mint = Color(0xFF19D6A6);
-  static const _blue = Color(0xFF67A7FF);
-  static const _coral = Color(0xFFFF8D5C);
-  static const _cream = Color(0xFFFFF7EA);
+  static const _ink = AppColors.textPrimary;
+  static const _mutedSoft = AppColors.textMuted;
+  static const _primary = AppColors.primary;
+  static const _primaryBright = AppColors.primaryBright;
+  static const _success = AppColors.success;
+  static const _surface = AppColors.surface;
+  static const _surfaceSoft = AppColors.surfaceSoft;
+  static const _stroke = AppColors.stroke;
+  static const _strokeStrong = AppColors.strokeStrong;
 
   @override
   Widget build(BuildContext context) {
@@ -69,43 +73,73 @@ class StepDashboardWidget extends StatelessWidget {
       borderRadius: BorderRadius.circular(36),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.92),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              _surface,
+              _surfaceSoft,
+            ],
+          ),
+          border: Border.all(color: _stroke.withValues(alpha: 0.88)),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF6F7C92).withValues(alpha: 0.14),
-              blurRadius: 28,
-              offset: const Offset(0, 14),
+              color: AppColors.shadow.withValues(alpha: 0.08),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
             ),
           ],
         ),
         child: Stack(
           children: [
             Positioned(
-              top: -64,
-              right: -50,
-              child: _StepGlowOrb(size: 188, color: _blue, opacity: 0.18),
+              top: -72,
+              right: -54,
+              child: _StepGlowOrb(
+                size: 188,
+                color: _primaryBright,
+                opacity: 0.10,
+              ),
             ),
             Positioned(
-              bottom: -78,
-              left: -74,
-              child: _StepGlowOrb(size: 220, color: _mint, opacity: 0.14),
+              bottom: -84,
+              left: -84,
+              child: _StepGlowOrb(size: 220, color: _primary, opacity: 0.06),
             ),
             Positioned(
-              top: 18,
-              right: 18,
+              top: 20,
+              right: 20,
               child: Container(
-                width: 58,
-                height: 58,
+                width: 74,
+                height: 74,
                 decoration: BoxDecoration(
-                  color: _cream.withValues(alpha: 0.82),
+                  border: Border.all(color: _stroke.withValues(alpha: 0.6)),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      _surface.withValues(alpha: 0.78),
+                      _primaryBright.withValues(alpha: 0.03),
+                    ],
+                  ),
                   shape: BoxShape.circle,
                 ),
               ),
             ),
-            Container(
-              height: 6,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(colors: [_coral, _mint, _blue]),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                height: 4,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      _primaryBright.withValues(alpha: 0.95),
+                      _primary.withValues(alpha: 0.88),
+                    ],
+                  ),
+                ),
               ),
             ),
             Padding(
@@ -134,7 +168,7 @@ class StepDashboardWidget extends StatelessWidget {
                                       ? 'Connect health access'
                                       : 'Health steps unavailable',
                               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                color: _muted,
+                                color: _mutedSoft,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -179,7 +213,7 @@ class StepDashboardWidget extends StatelessWidget {
                             Text(
                               'steps today',
                               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                color: _muted,
+                                color: _mutedSoft,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -190,13 +224,16 @@ class StepDashboardWidget extends StatelessWidget {
                                 vertical: 8,
                               ),
                               decoration: BoxDecoration(
-                                color: _mint.withValues(alpha: 0.12),
+                                color: _primaryBright.withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: _primaryBright.withValues(alpha: 0.14),
+                                ),
                               ),
                               child: Text(
                                 '${stepData.progressPercent}% of ${_formatCount(stepData.goal)}',
                                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                  color: const Color(0xFF0C9F7A),
+                                  color: _primaryBright,
                                   fontWeight: FontWeight.w900,
                                 ),
                               ),
@@ -232,19 +269,19 @@ class StepDashboardWidget extends StatelessWidget {
                                   icon: Icons.route_rounded,
                                   label: 'Distance',
                                   value: '${stepData.distanceKm.toStringAsFixed(1)} km',
-                                  color: _blue,
+                                  color: _primaryBright,
                                 ),
                                 _StepStatPill(
                                   icon: Icons.local_fire_department_rounded,
                                   label: 'Calories',
                                   value: '${stepData.calories}',
-                                  color: _coral,
+                                  color: _primary,
                                 ),
                                 _StepStatPill(
                                   icon: Icons.bolt_rounded,
                                   label: 'Streak',
                                   value: '${stepData.streakDays} d',
-                                  color: _mint,
+                                  color: _success,
                                 ),
                               ],
                             ),
@@ -366,9 +403,9 @@ class _StepProgressRing extends StatelessWidget {
                   color: Colors.white.withValues(alpha: 0.86),
                   boxShadow: [
                     BoxShadow(
-                      color: StepDashboardWidget._blue.withValues(alpha: 0.15),
-                      blurRadius: 24,
-                      offset: const Offset(0, 12),
+                      color: AppColors.shadow.withValues(alpha: 0.06),
+                      blurRadius: 18,
+                      offset: const Offset(0, 10),
                     ),
                   ],
                 ),
@@ -380,10 +417,8 @@ class _StepProgressRing extends StatelessWidget {
                   value: value,
                   strokeWidth: 12,
                   strokeCap: StrokeCap.round,
-                  backgroundColor: const Color(0xFFE9EEF4),
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                    StepDashboardWidget._mint,
-                  ),
+                  backgroundColor: StepDashboardWidget._stroke,
+                  valueColor: const AlwaysStoppedAnimation<Color>(StepDashboardWidget._primaryBright),
                 ),
               ),
               SizedBox(
@@ -394,9 +429,7 @@ class _StepProgressRing extends StatelessWidget {
                   strokeWidth: 7,
                   strokeCap: StrokeCap.round,
                   backgroundColor: Colors.transparent,
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                    StepDashboardWidget._blue,
-                  ),
+                  valueColor: const AlwaysStoppedAnimation<Color>(StepDashboardWidget._primary),
                 ),
               ),
               child!,
@@ -418,7 +451,7 @@ class _StepProgressRing extends StatelessWidget {
           Text(
             'goal',
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: StepDashboardWidget._muted,
+              color: StepDashboardWidget._mutedSoft,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -446,15 +479,14 @@ class _StepRefreshButton extends StatelessWidget {
         width: 46,
         height: 46,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [StepDashboardWidget._mint, StepDashboardWidget._blue],
-          ),
+          color: StepDashboardWidget._surface,
           borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: StepDashboardWidget._strokeStrong),
           boxShadow: [
             BoxShadow(
-              color: StepDashboardWidget._blue.withValues(alpha: 0.22),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
+              color: AppColors.shadow.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
@@ -464,13 +496,15 @@ class _StepRefreshButton extends StatelessWidget {
                   dimension: 18,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      StepDashboardWidget._primaryBright,
+                    ),
                   ),
                 ),
               )
             : const Icon(
                 Icons.refresh_rounded,
-                color: Colors.white,
+                color: StepDashboardWidget._primaryBright,
                 size: 21,
               ),
       ),
@@ -489,14 +523,15 @@ class _StepSyncFooter extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F7FA),
+        color: StepDashboardWidget._surface,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: StepDashboardWidget._stroke),
       ),
       child: Row(
         children: [
           const Icon(
             Icons.sync_rounded,
-            color: StepDashboardWidget._blue,
+            color: StepDashboardWidget._primaryBright,
             size: 17,
           ),
           const SizedBox(width: 8),
@@ -506,7 +541,7 @@ class _StepSyncFooter extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: StepDashboardWidget._muted,
+                color: StepDashboardWidget._mutedSoft,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -536,8 +571,9 @@ class _StepStatPill extends StatelessWidget {
       constraints: const BoxConstraints(minWidth: 96),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
+        color: StepDashboardWidget._surface.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.16)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -558,7 +594,7 @@ class _StepStatPill extends StatelessWidget {
               Text(
                 label,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: StepDashboardWidget._muted,
+                  color: StepDashboardWidget._mutedSoft,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -647,8 +683,9 @@ class _StepStatePanel extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F7FA),
+        color: StepDashboardWidget._surface,
         borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: StepDashboardWidget._stroke),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -657,10 +694,10 @@ class _StepStatePanel extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: StepDashboardWidget._blue.withValues(alpha: 0.14),
+              color: StepDashboardWidget._primaryBright.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Icon(icon, color: StepDashboardWidget._blue),
+            child: Icon(icon, color: StepDashboardWidget._primaryBright),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -680,7 +717,7 @@ class _StepStatePanel extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: StepDashboardWidget._muted,
+                    color: StepDashboardWidget._mutedSoft,
                     fontWeight: FontWeight.w700,
                   ),
                 ),

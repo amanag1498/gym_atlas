@@ -93,43 +93,43 @@
                                 </thead>
                                 <tbody>
                                     @foreach ($group['exercises'] as $exercise)
-                                        @php($usageTotal = $exercise->plan_exercises_count + $exercise->session_exercises_count + $exercise->personal_records_count)
+                                        @php($usageTotal = ($exercise['plan_exercises_count'] ?? 0) + ($exercise['session_exercises_count'] ?? 0) + ($exercise['personal_records_count'] ?? 0))
                                         <tr>
                                             <td>
-                                                <div class="font-semibold text-slate-950 dark:text-white">{{ $exercise->name }}</div>
-                                                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ str($exercise->status)->title() }} • {{ $exercise->is_active ? 'Active' : 'Inactive' }}</div>
-                                                @if ($exercise->instructions)
-                                                    <div class="mt-2 text-sm text-slate-600 dark:text-slate-300">{{ \Illuminate\Support\Str::limit($exercise->instructions, 110) }}</div>
+                                                <div class="font-semibold text-slate-950 dark:text-white">{{ $exercise['name'] }}</div>
+                                                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ str($exercise['status'])->title() }} • {{ !empty($exercise['is_active']) ? 'Active' : 'Inactive' }}</div>
+                                                @if (!empty($exercise['instructions']))
+                                                    <div class="mt-2 text-sm text-slate-600 dark:text-slate-300">{{ \Illuminate\Support\Str::limit($exercise['instructions'], 110) }}</div>
                                                 @endif
                                             </td>
                                             <td class="text-sm text-slate-600 dark:text-slate-300">
-                                                <div>{{ str($exercise->muscle_group)->replace('_', ' ')->title() }}</div>
-                                                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $exercise->equipment ?: 'No equipment set' }} • {{ $exercise->difficulty ?: 'No difficulty' }}</div>
-                                                @if (!empty($exercise->secondary_muscles))
+                                                <div>{{ str($exercise['muscle_group'])->replace('_', ' ')->title() }}</div>
+                                                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $exercise['equipment'] ?: 'No equipment set' }} • {{ $exercise['difficulty'] ?: 'No difficulty' }}</div>
+                                                @if (!empty($exercise['secondary_muscles']))
                                                     <div class="mt-2 flex flex-wrap gap-2">
-                                                        @foreach (collect($exercise->secondary_muscles)->take(3) as $secondary)
+                                                        @foreach (collect($exercise['secondary_muscles'])->take(3) as $secondary)
                                                             <x-status-badge :label="str($secondary)->title()" tone="neutral" />
                                                         @endforeach
                                                     </div>
                                                 @endif
                                             </td>
                                             <td class="text-sm text-slate-600 dark:text-slate-300">
-                                                <div>{{ $exercise->video_url ? 'Video linked' : 'No video' }}</div>
-                                                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $exercise->image_url ? 'Image linked' : 'No image' }}</div>
+                                                <div>{{ !empty($exercise['video_url']) ? 'Video linked' : 'No video' }}</div>
+                                                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ !empty($exercise['image_url']) ? 'Image linked' : 'No image' }}</div>
                                             </td>
                                             <td class="text-sm text-slate-600 dark:text-slate-300">
-                                                <div>Plans {{ $exercise->plan_exercises_count }}</div>
-                                                <div>Sessions {{ $exercise->session_exercises_count }}</div>
-                                                <div>PRs {{ $exercise->personal_records_count }}</div>
+                                                <div>Plans {{ $exercise['plan_exercises_count'] ?? 0 }}</div>
+                                                <div>Sessions {{ $exercise['session_exercises_count'] ?? 0 }}</div>
+                                                <div>PRs {{ $exercise['personal_records_count'] ?? 0 }}</div>
                                                 <div class="mt-1 font-semibold text-slate-900 dark:text-slate-100">Total {{ $usageTotal }}</div>
                                             </td>
                                             <td class="text-sm text-slate-600 dark:text-slate-300">
-                                                <div>{{ $exercise->creator?->name ?? 'System' }}</div>
-                                                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $exercise->is_global ? 'Global library' : 'Local' }}</div>
+                                                <div>{{ data_get($exercise, 'creator.name', 'System') }}</div>
+                                                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ !empty($exercise['is_global']) ? 'Global library' : 'Local' }}</div>
                                             </td>
                                             <td>
                                                 <div class="flex justify-end gap-2">
-                                                    <x-action-button as="a" href="{{ route('web.admin.exercises.edit', $exercise) }}" variant="secondary">Edit</x-action-button>
+                                                    <x-action-button as="a" href="{{ route('web.admin.exercises.edit', $exercise['id']) }}" variant="secondary">Edit</x-action-button>
                                                 </div>
                                             </td>
                                         </tr>

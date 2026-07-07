@@ -86,22 +86,40 @@ class MemberSessionController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      debugPrint('[auth][session] Starting Google sign-in flow');
       final account = await _googleSignIn.signIn();
       if (account == null) {
         throw Exception('Google sign-in cancelled.');
       }
+      debugPrint(
+        '[auth][session] Google account selected '
+        'email=${account.email} id=${account.id}',
+      );
 
       final authentication = await account.authentication;
+      debugPrint(
+        '[auth][session] Google auth received '
+        'idTokenPresent=${authentication.idToken?.isNotEmpty == true} '
+        'accessTokenPresent=${authentication.accessToken?.isNotEmpty == true}',
+      );
       final credential = firebase.GoogleAuthProvider.credential(
         idToken: authentication.idToken,
         accessToken: authentication.accessToken,
       );
       final firebaseUserCredential = await firebase.FirebaseAuth.instance
           .signInWithCredential(credential);
+      debugPrint(
+        '[auth][session] Firebase credential accepted '
+        'uid=${firebaseUserCredential.user?.uid} '
+        'email=${firebaseUserCredential.user?.email}',
+      );
       final idToken = await firebaseUserCredential.user?.getIdToken(true);
       if (idToken == null || idToken.isEmpty) {
         throw Exception('Firebase ID token missing.');
       }
+      debugPrint(
+        '[auth][session] Firebase ID token generated length=${idToken.length}',
+      );
 
       final session = await _authService.signInWithFirebase(
         idToken: idToken,
@@ -117,16 +135,27 @@ class MemberSessionController extends ChangeNotifier {
       var me = await _authService.fetchMe();
       me = await _ensureMemberRole(me);
       _ensureEligibleMember(me);
+      debugPrint(
+        '[auth][session] Member profile loaded '
+        'userId=${me.id} activeRole=${me.activeRole} roles=${me.roles}',
+      );
 
       token = session.token;
       user = me;
       await _storage.saveSession(token: session.token, user: me);
       await _registerFcmToken();
+      debugPrint('[auth][session] Login flow completed successfully');
     } on DioException catch (exception) {
+      debugPrint(
+        '[auth][session][dio-error] status=${exception.response?.statusCode} '
+        'type=${exception.type} message=${exception.message} '
+        'response=${exception.response?.data}',
+      );
       await _googleSafeSignOut();
       await _clearLocalState(notify: false);
       error = _mapAuthError(exception);
     } catch (exception) {
+      debugPrint('[auth][session][error] $exception');
       await _googleSafeSignOut();
       await _clearLocalState(notify: false);
       error = exception.toString().replaceFirst('Exception: ', '');

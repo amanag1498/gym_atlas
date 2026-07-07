@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -722,7 +723,7 @@ class _GlassBottomNav extends StatelessWidget {
                   color: Colors.white,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.10),
+                      color: AppColors.shadow.withValues(alpha: 0.10),
                       blurRadius: 14,
                       offset: const Offset(0, -3),
                     ),
@@ -800,14 +801,11 @@ class _GlassBottomNavItem extends StatelessWidget {
               duration: const Duration(milliseconds: 180),
               curve: Curves.easeOutCubic,
               scale: active ? 1.08 : 1,
-              child: active
-                  ? ShaderMask(
-                      shaderCallback: (bounds) => const LinearGradient(
-                        colors: [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
-                      ).createShader(bounds),
-                      child: Icon(icon, color: Colors.white, size: 25),
-                    )
-                  : Icon(icon, color: const Color(0xFFB6ADB1), size: 25),
+              child: Icon(
+                icon,
+                color: active ? AppColors.primary : AppColors.textMuted,
+                size: 25,
+              ),
             ),
             AnimatedContainer(
               duration: const Duration(milliseconds: 180),
@@ -820,9 +818,7 @@ class _GlassBottomNavItem extends StatelessWidget {
               width: active ? 5 : 0,
               height: active ? 5 : 0,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFEEA4CE), Color(0xFFC58BF2)],
-                ),
+                color: AppColors.primaryBright,
                 borderRadius: BorderRadius.circular(3),
               ),
             ),
@@ -856,19 +852,17 @@ class _MemberCenterAction extends StatelessWidget {
             color: Colors.white,
             boxShadow: [
               BoxShadow(
-                color: const Color(
-                  0xFF92A3FD,
-                ).withValues(alpha: active ? 0.34 : 0.24),
+                color: AppColors.primary.withValues(alpha: active ? 0.34 : 0.24),
                 blurRadius: active ? 24 : 16,
                 offset: const Offset(0, 8),
               ),
             ],
           ),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
-                begin: Alignment.topLeft,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.primaryBright, AppColors.primary],
+                  begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               shape: BoxShape.circle,
@@ -880,21 +874,21 @@ class _MemberCenterAction extends StatelessWidget {
                 ),
               ],
             ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Icon(
-                  Icons.search_rounded,
-                  color: Colors.white.withValues(alpha: 0.20),
-                  size: 44,
-                ),
-                const Icon(
-                  Icons.travel_explore_rounded,
-                  color: Colors.white,
-                  size: 30,
-                ),
-              ],
-            ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(
+                    Icons.search_rounded,
+                    color: Colors.white.withValues(alpha: 0.16),
+                    size: 42,
+                  ),
+                  const Icon(
+                    Icons.travel_explore_rounded,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ],
+              ),
           ),
         ),
       ),
@@ -1098,21 +1092,21 @@ class _DashboardPage extends StatelessWidget {
         value: workoutStreak > 0 ? '$workoutStreak d' : '0 d',
         helper: checkedInToday ? 'Checked in' : 'Workout rhythm',
         icon: Icons.local_fire_department_rounded,
-        color: const Color(0xFFFF8D5C),
+        color: AppColors.primary,
       ),
       _DashboardMetricData(
         label: 'Weight',
         value: latestWeightText,
         helper: hasWeightLog ? 'Latest log' : 'Add log',
         icon: Icons.monitor_weight_rounded,
-        color: const Color(0xFF67A7FF),
+        color: AppColors.primaryBright,
       ),
       _DashboardMetricData(
         label: 'Volume',
         value: totalVolume > 0 ? _formatVolume(totalVolume) : '--',
         helper: totalVolume > 0 ? 'Training load' : 'No volume',
         icon: Icons.fitness_center_rounded,
-        color: const Color(0xFF19D6A6),
+        color: AppColors.primaryBright,
       ),
       _DashboardMetricData(
         label: 'Access',
@@ -1123,9 +1117,138 @@ class _DashboardPage extends StatelessWidget {
             : 'Solo',
         helper: hasTrainer ? 'Coach linked' : heroLabel,
         icon: hasGymMembership ? Icons.verified_rounded : Icons.explore_rounded,
-        color: const Color(0xFF9A7BFF),
+        color: AppColors.primary,
       ),
     ];
+    final dashboardActions = [
+      _DashboardActionData(
+        label: hasGymMembership ? 'Start workout' : 'Explore gyms',
+        helper: hasGymMembership ? 'Open today plan' : 'Browse nearby gyms',
+        description: hasGymMembership
+            ? 'Jump straight into your assigned plan for today.'
+            : 'Discover gyms, compare options, and request access.',
+        icon: hasGymMembership
+            ? Icons.fitness_center_rounded
+            : Icons.travel_explore_rounded,
+        color: AppColors.primary,
+        onTap: hasGymMembership ? onStartWorkout : onFindGyms,
+      ),
+      _DashboardActionData(
+        label: hasGymMembership ? 'Show QR pass' : 'Open profile',
+        helper: hasGymMembership ? 'Scan at the front desk' : 'Update your setup',
+        description: hasGymMembership
+            ? 'Open your access pass instantly when you arrive.'
+            : 'Review your baseline and keep your profile complete.',
+        icon: hasGymMembership ? Icons.qr_code_2_rounded : Icons.person_rounded,
+        color: AppColors.primaryBright,
+        onTap: hasGymMembership ? onShowQr : onOpenProfile,
+      ),
+      _DashboardActionData(
+        label: 'Body progress',
+        helper: 'Weight logs and trends',
+        description: 'Track body updates and keep your progress history current.',
+        icon: Icons.monitor_weight_rounded,
+        color: AppColors.accentPurple,
+        onTap: onLogWeight,
+      ),
+      _DashboardActionData(
+        label: hasTrainer ? 'Message coach' : 'Trainer support',
+        helper: hasTrainer ? 'Open coaching chat' : 'Unlock coach access',
+        description: hasTrainer
+            ? 'Continue your conversation and review coach updates.'
+            : 'Connect with a gym to unlock trainer-backed support.',
+        icon: hasTrainer ? Icons.chat_bubble_rounded : Icons.support_agent_rounded,
+        color: AppColors.primary,
+        onTap: hasTrainer ? onMessageTrainer : onFindGyms,
+      ),
+      _DashboardActionData(
+        label: 'Membership',
+        helper: hasGymMembership ? 'Status and due dates' : 'See access options',
+        description: 'Review access status, dues, and membership details.',
+        icon: Icons.card_membership_rounded,
+        color: AppColors.primaryBright,
+        onTap: onViewMembership,
+      ),
+      _DashboardActionData(
+        label: 'Trial requests',
+        helper: 'Manage gym trials',
+        description: 'Check trial request progress and pending gym responses.',
+        icon: Icons.assignment_turned_in_rounded,
+        color: AppColors.accentPurple,
+        onTap: onOpenTrials,
+      ),
+      _DashboardActionData(
+        label: 'Workout logs',
+        helper: 'History, PRs, volume',
+        description: 'See completed sessions, personal records, and volume.',
+        icon: Icons.menu_book_rounded,
+        color: AppColors.primary,
+        onTap: onOpenLogbook,
+      ),
+      _DashboardActionData(
+        label: 'Attendance',
+        helper: 'Check-ins and visit history',
+        description: 'Review daily check-ins and your recent gym visits.',
+        icon: Icons.fact_check_outlined,
+        color: AppColors.primaryBright,
+        onTap: onOpenAttendance,
+      ),
+      _DashboardActionData(
+        label: 'Settings',
+        helper: 'Account, alerts, logout',
+        description: 'Manage preferences, notifications, and account actions.',
+        icon: Icons.settings_rounded,
+        color: AppColors.textSecondary,
+        onTap: onOpenSettings,
+      ),
+    ];
+    final focusBanner = hasWarning
+        ? _DashboardFocusBannerData(
+            eyebrow: 'Membership Alert',
+            title: dueAmount > 0
+                ? 'Your membership has pending dues'
+                : 'Your membership is nearing renewal',
+            description: dueAmount > 0
+                ? 'Review membership details and clear dues to avoid access issues.'
+                : 'Renew early and keep your access uninterrupted.',
+            label: 'Open membership',
+            icon: Icons.card_membership_rounded,
+            color: AppColors.primary,
+            onTap: onViewMembership,
+          )
+        : hasActivePlan
+        ? _DashboardFocusBannerData(
+            eyebrow: 'Today Focus',
+            title: activeWorkoutLabel,
+            description: checkedInToday
+                ? 'You are checked in. Open your plan and keep momentum going.'
+                : 'Your next training session is ready whenever you are.',
+            label: 'Open workout',
+            icon: Icons.fitness_center_rounded,
+            color: AppColors.primaryBright,
+            onTap: onOpenWorkout,
+          )
+        : hasTrainer
+        ? _DashboardFocusBannerData(
+            eyebrow: 'Coach Support',
+            title: 'Your coach channel is open',
+            description:
+                'Message your trainer for guidance, changes, or workout clarification.',
+            label: 'Open chat',
+            icon: Icons.chat_bubble_rounded,
+            color: AppColors.accentPurple,
+            onTap: onMessageTrainer,
+          )
+        : _DashboardFocusBannerData(
+            eyebrow: 'Next Step',
+            title: 'Keep your member profile progressing',
+            description:
+                'Complete your setup, explore gyms, and build a stronger routine.',
+            label: 'Open profile',
+            icon: Icons.person_rounded,
+            color: AppColors.primary,
+            onTap: onOpenProfile,
+          );
     return RefreshIndicator(
       onRefresh: onRefresh,
       color: const Color(0xFF19D6A6),
@@ -1184,81 +1307,178 @@ class _DashboardPage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             RevealOnBuild(
-              delay: const Duration(milliseconds: 70),
-              child: _MetricRail(metrics: metricCards),
-            ),
-            const SizedBox(height: 18),
-            RevealOnBuild(
-              delay: const Duration(milliseconds: 90),
-              child: StepDashboardWidget(
-                steps: stepSummary,
-                permissionStatus: stepPermissionStatus,
-                loading: stepLoading,
-                statusMessage: stepStatusMessage,
-                onRefresh: () => unawaited(onRefresh()),
-                onRequestPermission: onRequestStepPermission,
+              delay: const Duration(milliseconds: 65),
+              child: _DashboardSection(
+                eyebrow: 'Snapshot',
+                title: 'Today at a glance',
+                child: _MetricGrid(metrics: metricCards),
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
+            RevealOnBuild(
+              delay: const Duration(milliseconds: 85),
+              child: _DashboardSection(
+                eyebrow: 'Actions',
+                title: 'Featured shortcuts',
+                child: _DashboardActionCarousel(actions: dashboardActions),
+              ),
+            ),
+            const SizedBox(height: 16),
+            RevealOnBuild(
+              delay: const Duration(milliseconds: 95),
+              child: _DashboardSection(
+                eyebrow: 'Focus',
+                title: 'What deserves attention now',
+                child: _DashboardFocusBanner(data: focusBanner),
+              ),
+            ),
+            const SizedBox(height: 16),
             RevealOnBuild(
               delay: const Duration(milliseconds: 105),
-              child: _WorkoutTicket(
-                hasPlan: hasActivePlan,
-                title: hasActivePlan
-                    ? activeWorkoutLabel
-                    : 'Choose today\'s plan',
-                subtitle: hasActivePlan
-                    ? (todayWorkout['goal']?.toString() ??
-                          todayWorkout['focus']?.toString() ??
-                          'Training plan')
-                    : 'Pick a workout from your library',
-                duration: hasActivePlan
-                    ? '${todayWorkout['estimated_duration_minutes']?.toString() ?? '30'} min'
-                    : 'Flexible',
-                status: checkedInToday
-                    ? 'Checked in'
-                    : hasActivePlan
-                    ? 'Ready'
-                    : 'No plan',
-                onOpenWorkout: onOpenWorkout,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final split = constraints.maxWidth >= 680;
+                  final stepCard = StepDashboardWidget(
+                    steps: stepSummary,
+                    permissionStatus: stepPermissionStatus,
+                    loading: stepLoading,
+                    statusMessage: stepStatusMessage,
+                    onRefresh: () => unawaited(onRefresh()),
+                    onRequestPermission: onRequestStepPermission,
+                  );
+                  final workoutCard = _WorkoutTicket(
+                    hasPlan: hasActivePlan,
+                    title: hasActivePlan
+                        ? activeWorkoutLabel
+                        : 'Choose today\'s plan',
+                    subtitle: hasActivePlan
+                        ? (todayWorkout['goal']?.toString() ??
+                              todayWorkout['focus']?.toString() ??
+                              'Training plan')
+                        : 'Pick a workout from your library',
+                    duration: hasActivePlan
+                        ? '${todayWorkout['estimated_duration_minutes']?.toString() ?? '30'} min'
+                        : 'Flexible',
+                    status: checkedInToday
+                        ? 'Checked in'
+                        : hasActivePlan
+                        ? 'Ready'
+                        : 'No plan',
+                    onOpenWorkout: onOpenWorkout,
+                  );
+
+                  if (!split) {
+                    return Column(
+                      children: [
+                        _DashboardSection(
+                          eyebrow: 'Movement',
+                          title: 'Health and training',
+                          child: stepCard,
+                        ),
+                        const SizedBox(height: 16),
+                        _DashboardSection(
+                          eyebrow: 'Workout',
+                          title: 'Your next session',
+                          child: workoutCard,
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _DashboardSection(
+                          eyebrow: 'Movement',
+                          title: 'Health and training',
+                          child: stepCard,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _DashboardSection(
+                          eyebrow: 'Workout',
+                          title: 'Your next session',
+                          child: workoutCard,
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
             RevealOnBuild(
-              delay: const Duration(milliseconds: 115),
-              child: _MemberUtilityRail(
-                onOpenLogbook: onOpenLogbook,
-                onOpenAttendance: onOpenAttendance,
-                onOpenSettings: onOpenSettings,
-              ),
-            ),
-            const SizedBox(height: 18),
-            RevealOnBuild(
-              delay: const Duration(milliseconds: 135),
-              child: _WeeklyActivityStrip(
-                checkedInToday: checkedInToday,
-                streakDays: workoutStreak,
-                weeklyBars: weeklyBars,
-              ),
-            ),
-            const SizedBox(height: 18),
-            RevealOnBuild(
-              delay: const Duration(milliseconds: 155),
-              child: _RecentWorkoutRows(
-                workouts: latestWorkoutItems.take(2).toList(),
-                hasActivePlan: hasActivePlan,
-                onOpenLogbook: onOpenLogbook,
+              delay: const Duration(milliseconds: 130),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final split = constraints.maxWidth >= 680;
+                  final activityCard = _WeeklyActivityStrip(
+                    checkedInToday: checkedInToday,
+                    streakDays: workoutStreak,
+                    weeklyBars: weeklyBars,
+                  );
+                  final recentCard = _RecentWorkoutRows(
+                    workouts: latestWorkoutItems.take(2).toList(),
+                    hasActivePlan: hasActivePlan,
+                    onOpenLogbook: onOpenLogbook,
+                  );
+
+                  if (!split) {
+                    return Column(
+                      children: [
+                        _DashboardSection(
+                          eyebrow: 'Insights',
+                          title: 'Weekly consistency',
+                          child: activityCard,
+                        ),
+                        const SizedBox(height: 16),
+                        _DashboardSection(
+                          eyebrow: 'History',
+                          title: 'Recent training',
+                          child: recentCard,
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _DashboardSection(
+                          eyebrow: 'Insights',
+                          title: 'Weekly consistency',
+                          child: activityCard,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _DashboardSection(
+                          eyebrow: 'History',
+                          title: 'Recent training',
+                          child: recentCard,
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
             if (hasTrainer || hasGymMembership || isTrialUser) ...[
               const SizedBox(height: 16),
               RevealOnBuild(
-                delay: const Duration(milliseconds: 170),
-                child: _CoachMiniPanel(
-                  hasTrainer: hasTrainer,
-                  trainerName: assignedTrainerName,
-                  workoutLabel: activeWorkoutLabel,
-                  onTap: hasTrainer ? onMessageTrainer : onFindGyms,
+                delay: const Duration(milliseconds: 150),
+                child: _DashboardSection(
+                  eyebrow: 'Support',
+                  title: hasTrainer ? 'Coach connection' : 'Next unlock',
+                  child: _CoachMiniPanel(
+                    hasTrainer: hasTrainer,
+                    trainerName: assignedTrainerName,
+                    workoutLabel: activeWorkoutLabel,
+                    onTap: hasTrainer ? onMessageTrainer : onFindGyms,
+                  ),
                 ),
               ),
             ],
@@ -1411,53 +1631,179 @@ class _DashboardMetricData {
   final Color color;
 }
 
-class _PremiumDashboardBackground extends StatelessWidget {
+class _DashboardActionData {
+  const _DashboardActionData({
+    required this.label,
+    required this.helper,
+    required this.description,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final String helper;
+  final String description;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+}
+
+class _DashboardFocusBannerData {
+  const _DashboardFocusBannerData({
+    required this.eyebrow,
+    required this.title,
+    required this.description,
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String eyebrow;
+  final String title;
+  final String description;
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+}
+
+class _DashboardSection extends StatelessWidget {
+  const _DashboardSection({
+    required this.eyebrow,
+    required this.title,
+    required this.child,
+  });
+
+  final String eyebrow;
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                eyebrow.toUpperCase(),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.9,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
+        child,
+      ],
+    );
+  }
+}
+
+class _PremiumDashboardBackground extends StatefulWidget {
   const _PremiumDashboardBackground({required this.child});
 
   final Widget child;
 
   @override
+  State<_PremiumDashboardBackground> createState() =>
+      _PremiumDashboardBackgroundState();
+}
+
+class _PremiumDashboardBackgroundState extends State<_PremiumDashboardBackground>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 14),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFFFFFBF4), Color(0xFFF4FBF4), Color(0xFFF5F3FF)],
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final phase = _controller.value * math.pi * 2;
+        final topRightDx = math.sin(phase) * 10;
+        final topRightDy = math.cos(phase) * 8;
+        final leftDx = math.cos(phase * 0.8) * 8;
+        final leftDy = math.sin(phase * 0.8) * 10;
+        final bottomDx = math.sin(phase * 0.6) * 12;
+        final bottomDy = math.cos(phase * 0.6) * 9;
+
+        return Stack(
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    const Color(0xFFF8FAFC),
+                    const Color(0xFFF1F5F9).withValues(alpha: 0.92),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ),
-        const Positioned(
-          top: -88,
-          right: -72,
-          child: _DashboardGlowOrb(
-            size: 230,
-            color: Color(0xFF67A7FF),
-            opacity: 0.22,
-          ),
-        ),
-        const Positioned(
-          top: 250,
-          left: -96,
-          child: _DashboardGlowOrb(
-            size: 230,
-            color: Color(0xFF19D6A6),
-            opacity: 0.14,
-          ),
-        ),
-        const Positioned(
-          bottom: 120,
-          right: -100,
-          child: _DashboardGlowOrb(
-            size: 240,
-            color: Color(0xFF9A7BFF),
-            opacity: 0.12,
-          ),
-        ),
-        child,
-      ],
+            Positioned(
+              top: -96 + topRightDy,
+              right: -82 + topRightDx,
+              child: const _DashboardGlowOrb(
+                size: 220,
+                color: AppColors.primary,
+                opacity: 0.08,
+              ),
+            ),
+            Positioned(
+              top: 280 + leftDy,
+              left: -110 + leftDx,
+              child: const _DashboardGlowOrb(
+                size: 210,
+                color: AppColors.primaryBright,
+                opacity: 0.04,
+              ),
+            ),
+            Positioned(
+              bottom: 140 + bottomDy,
+              right: -120 + bottomDx,
+              child: const _DashboardGlowOrb(
+                size: 230,
+                color: AppColors.accentPurple,
+                opacity: 0.035,
+              ),
+            ),
+            widget.child,
+          ],
+        );
+      },
     );
   }
 }
@@ -1524,7 +1870,7 @@ class _MemberGreetingHeader extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.headlineSmall?.copyWith(
-                    color: const Color(0xFF18202A),
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w900,
                     letterSpacing: -0.7,
                     height: 1.02,
@@ -1536,7 +1882,7 @@ class _MemberGreetingHeader extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF758092),
+                    color: AppColors.textSecondary,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -1582,15 +1928,15 @@ class _HeaderAction extends StatelessWidget {
               color: Colors.white.withValues(alpha: 0.92),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF5F6F88).withValues(alpha: 0.11),
-                  blurRadius: 18,
-                  offset: const Offset(0, 10),
+                  color: AppColors.shadow.withValues(alpha: 0.10),
+                  blurRadius: 14,
+                  offset: const Offset(0, 8),
                 ),
               ],
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white),
+              border: Border.all(color: AppColors.stroke.withValues(alpha: 0.5)),
             ),
-            child: Icon(icon, color: const Color(0xFF18202A), size: 21),
+            child: Icon(icon, color: AppColors.textPrimary, size: 21),
           ),
           if (count > 0)
             Positioned(
@@ -1600,7 +1946,7 @@ class _HeaderAction extends StatelessWidget {
                 constraints: const BoxConstraints(minWidth: 19, minHeight: 19),
                 padding: const EdgeInsets.symmetric(horizontal: 5),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFF8D5C),
+                  color: AppColors.primary,
                   borderRadius: BorderRadius.circular(999),
                   border: Border.all(color: Colors.white, width: 2),
                 ),
@@ -1652,12 +1998,24 @@ class _PerformanceHeroPanel extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(34),
       child: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFFFFF2D8), Color(0xFFEAFBF1), Color(0xFFEAF0FF)],
+            colors: [
+              Colors.white.withValues(alpha: 0.98),
+              const Color(0xFFF6FBFF),
+              const Color(0xFFF8FAFC),
+            ],
           ),
+          border: Border.all(color: AppColors.stroke.withValues(alpha: 0.8)),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.shadow.withValues(alpha: 0.06),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
         ),
         child: Stack(
           children: [
@@ -1669,17 +2027,17 @@ class _PerformanceHeroPanel extends StatelessWidget {
                 height: 134,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.42),
+                  color: Colors.white.withValues(alpha: 0.34),
                 ),
               ),
             ),
-            const Positioned(
+            Positioned(
               top: -34,
               right: -28,
-              child: _DashboardGlowOrb(
+              child: const _DashboardGlowOrb(
                 size: 154,
-                color: Color(0xFFFF8D5C),
-                opacity: 0.20,
+                color: AppColors.primary,
+                opacity: 0.14,
               ),
             ),
             Padding(
@@ -1707,13 +2065,16 @@ class _PerformanceHeroPanel extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     color: Colors.white.withValues(alpha: 0.68),
                                     borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                      color: AppColors.stroke.withValues(alpha: 0.5),
+                                    ),
                                   ),
                                   child: Text(
                                     badge.toUpperCase(),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: theme.textTheme.labelSmall?.copyWith(
-                                      color: const Color(0xFF19A781),
+                                      color: AppColors.primary,
                                       fontWeight: FontWeight.w900,
                                       letterSpacing: 0.9,
                                     ),
@@ -1725,7 +2086,7 @@ class _PerformanceHeroPanel extends StatelessWidget {
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: theme.textTheme.displaySmall?.copyWith(
-                                    color: const Color(0xFF18202A),
+                                    color: AppColors.textPrimary,
                                     fontWeight: FontWeight.w900,
                                     height: 0.95,
                                     letterSpacing: -1.4,
@@ -1738,7 +2099,7 @@ class _PerformanceHeroPanel extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: theme.textTheme.labelSmall?.copyWith(
-                                    color: const Color(0xFF677386),
+                                    color: AppColors.textSecondary,
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
@@ -1818,12 +2179,13 @@ class _HeroRing extends StatelessWidget {
               height: size,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.05),
+                color: Colors.white.withValues(alpha: 0.78),
+                border: Border.all(color: AppColors.stroke.withValues(alpha: 0.7)),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF67A7FF).withValues(alpha: 0.16),
-                    blurRadius: 18,
-                    offset: const Offset(0, 10),
+                    color: AppColors.primary.withValues(alpha: 0.10),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
@@ -1838,17 +2200,15 @@ class _HeroRing extends StatelessWidget {
                 child: CircularProgressIndicator(
                   value: value,
                   strokeWidth: size < 100 ? 8 : 10,
-                  backgroundColor: Colors.white.withValues(alpha: 0.72),
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                    Color(0xFF19D6A6),
-                  ),
+                  backgroundColor: AppColors.stroke.withValues(alpha: 0.8),
+                  valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
                 ),
               ),
             ),
             Text(
               label,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: const Color(0xFF18202A),
+                color: AppColors.textPrimary,
                 fontWeight: FontWeight.w900,
                 fontSize: size < 100 ? 18 : null,
               ),
@@ -1872,16 +2232,17 @@ class _HeroChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.4)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(data.icon, size: 14, color: const Color(0xFF19A781)),
+          Icon(data.icon, size: 14, color: AppColors.primary),
           const SizedBox(width: 6),
           Text(
             data.label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: const Color(0xFF18202A),
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -1891,6 +2252,7 @@ class _HeroChip extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _MetricRail extends StatelessWidget {
   const _MetricRail({required this.metrics});
 
@@ -1906,6 +2268,111 @@ class _MetricRail extends StatelessWidget {
         itemCount: metrics.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) => _MetricRailItem(data: metrics[index]),
+      ),
+    );
+  }
+}
+
+class _MetricGrid extends StatelessWidget {
+  const _MetricGrid({required this.metrics});
+
+  final List<_DashboardMetricData> metrics;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 620 ? 4 : 2;
+        final spacing = constraints.maxWidth >= 620 ? 12.0 : 10.0;
+        final tileWidth =
+            (constraints.maxWidth - (spacing * (columns - 1))) / columns;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final entry in metrics.asMap().entries)
+              SizedBox(
+                width: tileWidth,
+                child: RevealOnBuild(
+                  delay: Duration(milliseconds: 30 * entry.key),
+                  offset: const Offset(0, 0.06),
+                  duration: const Duration(milliseconds: 420),
+                  child: _MetricGridItem(data: entry.value),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _MetricGridItem extends StatelessWidget {
+  const _MetricGridItem({required this.data});
+
+  final _DashboardMetricData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.75)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadow.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: data.color.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: data.color.withValues(alpha: 0.14)),
+            ),
+            child: Icon(data.icon, color: data.color, size: 20),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            data.value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            data.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            data.helper,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.textMuted,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1985,6 +2452,363 @@ class _MetricRailItem extends StatelessWidget {
   }
 }
 
+class _DashboardActionCarousel extends StatefulWidget {
+  const _DashboardActionCarousel({required this.actions});
+
+  final List<_DashboardActionData> actions;
+
+  @override
+  State<_DashboardActionCarousel> createState() => _DashboardActionCarouselState();
+}
+
+class _DashboardActionCarouselState extends State<_DashboardActionCarousel> {
+  late final PageController _controller;
+  double _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = PageController(viewportFraction: 0.78)
+      ..addListener(() {
+        if (_controller.hasClients) {
+          setState(() => _page = _controller.page ?? 0);
+        }
+      });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          height: 214,
+          child: PageView.builder(
+            controller: _controller,
+            physics: const BouncingScrollPhysics(),
+            itemCount: widget.actions.length,
+            itemBuilder: (context, index) {
+              final delta = (_page - index).abs().clamp(0.0, 1.0);
+              final scale = 1 - (delta * 0.12);
+              final opacity = 1 - (delta * 0.22);
+              final lift = 18 * delta;
+
+              return Transform.translate(
+                offset: Offset(0, lift),
+                child: Transform.scale(
+                  scale: scale,
+                  child: Opacity(
+                    opacity: opacity,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: RevealOnBuild(
+                        delay: Duration(milliseconds: 35 * index),
+                        offset: const Offset(0.04, 0.07),
+                        duration: const Duration(milliseconds: 460),
+                        child: _DashboardActionFeaturedCard(
+                          data: widget.actions[index],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(widget.actions.length, (index) {
+            final active = (_page.round() == index);
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              width: active ? 18 : 6,
+              height: 6,
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              decoration: BoxDecoration(
+                color: active ? AppColors.primary : AppColors.strokeStrong,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            );
+          }),
+        ),
+      ],
+    );
+  }
+}
+
+class _DashboardActionFeaturedCard extends StatelessWidget {
+  const _DashboardActionFeaturedCard({required this.data});
+
+  final _DashboardActionData data;
+
+  @override
+  Widget build(BuildContext context) {
+    const accentColor = AppColors.primary;
+
+    return InkWell(
+      onTap: data.onTap,
+      borderRadius: BorderRadius.circular(28),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: AppColors.stroke.withValues(alpha: 0.72)),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.shadow.withValues(alpha: 0.12),
+              blurRadius: 24,
+              offset: const Offset(0, 16),
+            ),
+            BoxShadow(
+              color: accentColor.withValues(alpha: 0.08),
+              blurRadius: 22,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: Stack(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.96),
+                ),
+              ),
+              Positioned(
+                top: -8,
+                right: -6,
+                child: Transform.rotate(
+                  angle: -0.24,
+                  child: Container(
+                    width: 88,
+                    height: 88,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(28),
+                      color: const Color(0xFFF8FAFC),
+                      border: Border.all(
+                        color: accentColor.withValues(alpha: 0.08),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 18,
+                right: 18,
+                child: Icon(
+                  Icons.north_east_rounded,
+                  color: accentColor.withValues(alpha: 0.70),
+                  size: 20,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Transform.translate(
+                          offset: const Offset(0, -2),
+                          child: Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              color: accentColor.withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: accentColor.withValues(alpha: 0.14),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: accentColor.withValues(alpha: 0.08),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Icon(data.icon, color: accentColor, size: 22),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            data.helper,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.15,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 22),
+                    Text(
+                      data.label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w900,
+                            height: 1.04,
+                          ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      data.description,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w700,
+                            height: 1.35,
+                          ),
+                    ),
+                    const Spacer(),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Open',
+                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                color: accentColor,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 18,
+                          color: accentColor,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardFocusBanner extends StatelessWidget {
+  const _DashboardFocusBanner({required this.data});
+
+  final _DashboardFocusBannerData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: data.onTap,
+      borderRadius: BorderRadius.circular(28),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.surface,
+              AppColors.surfaceSoft,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: AppColors.stroke.withValues(alpha: 0.72)),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.shadow.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: AppColors.primaryBright.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: AppColors.primaryBright.withValues(alpha: 0.14),
+                ),
+              ),
+              child: Icon(data.icon, color: AppColors.primaryBright, size: 24),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    data.eyebrow.toUpperCase(),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AppColors.primaryBright,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.7,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    data.title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    data.description,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w700,
+                          height: 1.35,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  data.label,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.primaryBright,
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+                const SizedBox(height: 6),
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  color: AppColors.primaryBright,
+                  size: 18,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _WorkoutTicket extends StatelessWidget {
   const _WorkoutTicket({
     required this.hasPlan,
@@ -2009,11 +2833,12 @@ class _WorkoutTicket extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.90),
         borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.75)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6F7C92).withValues(alpha: 0.12),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
+            color: AppColors.shadow.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -2026,7 +2851,7 @@ class _WorkoutTicket extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xFFFF8D5C), Color(0xFF19D6A6)],
+                  colors: [AppColors.primaryBright, AppColors.primary],
                 ),
                 borderRadius: BorderRadius.horizontal(
                   left: Radius.circular(28),
@@ -2044,7 +2869,7 @@ class _WorkoutTicket extends StatelessWidget {
                         Text(
                           'TODAY WORKOUT',
                           style: theme.textTheme.labelSmall?.copyWith(
-                            color: const Color(0xFFFF7A3D),
+                            color: AppColors.primary,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 1.1,
                           ),
@@ -2059,7 +2884,7 @@ class _WorkoutTicket extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleLarge?.copyWith(
-                        color: const Color(0xFF18202A),
+                        color: AppColors.textPrimary,
                         fontWeight: FontWeight.w900,
                         height: 1.02,
                       ),
@@ -2103,15 +2928,16 @@ class _TicketPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F6F8),
+        color: AppColors.surfaceSoft,
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.55)),
       ),
       child: Text(
         label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: const Color(0xFF5F6B7C),
+          color: AppColors.textSecondary,
           fontWeight: FontWeight.w800,
         ),
       ),
@@ -2138,10 +2964,11 @@ class _WeeklyActivityStrip extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.75)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6F7C92).withValues(alpha: 0.10),
-            blurRadius: 22,
+            color: AppColors.shadow.withValues(alpha: 0.08),
+            blurRadius: 16,
             offset: const Offset(0, 10),
           ),
         ],
@@ -2155,7 +2982,7 @@ class _WeeklyActivityStrip extends StatelessWidget {
                 child: Text(
                   'Weekly activity',
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFF18202A),
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -2201,12 +3028,12 @@ class _WeeklyActivityStrip extends StatelessWidget {
                                           end: Alignment.topCenter,
                                           colors: index == weeklyBars.length - 1
                                               ? const [
-                                                  Color(0xFF67A7FF),
-                                                  Color(0xFF19D6A6),
+                                                  AppColors.primaryBright,
+                                                  AppColors.primary,
                                                 ]
                                               : [
-                                                  const Color(0xFFE9EEF4),
-                                                  const Color(0xFFD6DEE8),
+                                                  AppColors.strokeStrong,
+                                                  AppColors.stroke,
                                                 ],
                                         ),
                                         borderRadius: BorderRadius.circular(
@@ -2222,7 +3049,7 @@ class _WeeklyActivityStrip extends StatelessWidget {
                         Text(
                           const ['S', 'M', 'T', 'W', 'T', 'F', 'S'][index],
                           style: theme.textTheme.labelSmall?.copyWith(
-                            color: const Color(0xFF8792A2),
+                            color: AppColors.textMuted,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -2258,10 +3085,11 @@ class _RecentWorkoutRows extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.75)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6F7C92).withValues(alpha: 0.10),
-            blurRadius: 22,
+            color: AppColors.shadow.withValues(alpha: 0.08),
+            blurRadius: 16,
             offset: const Offset(0, 10),
           ),
         ],
@@ -2274,17 +3102,17 @@ class _RecentWorkoutRows extends StatelessWidget {
                 child: Text(
                   'Recent workouts',
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFF18202A),
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
               TextButton(
                 onPressed: onOpenLogbook,
-                child: const Text(
+                child: Text(
                   'Open logs',
-                  style: TextStyle(
-                    color: Color(0xFF19A781),
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: AppColors.primary,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -2298,7 +3126,7 @@ class _RecentWorkoutRows extends StatelessWidget {
                 children: [
                   const Icon(
                     Icons.fitness_center_rounded,
-                    color: Color(0xFF67A7FF),
+                    color: AppColors.primary,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -2307,7 +3135,7 @@ class _RecentWorkoutRows extends StatelessWidget {
                           ? 'Open your plan and complete your first session.'
                           : 'Choose a workout to start building history.',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFF758092),
+                        color: AppColors.textSecondary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -2361,14 +3189,17 @@ class _RecentWorkoutRow extends StatelessWidget {
                   width: 46,
                   height: 46,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFEAF0FF), Color(0xFFE8FBF4)],
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.primary.withValues(alpha: 0.10),
+                        AppColors.primaryBright.withValues(alpha: 0.06),
+                      ],
                     ),
                     borderRadius: BorderRadius.circular(17),
                   ),
                   child: const Icon(
                     Icons.bolt_rounded,
-                    color: Color(0xFF19A781),
+                    color: AppColors.primary,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -2381,7 +3212,7 @@ class _RecentWorkoutRow extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: const Color(0xFF18202A),
+                          color: AppColors.textPrimary,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -2392,7 +3223,7 @@ class _RecentWorkoutRow extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.labelMedium
                             ?.copyWith(
-                              color: const Color(0xFF758092),
+                              color: AppColors.textSecondary,
                               fontWeight: FontWeight.w700,
                             ),
                       ),
@@ -2406,22 +3237,21 @@ class _RecentWorkoutRow extends StatelessWidget {
                   child: CircularProgressIndicator(
                     value: progress.clamp(0.0, 1.0),
                     strokeWidth: 4,
-                    backgroundColor: const Color(0xFFE7ECF2),
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Color(0xFF67A7FF),
-                    ),
+                    backgroundColor: AppColors.stroke,
+                    valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
                   ),
                 ),
               ],
             ),
           ),
-          if (showDivider) Divider(height: 1, color: const Color(0xFFE7ECF2)),
+          if (showDivider) Divider(height: 1, color: AppColors.stroke),
         ],
       ),
     );
   }
 }
 
+// ignore: unused_element
 class _MemberUtilityRail extends StatelessWidget {
   const _MemberUtilityRail({
     required this.onOpenLogbook,
@@ -2518,10 +3348,11 @@ class _MemberUtilityPill extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.88),
           borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: AppColors.stroke.withValues(alpha: 0.72)),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF6F7C92).withValues(alpha: 0.10),
-              blurRadius: 18,
+              color: AppColors.shadow.withValues(alpha: 0.08),
+              blurRadius: 12,
               offset: const Offset(0, 8),
             ),
           ],
@@ -2547,7 +3378,7 @@ class _MemberUtilityPill extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: const Color(0xFF18202A),
+                      color: AppColors.textPrimary,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -2557,14 +3388,14 @@ class _MemberUtilityPill extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: const Color(0xFF758092),
+                      color: AppColors.textSecondary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, color: Color(0xFF9AA5B5)),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
           ],
         ),
       ),
@@ -2595,10 +3426,11 @@ class _CoachMiniPanel extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.90),
           borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: AppColors.stroke.withValues(alpha: 0.72)),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF6F7C92).withValues(alpha: 0.10),
-              blurRadius: 18,
+              color: AppColors.shadow.withValues(alpha: 0.08),
+              blurRadius: 12,
               offset: const Offset(0, 8),
             ),
           ],
@@ -2611,14 +3443,17 @@ class _CoachMiniPanel extends StatelessWidget {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: hasTrainer
-                      ? const [Color(0xFF67A7FF), Color(0xFF9A7BFF)]
-                      : const [Color(0xFFEAF0FF), Color(0xFFE8FBF4)],
+                      ? const [AppColors.primary, AppColors.accentPurple]
+                      : [
+                          AppColors.primary.withValues(alpha: 0.10),
+                          AppColors.primaryBright.withValues(alpha: 0.06),
+                        ],
                 ),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 hasTrainer ? Icons.person_rounded : Icons.lock_rounded,
-                color: hasTrainer ? Colors.white : const Color(0xFF19A781),
+                color: hasTrainer ? Colors.white : AppColors.primary,
                 size: 20,
               ),
             ),
@@ -2632,7 +3467,7 @@ class _CoachMiniPanel extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: const Color(0xFF18202A),
+                      color: AppColors.textPrimary,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -2643,7 +3478,7 @@ class _CoachMiniPanel extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: const Color(0xFF758092),
+                      color: AppColors.textSecondary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -2653,7 +3488,7 @@ class _CoachMiniPanel extends StatelessWidget {
             const SizedBox(width: 8),
             Icon(
               hasTrainer ? Icons.chat_bubble_rounded : Icons.north_east_rounded,
-              color: const Color(0xFF19A781),
+              color: AppColors.primary,
               size: 20,
             ),
           ],
@@ -2686,19 +3521,21 @@ class _DashboardPillButton extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: filled
               ? const LinearGradient(
-                  colors: [Color(0xFF19D6A6), Color(0xFF67A7FF)],
+                  colors: [AppColors.primaryBright, AppColors.primary],
                 )
               : null,
           color: filled ? null : Colors.white.withValues(alpha: 0.70),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: filled ? Colors.transparent : Colors.white),
+          border: Border.all(
+            color: filled ? Colors.transparent : AppColors.stroke.withValues(alpha: 0.72),
+          ),
         ),
         child: Text(
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: filled ? Colors.white : const Color(0xFF18202A),
+            color: filled ? Colors.white : AppColors.textPrimary,
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -3931,11 +4768,13 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   bool _startingWorkout = false;
   bool _completingWorkout = false;
   bool _addingExercise = false;
+  bool _customExerciseLibraryLoading = false;
   bool _showPrAchievement = false;
   int? _restExerciseIndex;
   int _restRemainingSeconds = 0;
   int _restTotalSeconds = 0;
   Timer? _restTimer;
+  List<Map<String, dynamic>> _customExerciseLibrary = const [];
 
   @override
   void initState() {
@@ -4016,6 +4855,9 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         : 0;
     final selectedGoal =
         selectedPlan['goal']?.toString() ?? 'Build a stronger routine';
+    final selectedPlanId = _selectedPlanId();
+    final hasAssignedPlans = widget.plans.isNotEmpty;
+    final canStartWorkout = !_startingWorkout && _activeSessionId == null;
     final historyPreview = _workoutHistory.take(4).toList();
 
     return ListView(
@@ -4082,10 +4924,10 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                 _FitLifeEmptyPanel(
                   title: 'No assigned workout yet',
                   message:
-                      'Open the workout book to pick a plan, or start once your trainer assigns one.',
+                      'Start a custom workout now and add exercises from the exercise library, or open the workout book to adopt a plan.',
                   icon: Icons.fitness_center_rounded,
-                  actionLabel: 'Open Workout Book',
-                  onAction: widget.onOpenWorkoutBook,
+                  actionLabel: 'Start Custom Workout',
+                  onAction: canStartWorkout ? _startWorkout : null,
                 )
               else
                 ...widget.plans.asMap().entries.map((entry) {
@@ -4110,14 +4952,23 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                 label: _startingWorkout
                     ? 'Starting workout...'
                     : _activeSessionId == null
-                    ? 'Start Workout'
+                    ? (hasAssignedPlans
+                        ? (selectedPlanId != null
+                            ? 'Start Workout'
+                            : 'Select Workout Plan')
+                        : 'Start Custom Workout')
                     : 'Workout Active',
-                icon: Icons.play_arrow_rounded,
+                icon: _activeSessionId == null
+                    ? Icons.play_arrow_rounded
+                    : Icons.pause_circle_filled_rounded,
                 loading: _startingWorkout,
-                enabled: !_startingWorkout && _activeSessionId == null,
+                enabled: canStartWorkout &&
+                    (!hasAssignedPlans || selectedPlanId != null),
                 onTap: _startWorkout,
               ),
-              if (selectedPlan.isNotEmpty && _activeSessionId == null) ...[
+              if (hasAssignedPlans &&
+                  selectedPlan.isNotEmpty &&
+                  _activeSessionId == null) ...[
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 10,
@@ -4125,11 +4976,11 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                   children: [
                     StatusBadge(
                       label: '$selectedPlanDays workout days',
-                      color: const Color(0xFF92A3FD),
+                      color: AppColors.primaryBright,
                     ),
                     StatusBadge(
                       label: selectedGoal,
-                      color: const Color(0xFFC58BF2),
+                      color: AppColors.primary,
                     ),
                   ],
                 ),
@@ -4143,10 +4994,11 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                 ),
                 const SizedBox(height: 12),
                 if (_sessionExercises.isEmpty)
-                  const _FitLifeEmptyPanel(
+                  _FitLifeEmptyPanel(
                     title: 'No exercises loaded',
-                    message:
-                        'Add exercises from your assigned workout library before completing this session.',
+                    message: widget.plans.isEmpty
+                        ? 'Add custom exercises from the exercise library, or end the workout below.'
+                        : 'Add exercises from your assigned workout library, or end the workout below.',
                     icon: Icons.playlist_add_rounded,
                   )
                 else ...[
@@ -4182,25 +5034,30 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  _FitLifePrimaryAction(
-                    label: _completingWorkout
-                        ? 'Completing workout...'
-                        : 'Complete Workout',
-                    icon: Icons.emoji_events_rounded,
-                    loading: _completingWorkout,
-                    enabled:
-                        !_completingWorkout && _sessionExercises.isNotEmpty,
-                    gradient: const [Color(0xFFEEA4CE), Color(0xFFC58BF2)],
-                    onTap: _completeWorkout,
-                  ),
                 ],
+                const SizedBox(height: 4),
+                _FitLifePrimaryAction(
+                  label: _completingWorkout
+                      ? (_sessionExercises.isEmpty
+                          ? 'Ending workout...'
+                          : 'Completing workout...')
+                      : (_sessionExercises.isEmpty
+                          ? 'End Workout'
+                          : 'Complete Workout'),
+                  icon: _sessionExercises.isEmpty
+                      ? Icons.stop_circle_rounded
+                      : Icons.emoji_events_rounded,
+                  loading: _completingWorkout,
+                  enabled: !_completingWorkout,
+                  gradient: const [AppColors.primaryBright, AppColors.primary],
+                  onTap: _completeWorkout,
+                ),
               ],
               if (_showPrAchievement) ...[
                 const SizedBox(height: 18),
                 PulseGlow(
                   enabled: true,
-                  glowColor: const Color(0xFFC58BF2),
+                  glowColor: AppColors.primaryBright,
                   child: _FitLifeAchievementPanel(
                     title: 'New personal record',
                     message: 'Your latest session unlocked a new best.',
@@ -4224,8 +5081,12 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                   message:
                       'Complete your first workout to unlock trends, PRs, and volume history.',
                   icon: Icons.insights_rounded,
-                  actionLabel: 'Start Workout',
-                  onAction: _activeSessionId == null && !_startingWorkout
+                  actionLabel: canStartWorkout
+                      ? (hasAssignedPlans
+                          ? (selectedPlanId != null ? 'Start Workout' : null)
+                          : 'Start Custom Workout')
+                      : null,
+                  onAction: canStartWorkout
                       ? _startWorkout
                       : null,
                 )
@@ -4251,6 +5112,19 @@ class __WorkoutPageState extends State<_WorkoutPage> {
 
   Future<void> _startWorkout() async {
     final messenger = ScaffoldMessenger.of(context);
+    final selectedPlanId = _selectedPlanId();
+
+    if (widget.plans.isNotEmpty && selectedPlanId == null) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Select an assigned workout plan before starting a workout.',
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() => _startingWorkout = true);
 
     try {
@@ -4261,13 +5135,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         return;
       }
       final response = await widget.repository.startWorkout({
-        if ((_planIdController.text.trim().isNotEmpty
-                ? int.tryParse(_planIdController.text)
-                : (widget.plans.firstOrNull?['id'] as num?)?.toInt()) !=
-            null)
-          'workout_plan_id': _planIdController.text.trim().isNotEmpty
-              ? int.tryParse(_planIdController.text)
-              : (widget.plans.firstOrNull?['id'] as num?)?.toInt(),
+        if (selectedPlanId != null) 'workout_plan_id': selectedPlanId,
         'session_date': DateTime.now().toIso8601String().split('T').first,
       });
       final data = Map<String, dynamic>.from(
@@ -4322,17 +5190,10 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     }
 
     final messenger = ScaffoldMessenger.of(context);
+    final endingWithoutExercises = _sessionExercises.isEmpty;
     setState(() => _completingWorkout = true);
 
     try {
-      if (_sessionExercises.isEmpty) {
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('No exercises are loaded for this workout session.'),
-          ),
-        );
-        return;
-      }
       final response = await widget.repository
           .completeWorkoutSession(sessionId, {
             'completed_at': DateTime.now().toIso8601String(),
@@ -4369,7 +5230,13 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       });
       await _showCompletionCelebration(context, records.isNotEmpty);
       messenger.showSnackBar(
-        const SnackBar(content: Text('Workout completed successfully.')),
+        SnackBar(
+          content: Text(
+            endingWithoutExercises
+                ? 'Workout ended successfully.'
+                : 'Workout completed successfully.',
+          ),
+        ),
       );
     } catch (exception) {
       if (!mounted) {
@@ -4698,6 +5565,59 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     return '${value.toStringAsFixed(0)} kg';
   }
 
+  int? _selectedPlanId() {
+    if (_planIdController.text.trim().isNotEmpty) {
+      return int.tryParse(_planIdController.text.trim());
+    }
+
+    return (widget.plans.firstOrNull?['id'] as num?)?.toInt();
+  }
+
+  Future<void> _ensureCustomExerciseLibraryLoaded() async {
+    if (_customExerciseLibraryLoading || _customExerciseLibrary.isNotEmpty) {
+      return;
+    }
+
+    setState(() => _customExerciseLibraryLoading = true);
+
+    try {
+      final response = await widget.repository.fetchWorkoutExercises();
+      final rawItems = response['data'] as List<dynamic>? ?? const [];
+      final exercises = rawItems
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .map((exercise) => <String, dynamic>{
+                'exercise_id': (exercise['id'] as num?)?.toInt(),
+                'exercise': exercise,
+                'sets': 3,
+                'reps': '10',
+                'target_weight': 0,
+                'rest_seconds': 60,
+                'notes': null,
+              })
+          .where((exercise) => exercise['exercise_id'] != null)
+          .toList();
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _customExerciseLibrary = exercises;
+      });
+    } catch (exception) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+    } finally {
+      if (mounted) {
+        setState(() => _customExerciseLibraryLoading = false);
+      }
+    }
+  }
+
   String _titleCase(String value) {
     if (value.isEmpty) {
       return 'Unknown';
@@ -4763,6 +5683,10 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   }
 
   List<Map<String, dynamic>> _collectExerciseLibrary() {
+    if (widget.plans.isEmpty) {
+      return _customExerciseLibrary;
+    }
+
     final library = <int, Map<String, dynamic>>{};
 
     for (final plan in widget.plans) {
@@ -4822,15 +5746,21 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       return;
     }
 
+    if (widget.plans.isEmpty) {
+      await _ensureCustomExerciseLibraryLoaded();
+    }
+
     final library = _collectExerciseLibrary();
     if (library.isEmpty) {
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'No exercise library is available from your assigned workout plans yet.',
+            widget.plans.isEmpty
+                ? 'No custom exercise library is available right now.'
+                : 'No exercise library is available from your assigned workout plans yet.',
           ),
         ),
       );
@@ -4853,12 +5783,18 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'All available plan exercises are already in this workout.',
+            widget.plans.isEmpty
+                ? 'All available custom exercises are already in this workout.'
+                : 'All available plan exercises are already in this workout.',
           ),
         ),
       );
+      return;
+    }
+
+    if (!mounted) {
       return;
     }
 
@@ -4994,41 +5930,69 @@ class _FitLifeWorkoutHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primaryValue = active ? '$exerciseCount' : '$planCount';
+    final primaryLabel = active ? 'Exercises loaded' : 'Plans ready';
+    final secondaryValue = active
+        ? '${duration.inMinutes} min'
+        : '${totalVolume.toStringAsFixed(0)} kg volume';
+    final secondaryLabel = active ? 'Elapsed time' : 'Last tracked volume';
+
     return Container(
       margin: const EdgeInsets.fromLTRB(0, 0, 0, 22),
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
-      decoration: const BoxDecoration(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
+      decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
+          colors: [
+            AppColors.surface,
+            AppColors.surfaceSoft,
+            AppColors.primaryBright.withValues(alpha: 0.04),
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(36)),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(36)),
+        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.82)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadow.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Stack(
         children: [
           Positioned(
-            right: -34,
-            top: 22,
+            right: -38,
+            top: -16,
             child: Container(
-              width: 152,
-              height: 152,
+              width: 168,
+              height: 168,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.14),
+                color: AppColors.primaryBright.withValues(alpha: 0.04),
               ),
             ),
           ),
           Positioned(
-            right: 42,
-            bottom: -28,
+            right: 22,
+            top: 36,
             child: Container(
-              width: 104,
-              height: 104,
+              width: 92,
+              height: 92,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.10),
+                color: AppColors.primary.withValues(alpha: 0.04),
               ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 58,
+            child: Container(
+              height: 1,
+              color: AppColors.stroke.withValues(alpha: 0.82),
             ),
           ),
           Column(
@@ -5036,84 +6000,142 @@ class _FitLifeWorkoutHeader extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Expanded(
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryBright.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: AppColors.primaryBright.withValues(alpha: 0.14),
+                      ),
+                    ),
                     child: Text(
-                      'Workout Tracker',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.5,
-                          ),
+                      active ? 'ACTIVE SESSION' : 'WORKOUT TRACKER',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: AppColors.primaryBright,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                      ),
                     ),
                   ),
+                  const Spacer(),
                   _FitLifeHeaderButton(
-                    icon: Icons.menu_book_rounded,
+                    icon: Icons.insights_rounded,
                     onTap: onOpenLogbook,
                   ),
                 ],
               ),
+              const SizedBox(height: 18),
+              Text(
+                'Workout Tracker',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.6,
+                  height: 1.02,
+                ),
+              ),
               const SizedBox(height: 8),
               Text(
                 active
-                    ? 'Session running. Keep your sets clean.'
-                    : 'Start your session and build today.',
+                    ? 'Track your sets, rest, and volume with a cleaner live session view.'
+                    : 'Choose a plan and start logging with a more focused setup.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.86),
+                  color: AppColors.textSecondary,
                   fontWeight: FontWeight.w600,
+                  height: 1.35,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 18),
               Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          active ? '$exerciseCount moves' : '$planCount plans',
-                          style: Theme.of(context).textTheme.displaySmall
-                              ?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                height: 0.95,
-                              ),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            AppColors.surface,
+                            AppColors.surfaceStrong,
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          active
-                              ? '${duration.inMinutes} min • ${totalVolume.toStringAsFixed(0)} kg'
-                              : 'Choose your workout plan',
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(
-                                color: Colors.white.withValues(alpha: 0.84),
-                                fontWeight: FontWeight.w700,
-                              ),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: AppColors.stroke.withValues(alpha: 0.88),
                         ),
-                      ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            primaryValue,
+                            style: Theme.of(context).textTheme.displaySmall
+                                ?.copyWith(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w900,
+                                  height: 0.92,
+                                ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            primaryLabel,
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(
+                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _FitLifeHeaderMetric(
+                                  label: secondaryLabel,
+                                  value: secondaryValue,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _FitLifeHeaderMetric(
+                                  label: active ? 'Volume' : 'Quick access',
+                                  value: active
+                                      ? '${totalVolume.toStringAsFixed(0)} kg'
+                                      : 'Book + Logbook',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  _FitLifeHeaderRing(active: active),
+                  const SizedBox(width: 14),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: _FitLifeHeaderRing(active: active),
+                  ),
                 ],
               ),
-              const SizedBox(height: 24),
-              Row(
+              const SizedBox(height: 18),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
                 children: [
-                  Expanded(
-                    child: _FitLifeHeaderPill(
-                      icon: Icons.library_books_rounded,
-                      label: 'Workout Book',
-                      onTap: onOpenBook,
-                    ),
+                  _FitLifeHeaderPill(
+                    icon: Icons.library_books_rounded,
+                    label: 'Workout Book',
+                    onTap: onOpenBook,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _FitLifeHeaderPill(
-                      icon: Icons.insights_rounded,
-                      label: 'Logbook',
-                      onTap: onOpenLogbook,
-                    ),
+                  _FitLifeHeaderPill(
+                    icon: Icons.menu_book_rounded,
+                    label: 'Logbook',
+                    onTap: onOpenLogbook,
                   ),
                 ],
               ),
@@ -5121,6 +6143,45 @@ class _FitLifeWorkoutHeader extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _FitLifeHeaderMetric extends StatelessWidget {
+  const _FitLifeHeaderMetric({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: AppColors.textMuted,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.7,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -5140,10 +6201,11 @@ class _FitLifeHeaderButton extends StatelessWidget {
         width: 42,
         height: 42,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.26),
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.stroke.withValues(alpha: 0.9)),
         ),
-        child: Icon(icon, color: Colors.white),
+        child: Icon(icon, color: AppColors.primaryBright),
       ),
     );
   }
@@ -5161,27 +6223,40 @@ class _FitLifeHeaderRing extends StatelessWidget {
       duration: const Duration(milliseconds: 700),
       curve: Curves.easeOutCubic,
       builder: (context, value, _) {
-        return SizedBox(
-          width: 92,
-          height: 92,
+        return Container(
+          width: 88,
+          height: 88,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.stroke.withValues(alpha: 0.9)),
+          ),
           child: Stack(
             alignment: Alignment.center,
             children: [
-              CircularProgressIndicator(
-                value: 1,
-                strokeWidth: 10,
-                color: Colors.white.withValues(alpha: 0.22),
+              SizedBox(
+                width: 70,
+                height: 70,
+                child: CircularProgressIndicator(
+                  value: 1,
+                  strokeWidth: 8,
+                  color: AppColors.stroke,
+                ),
               ),
-              CircularProgressIndicator(
-                value: value,
-                strokeWidth: 10,
-                strokeCap: StrokeCap.round,
-                color: Colors.white,
+              SizedBox(
+                width: 70,
+                height: 70,
+                child: CircularProgressIndicator(
+                  value: value,
+                  strokeWidth: 8,
+                  strokeCap: StrokeCap.round,
+                  color: AppColors.primaryBright,
+                ),
               ),
               Icon(
                 active ? Icons.bolt_rounded : Icons.fitness_center_rounded,
-                color: Colors.white,
-                size: 30,
+                color: AppColors.primaryBright,
+                size: 26,
               ),
             ],
           ),
@@ -5206,27 +6281,25 @@ class _FitLifeHeaderPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(18),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.22),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.stroke.withValues(alpha: 0.88)),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.white, size: 18),
+            Icon(icon, color: AppColors.primaryBright, size: 18),
             const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
+            Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ],
@@ -5254,11 +6327,16 @@ class _FitLifeWorkoutStats extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.surface, AppColors.surfaceStrong],
+        ),
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.stroke),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
+            color: AppColors.shadow.withValues(alpha: 0.06),
             blurRadius: 18,
             offset: const Offset(0, 10),
           ),
@@ -5270,7 +6348,8 @@ class _FitLifeWorkoutStats extends StatelessWidget {
             child: _FitLifeStatCell(
               value: '$completedExercises/$totalExercises',
               label: 'Logged',
-              gradient: const [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
+              gradient: const [AppColors.primaryBright, AppColors.primary],
+              icon: Icons.checklist_rounded,
             ),
           ),
           _FitLifeDivider(),
@@ -5278,7 +6357,8 @@ class _FitLifeWorkoutStats extends StatelessWidget {
             child: _FitLifeStatCell(
               value: totalVolume,
               label: 'Volume',
-              gradient: const [Color(0xFFEEA4CE), Color(0xFFC58BF2)],
+              gradient: const [AppColors.primary, AppColors.primaryBright],
+              icon: Icons.fitness_center_rounded,
             ),
           ),
           _FitLifeDivider(),
@@ -5286,7 +6366,8 @@ class _FitLifeWorkoutStats extends StatelessWidget {
             child: _FitLifeStatCell(
               value: '$planDays',
               label: 'Days',
-              gradient: const [Color(0xFFFFC6A5), Color(0xFFFF8D77)],
+              gradient: const [AppColors.primaryBright, AppColors.primary],
+              icon: Icons.calendar_today_rounded,
             ),
           ),
         ],
@@ -5300,27 +6381,35 @@ class _FitLifeStatCell extends StatelessWidget {
     required this.value,
     required this.label,
     required this.gradient,
+    required this.icon,
   });
 
   final String value;
   final String label;
   final List<Color> gradient;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        ShaderMask(
-          shaderCallback: (bounds) =>
-              LinearGradient(colors: gradient).createShader(bounds),
-          child: Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-            ),
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(colors: gradient),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, color: Colors.white, size: 18),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w900,
           ),
         ),
         const SizedBox(height: 4),
@@ -5408,9 +6497,23 @@ class _FitLifeWorkoutPlanRow extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppColors.surface, AppColors.surfaceStrong],
+          ),
           borderRadius: BorderRadius.circular(18),
-          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)],
+          border: Border.all(
+            color: selected ? AppColors.primaryBright : AppColors.stroke,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: (selected ? AppColors.primary : AppColors.shadow)
+                  .withValues(alpha: selected ? 0.10 : 0.05),
+              blurRadius: selected ? 20 : 12,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -5418,18 +6521,26 @@ class _FitLifeWorkoutPlanRow extends StatelessWidget {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(18),
                 gradient: LinearGradient(
                   colors: selected
-                      ? const [Color(0xFF9DCEFF), Color(0xFF92A3FD)]
-                      : const [Color(0xFFF7F8F8), Color(0xFFFFFFFF)],
+                      ? const [AppColors.primaryBright, AppColors.primary]
+                      : [
+                          AppColors.primaryBright.withValues(alpha: 0.08),
+                          AppColors.primary.withValues(alpha: 0.04),
+                        ],
+                ),
+                border: Border.all(
+                  color: selected
+                      ? Colors.transparent
+                      : AppColors.stroke.withValues(alpha: 0.85),
                 ),
               ),
               child: Icon(
                 selected
                     ? Icons.play_arrow_rounded
                     : Icons.fitness_center_rounded,
-                color: selected ? Colors.white : AppColors.textSecondary,
+                color: selected ? Colors.white : AppColors.primaryBright,
               ),
             ),
             const SizedBox(width: 14),
@@ -5459,7 +6570,10 @@ class _FitLifeWorkoutPlanRow extends StatelessWidget {
                 ],
               ),
             ),
-            _FitLifeMiniBadge(label: selected ? 'Selected' : 'Load'),
+            _FitLifeMiniBadge(
+              label: selected ? 'Selected' : 'Load',
+              selected: selected,
+            ),
           ],
         ),
       ),
@@ -5468,22 +6582,30 @@ class _FitLifeWorkoutPlanRow extends StatelessWidget {
 }
 
 class _FitLifeMiniBadge extends StatelessWidget {
-  const _FitLifeMiniBadge({required this.label});
+  const _FitLifeMiniBadge({required this.label, this.selected = false});
 
   final String label;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: AppColors.backgroundAlt,
+        color: selected
+            ? AppColors.primaryBright.withValues(alpha: 0.10)
+            : AppColors.backgroundAlt,
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: selected
+              ? AppColors.primaryBright.withValues(alpha: 0.18)
+              : AppColors.stroke,
+        ),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: AppColors.textSecondary,
+          color: selected ? AppColors.primaryBright : AppColors.textSecondary,
           fontWeight: FontWeight.w800,
         ),
       ),
@@ -5498,7 +6620,7 @@ class _FitLifePrimaryAction extends StatelessWidget {
     required this.loading,
     required this.enabled,
     required this.onTap,
-    this.gradient = const [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
+    this.gradient = const [AppColors.primaryBright, AppColors.primary],
   });
 
   final String label;
@@ -5518,7 +6640,11 @@ class _FitLifePrimaryAction extends StatelessWidget {
         child: Container(
           height: 56,
           decoration: BoxDecoration(
-            gradient: LinearGradient(colors: gradient),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: gradient,
+            ),
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
@@ -5580,9 +6706,20 @@ class _FitLifeEmptyPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.surface, AppColors.surfaceStrong],
+        ),
         borderRadius: BorderRadius.circular(22),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)],
+        border: Border.all(color: AppColors.stroke),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadow.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -5591,12 +6728,13 @@ class _FitLifeEmptyPanel extends StatelessWidget {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [Color(0xFFEEA4CE), Color(0xFFC58BF2)],
+              borderRadius: BorderRadius.circular(16),
+              color: AppColors.primaryBright.withValues(alpha: 0.10),
+              border: Border.all(
+                color: AppColors.primaryBright.withValues(alpha: 0.16),
               ),
             ),
-            child: Icon(icon, color: Colors.white),
+            child: Icon(icon, color: AppColors.primaryBright),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -5651,20 +6789,23 @@ class _FitLifeSmallGradientButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.surfaceSoft,
           borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.stroke),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.shadow.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 5),
+            ),
+          ],
         ),
-        child: ShaderMask(
-          shaderCallback: (bounds) => const LinearGradient(
-            colors: [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
-          ).createShader(bounds),
-          child: Center(
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-              ),
+        child: Center(
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: AppColors.primaryBright,
+              fontWeight: FontWeight.w900,
             ),
           ),
         ),
@@ -5684,14 +6825,31 @@ class _FitLifeAchievementPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFF4FB), Color(0xFFFFFFFF)],
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.primaryBright.withValues(alpha: 0.08),
+            AppColors.surface,
+          ],
         ),
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.stroke),
       ),
       child: Row(
         children: [
-          const Icon(Icons.emoji_events_rounded, color: Color(0xFFC58BF2)),
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.primaryBright.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.emoji_events_rounded,
+              color: AppColors.primaryBright,
+            ),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
