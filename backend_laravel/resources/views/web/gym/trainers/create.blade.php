@@ -5,7 +5,7 @@
         <x-premium-card class="p-6">
             <div class="mb-6">
                 <h3 class="panel-section-title">Create Trainer</h3>
-                <p class="panel-section-copy">Create a new trainer profile or attach an existing trainer user to this gym and branch.</p>
+                <p class="panel-section-copy">Create a new trainer profile or attach an existing user or member to this gym and branch.</p>
                 <div class="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200">
                     Password is not required here. Existing users keep their current credentials.
                 </div>

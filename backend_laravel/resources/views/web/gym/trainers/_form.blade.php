@@ -6,10 +6,11 @@
 <div class="space-y-5">
     @if (! $trainer)
         <div>
-            <label for="existing_user_id" class="panel-label">Select Existing Trainer</label>
+            <label for="existing_user_id" class="panel-label">Select Existing User</label>
             <select id="existing_user_id" name="existing_user_id" class="panel-select">
                 <option value="">Create a new trainer user</option>
                 @foreach ($existingUsers as $existingUser)
+                    @php($existingMemberProfile = $existingUser->memberProfiles->first())
                     <option
                         value="{{ $existingUser->id }}"
                         data-name="{{ $existingUser->name }}"
@@ -19,11 +20,16 @@
                         @selected(old('existing_user_id') == $existingUser->id)
                     >
                         {{ $existingUser->name }} • {{ $existingUser->email }}
+                        @if ($existingMemberProfile)
+                            • Existing member
+                        @elseif ($existingUser->hasRole(\App\Enums\RoleName::Trainer->value))
+                            • Trainer user
+                        @endif
                     </option>
                 @endforeach
             </select>
             <div id="existing_user_hint" class="mt-3 hidden rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200">
-                Existing trainer selected. Account details are reused; only gym, branch, and coaching profile details are updated here.
+                Existing user selected. Account details are reused; only gym, branch, and coaching profile details are updated here.
             </div>
         </div>
     @endif

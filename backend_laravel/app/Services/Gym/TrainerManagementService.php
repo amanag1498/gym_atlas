@@ -61,7 +61,16 @@ class TrainerManagementService
     public function existingUsersQuery(Gym $gym): Builder
     {
         return User::query()
-            ->role(RoleName::Trainer->value)
+            ->with([
+                'memberProfiles' => fn ($builder) => $builder
+                    ->where('gym_id', $gym->id)
+                    ->latest('id'),
+            ])
+            ->where(function (Builder $builder) use ($gym): void {
+                $builder
+                    ->whereHas('roles', fn (Builder $roleQuery) => $roleQuery->where('name', RoleName::Trainer->value))
+                    ->orWhereHas('memberProfiles', fn (Builder $profileQuery) => $profileQuery->where('gym_id', $gym->id));
+            })
             ->where('is_active', true)
             ->whereDoesntHave('managedTrainerProfile', fn (Builder $builder) => $builder->where('gym_id', $gym->id))
             ->orderBy('name');

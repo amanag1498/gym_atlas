@@ -130,11 +130,12 @@ class TrainerManagementFeatureTest extends TestCase
         ]);
     }
 
-    public function test_trainer_create_page_only_lists_existing_trainer_users(): void
+    public function test_trainer_create_page_lists_free_trainers_and_current_gym_members(): void
     {
         $owner = $this->makeUser(RoleName::GymOwner->value, 'owner-trainer-list@example.com');
         $existingTrainer = $this->makeUser(RoleName::Trainer->value, 'listed-trainer@example.com');
-        $existingMember = $this->makeUser(RoleName::Member->value, 'hidden-member@example.com');
+        $existingMember = $this->makeUser(RoleName::Member->value, 'visible-member@example.com');
+        $outsideMember = $this->makeUser(RoleName::Member->value, 'hidden-member@example.com');
 
         $gym = Gym::query()->create([
             'owner_user_id' => $owner->id,
@@ -160,6 +161,13 @@ class TrainerManagementFeatureTest extends TestCase
             'status' => 'active',
             'is_active' => true,
         ]);
+        MemberProfile::query()->create([
+            'user_id' => $existingMember->id,
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'membership_status' => 'active',
+            'is_active' => true,
+        ]);
         $freeTrainer = $this->makeUser(RoleName::Trainer->value, 'free-trainer@example.com');
 
         $this->attachToGymAndBranches($owner, $gym, [$branch]);
@@ -168,11 +176,13 @@ class TrainerManagementFeatureTest extends TestCase
         $this->get(route('web.gym.trainers.create', ['gym' => $gym->id]))
             ->assertOk()
             ->assertSee('free-trainer@example.com')
+            ->assertSee('visible-member@example.com')
             ->assertDontSee('listed-trainer@example.com')
             ->assertDontSee('hidden-member@example.com')
             ->assertDontSee('name="password"', false);
 
         $this->assertTrue($existingMember->hasRole(RoleName::Member->value));
+        $this->assertTrue($outsideMember->hasRole(RoleName::Member->value));
     }
 
     public function test_branch_manager_scope_applies_to_trainer_views_web_and_api(): void
