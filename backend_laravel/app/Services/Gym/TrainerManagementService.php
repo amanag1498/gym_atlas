@@ -66,10 +66,10 @@ class TrainerManagementService
                     ->where('gym_id', $gym->id)
                     ->latest('id'),
             ])
-            ->where(function (Builder $builder) use ($gym): void {
+            ->where(function (Builder $builder): void {
                 $builder
                     ->whereHas('roles', fn (Builder $roleQuery) => $roleQuery->where('name', RoleName::Trainer->value))
-                    ->orWhereHas('memberProfiles', fn (Builder $profileQuery) => $profileQuery->where('gym_id', $gym->id));
+                    ->orWhereHas('roles', fn (Builder $roleQuery) => $roleQuery->where('name', RoleName::Member->value));
             })
             ->where('is_active', true)
             ->whereDoesntHave('managedTrainerProfile', fn (Builder $builder) => $builder->where('gym_id', $gym->id))

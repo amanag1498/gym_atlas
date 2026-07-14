@@ -10,7 +10,6 @@
             <select id="existing_user_id" name="existing_user_id" class="panel-select">
                 <option value="">Create a new trainer user</option>
                 @foreach ($existingUsers as $existingUser)
-                    @php($existingMemberProfile = $existingUser->memberProfiles->first())
                     <option
                         value="{{ $existingUser->id }}"
                         data-name="{{ $existingUser->name }}"
@@ -20,7 +19,7 @@
                         @selected(old('existing_user_id') == $existingUser->id)
                     >
                         {{ $existingUser->name }} • {{ $existingUser->email }}
-                        @if ($existingMemberProfile)
+                        @if ($existingUser->hasRole(\App\Enums\RoleName::Member->value))
                             • Existing member
                         @elseif ($existingUser->hasRole(\App\Enums\RoleName::Trainer->value))
                             • Trainer user
