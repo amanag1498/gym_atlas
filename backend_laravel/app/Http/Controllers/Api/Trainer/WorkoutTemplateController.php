@@ -12,6 +12,7 @@ use App\Models\WorkoutTemplate;
 use App\Services\Audit\AuditLogService;
 use App\Services\Workout\WorkoutAccessService;
 use App\Services\Workout\WorkoutPlanService;
+use App\Services\Trainer\TrainerScopeService;
 use Illuminate\Http\Request;
 
 class WorkoutTemplateController extends Controller
@@ -20,6 +21,7 @@ class WorkoutTemplateController extends Controller
         private readonly WorkoutPlanService $workoutPlanService,
         private readonly WorkoutAccessService $workoutAccessService,
         private readonly AuditLogService $auditLogService,
+        private readonly TrainerScopeService $trainerScopeService,
     ) {
     }
 
@@ -49,7 +51,12 @@ class WorkoutTemplateController extends Controller
 
     public function store(StoreWorkoutTemplateRequest $request)
     {
-        $template = $this->workoutPlanService->createTemplateFromPayload($request->user(), $request->validated());
+        $profile = $this->trainerScopeService->resolveTrainerProfile($request);
+        $data = $request->validated();
+        $data['gym_id'] = $profile->gym_id;
+        $data['branch_id'] = $profile->branch_id;
+        $data['is_public_catalog'] = false;
+        $template = $this->workoutPlanService->createTemplateFromPayload($request->user(), $data);
 
         $this->auditLogService->log(
             event: 'workout_template.created',
@@ -93,16 +100,20 @@ class WorkoutTemplateController extends Controller
 
     public function assign(AssignWorkoutTemplateRequest $request, WorkoutTemplate $workoutTemplate)
     {
+        $profile = $this->trainerScopeService->resolveTrainerProfile($request);
         $this->workoutAccessService->assertTemplateAccess($request->user(), $workoutTemplate);
         foreach ($request->validated('member_ids') as $memberId) {
             $member = \App\Models\User::query()->findOrFail($memberId);
             $this->workoutAccessService->assertTrainerCanAccessMember($request->user(), $member);
         }
 
+        $data = $request->validated();
+        $data['gym_id'] = $profile->gym_id;
+        $data['branch_id'] = $profile->branch_id;
         $plans = $this->workoutPlanService->assignTemplateToMembers(
             $request->user(),
             $workoutTemplate->load('days.exercises'),
-            $request->validated(),
+            $data,
         );
 
         foreach ($plans as $plan) {

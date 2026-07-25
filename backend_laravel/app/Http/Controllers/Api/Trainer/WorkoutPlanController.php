@@ -11,6 +11,7 @@ use App\Models\WorkoutPlan;
 use App\Services\Audit\AuditLogService;
 use App\Services\Workout\WorkoutAccessService;
 use App\Services\Workout\WorkoutPlanService;
+use App\Services\Trainer\TrainerScopeService;
 use Illuminate\Http\Request;
 
 class WorkoutPlanController extends Controller
@@ -19,6 +20,7 @@ class WorkoutPlanController extends Controller
         private readonly WorkoutPlanService $workoutPlanService,
         private readonly WorkoutAccessService $workoutAccessService,
         private readonly AuditLogService $auditLogService,
+        private readonly TrainerScopeService $trainerScopeService,
     ) {
     }
 
@@ -38,12 +40,16 @@ class WorkoutPlanController extends Controller
 
     public function store(StoreWorkoutPlanRequest $request)
     {
-        foreach ($request->validated('member_ids') as $memberId) {
+        $profile = $this->trainerScopeService->resolveTrainerProfile($request);
+        $data = $request->validated();
+        $data['gym_id'] = $profile->gym_id;
+        $data['branch_id'] = $profile->branch_id;
+        foreach ($data['member_ids'] as $memberId) {
             $member = User::query()->findOrFail($memberId);
             $this->workoutAccessService->assertTrainerCanAccessMember($request->user(), $member);
         }
 
-        $plans = $this->workoutPlanService->createPlans($request->user(), $request->validated());
+        $plans = $this->workoutPlanService->createPlans($request->user(), $data);
 
         foreach ($plans as $plan) {
             $this->auditLogService->log(

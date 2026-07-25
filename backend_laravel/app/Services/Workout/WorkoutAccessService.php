@@ -86,6 +86,11 @@ class WorkoutAccessService
     {
         if ($actor->active_role === RoleName::Member->value) {
             $this->assertMemberSelfAccess($actor, $plan->member_id);
+            $actor->loadMissing('memberProfile');
+            $profile = $actor->memberProfile;
+            if (! $profile || (int) $profile->gym_id !== (int) $plan->gym_id || ($plan->branch_id && (int) $profile->branch_id !== (int) $plan->branch_id)) {
+                throw ValidationException::withMessages(['workout_plan_id' => ['This workout plan is not available in your current gym space.']]);
+            }
 
             return;
         }

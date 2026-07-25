@@ -23,12 +23,18 @@ class DietPlanController extends Controller
 
     public function index(Request $request)
     {
+        $profile = $request->user()->memberProfile;
+        if (! $profile?->gym_id) {
+            return $this->success([], 'No active gym space is available.');
+        }
         $plans = DietPlan::query()
             ->with([
                 'meals.items',
                 'meals.logs' => fn ($query) => $query->where('member_id', $request->user()->id)->whereDate('logged_for', today()),
             ])
             ->where('member_id', $request->user()->id)
+            ->where('gym_id', $profile->gym_id)
+            ->when($profile->branch_id, fn ($query) => $query->where(fn ($scope) => $scope->whereNull('branch_id')->orWhere('branch_id', $profile->branch_id)))
             ->availableOn()
             ->latest()
             ->get();
@@ -101,7 +107,8 @@ class DietPlanController extends Controller
 
     private function assertOwner(Request $request, DietPlan $plan): void
     {
-        if ((int) $plan->member_id !== (int) $request->user()->id) {
+        $profile = $request->user()->memberProfile;
+        if ((int) $plan->member_id !== (int) $request->user()->id || ! $profile?->gym_id || (int) $plan->gym_id !== (int) $profile->gym_id || ($plan->branch_id && (int) $plan->branch_id !== (int) $profile->branch_id)) {
             throw ValidationException::withMessages(['diet_plan_id' => ['You do not have access to this diet plan.']]);
         }
     }
