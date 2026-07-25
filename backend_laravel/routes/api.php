@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\Chat\TrainerMemberChatController;
 use App\Http\Controllers\Api\Gym\Admin\AuditLogController as GymAuditLogController;
 use App\Http\Controllers\Api\Gym\Admin\BranchController as GymBranchController;
 use App\Http\Controllers\Api\Gym\Admin\DashboardController as GymDashboardController;
+use App\Http\Controllers\Api\Gym\Admin\DietPlanController as GymDietPlanController;
 use App\Http\Controllers\Api\Gym\Admin\GymProfileController;
 use App\Http\Controllers\Api\Gym\Admin\MemberController as GymMemberController;
 use App\Http\Controllers\Api\Gym\Admin\SettingController as GymSettingController;
@@ -295,6 +296,11 @@ Route::prefix('gym')
     ->group(function (): void {
         Route::get('dashboard', GymDashboardController::class)
             ->middleware('permission:gym.dashboard.view');
+        Route::get('diet-plans', [GymDietPlanController::class, 'index'])->middleware('permission:member.view');
+        Route::post('diet-plans', [GymDietPlanController::class, 'store'])->middleware('permission:member.manage');
+        Route::get('diet-plans/{dietPlan}', [GymDietPlanController::class, 'show'])->middleware('permission:member.view');
+        Route::put('diet-plans/{dietPlan}', [GymDietPlanController::class, 'update'])->middleware('permission:member.manage');
+        Route::delete('diet-plans/{dietPlan}', [GymDietPlanController::class, 'destroy'])->middleware('permission:member.manage');
         Route::get('context', GymContextController::class);
         Route::get('profile', [GymProfileController::class, 'show'])
             ->middleware('permission:gym.view');
