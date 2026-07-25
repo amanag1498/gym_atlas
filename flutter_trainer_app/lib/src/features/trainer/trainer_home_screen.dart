@@ -132,8 +132,10 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       try {
         final response = await _repository.fetchChatConversations();
         chatConversations = _mapList(response['data']);
-      } catch (_) {
+        _chatError = null;
+      } catch (exception) {
         chatConversations = const [];
+        _chatError = exception.toString();
       }
       if (!mounted) {
         return;
@@ -463,9 +465,28 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
               : (_intValue(current['unread_count']) ?? 0),
           'updated_at': normalized['created_at'],
         });
+      } else {
+        unawaited(_refreshChatConversations());
       }
       _chatConversations = conversations;
     });
+  }
+
+  Future<void> _refreshChatConversations() async {
+    try {
+      final response = await _repository.fetchChatConversations();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _chatConversations = _mapList(response['data']);
+        _chatError = null;
+      });
+    } catch (exception) {
+      if (mounted) {
+        setState(() => _chatError = exception.toString());
+      }
+    }
   }
 
   Future<void> _openMemberDetailSheet(Map<String, dynamic> assignment) async {

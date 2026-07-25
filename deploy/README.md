@@ -103,6 +103,17 @@ USE_REDIS_ADAPTER=false
 ```
 
 The `SOCKET_INTERNAL_API_KEY` must also be added to Laravel if you wire internal socket publishing from Laravel later.
+Use the same strong value in both services. Production startup rejects the placeholder `change-me` value.
+
+Build the member and trainer apps with the deployed realtime URL explicitly:
+
+```bash
+flutter build apk \
+  --dart-define=API_BASE_URL=https://gymatlas.in/api \
+  --dart-define=SOCKET_BASE_URL=https://your-realtime-domain.example.com
+```
+
+When `SOCKET_BASE_URL` is omitted, chat remains available through the durable Laravel API without realtime updates.
 
 ## Process Management
 
@@ -168,4 +179,3 @@ Deploy only:
 
 - `backend_laravel`
 - `realtime_server`
-

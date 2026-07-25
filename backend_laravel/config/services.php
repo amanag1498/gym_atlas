@@ -59,7 +59,7 @@ return [
     ],
 
     'realtime' => [
-        'internal_api_key' => env('SOCKET_INTERNAL_API_KEY', 'change-me'),
+        'internal_api_key' => env('SOCKET_INTERNAL_API_KEY', ''),
     ],
 
 ];

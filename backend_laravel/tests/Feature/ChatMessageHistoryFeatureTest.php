@@ -11,6 +11,7 @@ use App\Models\MemberProfile;
 use App\Models\TrainerProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ChatMessageHistoryFeatureTest extends TestCase
@@ -73,6 +74,50 @@ class ChatMessageHistoryFeatureTest extends TestCase
         $this->assertSame('Fresh message', $conversation->last_message_body);
         $this->assertSame(0, $conversation->trainer_unread_count);
         $this->assertSame(1, $conversation->member_unread_count);
+    }
+
+    public function test_legacy_socket_rooms_are_merged_into_canonical_history(): void
+    {
+        [$trainer, $member] = $this->assignedTrainerPair();
+        $legacyRoom = "chat:trainer:{$trainer->id}:member:{$member->id}";
+        $canonicalRoom = "trainer:{$trainer->id}:member:{$member->id}";
+        $message = $this->createMessage(
+            $legacyRoom,
+            $trainer,
+            $member,
+            $member->id,
+            $trainer->id,
+            'Legacy socket message',
+            now(),
+            'legacy-socket-1'
+        );
+
+        ChatConversation::query()->create([
+            'room' => $legacyRoom,
+            'trainer_id' => $trainer->id,
+            'member_id' => $member->id,
+            'last_message_id' => $message->id,
+            'last_message_body' => $message->body,
+            'last_sender_id' => $message->sender_id,
+            'last_message_at' => $message->created_at,
+            'trainer_unread_count' => 1,
+        ]);
+
+        $migration = require database_path('migrations/2026_07_25_140000_normalize_trainer_member_chat_rooms.php');
+        $migration->up();
+
+        $this->assertDatabaseHas('chat_messages', [
+            'id' => $message->id,
+            'room' => $canonicalRoom,
+        ]);
+        $this->assertDatabaseMissing('chat_conversations', ['room' => $legacyRoom]);
+        $this->assertDatabaseHas('chat_conversations', [
+            'room' => $canonicalRoom,
+            'trainer_id' => $trainer->id,
+            'member_id' => $member->id,
+            'trainer_unread_count' => 1,
+        ]);
+        $this->assertSame(1, DB::table('chat_conversations')->count());
     }
 
     private function createMessage(

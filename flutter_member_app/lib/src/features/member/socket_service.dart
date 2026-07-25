@@ -5,9 +5,15 @@ import '../../core/config.dart';
 class MemberSocketService {
   io.Socket? _socket;
 
-  io.Socket connect(String token) {
+  io.Socket? connect(String token) {
+    dispose();
+    final socketUrl = MemberConfig.socketBaseUrl.trim();
+    if (socketUrl.isEmpty) {
+      return null;
+    }
+
     final socket = io.io(
-      MemberConfig.socketBaseUrl,
+      socketUrl,
       io.OptionBuilder()
           .setTransports(['websocket'])
           .disableAutoConnect()

@@ -19,6 +19,8 @@ const chatAuthorizationService = new ChatAuthorizationService();
 const chatPersistenceService = new ChatPersistenceService();
 const presenceService = new PresenceService();
 const roomService = new RoomService();
+const maxMessagesPerWindow = 20;
+const messageWindowMs = 10_000;
 
 function assertSocketUser(socket: TypedSocket) {
   const user = socket.data.user;
@@ -29,9 +31,35 @@ function assertSocketUser(socket: TypedSocket) {
   return user;
 }
 
+function assertChatSendPayload(payload: ChatSendPayload): void {
+  if (!payload || !Number.isSafeInteger(payload.recipientId) || payload.recipientId <= 0) {
+    throw new Error('A valid recipient is required.');
+  }
+
+  if (typeof payload.message !== 'string' || payload.message.trim().length === 0 || payload.message.length > 4000) {
+    throw new Error('Message must contain between 1 and 4000 characters.');
+  }
+
+  if (payload.clientMessageId !== undefined
+    && (typeof payload.clientMessageId !== 'string' || payload.clientMessageId.length > 120)) {
+    throw new Error('Invalid client message identifier.');
+  }
+}
+
+function assertChatReadPayload(payload: ChatReadPayload): void {
+  if (!payload || !Number.isSafeInteger(payload.recipientId) || payload.recipientId <= 0) {
+    throw new Error('A valid recipient is required.');
+  }
+
+  if (!Array.isArray(payload.messageIds) || payload.messageIds.length > 1000) {
+    throw new Error('Invalid read receipt message list.');
+  }
+}
+
 export function registerSocketServer(io: Server): void {
   io.on('connection', async (socket: TypedSocket) => {
     const user = assertSocketUser(socket);
+    const sentMessageTimes: number[] = [];
     await roomService.joinBaseRooms(socket, user);
     presenceService.registerConnection(io, user, socket.id);
 
@@ -43,6 +71,16 @@ export function registerSocketServer(io: Server): void {
 
     socket.on('chat:send', async (payload: ChatSendPayload, acknowledgement?: (response: unknown) => void) => {
       try {
+        assertChatSendPayload(payload);
+        const now = Date.now();
+        while ((sentMessageTimes[0] ?? now) < now - messageWindowMs) {
+          sentMessageTimes.shift();
+        }
+        if (sentMessageTimes.length >= maxMessagesPerWindow) {
+          throw new Error('Message rate limit exceeded. Please wait before sending again.');
+        }
+        sentMessageTimes.push(now);
+
         const actor = assertSocketUser(socket);
         const authorizedPeer = chatAuthorizationService.authorizePeer(actor, payload.recipientId);
         const suppressPush = presenceService.isOnline(payload.recipientId);
@@ -66,16 +104,6 @@ export function registerSocketServer(io: Server): void {
           .to(rooms.user(payload.recipientId))
           .emit('chat:new_message', chatMessageEvent);
 
-        io.to(rooms.user(payload.recipientId)).emit('notification:new', {
-          type: 'chat_message',
-          title: 'New message',
-          body: payload.message,
-          data: {
-            room: authorizedPeer.room,
-            senderId: actor.id,
-          },
-        });
-
         acknowledgement?.({
           ok: true,
           room: authorizedPeer.room,
@@ -91,6 +119,9 @@ export function registerSocketServer(io: Server): void {
 
     socket.on('chat:typing', async (payload: ChatTypingPayload) => {
       try {
+        if (!payload || !Number.isSafeInteger(payload.recipientId) || typeof payload.isTyping !== 'boolean') {
+          throw new Error('Invalid typing event.');
+        }
         const actor = assertSocketUser(socket);
         const authorizedPeer = chatAuthorizationService.authorizePeer(actor, payload.recipientId);
         await socket.join(authorizedPeer.room);
@@ -111,6 +142,7 @@ export function registerSocketServer(io: Server): void {
 
     socket.on('chat:read', async (payload: ChatReadPayload, acknowledgement?: (response: unknown) => void) => {
       try {
+        assertChatReadPayload(payload);
         const actor = assertSocketUser(socket);
         const authorizedPeer = chatAuthorizationService.authorizePeer(actor, payload.recipientId);
         await socket.join(authorizedPeer.room);

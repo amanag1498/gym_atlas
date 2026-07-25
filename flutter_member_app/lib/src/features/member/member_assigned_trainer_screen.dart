@@ -1602,44 +1602,22 @@ class _MemberChatThreadHeader extends StatelessWidget {
               color: AppColors.textPrimary,
             ),
           ),
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: AppColors.surfaceSoft,
-                backgroundImage:
-                    trainerAvatarUrl != null &&
-                        trainerAvatarUrl!.trim().isNotEmpty
-                    ? NetworkImage(trainerAvatarUrl!)
-                    : null,
-                child:
-                    trainerAvatarUrl == null || trainerAvatarUrl!.trim().isEmpty
-                    ? Text(
-                        trainerName.trim().isEmpty
-                            ? 'T'
-                            : trainerName.trim()[0],
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      )
-                    : null,
-              ),
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  width: 13,
-                  height: 13,
-                  decoration: BoxDecoration(
-                    color: AppColors.success,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                ),
-              ),
-            ],
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: AppColors.surfaceSoft,
+            backgroundImage:
+                trainerAvatarUrl != null && trainerAvatarUrl!.trim().isNotEmpty
+                ? NetworkImage(trainerAvatarUrl!)
+                : null,
+            child: trainerAvatarUrl == null || trainerAvatarUrl!.trim().isEmpty
+                ? Text(
+                    trainerName.trim().isEmpty ? 'T' : trainerName.trim()[0],
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  )
+                : null,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1656,25 +1634,12 @@ class _MemberChatThreadHeader extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: const BoxDecoration(
-                        color: AppColors.success,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      loading ? 'Syncing chat...' : 'Trainer conversation',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+                Text(
+                  loading ? 'Syncing chat...' : 'Trainer conversation',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),

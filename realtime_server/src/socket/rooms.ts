@@ -6,7 +6,7 @@ export const rooms = {
   gymAnnouncements: (gymId: number): string => `gym:${gymId}:announcements`,
   branchAnnouncements: (gymId: number, branchId: number): string => `gym:${gymId}:branch:${branchId}:announcements`,
   platformAnnouncements: (): string => 'platform:announcements',
-  trainerMemberChat: (trainerId: number, memberId: number): string => `chat:trainer:${trainerId}:member:${memberId}`,
+  trainerMemberChat: (trainerId: number, memberId: number): string => `trainer:${trainerId}:member:${memberId}`,
 };
 
 export function resolveTrainerMemberRoom(trainerId: number, memberId: number): string {

@@ -12,7 +12,9 @@ Socket.IO realtime service for the gym ecosystem.
 - User notification rooms
 - Gym and branch announcement rooms
 - Internal publish endpoints for Laravel-triggered notification and announcement events
-- Redis adapter integration placeholder
+- Durable Laravel persistence with idempotent client message IDs
+- Canonical trainer-member rooms shared with Laravel
+- Liveness and Laravel dependency readiness endpoints
 
 ## Environment
 
@@ -24,7 +26,7 @@ Copy `.env.example` to `.env` and adjust:
 - `SOCKET_INTERNAL_API_KEY`
 - `TOKEN_VERIFICATION_STRATEGY=laravel|jwt`
 - `JWT_SHARED_SECRET` when using shared JWT
-- `USE_REDIS_ADAPTER=true|false`
+- `USE_REDIS_ADAPTER=false` until a Redis adapter is installed and configured
 
 ## Run
 
@@ -40,3 +42,8 @@ Protected with `x-internal-api-key: <SOCKET_INTERNAL_API_KEY>`.
 - `POST /internal/announcements`
 
 These are intended for Laravel-side integration after a notification or announcement is created.
+
+## Health
+
+- `GET /health` checks the Node process.
+- `GET /ready` checks that the realtime server can reach Laravel, which is required before accepting production chat traffic.

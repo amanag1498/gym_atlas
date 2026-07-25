@@ -8,6 +8,7 @@ use App\Models\ChatMessage;
 use App\Models\Gym;
 use App\Models\MemberProfile;
 use App\Models\Notification;
+use App\Models\NotificationPreference;
 use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Models\UserFcmToken;
@@ -19,6 +20,13 @@ use Tests\TestCase;
 class ChatFcmNotificationFeatureTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config()->set('services.realtime.internal_api_key', 'chat-test-internal-key');
+    }
 
     public function test_trainer_chat_message_sends_fcm_push_to_member_app_token(): void
     {
@@ -175,6 +183,72 @@ class ChatFcmNotificationFeatureTest extends TestCase
 
         $this->assertSame(1, ChatMessage::query()->where('client_message_id', 'member-online-1')->count());
         $this->assertSame(1, Notification::query()->where('data->room', "trainer:{$trainer->id}:member:{$member->id}")->count());
+        Http::assertSentCount(0);
+    }
+
+    public function test_internal_chat_canonicalizes_legacy_rooms_and_rejects_forged_participants(): void
+    {
+        [$trainer, $member] = $this->assignedTrainerPair();
+        $outsider = User::factory()->create();
+        $headers = [
+            'X-Internal-Api-Key' => config('services.realtime.internal_api_key'),
+        ];
+
+        $this->postJson('/api/internal/chat/messages', [
+            'room' => "chat:trainer:{$trainer->id}:member:{$member->id}",
+            'trainer_id' => $trainer->id,
+            'member_id' => $member->id,
+            'sender_id' => $member->id,
+            'recipient_id' => $trainer->id,
+            'message' => 'Canonicalize this rolling-deploy message.',
+            'client_message_id' => 'legacy-room-1',
+            'suppress_push' => true,
+        ], $headers)
+            ->assertCreated()
+            ->assertJsonPath('data.room', "trainer:{$trainer->id}:member:{$member->id}");
+
+        $this->postJson('/api/internal/chat/messages', [
+            'room' => "trainer:{$trainer->id}:member:{$member->id}",
+            'trainer_id' => $trainer->id,
+            'member_id' => $member->id,
+            'sender_id' => $outsider->id,
+            'recipient_id' => $trainer->id,
+            'message' => 'Forged sender',
+        ], $headers)->assertUnprocessable();
+
+        $this->assertSame(1, ChatMessage::query()->count());
+    }
+
+    public function test_disabled_chat_notification_preference_suppresses_notification_and_push(): void
+    {
+        $this->enableFcm();
+        [$trainer, $member] = $this->assignedTrainerPair();
+        $profile = $member->memberProfiles()->firstOrFail();
+
+        UserFcmToken::query()->create([
+            'user_id' => $member->id,
+            'token' => 'disabled-chat-fcm-token',
+            'platform' => 'android',
+            'app_role' => RoleName::Member->value,
+        ]);
+        NotificationPreference::query()->create([
+            'user_id' => $member->id,
+            'gym_id' => $profile->gym_id,
+            'branch_id' => $profile->branch_id,
+            'notification_type' => 'trainer_message',
+            'is_enabled' => false,
+        ]);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/chat/messages', [
+                'recipient_id' => $member->id,
+                'message' => 'This message remains durable without an alert.',
+                'client_message_id' => 'preference-disabled-1',
+            ])
+            ->assertCreated();
+
+        $this->assertSame(1, ChatMessage::query()->count());
+        $this->assertSame(0, Notification::query()->count());
         Http::assertSentCount(0);
     }
 

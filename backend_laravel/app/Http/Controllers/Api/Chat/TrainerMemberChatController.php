@@ -14,13 +14,19 @@ use App\Models\Notification;
 use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Services\Firebase\FcmNotificationService;
+use App\Services\Member\MemberAppService;
+use App\Services\Notification\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class TrainerMemberChatController extends Controller
 {
-    public function __construct(private readonly FcmNotificationService $fcmNotificationService) {}
+    public function __construct(
+        private readonly FcmNotificationService $fcmNotificationService,
+        private readonly NotificationService $notificationService,
+        private readonly MemberAppService $memberAppService,
+    ) {}
 
     public function conversations(Request $request)
     {
@@ -49,12 +55,9 @@ class TrainerMemberChatController extends Controller
         }
 
         if ($user->active_role === RoleName::Member->value) {
-            $profile = MemberProfile::query()
-                ->where('user_id', $user->id)
-                ->whereNotNull('assigned_trainer_user_id')
-                ->first();
+            $profile = $this->memberAppService->memberProfileFor($user);
 
-            if (! $profile) {
+            if (! $profile?->assigned_trainer_user_id) {
                 return $this->success([], 'No assigned trainer conversation found.');
             }
 
@@ -131,29 +134,36 @@ class TrainerMemberChatController extends Controller
         $message = DB::transaction(function () use ($trainerId, $memberId, $senderId, $recipientId, $validated, &$created): ChatMessage {
             $clientMessageId = $validated['client_message_id'] ?? null;
             if ($clientMessageId) {
-                $existing = ChatMessage::query()
-                    ->where('room', $this->room($trainerId, $memberId))
-                    ->where('sender_id', $senderId)
-                    ->where('client_message_id', $clientMessageId)
-                    ->first();
+                $message = ChatMessage::query()->firstOrCreate([
+                    'room' => $this->room($trainerId, $memberId),
+                    'sender_id' => $senderId,
+                    'client_message_id' => $clientMessageId,
+                ], [
+                    'trainer_id' => $trainerId,
+                    'member_id' => $memberId,
+                    'recipient_id' => $recipientId,
+                    'body' => trim($validated['message']),
+                    'metadata' => $validated['metadata'] ?? null,
+                    'delivery_status' => 'sent',
+                    'delivered_at' => now(),
+                ]);
 
-                if ($existing) {
-                    return $existing;
+                if (! $message->wasRecentlyCreated) {
+                    return $message;
                 }
+            } else {
+                $message = ChatMessage::query()->create([
+                    'room' => $this->room($trainerId, $memberId),
+                    'trainer_id' => $trainerId,
+                    'member_id' => $memberId,
+                    'sender_id' => $senderId,
+                    'recipient_id' => $recipientId,
+                    'body' => trim($validated['message']),
+                    'metadata' => $validated['metadata'] ?? null,
+                    'delivery_status' => 'sent',
+                    'delivered_at' => now(),
+                ]);
             }
-
-            $message = ChatMessage::query()->create([
-                'room' => $this->room($trainerId, $memberId),
-                'trainer_id' => $trainerId,
-                'member_id' => $memberId,
-                'sender_id' => $senderId,
-                'recipient_id' => $recipientId,
-                'body' => trim($validated['message']),
-                'client_message_id' => $validated['client_message_id'] ?? null,
-                'metadata' => $validated['metadata'] ?? null,
-                'delivery_status' => 'sent',
-                'delivered_at' => now(),
-            ]);
 
             $this->updateConversationForMessage($message);
             $created = true;
@@ -162,21 +172,10 @@ class TrainerMemberChatController extends Controller
         });
 
         if ($created) {
-            $notification = Notification::query()->create([
-                'user_id' => $recipientId,
-                'type' => NotificationType::TrainerMessage->value,
-                'title' => $request->user()->name.' sent you a message',
-                'body' => $message->body,
-                'data' => [
-                    'room' => $message->room,
-                    'sender_id' => $senderId,
-                    'trainer_id' => $trainerId,
-                    'member_id' => $memberId,
-                ],
-                'created_by_user_id' => $senderId,
-            ]);
-
-            $this->sendChatPush($message, $notification);
+            $notification = $this->createChatNotification($message, $request->user()->name);
+            if ($notification) {
+                $this->sendChatPush($message, $notification);
+            }
         }
 
         return $this->success(ChatMessageResource::make($message), 'Message sent successfully.', 201);
@@ -184,16 +183,22 @@ class TrainerMemberChatController extends Controller
 
     public function markRead(Request $request)
     {
-        [$trainerId, $memberId] = $this->resolvePair($request, (int) $request->integer('recipient_id'));
+        $validated = $request->validate([
+            'recipient_id' => ['required', 'integer', 'exists:users,id'],
+        ]);
+        [$trainerId, $memberId] = $this->resolvePair($request, (int) $validated['recipient_id']);
 
-        ChatMessage::query()
-            ->where('trainer_id', $trainerId)
-            ->where('member_id', $memberId)
-            ->where('recipient_id', $request->user()->id)
-            ->whereNull('read_at')
-            ->update(['read_at' => now(), 'delivery_status' => 'read']);
+        DB::transaction(function () use ($trainerId, $memberId, $request): void {
+            $this->lockConversation($trainerId, $memberId);
+            ChatMessage::query()
+                ->where('trainer_id', $trainerId)
+                ->where('member_id', $memberId)
+                ->where('recipient_id', $request->user()->id)
+                ->whereNull('read_at')
+                ->update(['read_at' => now(), 'delivery_status' => 'read']);
 
-        $this->markConversationRead($trainerId, $memberId, $request->user()->id);
+            $this->markConversationRead($trainerId, $memberId, $request->user()->id);
+        });
 
         return $this->success(null, 'Chat messages marked read.');
     }
@@ -213,32 +218,50 @@ class TrainerMemberChatController extends Controller
             'suppress_push' => ['sometimes', 'boolean'],
         ]);
 
+        $canonicalRoom = $this->room((int) $validated['trainer_id'], (int) $validated['member_id']);
+        abort_unless($this->canonicalRoom($validated['room']) === $canonicalRoom, 422, 'Chat room does not match its participants.');
+        $this->assertAssignedPair((int) $validated['trainer_id'], (int) $validated['member_id']);
+        $this->assertMessageParticipants(
+            (int) $validated['trainer_id'],
+            (int) $validated['member_id'],
+            (int) $validated['sender_id'],
+            (int) $validated['recipient_id'],
+        );
+        $validated['room'] = $canonicalRoom;
+
         $created = false;
         $message = DB::transaction(function () use ($validated, &$created): ChatMessage {
             if (! empty($validated['client_message_id'])) {
-                $existing = ChatMessage::query()
-                    ->where('room', $validated['room'])
-                    ->where('sender_id', $validated['sender_id'])
-                    ->where('client_message_id', $validated['client_message_id'])
-                    ->first();
+                $message = ChatMessage::query()->firstOrCreate([
+                    'room' => $validated['room'],
+                    'sender_id' => $validated['sender_id'],
+                    'client_message_id' => $validated['client_message_id'],
+                ], [
+                    'trainer_id' => $validated['trainer_id'],
+                    'member_id' => $validated['member_id'],
+                    'recipient_id' => $validated['recipient_id'],
+                    'body' => trim($validated['message']),
+                    'metadata' => $validated['metadata'] ?? null,
+                    'delivery_status' => 'sent',
+                    'delivered_at' => now(),
+                ]);
 
-                if ($existing) {
-                    return $existing;
+                if (! $message->wasRecentlyCreated) {
+                    return $message;
                 }
+            } else {
+                $message = ChatMessage::query()->create([
+                    'room' => $validated['room'],
+                    'trainer_id' => $validated['trainer_id'],
+                    'member_id' => $validated['member_id'],
+                    'sender_id' => $validated['sender_id'],
+                    'recipient_id' => $validated['recipient_id'],
+                    'body' => trim($validated['message']),
+                    'metadata' => $validated['metadata'] ?? null,
+                    'delivery_status' => 'sent',
+                    'delivered_at' => now(),
+                ]);
             }
-
-            $message = ChatMessage::query()->create([
-                'room' => $validated['room'],
-                'trainer_id' => $validated['trainer_id'],
-                'member_id' => $validated['member_id'],
-                'sender_id' => $validated['sender_id'],
-                'recipient_id' => $validated['recipient_id'],
-                'body' => trim($validated['message']),
-                'client_message_id' => $validated['client_message_id'] ?? null,
-                'metadata' => $validated['metadata'] ?? null,
-                'delivery_status' => 'sent',
-                'delivered_at' => now(),
-            ]);
 
             $this->updateConversationForMessage($message);
             $created = true;
@@ -248,21 +271,9 @@ class TrainerMemberChatController extends Controller
 
         if ($created) {
             $senderName = User::query()->whereKey($message->sender_id)->value('name') ?: 'New message';
-            $notification = Notification::query()->create([
-                'user_id' => $message->recipient_id,
-                'type' => NotificationType::TrainerMessage->value,
-                'title' => $senderName.' sent you a message',
-                'body' => $message->body,
-                'data' => [
-                    'room' => $message->room,
-                    'sender_id' => $message->sender_id,
-                    'trainer_id' => $message->trainer_id,
-                    'member_id' => $message->member_id,
-                ],
-                'created_by_user_id' => $message->sender_id,
-            ]);
+            $notification = $this->createChatNotification($message, $senderName);
 
-            if (! ($validated['suppress_push'] ?? false)) {
+            if ($notification && ! ($validated['suppress_push'] ?? false)) {
                 $this->sendChatPush($message, $notification);
             }
         }
@@ -276,22 +287,28 @@ class TrainerMemberChatController extends Controller
         $validated = $request->validate([
             'room' => ['required', 'string', 'max:120'],
             'user_id' => ['required', 'integer', 'exists:users,id'],
-            'message_ids' => ['nullable', 'array'],
+            'message_ids' => ['nullable', 'array', 'max:1000'],
+            'message_ids.*' => ['integer', 'min:1'],
         ]);
 
-        $query = ChatMessage::query()
-            ->where('room', $validated['room'])
-            ->where('recipient_id', $validated['user_id'])
-            ->whereNull('read_at');
-
-        if (! empty($validated['message_ids'])) {
-            $query->whereIn('id', $validated['message_ids']);
-        }
-
-        $query->update(['read_at' => now(), 'delivery_status' => 'read']);
-
         [$trainerId, $memberId] = $this->parseRoom($validated['room']);
-        $this->markConversationRead($trainerId, $memberId, (int) $validated['user_id']);
+        $this->assertAssignedPair($trainerId, $memberId);
+        abort_unless(in_array((int) $validated['user_id'], [$trainerId, $memberId], true), 422, 'Read receipt user is not a room participant.');
+
+        DB::transaction(function () use ($validated, $trainerId, $memberId): void {
+            $this->lockConversation($trainerId, $memberId);
+            $query = ChatMessage::query()
+                ->where('room', $this->room($trainerId, $memberId))
+                ->where('recipient_id', $validated['user_id'])
+                ->whereNull('read_at');
+
+            if (! empty($validated['message_ids'])) {
+                $query->whereIn('id', $validated['message_ids']);
+            }
+
+            $query->update(['read_at' => now(), 'delivery_status' => 'read']);
+            $this->markConversationRead($trainerId, $memberId, (int) $validated['user_id']);
+        });
 
         return $this->success(null, 'Read receipt persisted.');
     }
@@ -314,12 +331,6 @@ class TrainerMemberChatController extends Controller
             return;
         }
 
-        $existingRooms = ChatConversation::query()
-            ->where('trainer_id', $trainerId)
-            ->whereIn('member_id', $memberIds)
-            ->pluck('room')
-            ->all();
-
         $now = now();
         $rows = collect($memberIds)
             ->map(fn (int $memberId): array => [
@@ -329,18 +340,15 @@ class TrainerMemberChatController extends Controller
                 'created_at' => $now,
                 'updated_at' => $now,
             ])
-            ->reject(fn (array $row): bool => in_array($row['room'], $existingRooms, true))
             ->values()
             ->all();
 
-        if (! empty($rows)) {
-            ChatConversation::query()->insert($rows);
-        }
+        ChatConversation::query()->insertOrIgnore($rows);
     }
 
     private function updateConversationForMessage(ChatMessage $message): void
     {
-        $conversation = $this->ensureConversation($message->trainer_id, $message->member_id);
+        $conversation = $this->lockConversation($message->trainer_id, $message->member_id);
         $trainerUnreadCount = $conversation->trainer_unread_count ?? 0;
         $memberUnreadCount = $conversation->member_unread_count ?? 0;
 
@@ -413,9 +421,36 @@ class TrainerMemberChatController extends Controller
         );
     }
 
+    private function createChatNotification(ChatMessage $message, string $senderName): ?Notification
+    {
+        $recipient = User::query()->find($message->recipient_id);
+        if (! $recipient) {
+            return null;
+        }
+
+        $member = User::query()->find($message->member_id);
+        $scope = $member ? $this->memberAppService->memberProfileFor($member) : null;
+
+        return $this->notificationService->create(
+            user: $recipient,
+            type: NotificationType::TrainerMessage->value,
+            title: $senderName.' sent you a message',
+            body: $message->body,
+            gymId: $scope?->gym_id,
+            branchId: $scope?->branch_id,
+            createdByUserId: $message->sender_id,
+            data: [
+                'room' => $message->room,
+                'sender_id' => $message->sender_id,
+                'trainer_id' => $message->trainer_id,
+                'member_id' => $message->member_id,
+            ],
+        );
+    }
+
     private function parseRoom(string $room): array
     {
-        if (! preg_match('/^trainer:(\d+):member:(\d+)$/', $room, $matches)) {
+        if (! preg_match('/^(?:chat:)?trainer:(\d+):member:(\d+)$/', $room, $matches)) {
             abort(422, 'Invalid chat room.');
         }
 
@@ -443,12 +478,9 @@ class TrainerMemberChatController extends Controller
         }
 
         if ($user->active_role === RoleName::Member->value) {
-            $memberProfile = MemberProfile::query()
-                ->where('user_id', $user->id)
-                ->where('assigned_trainer_user_id', $recipientId)
-                ->first();
+            $memberProfile = $this->memberAppService->memberProfileFor($user);
 
-            if (! $memberProfile) {
+            if (! $memberProfile || (int) $memberProfile->assigned_trainer_user_id !== $recipientId) {
                 throw ValidationException::withMessages(['recipient_id' => ['Member can chat only with the assigned trainer.']]);
             }
 
@@ -463,10 +495,66 @@ class TrainerMemberChatController extends Controller
         return 'trainer:'.$trainerId.':member:'.$memberId;
     }
 
+    private function canonicalRoom(string $room): string
+    {
+        [$trainerId, $memberId] = $this->parseRoom($room);
+
+        return $this->room($trainerId, $memberId);
+    }
+
+    private function lockConversation(int $trainerId, int $memberId): ChatConversation
+    {
+        $conversation = $this->ensureConversation($trainerId, $memberId);
+
+        return ChatConversation::query()->whereKey($conversation->id)->lockForUpdate()->firstOrFail();
+    }
+
+    private function assertAssignedPair(int $trainerId, int $memberId): void
+    {
+        $member = User::query()->find($memberId);
+        abort_unless($member, 422, 'Member account is not available.');
+        $memberProfile = $this->memberAppService->memberProfileFor($member);
+        abort_unless(
+            $memberProfile && (int) $memberProfile->assigned_trainer_user_id === $trainerId,
+            422,
+            'Trainer-member assignment is no longer active.'
+        );
+
+        $trainerProfile = TrainerProfile::query()
+            ->where('user_id', $trainerId)
+            ->first();
+        abort_unless($trainerProfile, 422, 'Trainer profile is not available.');
+
+        abort_unless(
+            (int) $memberProfile->gym_id === (int) $trainerProfile->gym_id
+                && ($trainerProfile->branch_id === null || (int) $memberProfile->branch_id === (int) $trainerProfile->branch_id),
+            422,
+            'Trainer-member assignment is outside the trainer scope.'
+        );
+    }
+
+    private function assertMessageParticipants(int $trainerId, int $memberId, int $senderId, int $recipientId): void
+    {
+        $participants = [$trainerId, $memberId];
+
+        abort_unless(
+            $senderId !== $recipientId
+                && in_array($senderId, $participants, true)
+                && in_array($recipientId, $participants, true),
+            422,
+            'Message sender and recipient must be opposite room participants.'
+        );
+    }
+
     private function assertInternal(Request $request): void
     {
+        $configuredKey = (string) config('services.realtime.internal_api_key');
+
         abort_unless(
-            $request->header('X-Internal-Api-Key') === config('services.realtime.internal_api_key', env('SOCKET_INTERNAL_API_KEY', 'change-me')),
+            $configuredKey !== ''
+                && (app()->environment('testing') || $configuredKey !== 'change-me')
+                && is_string($request->header('X-Internal-Api-Key'))
+                && hash_equals($configuredKey, (string) $request->header('X-Internal-Api-Key')),
             401
         );
     }

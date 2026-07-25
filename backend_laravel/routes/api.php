@@ -97,14 +97,14 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::delete('fcm-tokens', [FcmTokenController::class, 'destroy']);
     Route::get('chat/conversations', [TrainerMemberChatController::class, 'conversations']);
     Route::get('chat/messages', [TrainerMemberChatController::class, 'index']);
-    Route::post('chat/messages', [TrainerMemberChatController::class, 'store']);
-    Route::post('chat/read', [TrainerMemberChatController::class, 'markRead']);
+    Route::post('chat/messages', [TrainerMemberChatController::class, 'store'])->middleware('throttle:30,1');
+    Route::post('chat/read', [TrainerMemberChatController::class, 'markRead'])->middleware('throttle:120,1');
 });
 
 Route::prefix('internal')
     ->group(function (): void {
-        Route::post('chat/messages', [TrainerMemberChatController::class, 'internalStore']);
-        Route::post('chat/read', [TrainerMemberChatController::class, 'internalRead']);
+        Route::post('chat/messages', [TrainerMemberChatController::class, 'internalStore'])->middleware('throttle:120,1');
+        Route::post('chat/read', [TrainerMemberChatController::class, 'internalRead'])->middleware('throttle:240,1');
     });
 
 Route::prefix('platform-admin')

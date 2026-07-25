@@ -70,9 +70,9 @@ export class ChatPersistenceService {
       }
 
       const metadata = response.data.metadata ?? payload.metadata;
-    if (metadata) {
-      persistedMessage.metadata = metadata;
-    }
+      if (metadata) {
+        persistedMessage.metadata = metadata;
+      }
 
       return persistedMessage;
     } catch (error) {
@@ -91,7 +91,6 @@ export class ChatPersistenceService {
     userId: number,
     payload: ChatReadPayload,
   ): Promise<{ room: string; userId: number; messageIds: string[]; readAt: string; persisted: boolean }> {
-    let persisted = false;
     try {
       await apiFetch(`${env.laravelApiBaseUrl}/internal/chat/read`, {
         method: 'POST',
@@ -104,13 +103,13 @@ export class ChatPersistenceService {
           message_ids: payload.messageIds,
         }),
       });
-      persisted = true;
     } catch (error) {
-      logger.warn('Chat read receipt persistence failed', {
+      logger.error('Chat read receipt persistence failed', {
         room,
         userId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
+      throw error;
     }
 
     return {
@@ -118,7 +117,7 @@ export class ChatPersistenceService {
       userId,
       messageIds: payload.messageIds,
       readAt: payload.readAt ?? new Date().toISOString(),
-      persisted,
+      persisted: true,
     };
   }
 
