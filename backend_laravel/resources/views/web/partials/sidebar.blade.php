@@ -65,6 +65,7 @@
                 'items' => [
                     ['label' => 'Dashboard', 'icon' => 'ti-dashboard', 'route' => 'web.gym.dashboard', 'active' => ['web.gym.dashboard']],
                     ['label' => 'Members', 'icon' => 'ti-users', 'route' => 'web.gym.members.index', 'active' => ['web.gym.members.*', 'web.gym.memberships.*']],
+                    ['label' => 'Diet Plans', 'icon' => 'ti-apple', 'route' => 'web.gym.diet-plans.index', 'active' => ['web.gym.diet-plans.*']],
                     ['label' => 'Memberships', 'icon' => 'ti-id', 'route' => 'web.gym.memberships.index', 'active' => ['web.gym.memberships.*']],
                     ['label' => 'Custom Fees', 'icon' => 'ti-discount-2', 'route' => 'web.gym.custom-fees.index', 'active' => ['web.gym.custom-fees.*', 'web.gym.members.custom-fee*']],
                     ['label' => 'Payments', 'icon' => 'ti-cash-banknote', 'route' => 'web.gym.payments.index', 'active' => ['web.gym.payments.*']],

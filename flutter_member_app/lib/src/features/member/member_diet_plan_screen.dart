@@ -124,6 +124,10 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                   else ...[
                     _Hero(plan: plan),
                     const SizedBox(height: AppSpacing.lg),
+                    if (_hasGuidance(plan)) ...[
+                      _Guidance(plan: plan),
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
                     Row(
                       children: [
                         _Macro(
@@ -235,6 +239,57 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                 ],
               ),
             ),
+    );
+  }
+}
+
+bool _hasGuidance(Map<String, dynamic> plan) => [
+  'dietary_preferences',
+  'allergies_and_restrictions',
+  'notes',
+].any((key) => plan[key]?.toString().trim().isNotEmpty ?? false);
+
+class _Guidance extends StatelessWidget {
+  const _Guidance({required this.plan});
+
+  final Map<String, dynamic> plan;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = <MapEntry<String, String>>[
+      MapEntry('Preferences', plan['dietary_preferences']?.toString() ?? ''),
+      MapEntry(
+        'Restrictions',
+        plan['allergies_and_restrictions']?.toString() ?? '',
+      ),
+      MapEntry('Coach notes', plan['notes']?.toString() ?? ''),
+    ].where((entry) => entry.value.trim().isNotEmpty).toList();
+    return PremiumCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Plan guidance', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          ...entries.map(
+            (entry) => Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: RichText(
+                text: TextSpan(
+                  style: Theme.of(context).textTheme.bodyMedium,
+                  children: [
+                    TextSpan(
+                      text: '${entry.key}: ',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    TextSpan(text: entry.value),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

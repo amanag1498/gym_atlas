@@ -20,6 +20,7 @@ use App\Http\Controllers\Web\Gym\AttendanceController as WebGymAttendanceControl
 use App\Http\Controllers\Web\Gym\AuditLogController as WebGymAuditLogController;
 use App\Http\Controllers\Web\Gym\BranchController as WebGymBranchController;
 use App\Http\Controllers\Web\Gym\DashboardController as WebGymDashboardController;
+use App\Http\Controllers\Web\Gym\DietPlanController as WebGymDietPlanController;
 use App\Http\Controllers\Web\Gym\GymProfileController as WebGymProfileController;
 use App\Http\Controllers\Web\Gym\MemberController as WebGymMemberController;
 use App\Http\Controllers\Web\Gym\MemberMembershipController as WebGymMemberMembershipController;
@@ -431,6 +432,9 @@ Route::prefix('gym')
         Route::post('/members/{member}/deactivate', [WebGymMemberController::class, 'deactivate'])->name('members.deactivate');
         Route::post('/members/{member}/remove-from-gym', [WebGymMemberController::class, 'removeFromGym'])->name('members.remove-from-gym');
         Route::post('/members/{member}/assign-trainer', [WebGymMemberController::class, 'assignTrainer'])->name('members.assign-trainer');
+        Route::get('/diet-plans', [WebGymDietPlanController::class, 'index'])->name('diet-plans.index');
+        Route::post('/diet-plans', [WebGymDietPlanController::class, 'store'])->name('diet-plans.store');
+        Route::post('/diet-plans/{dietPlan}/status', [WebGymDietPlanController::class, 'updateStatus'])->name('diet-plans.status');
         Route::get('/members/{member}/assign-membership', [WebGymMemberMembershipController::class, 'assignForm'])->name('members.assign-membership');
         Route::post('/members/{member}/assign-membership', [WebGymMemberMembershipController::class, 'assign'])->name('members.assign-membership.store');
         Route::get('/memberships', [WebGymMemberMembershipController::class, 'index'])->name('memberships.index');
