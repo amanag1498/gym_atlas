@@ -25,6 +25,16 @@ class MemberRepository {
       _client.get('/member/workout-plans');
   Future<Map<String, dynamic>> fetchWorkoutPlan(int workoutPlanId) async =>
       _client.get('/member/workout-plans/$workoutPlanId');
+  Future<Map<String, dynamic>> fetchDietPlans() => _client.get('/member/diet-plans');
+  Future<Map<String, dynamic>> updateDietMealLog(
+    int planId,
+    int mealId, {
+    required bool completed,
+    String? loggedFor,
+  }) => _client.post(
+    '/member/diet-plans/$planId/meals/$mealId/log',
+    data: {'completed': completed, if (loggedFor != null) 'logged_for': loggedFor},
+  );
   Future<Map<String, dynamic>> fetchWorkoutBooks({
     Map<String, dynamic>? queryParameters,
   }) async =>

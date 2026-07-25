@@ -15,6 +15,7 @@ import '../auth/session_controller.dart';
 import 'member_logbook_screen.dart';
 import 'member_assigned_trainer_screen.dart';
 import 'member_assigned_workout_screen.dart';
+import 'member_diet_plan_screen.dart';
 import 'member_membership_screen.dart';
 import 'member_notifications_screen.dart';
 import 'member_onboarding_flow.dart';
@@ -444,6 +445,8 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
     );
   }
 
+  Future<void> _openDietPlanScreen() => Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (context) => MemberDietPlanScreen(repository: _memberRepository)));
+
   Future<void> _openWorkoutBookScreen() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
@@ -597,6 +600,7 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
               .length,
           onPressed: _openNotificationsScreen,
         ),
+        IconButton(onPressed: _openDietPlanScreen, icon: const Icon(Icons.restaurant_menu_rounded)),
         IconButton(
           onPressed: _openSettingsScreen,
           icon: const Icon(Icons.settings_outlined),

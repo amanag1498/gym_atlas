@@ -14,7 +14,14 @@ class DietPlanController extends Controller
 {
     public function index(Request $request)
     {
-        $plans = DietPlan::query()->with('meals.items')->where('member_id', $request->user()->id)->latest()->get();
+        $plans = DietPlan::query()
+            ->with([
+                'meals.items',
+                'meals.logs' => fn ($query) => $query->where('member_id', $request->user()->id)->whereDate('logged_for', today()),
+            ])
+            ->where('member_id', $request->user()->id)
+            ->latest()
+            ->get();
 
         return $this->success(DietPlanResource::collection($plans), 'Diet plans fetched successfully.');
     }
@@ -23,7 +30,10 @@ class DietPlanController extends Controller
     {
         $this->assertOwner($request, $dietPlan);
 
-        return $this->success(DietPlanResource::make($dietPlan->load('meals.items')));
+        return $this->success(DietPlanResource::make($dietPlan->load([
+            'meals.items',
+            'meals.logs' => fn ($query) => $query->where('member_id', $request->user()->id)->whereDate('logged_for', today()),
+        ])));
     }
 
     public function logMeal(Request $request, DietPlan $dietPlan, DietPlanMeal $meal)
