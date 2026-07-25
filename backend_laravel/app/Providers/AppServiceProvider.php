@@ -12,8 +12,11 @@ use App\Policies\GymPolicy;
 use App\Policies\MemberMembershipPolicy;
 use App\Policies\MembershipPlanPolicy;
 use App\Policies\UserPolicy;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -38,5 +41,10 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(MemberMembership::class, MemberMembershipPolicy::class);
         Gate::policy(MembershipPlan::class, MembershipPlanPolicy::class);
         Gate::policy(User::class, UserPolicy::class);
+
+        RateLimiter::for('internal-chat-send', fn (Request $request): Limit => Limit::perMinute(120)
+            ->by('chat-sender:'.$request->integer('sender_id')));
+        RateLimiter::for('internal-chat-read', fn (Request $request): Limit => Limit::perMinute(240)
+            ->by('chat-reader:'.$request->integer('user_id')));
     }
 }

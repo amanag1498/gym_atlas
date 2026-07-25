@@ -59,6 +59,7 @@ return [
     ],
 
     'realtime' => [
+        'url' => env('REALTIME_SERVER_URL', ''),
         'internal_api_key' => env('SOCKET_INTERNAL_API_KEY', ''),
     ],
 

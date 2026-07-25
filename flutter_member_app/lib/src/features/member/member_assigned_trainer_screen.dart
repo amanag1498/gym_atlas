@@ -1187,12 +1187,15 @@ class _MemberTrainerChatThreadScreenState
   String? _error;
   int? _nextBeforeId;
   dynamic _chatMessageHandler;
+  dynamic _chatReadHandler;
 
   @override
   void initState() {
     super.initState();
     _chatMessageHandler = _handleSocketMessage;
+    _chatReadHandler = _handleSocketRead;
     widget.socket?.on('chat:new_message', _chatMessageHandler);
+    widget.socket?.on('chat:read_receipt', _chatReadHandler);
     _load();
   }
 
@@ -1200,6 +1203,9 @@ class _MemberTrainerChatThreadScreenState
   void dispose() {
     if (_chatMessageHandler != null) {
       widget.socket?.off('chat:new_message', _chatMessageHandler);
+    }
+    if (_chatReadHandler != null) {
+      widget.socket?.off('chat:read_receipt', _chatReadHandler);
     }
     _controller.dispose();
     super.dispose();
@@ -1216,8 +1222,40 @@ class _MemberTrainerChatThreadScreenState
     final recipientId = _memberIntValue(message['recipient_id']);
     if (senderId == widget.trainerId || recipientId == widget.trainerId) {
       _upsert(message);
-      widget.repository.markChatRead(widget.trainerId);
+      if (senderId == widget.trainerId) {
+        widget.repository.markChatRead(widget.trainerId);
+      }
     }
+  }
+
+  void _handleSocketRead(dynamic data) {
+    if (!mounted) {
+      return;
+    }
+
+    final receipt = _trainerRecordMap(data);
+    if (_memberIntValue(receipt['userId'] ?? receipt['user_id']) !=
+        widget.trainerId) {
+      return;
+    }
+
+    final messageIds = (receipt['messageIds'] ?? receipt['message_ids']);
+    if (messageIds is! List) {
+      return;
+    }
+
+    final ids = messageIds.map((id) => id.toString()).toSet();
+    final readAt =
+        receipt['readAt']?.toString() ??
+        receipt['read_at']?.toString() ??
+        DateTime.now().toIso8601String();
+    setState(() {
+      for (var index = 0; index < _messages.length; index++) {
+        if (ids.contains(_messages[index]['id']?.toString())) {
+          _messages[index] = {..._messages[index], 'read_at': readAt};
+        }
+      }
+    });
   }
 
   Future<void> _load() async {

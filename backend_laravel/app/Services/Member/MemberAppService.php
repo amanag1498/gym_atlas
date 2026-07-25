@@ -15,6 +15,37 @@ use Illuminate\Support\Facades\DB;
 
 class MemberAppService
 {
+    public function memberProfileForChat(User $user): ?MemberProfile
+    {
+        $gymId = MemberMembership::query()
+            ->where('member_id', $user->id)
+            ->whereIn('status', ['active', 'frozen'])
+            ->orderByRaw("
+                case status
+                    when 'active' then 0
+                    when 'frozen' then 1
+                    else 2
+                end
+            ")
+            ->orderByDesc('start_date')
+            ->value('gym_id');
+
+        return MemberProfile::query()
+            ->where('user_id', $user->id)
+            ->when($gymId !== null, fn ($query) => $query->where('gym_id', $gymId))
+            ->orderByRaw("
+                case
+                    when is_active = 1 and membership_status = 'active' and gym_id is not null and branch_id is not null then 0
+                    when is_active = 1 and gym_id is null then 1
+                    when is_active = 1 and gym_id is not null and branch_id is not null then 2
+                    when is_active = 1 and gym_id is not null then 3
+                    else 4
+                end
+            ")
+            ->latest('id')
+            ->first();
+    }
+
     public function memberProfileFor(User $user): ?MemberProfile
     {
         $membership = $this->currentMembershipFor($user);

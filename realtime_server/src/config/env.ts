@@ -23,6 +23,7 @@ export const env = {
   useRedisAdapter: (process.env.USE_REDIS_ADAPTER ?? 'false') === 'true',
 } as const;
 
-if (env.nodeEnv === 'production' && env.socketInternalApiKey === 'change-me') {
-  throw new Error('SOCKET_INTERNAL_API_KEY must be configured with a strong production secret.');
+if (env.nodeEnv === 'production'
+  && (env.socketInternalApiKey === 'change-me' || env.socketInternalApiKey.length < 32)) {
+  throw new Error('SOCKET_INTERNAL_API_KEY must contain at least 32 characters in production.');
 }

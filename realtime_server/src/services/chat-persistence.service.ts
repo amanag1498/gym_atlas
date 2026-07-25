@@ -20,7 +20,6 @@ export class ChatPersistenceService {
     room: string,
     senderId: number,
     payload: ChatSendPayload,
-    options: { suppressPush?: boolean } = {},
   ): Promise<PersistedChatMessage> {
     try {
       const [trainerId, memberId] = this.parseRoom(room);
@@ -50,7 +49,6 @@ export class ChatPersistenceService {
           message: payload.message,
           client_message_id: payload.clientMessageId,
           metadata: payload.metadata,
-          suppress_push: options.suppressPush === true,
         }),
       });
 
@@ -92,7 +90,15 @@ export class ChatPersistenceService {
     payload: ChatReadPayload,
   ): Promise<{ room: string; userId: number; messageIds: string[]; readAt: string; persisted: boolean }> {
     try {
-      await apiFetch(`${env.laravelApiBaseUrl}/internal/chat/read`, {
+      const response = await apiFetch<{
+        success: boolean;
+        data: {
+          room: string;
+          user_id: number;
+          message_ids: Array<string | number>;
+          read_at: string;
+        };
+      }>(`${env.laravelApiBaseUrl}/internal/chat/read`, {
         method: 'POST',
         headers: {
           'X-Internal-Api-Key': env.socketInternalApiKey,
@@ -103,6 +109,14 @@ export class ChatPersistenceService {
           message_ids: payload.messageIds,
         }),
       });
+
+      return {
+        room: response.data.room,
+        userId: response.data.user_id,
+        messageIds: response.data.message_ids.map(String),
+        readAt: response.data.read_at,
+        persisted: true,
+      };
     } catch (error) {
       logger.error('Chat read receipt persistence failed', {
         room,
@@ -111,14 +125,6 @@ export class ChatPersistenceService {
       });
       throw error;
     }
-
-    return {
-      room,
-      userId,
-      messageIds: payload.messageIds,
-      readAt: payload.readAt ?? new Date().toISOString(),
-      persisted: true,
-    };
   }
 
   private parseRoom(room: string): [number, number] {

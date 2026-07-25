@@ -6,12 +6,11 @@ Socket.IO realtime service for the gym ecosystem.
 
 - Sanctum or shared-JWT socket authentication
 - Trainer-member 1:1 chat authorization
-- Typing indicator
 - Read receipts
 - Presence tracking
 - User notification rooms
 - Gym and branch announcement rooms
-- Internal publish endpoints for Laravel-triggered notification and announcement events
+- Internal publish endpoints for Laravel-triggered chat, notification, and announcement events
 - Durable Laravel persistence with idempotent client message IDs
 - Canonical trainer-member rooms shared with Laravel
 - Liveness and Laravel dependency readiness endpoints
@@ -40,10 +39,12 @@ Protected with `x-internal-api-key: <SOCKET_INTERNAL_API_KEY>`.
 
 - `POST /internal/notifications`
 - `POST /internal/announcements`
+- `POST /internal/chat/messages`
+- `POST /internal/chat/read`
 
-These are intended for Laravel-side integration after a notification or announcement is created.
+Laravel uses the chat endpoints to broadcast messages and read receipts created through REST fallback.
 
 ## Health
 
 - `GET /health` checks the Node process.
-- `GET /ready` checks that the realtime server can reach Laravel, which is required before accepting production chat traffic.
+- `GET /ready` verifies that the realtime server can reach Laravel and authenticate with the shared internal key.

@@ -39,7 +39,9 @@ Map<String, dynamic> _recordMap(dynamic value) {
 }
 
 class MemberHomeScreen extends StatefulWidget {
-  const MemberHomeScreen({super.key});
+  const MemberHomeScreen({super.key, this.initialIndex = 0});
+
+  final int initialIndex;
 
   @override
   State<MemberHomeScreen> createState() => _MemberHomeScreenState();
@@ -51,7 +53,7 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
   StepSyncService? _stepSyncService;
   final MemberSocketService _socketService = MemberSocketService();
   io.Socket? _socket;
-  int _index = 0;
+  late int _index;
   int? _preferredWorkoutPlanId;
   bool _loading = true;
   String? _error;
@@ -85,6 +87,7 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
   @override
   void initState() {
     super.initState();
+    _index = widget.initialIndex;
     WidgetsBinding.instance.addObserver(this);
     scheduleMicrotask(_bootstrap);
   }

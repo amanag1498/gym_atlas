@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -28,6 +31,9 @@ class _MemberAppState extends State<MemberApp> {
   late final MemberSessionController sessionController;
   late final MemberRepository memberRepository;
   late final GoRouter router;
+  StreamSubscription<RemoteMessage>? _notificationOpenSubscription;
+  int _chatLaunchSequence = 0;
+  bool _pendingChatLaunch = false;
 
   @override
   void initState() {
@@ -58,8 +64,14 @@ class _MemberAppState extends State<MemberApp> {
         ),
         GoRoute(
           path: '/home',
-          pageBuilder: (context, state) =>
-              _buildPage(state, const MemberHomeScreen()),
+          pageBuilder: (context, state) => _buildPage(
+            state,
+            MemberHomeScreen(
+              initialIndex: state.uri.queryParameters['section'] == 'chat'
+                  ? 3
+                  : 0,
+            ),
+          ),
         ),
       ],
       redirect: (context, state) {
@@ -80,7 +92,51 @@ class _MemberAppState extends State<MemberApp> {
         return null;
       },
     );
+    sessionController.addListener(_openPendingChatIfReady);
+    _notificationOpenSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
+      _handleNotificationOpen,
+    );
+    FirebaseMessaging.instance
+        .getInitialMessage()
+        .then((message) {
+          if (message != null) {
+            _handleNotificationOpen(message);
+          }
+        })
+        .catchError((Object exception) {
+          debugPrint('[fcm] initial notification skipped: $exception');
+        });
     sessionController.bootstrap();
+  }
+
+  void _handleNotificationOpen(RemoteMessage message) {
+    if (message.data['type'] != 'chat_message') {
+      return;
+    }
+
+    _chatLaunchSequence++;
+    _pendingChatLaunch = true;
+    _openPendingChatIfReady();
+  }
+
+  void _openPendingChatIfReady() {
+    if (!_pendingChatLaunch ||
+        sessionController.initializing ||
+        !sessionController.isAuthenticated) {
+      return;
+    }
+
+    _pendingChatLaunch = false;
+    router.go('/home?section=chat&launch=$_chatLaunchSequence');
+  }
+
+  @override
+  void dispose() {
+    _notificationOpenSubscription?.cancel();
+    sessionController.removeListener(_openPendingChatIfReady);
+    router.dispose();
+    sessionController.dispose();
+    super.dispose();
   }
 
   @override

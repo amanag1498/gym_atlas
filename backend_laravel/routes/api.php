@@ -49,6 +49,7 @@ use App\Http\Controllers\Api\Public\FcmTokenController;
 use App\Http\Controllers\Api\Public\NotificationController as PublicNotificationController;
 use App\Http\Controllers\Api\Public\PublicContextController;
 use App\Http\Controllers\Api\Public\TrialRequestController as PublicTrialRequestController;
+use App\Http\Controllers\Api\Realtime\RealtimeContextController;
 use App\Http\Controllers\Api\Trainer\AssignedMemberController as TrainerAssignedMemberController;
 use App\Http\Controllers\Api\Trainer\AnnouncementController as TrainerAnnouncementController;
 use App\Http\Controllers\Api\Trainer\ExerciseController as TrainerExerciseController;
@@ -74,6 +75,7 @@ Route::prefix('public')->group(function (): void {
 
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('me', [AuthController::class, 'me']);
+        Route::get('realtime/context', RealtimeContextController::class)->middleware('throttle:60,1');
         Route::post('auth/logout', [AuthController::class, 'logout']);
         Route::post('auth/active-role', [AuthController::class, 'switchActiveRole']);
         Route::get('notifications', [PublicNotificationController::class, 'index']);
@@ -103,8 +105,9 @@ Route::middleware('auth:sanctum')->group(function (): void {
 
 Route::prefix('internal')
     ->group(function (): void {
-        Route::post('chat/messages', [TrainerMemberChatController::class, 'internalStore'])->middleware('throttle:120,1');
-        Route::post('chat/read', [TrainerMemberChatController::class, 'internalRead'])->middleware('throttle:240,1');
+        Route::get('chat/health', [TrainerMemberChatController::class, 'internalHealth'])->middleware('throttle:60,1');
+        Route::post('chat/messages', [TrainerMemberChatController::class, 'internalStore'])->middleware('throttle:internal-chat-send');
+        Route::post('chat/read', [TrainerMemberChatController::class, 'internalRead'])->middleware('throttle:internal-chat-read');
     });
 
 Route::prefix('platform-admin')

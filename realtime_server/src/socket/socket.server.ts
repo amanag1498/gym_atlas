@@ -8,7 +8,6 @@ import type {
   AuthenticatedSocketData,
   ChatReadPayload,
   ChatSendPayload,
-  ChatTypingPayload,
   PresenceUpdatePayload,
 } from '../types/socket';
 import { rooms } from './rooms';
@@ -41,8 +40,19 @@ function assertChatSendPayload(payload: ChatSendPayload): void {
   }
 
   if (payload.clientMessageId !== undefined
-    && (typeof payload.clientMessageId !== 'string' || payload.clientMessageId.length > 120)) {
+    && (typeof payload.clientMessageId !== 'string'
+      || payload.clientMessageId.length === 0
+      || payload.clientMessageId.length > 120)) {
     throw new Error('Invalid client message identifier.');
+  }
+
+  if (payload.metadata !== undefined) {
+    if (!payload.metadata
+      || typeof payload.metadata !== 'object'
+      || Array.isArray(payload.metadata)
+      || JSON.stringify(payload.metadata).length > 8192) {
+      throw new Error('Invalid or oversized chat metadata.');
+    }
   }
 }
 
@@ -53,6 +63,10 @@ function assertChatReadPayload(payload: ChatReadPayload): void {
 
   if (!Array.isArray(payload.messageIds) || payload.messageIds.length > 1000) {
     throw new Error('Invalid read receipt message list.');
+  }
+
+  if (payload.messageIds.some((id) => typeof id !== 'string' || !/^\d+$/.test(id))) {
+    throw new Error('Read receipt message identifiers must be positive integers.');
   }
 }
 
@@ -83,14 +97,11 @@ export function registerSocketServer(io: Server): void {
 
         const actor = assertSocketUser(socket);
         const authorizedPeer = chatAuthorizationService.authorizePeer(actor, payload.recipientId);
-        const suppressPush = presenceService.isOnline(payload.recipientId);
-
         await socket.join(authorizedPeer.room);
         const persisted = await chatPersistenceService.persistMessage(
           authorizedPeer.room,
           actor.id,
           payload,
-          { suppressPush },
         );
 
         const chatMessageEvent = {
@@ -113,29 +124,6 @@ export function registerSocketServer(io: Server): void {
         acknowledgement?.({
           ok: false,
           error: error instanceof Error ? error.message : 'Unable to send chat message.',
-        });
-      }
-    });
-
-    socket.on('chat:typing', async (payload: ChatTypingPayload) => {
-      try {
-        if (!payload || !Number.isSafeInteger(payload.recipientId) || typeof payload.isTyping !== 'boolean') {
-          throw new Error('Invalid typing event.');
-        }
-        const actor = assertSocketUser(socket);
-        const authorizedPeer = chatAuthorizationService.authorizePeer(actor, payload.recipientId);
-        await socket.join(authorizedPeer.room);
-
-        socket.to(authorizedPeer.room).emit('chat:typing', {
-          room: authorizedPeer.room,
-          userId: actor.id,
-          recipientId: payload.recipientId,
-          isTyping: payload.isTyping,
-        });
-      } catch (error) {
-        logger.warn('chat:typing rejected', {
-          socketId: socket.id,
-          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     });
@@ -171,7 +159,11 @@ export function registerSocketServer(io: Server): void {
 
     socket.on('presence:update', (payload: PresenceUpdatePayload) => {
       const actor = assertSocketUser(socket);
-      presenceService.updateStatus(io, actor.id, payload.status ?? 'online');
+      const status = payload?.status ?? 'online';
+      if (!['online', 'offline', 'away'].includes(status)) {
+        return;
+      }
+      presenceService.updateStatus(io, actor.id, status);
     });
 
     socket.on('disconnect', () => {

@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Enums\RoleName;
+use App\Jobs\PublishRealtimeEvent;
 use App\Models\Branch;
+use App\Models\ChatConversation;
 use App\Models\ChatMessage;
 use App\Models\Gym;
 use App\Models\MemberProfile;
@@ -15,6 +17,7 @@ use App\Models\UserFcmToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class ChatFcmNotificationFeatureTest extends TestCase
@@ -154,7 +157,7 @@ class ChatFcmNotificationFeatureTest extends TestCase
         $this->assertSame(1, Notification::query()->where('data->room', "trainer:{$trainer->id}:member:{$member->id}")->count());
     }
 
-    public function test_internal_chat_message_can_suppress_fcm_when_recipient_is_online(): void
+    public function test_internal_chat_message_does_not_suppress_push_from_global_presence_alone(): void
     {
         $this->enableFcm();
         [$trainer, $member] = $this->assignedTrainerPair();
@@ -172,7 +175,7 @@ class ChatFcmNotificationFeatureTest extends TestCase
             'member_id' => $member->id,
             'sender_id' => $member->id,
             'recipient_id' => $trainer->id,
-            'message' => 'You should see this over socket only.',
+            'message' => 'Global presence must not hide this push.',
             'client_message_id' => 'member-online-1',
             'suppress_push' => true,
         ], [
@@ -183,7 +186,132 @@ class ChatFcmNotificationFeatureTest extends TestCase
 
         $this->assertSame(1, ChatMessage::query()->where('client_message_id', 'member-online-1')->count());
         $this->assertSame(1, Notification::query()->where('data->room', "trainer:{$trainer->id}:member:{$member->id}")->count());
-        Http::assertSentCount(0);
+        Http::assertSent(fn ($request): bool => str_contains((string) $request->url(), '/messages:send'));
+    }
+
+    public function test_rest_fallback_message_is_queued_for_realtime_delivery_once(): void
+    {
+        Queue::fake();
+        config()->set('services.realtime.url', 'https://realtime.example.test');
+        [$trainer, $member] = $this->assignedTrainerPair();
+        $payload = [
+            'recipient_id' => $member->id,
+            'message' => 'Deliver this REST fallback over realtime.',
+            'client_message_id' => 'rest-realtime-1',
+        ];
+
+        $this->actingAs($trainer, 'sanctum')->postJson('/api/chat/messages', $payload)->assertCreated();
+        $this->actingAs($trainer, 'sanctum')->postJson('/api/chat/messages', $payload)->assertCreated();
+
+        Queue::assertPushed(PublishRealtimeEvent::class, 1);
+        Queue::assertPushed(PublishRealtimeEvent::class, function (PublishRealtimeEvent $job) use ($member): bool {
+            return $job->path === 'internal/chat/messages'
+                && $job->payload['message']['recipientId'] === $member->id
+                && $job->payload['message']['clientMessageId'] === 'rest-realtime-1';
+        });
+    }
+
+    public function test_partial_internal_read_keeps_remaining_unread_count(): void
+    {
+        [$trainer, $member] = $this->assignedTrainerPair();
+        $headers = ['X-Internal-Api-Key' => config('services.realtime.internal_api_key')];
+        $room = "trainer:{$trainer->id}:member:{$member->id}";
+
+        $firstId = $this->postJson('/api/internal/chat/messages', [
+            'room' => $room,
+            'trainer_id' => $trainer->id,
+            'member_id' => $member->id,
+            'sender_id' => $member->id,
+            'recipient_id' => $trainer->id,
+            'message' => 'First unread message.',
+            'client_message_id' => 'partial-read-1',
+        ], $headers)->assertCreated()->json('data.id');
+        $this->postJson('/api/internal/chat/messages', [
+            'room' => $room,
+            'trainer_id' => $trainer->id,
+            'member_id' => $member->id,
+            'sender_id' => $member->id,
+            'recipient_id' => $trainer->id,
+            'message' => 'Second unread message.',
+            'client_message_id' => 'partial-read-2',
+        ], $headers)->assertCreated();
+
+        $this->postJson('/api/internal/chat/read', [
+            'room' => $room,
+            'user_id' => $trainer->id,
+            'message_ids' => [(int) $firstId],
+        ], $headers)
+            ->assertOk()
+            ->assertJsonPath('data.message_ids.0', (int) $firstId);
+
+        $conversation = ChatConversation::query()->where('room', $room)->firstOrFail();
+        $this->assertSame(1, $conversation->trainer_unread_count);
+        $this->assertNotNull(ChatMessage::query()->findOrFail($firstId)->read_at);
+        $this->assertNull(ChatMessage::query()->where('client_message_id', 'partial-read-2')->firstOrFail()->read_at);
+    }
+
+    public function test_rest_read_receipt_is_queued_with_authoritative_message_ids(): void
+    {
+        [$trainer, $member] = $this->assignedTrainerPair();
+        $headers = ['X-Internal-Api-Key' => config('services.realtime.internal_api_key')];
+        $room = "trainer:{$trainer->id}:member:{$member->id}";
+        $messageId = $this->postJson('/api/internal/chat/messages', [
+            'room' => $room,
+            'trainer_id' => $trainer->id,
+            'member_id' => $member->id,
+            'sender_id' => $member->id,
+            'recipient_id' => $trainer->id,
+            'message' => 'Read this through REST.',
+            'client_message_id' => 'rest-read-1',
+        ], $headers)->assertCreated()->json('data.id');
+
+        Queue::fake();
+        config()->set('services.realtime.url', 'https://realtime.example.test');
+
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/chat/read', ['recipient_id' => $member->id])
+            ->assertOk()
+            ->assertJsonPath('data.message_ids.0', (int) $messageId);
+
+        Queue::assertPushed(PublishRealtimeEvent::class, function (PublishRealtimeEvent $job) use ($messageId): bool {
+            return $job->path === 'internal/chat/read'
+                && $job->payload['messageIds'] === [(string) $messageId];
+        });
+    }
+
+    public function test_internal_health_verifies_the_shared_realtime_key(): void
+    {
+        $this->getJson('/api/internal/chat/health', [
+            'X-Internal-Api-Key' => 'wrong-key',
+        ])->assertUnauthorized();
+
+        $this->getJson('/api/internal/chat/health', [
+            'X-Internal-Api-Key' => config('services.realtime.internal_api_key'),
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.service', 'chat-persistence');
+    }
+
+    public function test_realtime_publish_job_uses_the_configured_url_and_internal_key(): void
+    {
+        config()->set('services.realtime.url', 'https://realtime.example.test/');
+        Http::fake([
+            'https://realtime.example.test/internal/chat/read' => Http::response(['success' => true]),
+        ]);
+
+        $job = new PublishRealtimeEvent('internal/chat/read', [
+            'room' => 'trainer:1:member:2',
+            'userId' => 2,
+            'recipientId' => 1,
+            'messageIds' => ['10'],
+            'readAt' => now()->toIso8601String(),
+        ]);
+        $job->handle();
+
+        Http::assertSent(function ($request): bool {
+            return $request->url() === 'https://realtime.example.test/internal/chat/read'
+                && $request->header('X-Internal-Api-Key')[0] === config('services.realtime.internal_api_key');
+        });
     }
 
     public function test_internal_chat_canonicalizes_legacy_rooms_and_rejects_forged_participants(): void

@@ -94,16 +94,22 @@ Create `.env`:
 ```dotenv
 NODE_ENV=production
 PORT=4010
-CLIENT_ORIGIN=https://gymatlas.example.com
-LARAVEL_API_BASE_URL=https://gymatlas.example.com/api
+CLIENT_ORIGIN=https://gymatlas.in
+LARAVEL_API_BASE_URL=https://gymatlas.in/api
 SOCKET_INTERNAL_API_KEY=replace-with-strong-random-secret
 TOKEN_VERIFICATION_STRATEGY=laravel
 JWT_SHARED_SECRET=
 USE_REDIS_ADAPTER=false
 ```
 
-The `SOCKET_INTERNAL_API_KEY` must also be added to Laravel if you wire internal socket publishing from Laravel later.
-Use the same strong value in both services. Production startup rejects the placeholder `change-me` value.
+Set these matching values in Laravel:
+
+```dotenv
+REALTIME_SERVER_URL=http://127.0.0.1:4010
+SOCKET_INTERNAL_API_KEY=replace-with-the-same-strong-random-secret
+```
+
+The realtime readiness check verifies both Laravel reachability and the shared internal key. Laravel queues REST fallback chat messages and read receipts for realtime publishing, so keep the queue worker running.
 
 Build the member and trainer apps with the deployed realtime URL explicitly:
 

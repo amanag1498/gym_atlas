@@ -44,8 +44,11 @@ app.get('/health', (_request, response) => {
 
 app.get('/ready', async (_request, response) => {
   try {
-    await apiFetch(`${env.laravelApiBaseUrl}/public/health`, {
+    await apiFetch(`${env.laravelApiBaseUrl}/internal/chat/health`, {
       method: 'GET',
+      headers: {
+        'X-Internal-Api-Key': env.socketInternalApiKey,
+      },
       signal: AbortSignal.timeout(5000),
     });
     response.json({

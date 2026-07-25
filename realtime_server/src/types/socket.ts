@@ -7,11 +7,6 @@ export interface ChatSendPayload {
   metadata?: Record<string, unknown>;
 }
 
-export interface ChatTypingPayload {
-  recipientId: number;
-  isTyping: boolean;
-}
-
 export interface ChatReadPayload {
   recipientId: number;
   messageIds: string[];
@@ -39,6 +34,33 @@ export interface InternalAnnouncementPayload {
   title: string;
   message: string;
   data?: Record<string, unknown>;
+}
+
+export interface InternalChatMessagePayload {
+  room: string;
+  trainerId: number;
+  memberId: number;
+  message: PersistedChatEventMessage;
+}
+
+export interface InternalChatReadPayload {
+  room: string;
+  userId: number;
+  recipientId: number;
+  messageIds: string[];
+  readAt: string;
+}
+
+export interface PersistedChatEventMessage {
+  id: string;
+  room: string;
+  senderId: number;
+  recipientId: number;
+  body: string;
+  clientMessageId?: string | null;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  persisted: true;
 }
 
 export interface AuthenticatedSocketData {

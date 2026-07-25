@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -23,6 +26,9 @@ class _TrainerAppState extends State<TrainerApp> {
   late final TrainerAuthService _authService;
   late final TrainerFcmTokenService _fcmTokenService;
   late final TrainerSessionController _sessionController;
+  StreamSubscription<RemoteMessage>? _notificationOpenSubscription;
+  int? _pendingChatMemberId;
+  int _chatLaunchVersion = 0;
 
   @override
   void initState() {
@@ -37,7 +43,43 @@ class _TrainerAppState extends State<TrainerApp> {
       authService: _authService,
       fcmTokenService: _fcmTokenService,
     );
+    _notificationOpenSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
+      _handleNotificationOpen,
+    );
+    FirebaseMessaging.instance
+        .getInitialMessage()
+        .then((message) {
+          if (message != null) {
+            _handleNotificationOpen(message);
+          }
+        })
+        .catchError((Object exception) {
+          debugPrint('[fcm] initial notification skipped: $exception');
+        });
     _sessionController.bootstrap();
+  }
+
+  void _handleNotificationOpen(RemoteMessage message) {
+    if (message.data['type'] != 'chat_message') {
+      return;
+    }
+
+    final memberId = int.tryParse(message.data['member_id']?.toString() ?? '');
+    if (memberId == null || memberId <= 0 || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _pendingChatMemberId = memberId;
+      _chatLaunchVersion++;
+    });
+  }
+
+  @override
+  void dispose() {
+    _notificationOpenSubscription?.cancel();
+    _sessionController.dispose();
+    super.dispose();
   }
 
   @override
@@ -57,7 +99,10 @@ class _TrainerAppState extends State<TrainerApp> {
             }
 
             return session.isAuthenticated
-                ? const TrainerHomeScreen()
+                ? TrainerHomeScreen(
+                    initialChatMemberId: _pendingChatMemberId,
+                    chatLaunchVersion: _chatLaunchVersion,
+                  )
                 : const TrainerLoginScreen();
           },
         ),

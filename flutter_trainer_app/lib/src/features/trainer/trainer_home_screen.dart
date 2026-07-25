@@ -21,7 +21,14 @@ import 'trainer_settings_screen.dart';
 import 'trainer_tasks_screen.dart';
 
 class TrainerHomeScreen extends StatefulWidget {
-  const TrainerHomeScreen({super.key});
+  const TrainerHomeScreen({
+    super.key,
+    this.initialChatMemberId,
+    this.chatLaunchVersion = 0,
+  });
+
+  final int? initialChatMemberId;
+  final int chatLaunchVersion;
 
   @override
   State<TrainerHomeScreen> createState() => _TrainerHomeScreenState();
@@ -47,6 +54,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
   List<Map<String, dynamic>> _chatConversations = const [];
   String? _chatError;
   int? _workoutFocusMemberId;
+  int _handledChatLaunchVersion = -1;
 
   @override
   void initState() {
@@ -54,6 +62,14 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     final session = context.read<TrainerSessionController>();
     _repository = TrainerRepository(session.client);
     scheduleMicrotask(_bootstrap);
+  }
+
+  @override
+  void didUpdateWidget(covariant TrainerHomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.chatLaunchVersion != widget.chatLaunchVersion) {
+      _scheduleInitialChat();
+    }
   }
 
   Future<void> _bootstrap() async {
@@ -86,6 +102,24 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         );
       });
     }
+    _scheduleInitialChat();
+  }
+
+  void _scheduleInitialChat() {
+    final memberId = widget.initialChatMemberId;
+    if (memberId == null ||
+        widget.chatLaunchVersion == _handledChatLaunchVersion ||
+        _loading ||
+        !mounted) {
+      return;
+    }
+
+    _handledChatLaunchVersion = widget.chatLaunchVersion;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_openTrainerChatThread(memberId));
+      }
+    });
   }
 
   Future<void> _load() async {
@@ -7513,12 +7547,15 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
   String? _error;
   int? _nextBeforeId;
   dynamic _chatMessageHandler;
+  dynamic _chatReadHandler;
 
   @override
   void initState() {
     super.initState();
     _chatMessageHandler = _handleSocketMessage;
+    _chatReadHandler = _handleSocketRead;
     widget.socket?.on('chat:new_message', _chatMessageHandler);
+    widget.socket?.on('chat:read_receipt', _chatReadHandler);
     _load();
   }
 
@@ -7526,6 +7563,9 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
   void dispose() {
     if (_chatMessageHandler != null) {
       widget.socket?.off('chat:new_message', _chatMessageHandler);
+    }
+    if (_chatReadHandler != null) {
+      widget.socket?.off('chat:read_receipt', _chatReadHandler);
     }
     _controller.dispose();
     super.dispose();
@@ -7540,8 +7580,39 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
     final recipientId = _intValue(message['recipient_id']);
     if (senderId == widget.memberId || recipientId == widget.memberId) {
       _upsert(message);
-      unawaited(widget.repository.markChatRead(widget.memberId));
+      if (senderId == widget.memberId) {
+        unawaited(widget.repository.markChatRead(widget.memberId));
+      }
     }
+  }
+
+  void _handleSocketRead(dynamic data) {
+    if (!mounted) {
+      return;
+    }
+
+    final receipt = _map(data);
+    if (_intValue(receipt['userId'] ?? receipt['user_id']) != widget.memberId) {
+      return;
+    }
+
+    final messageIds = receipt['messageIds'] ?? receipt['message_ids'];
+    if (messageIds is! List) {
+      return;
+    }
+
+    final ids = messageIds.map((id) => id.toString()).toSet();
+    final readAt =
+        receipt['readAt']?.toString() ??
+        receipt['read_at']?.toString() ??
+        DateTime.now().toIso8601String();
+    setState(() {
+      for (var index = 0; index < _messages.length; index++) {
+        if (ids.contains(_messages[index]['id']?.toString())) {
+          _messages[index] = {..._messages[index], 'read_at': readAt};
+        }
+      }
+    });
   }
 
   Future<void> _load() async {

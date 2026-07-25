@@ -120,6 +120,26 @@ class ChatMessageHistoryFeatureTest extends TestCase
         $this->assertSame(1, DB::table('chat_conversations')->count());
     }
 
+    public function test_realtime_context_returns_lightweight_authoritative_chat_assignments(): void
+    {
+        [$trainer, $member] = $this->assignedTrainerPair();
+
+        $this->actingAs($trainer, 'sanctum')
+            ->getJson('/api/public/realtime/context')
+            ->assertOk()
+            ->assertJsonPath('data.id', $trainer->id)
+            ->assertJsonPath('data.active_role', RoleName::Trainer->value)
+            ->assertJsonPath('data.assigned_member_ids.0', $member->id)
+            ->assertJsonPath('data.assigned_trainer_id', null);
+
+        $this->actingAs($member, 'sanctum')
+            ->getJson('/api/public/realtime/context')
+            ->assertOk()
+            ->assertJsonPath('data.id', $member->id)
+            ->assertJsonPath('data.assigned_trainer_id', $trainer->id)
+            ->assertJsonPath('data.assigned_member_ids', []);
+    }
+
     private function createMessage(
         string $room,
         User $trainer,

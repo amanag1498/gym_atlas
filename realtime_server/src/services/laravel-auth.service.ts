@@ -11,46 +11,18 @@ interface LaravelApiEnvelope<T> {
   meta: Record<string, unknown> | null;
 }
 
-interface LaravelUserResource {
+interface RealtimeContextResponse {
   id: number;
   name: string;
   email: string;
   active_role: ActiveRole;
   roles: string[];
   permissions: string[];
-  gyms?: Array<{ id: number }>;
-  branches?: Array<{ id: number; gym_id: number }>;
-}
-
-interface MemberContextResponse {
-  user: LaravelUserResource;
-  trainer_connection?: {
-    assigned_trainer?: {
-      id: number;
-      name: string;
-    } | null;
-  } | null;
-  branches?: Array<{ id: number; gym_id: number }>;
-}
-
-interface TrainerAssignedMemberList {
-  data: Array<{
-    member_id: number;
-  }>;
-}
-
-interface TrainerContextResponse {
-  user: LaravelUserResource;
-  trainer_profile?: {
-    gym_id: number;
-    branch_id: number | null;
-  } | null;
-  branches?: Array<{ id: number; gym_id: number }>;
-}
-
-interface GymContextResponse {
-  user: LaravelUserResource;
-  gyms?: Array<{ id: number; branches?: Array<{ id: number }> }>;
+  gym_ids: number[];
+  branch_ids: number[];
+  branch_scopes: Array<{ gym_id: number; branch_id: number }>;
+  assigned_member_ids: number[];
+  assigned_trainer_id: number | null;
 }
 
 export class LaravelAuthService {
@@ -97,104 +69,23 @@ export class LaravelAuthService {
   }
 
   private async fetchSocketUserFromLaravel(token: string): Promise<SocketUserContext> {
-    const me = await this.fetchProtected<LaravelUserResource>('public/me', token);
-    const activeRole = me.active_role;
-
-    if (activeRole === 'member') {
-      const context = await this.fetchProtected<MemberContextResponse>('member/context', token);
-
-      return {
-        id: context.user.id,
-        name: context.user.name,
-        email: context.user.email,
-        activeRole,
-        roles: context.user.roles,
-        permissions: context.user.permissions,
-        gymIds: (context.user.gyms ?? []).map((gym) => gym.id),
-        branchIds: (context.branches ?? context.user.branches ?? []).map((branch) => branch.id),
-        branchScopes: (context.branches ?? context.user.branches ?? []).map((branch) => ({
-          gymId: branch.gym_id,
-          branchId: branch.id,
-        })),
-        assignedMemberIds: [],
-        assignedTrainerId: context.trainer_connection?.assigned_trainer?.id ?? null,
-      };
-    }
-
-    if (activeRole === 'trainer') {
-      const [context, members] = await Promise.all([
-        this.fetchProtected<TrainerContextResponse>('trainer/context', token),
-        this.fetchPaginated<TrainerAssignedMemberList>('trainer/assigned-members?per_page=1000', token),
-      ]);
-
-      return {
-        id: context.user.id,
-        name: context.user.name,
-        email: context.user.email,
-        activeRole,
-        roles: context.user.roles,
-        permissions: context.user.permissions,
-        gymIds: (context.user.gyms ?? []).map((gym) => gym.id),
-        branchIds: (context.branches ?? context.user.branches ?? []).map((branch) => branch.id),
-        branchScopes: (context.branches ?? context.user.branches ?? []).map((branch) => ({
-          gymId: branch.gym_id,
-          branchId: branch.id,
-        })),
-        assignedMemberIds: members.data.map((member) => member.member_id),
-        assignedTrainerId: null,
-      };
-    }
-
-    if (activeRole === 'gym_owner' || activeRole === 'branch_manager' || activeRole === 'gym_staff') {
-      const context = await this.fetchProtected<GymContextResponse>('gym/context', token);
-      const gymIds = (context.gyms ?? context.user.gyms ?? []).map((gym) => gym.id);
-      const branchIds = [
-        ...(context.user.branches ?? []).map((branch) => branch.id),
-        ...(context.gyms ?? []).flatMap((gym) => (gym.branches ?? []).map((branch) => branch.id)),
-      ];
-      const branchScopes = [
-        ...(context.user.branches ?? []).map((branch) => ({
-          gymId: branch.gym_id,
-          branchId: branch.id,
-        })),
-        ...(context.gyms ?? []).flatMap((gym) => (gym.branches ?? []).map((branch) => ({
-          gymId: gym.id,
-          branchId: branch.id,
-        }))),
-      ];
-
-      return {
-        id: context.user.id,
-        name: context.user.name,
-        email: context.user.email,
-        activeRole,
-        roles: context.user.roles,
-        permissions: context.user.permissions,
-        gymIds: [...new Set(gymIds)],
-        branchIds: [...new Set(branchIds)],
-        branchScopes: branchScopes.filter(
-          (scope, index, list) => list.findIndex((item) => item.gymId === scope.gymId && item.branchId === scope.branchId) === index,
-        ),
-        assignedMemberIds: [],
-        assignedTrainerId: null,
-      };
-    }
+    const context = await this.fetchProtected<RealtimeContextResponse>('public/realtime/context', token);
 
     return {
-      id: me.id,
-      name: me.name,
-      email: me.email,
-      activeRole,
-      roles: me.roles,
-      permissions: me.permissions,
-      gymIds: (me.gyms ?? []).map((gym) => gym.id),
-      branchIds: (me.branches ?? []).map((branch) => branch.id),
-      branchScopes: (me.branches ?? []).map((branch) => ({
-        gymId: branch.gym_id,
-        branchId: branch.id,
+      id: context.id,
+      name: context.name,
+      email: context.email,
+      activeRole: context.active_role,
+      roles: context.roles,
+      permissions: context.permissions,
+      gymIds: context.gym_ids,
+      branchIds: context.branch_ids,
+      branchScopes: context.branch_scopes.map((scope) => ({
+        gymId: scope.gym_id,
+        branchId: scope.branch_id,
       })),
-      assignedMemberIds: [],
-      assignedTrainerId: null,
+      assignedMemberIds: context.assigned_member_ids,
+      assignedTrainerId: context.assigned_trainer_id,
     };
   }
 
@@ -207,14 +98,5 @@ export class LaravelAuthService {
     });
 
     return response.data;
-  }
-
-  private async fetchPaginated<T>(path: string, token: string): Promise<T> {
-    return apiFetch<T>(`${env.laravelApiBaseUrl}/${path}`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
   }
 }
