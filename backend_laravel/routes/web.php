@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Web\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Web\Admin\DietPlanController as AdminDietPlanController;
 use App\Http\Controllers\Web\Admin\GymPlatformSubscriptionController as AdminGymPlatformSubscriptionController;
 use App\Http\Controllers\Web\Admin\GymController as AdminGymController;
 use App\Http\Controllers\Web\Admin\GymOwnerController as AdminGymOwnerController;
@@ -251,6 +252,8 @@ Route::prefix('admin')
     ->middleware(['auth', 'web_platform_admin'])
     ->group(function (): void {
         Route::get('/dashboard', AdminDashboardController::class)->name('dashboard');
+        Route::get('/diet-plans', [AdminDietPlanController::class, 'index'])->name('diet-plans.index');
+        Route::post('/diet-plans/{dietPlan}/status', [AdminDietPlanController::class, 'updateStatus'])->name('diet-plans.status');
 
         Route::get('/gyms', [AdminGymController::class, 'index'])->name('gyms.index');
         Route::get('/gyms/create', [AdminGymController::class, 'create'])->name('gyms.create');
