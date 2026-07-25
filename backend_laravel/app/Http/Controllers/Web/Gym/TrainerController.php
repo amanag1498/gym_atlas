@@ -10,7 +10,6 @@ use App\Http\Requests\Web\Gym\StoreTrainerWebRequest;
 use App\Http\Requests\Web\Gym\UpdateTrainerWebRequest;
 use App\Models\ActivityLog;
 use App\Models\AttendanceLog;
-use App\Models\MemberProfile;
 use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Services\Audit\AuditLogService;
@@ -19,9 +18,11 @@ use App\Services\Gym\TrainerManagementService;
 use App\Services\Users\ManagedUserService;
 use App\Services\Web\GymWebPanelService;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class TrainerController extends Controller
@@ -32,8 +33,7 @@ class TrainerController extends Controller
         private readonly AuditLogService $auditLogService,
         private readonly AuditTimelineService $auditTimelineService,
         private readonly TrainerManagementService $trainerManagementService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -88,24 +88,56 @@ class TrainerController extends Controller
         $gym = $this->gymWebPanelService->resolveGym($request);
         $this->gymWebPanelService->assertPermission($request, PermissionName::TrainersManage->value, $gym);
 
+        $initialExistingUser = $request->old('existing_user_id')
+            ? $this->trainerManagementService->existingUsersQuery($gym)->find($request->old('existing_user_id'))
+            : null;
+
         return view('web.gym.trainers.create', [
             'pageTitle' => 'Create Trainer',
             'breadcrumbs' => ['Gym', 'Trainers', 'Create'],
             'gym' => $gym,
             'branches' => $this->gymWebPanelService->accessibleBranches($request, $gym),
-            'existingUsers' => $this->trainerManagementService->existingUsersQuery($gym)->limit(50)->get(),
+            'initialExistingUser' => $initialExistingUser
+                ? $this->existingUserSearchItem($initialExistingUser)
+                : null,
             'hasPhoneColumn' => $this->trainerManagementService->hasPhoneColumn(),
         ]);
+    }
+
+    public function searchEligibleUsers(Request $request): JsonResponse
+    {
+        $gym = $this->gymWebPanelService->resolveGym($request);
+        $this->gymWebPanelService->assertPermission($request, PermissionName::TrainersManage->value, $gym);
+        $validated = $request->validate([
+            'q' => ['required', 'string', 'min:2', 'max:100'],
+        ]);
+        $search = '%'.$validated['q'].'%';
+        $hasPhoneColumn = $this->trainerManagementService->hasPhoneColumn();
+
+        $users = $this->trainerManagementService->existingUsersQuery($gym)
+            ->where(function (Builder $query) use ($search, $hasPhoneColumn): void {
+                $query->where('name', 'like', $search)
+                    ->orWhere('email', 'like', $search);
+
+                if ($hasPhoneColumn) {
+                    $query->orWhere('phone', 'like', $search);
+                }
+            })
+            ->limit(20)
+            ->get()
+            ->map(fn (User $user): array => $this->existingUserSearchItem($user))
+            ->values();
+
+        return response()->json(['data' => $users]);
     }
 
     public function store(StoreTrainerWebRequest $request): RedirectResponse
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
-        $payload = $this->normalizedPayload($request);
-        $branchId = $payload['branch_id'] ?? null;
-
+        $branchId = $request->validated('branch_id');
         $this->gymWebPanelService->assertPermission($request, PermissionName::TrainersManage->value, $gym, $branchId);
         $this->ensureBranchWithinScope($request, $gym, $branchId);
+        $payload = $this->normalizedPayload($request);
 
         $existingUser = isset($payload['existing_user_id']) ? User::query()->find($payload['existing_user_id']) : null;
         $user = $this->managedUserService->upsertTrainer($existingUser, $gym, $payload);
@@ -216,11 +248,10 @@ class TrainerController extends Controller
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
         $profile = $this->trainerManagementService->assertTrainerAccessible($request, $gym, $trainer, $this->gymWebPanelService);
-        $payload = $this->normalizedPayload($request, $trainer, $profile);
-        $branchId = $payload['branch_id'] ?? $profile->branch_id;
-
+        $branchId = $request->validated('branch_id', $profile->branch_id);
         $this->gymWebPanelService->assertPermission($request, PermissionName::TrainersManage->value, $gym, $branchId);
         $this->ensureBranchWithinScope($request, $gym, $branchId);
+        $payload = $this->normalizedPayload($request, $trainer, $profile);
 
         $oldValues = $trainer->load(['managedTrainerProfile', 'branches', 'roles'])->toArray();
         $user = $this->managedUserService->upsertTrainer($trainer, $gym, $payload);
@@ -374,11 +405,25 @@ class TrainerController extends Controller
             }
         }
 
+        if (! $existingUser && $request->hasFile('profile_photo')) {
+            $storedPath = $request->file('profile_photo')->store('trainer-profile-photos', 'public');
+            $photoUrl = $request->getSchemeAndHttpHost().Storage::url($storedPath);
+            $payload['avatar'] = $photoUrl;
+            $payload['profile_photo_url'] = $photoUrl;
+        } elseif ($existingUser) {
+            $payload['profile_photo_url'] = $existingUser->avatar;
+        } else {
+            $payload['profile_photo_url'] = $request->validated(
+                'profile_photo_url',
+                $profile?->profile_photo_url ?? $request->validated('avatar', $trainer?->avatar)
+            );
+        }
+        unset($payload['profile_photo']);
+
         $specializations = $request->validated('specializations', $profile?->specializations ?? []);
         $payload['specializations'] = $specializations;
         $payload['specialization'] = $specializations[0] ?? $request->validated('specialization', $profile?->specialization);
         $payload['branch_id'] = $request->validated('branch_id', $profile?->branch_id);
-        $payload['profile_photo_url'] = $request->validated('profile_photo_url', $profile?->profile_photo_url ?? $request->validated('avatar', $trainer?->avatar));
         $payload['bio'] = $request->validated('bio', $profile?->bio);
         $payload['experience_years'] = $request->validated('experience_years', $profile?->experience_years ?? 0);
         $payload['certifications'] = $request->validated('certifications', $profile?->certifications ?? []);
@@ -388,5 +433,28 @@ class TrainerController extends Controller
         $payload['verification_status'] = $request->validated('verification_status', $profile?->verification_status ?? 'pending');
 
         return $payload;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function existingUserSearchItem(User $user): array
+    {
+        $role = $user->hasRole(RoleName::Member->value) ? 'Existing member' : 'Trainer user';
+        $description = $user->email;
+
+        if ($this->trainerManagementService->hasPhoneColumn() && filled($user->phone)) {
+            $description .= ' • '.$user->phone;
+        }
+
+        return [
+            'id' => $user->id,
+            'label' => $user->name,
+            'description' => $description.' • '.$role,
+            'avatar' => $user->avatar,
+            'name' => $user->name,
+            'email' => $user->email,
+            'phone' => $this->trainerManagementService->hasPhoneColumn() ? $user->phone : null,
+        ];
     }
 }

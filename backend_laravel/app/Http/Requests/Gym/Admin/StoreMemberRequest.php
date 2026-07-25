@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Gym\Admin;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -20,7 +19,9 @@ class StoreMemberRequest extends FormRequest
             'existing_user_id' => ['nullable', 'integer', 'exists:users,id'],
             'name' => ['nullable', 'string', 'max:160'],
             'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')],
+            'phone' => ['nullable', 'string', 'max:30'],
             'avatar' => ['nullable', 'url', 'max:2048'],
+            'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'assigned_trainer_user_id' => ['nullable', 'integer', 'exists:users,id'],
             'fitness_goal' => ['nullable', 'string', 'max:255'],
@@ -53,10 +54,6 @@ class StoreMemberRequest extends FormRequest
             'pt_custom_fee' => ['nullable', 'numeric', 'min:0'],
             'custom_fee_reason' => ['nullable', 'string', 'max:5000'],
         ];
-
-        if (Schema::hasColumn('users', 'phone')) {
-            $rules['phone'] = ['nullable', 'string', 'max:30'];
-        }
 
         return $rules;
     }

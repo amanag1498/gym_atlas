@@ -60,7 +60,13 @@
                         <input type="hidden" name="branch" value="{{ request('branch') }}">
                     @endif
                     <x-form-select name="branch_id" label="Branch" :selected="request('branch_id')" :options="['' => 'All branches'] + $branches->pluck('name', 'id')->all()" />
-                    <x-form-select name="member_id" label="Member" :selected="request('member_id')" :options="['' => 'All members'] + $members->pluck('name', 'id')->all()" />
+                    <x-remote-user-search
+                        name="member_id"
+                        label="Member"
+                        :search-url="route('web.gym.attendance.search.members', $scopeQuery)"
+                        :initial-item="$selectedMemberSearchItem"
+                        placeholder="Search members"
+                    />
                     <x-form-select name="check_in_method" label="Method" :selected="request('check_in_method')" :options="['' => 'All methods', 'biometric' => 'Biometric', 'manual' => 'Manual']" />
                     <x-form-input name="start_date" label="Start Date" type="date" :value="request('start_date')" />
                     <x-form-input name="end_date" label="End Date" type="date" :value="request('end_date')" />
@@ -320,7 +326,16 @@
                         <input type="hidden" name="gym_id" value="{{ $gym->id }}">
                         <input type="hidden" name="attendance_log_id" id="attendance_correction_log_id" value="{{ old('attendance_log_id') }}">
                         <x-form-select name="branch_id" label="Branch" :selected="old('branch_id', request('branch_id'))" :options="$branches->pluck('name', 'id')->all()" required />
-                        <x-form-select name="member_id" label="Member" :selected="old('member_id', request('member_id'))" :options="$members->pluck('name', 'id')->all()" required />
+                        <div id="attendance-correction-member-picker">
+                            <x-remote-user-search
+                                name="member_id"
+                                label="Member"
+                                :search-url="route('web.gym.attendance.search.members', $scopeQuery)"
+                                :initial-item="$selectedMemberSearchItem"
+                                placeholder="Search members"
+                                required
+                            />
+                        </div>
                         <x-form-input type="datetime-local" name="requested_check_in_at" label="Requested Check-in Time" :value="old('requested_check_in_at')" required />
                         <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/70">
                             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Linked log</p>
@@ -403,12 +418,14 @@
                             logIdInput.value = logId;
                         }
 
-                        const memberField = form?.querySelector('[name="member_id"]');
+                        const memberPicker = document.querySelector('#attendance-correction-member-picker [data-remote-user-search]');
                         const branchField = form?.querySelector('[name="branch_id"]');
                         const timeField = form?.querySelector('[name="requested_check_in_at"]');
 
-                        if (memberField) {
-                            memberField.value = memberId;
+                        if (memberPicker) {
+                            memberPicker.dispatchEvent(new CustomEvent('remote-user-set', {
+                                detail: { id: memberId, label: memberLabel },
+                            }));
                         }
 
                         if (branchField) {

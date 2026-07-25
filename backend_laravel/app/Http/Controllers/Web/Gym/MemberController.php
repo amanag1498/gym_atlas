@@ -11,9 +11,9 @@ use App\Http\Requests\Gym\Admin\UpdateMemberRequest;
 use App\Http\Requests\Web\Gym\PreviewMemberImportRequest;
 use App\Http\Requests\Web\Gym\StoreMemberImportRequest;
 use App\Models\AttendanceLog;
-use App\Models\MembershipPlan;
 use App\Models\MemberMembership;
 use App\Models\MemberProfile;
+use App\Models\MembershipPlan;
 use App\Models\Payment;
 use App\Models\TrainerProfile;
 use App\Models\User;
@@ -32,10 +32,13 @@ use App\Services\Users\ManagedUserService;
 use App\Services\Web\CsvStreamService;
 use App\Services\Web\GymMemberImportService;
 use App\Services\Web\GymWebPanelService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -57,8 +60,7 @@ class MemberController extends Controller
         private readonly CsvStreamService $csvStreamService,
         private readonly MemberGymInvitationService $memberGymInvitationService,
         private readonly MemberAppService $memberAppService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View|StreamedResponse
     {
@@ -80,12 +82,12 @@ class MemberController extends Controller
     public function store(StoreMemberRequest $request): RedirectResponse
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
-        $payload = $this->normalizedPayload($request);
-        $branchId = $payload['branch_id'] ?? null;
+        $branchId = $request->validated('branch_id');
         $this->gymWebPanelService->assertAnyPermission($request, [
             PermissionName::MembersManage->value,
             PermissionName::MembershipsManage->value,
         ], $gym, $branchId);
+        $payload = $this->normalizedPayload($request);
         $this->assertBranchAndTrainerInScope($request, $gym, $branchId, $payload['assigned_trainer_user_id'] ?? null);
 
         $existingUser = isset($payload['existing_user_id']) ? User::query()->find($payload['existing_user_id']) : null;
@@ -179,6 +181,10 @@ class MemberController extends Controller
             PermissionName::MembershipsManage->value,
         ], $gym);
 
+        $initialExistingUser = $request->old('existing_user_id')
+            ? $this->eligibleExistingUsersQuery($gym)->find($request->old('existing_user_id'))
+            : null;
+
         return view('web.gym.members.create', [
             'pageTitle' => 'Create Member',
             'breadcrumbs' => ['Gym', 'Members', 'Create'],
@@ -187,15 +193,42 @@ class MemberController extends Controller
             'trainers' => $this->trainers($request, $gym),
             'plans' => $this->plans($gym, $this->gymWebPanelService->accessibleBranchIds($request, $gym)),
             'hasPhoneColumn' => Schema::hasColumn('users', 'phone'),
-            'existingUsers' => User::query()
-                ->with('memberProfile')
-                ->role(RoleName::Member->value)
-                ->where('is_active', true)
-                ->whereDoesntHave('memberProfile', fn ($builder) => $builder->where('gym_id', $gym->id))
-                ->orderBy('name')
-                ->limit(50)
-                ->get(),
+            'initialExistingUser' => $initialExistingUser
+                ? $this->existingUserSearchItem($initialExistingUser)
+                : null,
         ]);
+    }
+
+    public function searchEligibleUsers(Request $request): JsonResponse
+    {
+        $gym = $this->gymWebPanelService->resolveGym($request);
+        $this->gymWebPanelService->assertAnyPermission($request, [
+            PermissionName::MembersManage->value,
+            PermissionName::MembershipsManage->value,
+        ], $gym);
+
+        $validated = $request->validate([
+            'q' => ['required', 'string', 'min:2', 'max:100'],
+        ]);
+        $search = '%'.$validated['q'].'%';
+        $hasPhoneColumn = Schema::hasColumn('users', 'phone');
+
+        $users = $this->eligibleExistingUsersQuery($gym)
+            ->where(function ($query) use ($search, $hasPhoneColumn): void {
+                $query->where('name', 'like', $search)
+                    ->orWhere('email', 'like', $search);
+
+                if ($hasPhoneColumn) {
+                    $query->orWhere('phone', 'like', $search);
+                }
+            })
+            ->orderBy('name')
+            ->limit(20)
+            ->get()
+            ->map(fn (User $user): array => $this->existingUserSearchItem($user))
+            ->values();
+
+        return response()->json(['data' => $users]);
     }
 
     public function update(UpdateMemberRequest $request, User $member): RedirectResponse
@@ -432,6 +465,7 @@ class MemberController extends Controller
 
             if ($existing) {
                 $skippedCount++;
+
                 continue;
             }
 
@@ -479,7 +513,7 @@ class MemberController extends Controller
 
     private function renderIndex(Request $request, $gym, array $data): View
     {
-        if (($data['members'] ?? null) instanceof \Illuminate\Pagination\LengthAwarePaginator) {
+        if (($data['members'] ?? null) instanceof LengthAwarePaginator) {
             $this->engagementScoreService->enrichUsers($data['members']->getCollection(), $gym->id);
         }
 
@@ -591,7 +625,13 @@ class MemberController extends Controller
             }
         }
 
-        $payload['avatar'] = $request->validated('avatar', $member?->avatar);
+        if (! $existingUser && $request->hasFile('profile_photo')) {
+            $storedPath = $request->file('profile_photo')->store('member-profile-photos', 'public');
+            $payload['avatar'] = $request->getSchemeAndHttpHost().Storage::url($storedPath);
+        } else {
+            $payload['avatar'] = $existingUser?->avatar ?? $request->validated('avatar', $member?->avatar);
+        }
+        unset($payload['profile_photo']);
         $payload['branch_id'] = $request->validated('branch_id', $memberProfile?->branch_id);
         $payload['assigned_trainer_user_id'] = $request->has('assigned_trainer_user_id')
             ? $request->validated('assigned_trainer_user_id')
@@ -612,6 +652,49 @@ class MemberController extends Controller
         $payload['is_active'] = $request->validated('is_active', $memberProfile?->is_active ?? true);
 
         return $payload;
+    }
+
+    private function eligibleExistingUsersQuery($gym)
+    {
+        return User::query()
+            ->with('memberProfile')
+            ->role(RoleName::Member->value)
+            ->where('is_active', true)
+            ->whereDoesntHave('memberProfile', fn ($builder) => $builder->where('gym_id', $gym->id));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function existingUserSearchItem(User $user): array
+    {
+        $profile = $user->memberProfile;
+        $description = $user->email;
+
+        if (Schema::hasColumn('users', 'phone') && filled($user->phone)) {
+            $description .= ' • '.$user->phone;
+        }
+
+        return [
+            'id' => $user->id,
+            'label' => $user->name,
+            'description' => $description,
+            'avatar' => $user->avatar,
+            'name' => $user->name,
+            'email' => $user->email,
+            'phone' => Schema::hasColumn('users', 'phone') ? $user->phone : null,
+            'fitness_goal' => $profile?->fitness_goal,
+            'experience_level' => $profile?->experience_level,
+            'height_cm' => $profile?->height_cm,
+            'weight_kg' => $profile?->weight_kg,
+            'gender' => $profile?->gender,
+            'medical_notes' => $profile?->medical_notes,
+            'injury_notes' => $profile?->injury_notes,
+            'emergency_contact_name' => $profile?->emergency_contact_name,
+            'emergency_contact_phone' => $profile?->emergency_contact_phone,
+            'biometric_identifier' => $profile?->biometric_identifier,
+            'biometric_enabled' => (bool) $profile?->biometric_enabled,
+        ];
     }
 
     /**

@@ -592,6 +592,7 @@ Route::prefix('member')
         Route::get('context', MemberContextController::class);
         Route::get('profile', [MemberProfileController::class, 'show']);
         Route::put('profile', [MemberProfileController::class, 'update']);
+        Route::post('profile/photo', [MemberProfileController::class, 'uploadPhoto']);
         Route::get('favorite-gyms', [FavoriteGymController::class, 'index']);
         Route::post('favorite-gyms/{publicGym}', [FavoriteGymController::class, 'store']);
         Route::delete('favorite-gyms/{publicGym}', [FavoriteGymController::class, 'destroy']);

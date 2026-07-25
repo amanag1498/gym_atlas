@@ -6,34 +6,13 @@
 <div class="space-y-5">
     @if (! $member)
         <div>
-            <label for="existing_user_id" class="panel-label">Select Existing User</label>
-            <select id="existing_user_id" name="existing_user_id" class="panel-select">
-                <option value="">Create a new member user</option>
-                @foreach ($existingUsers as $existingUser)
-                    @php($existingProfile = $existingUser->memberProfile)
-                    <option
-                        value="{{ $existingUser->id }}"
-                        data-name="{{ $existingUser->name }}"
-                        data-email="{{ $existingUser->email }}"
-                        @if ($hasPhoneColumn) data-phone="{{ $existingUser->phone }}" @endif
-                        data-avatar="{{ $existingUser->avatar }}"
-                        data-fitness-goal="{{ $existingProfile?->fitness_goal }}"
-                        data-experience-level="{{ $existingProfile?->experience_level }}"
-                        data-height-cm="{{ $existingProfile?->height_cm }}"
-                        data-weight-kg="{{ $existingProfile?->weight_kg }}"
-                        data-gender="{{ $existingProfile?->gender }}"
-                        data-medical-notes="{{ $existingProfile?->medical_notes }}"
-                        data-injury-notes="{{ $existingProfile?->injury_notes }}"
-                        data-emergency-contact-name="{{ $existingProfile?->emergency_contact_name }}"
-                        data-emergency-contact-phone="{{ $existingProfile?->emergency_contact_phone }}"
-                        data-biometric-identifier="{{ $existingProfile?->biometric_identifier }}"
-                        data-biometric-enabled="{{ $existingProfile?->biometric_enabled ? '1' : '0' }}"
-                        @selected(old('existing_user_id') == $existingUser->id)
-                    >
-                        {{ $existingUser->name }} • {{ $existingUser->email }}
-                    </option>
-                @endforeach
-            </select>
+            <x-remote-user-search
+                name="existing_user_id"
+                label="Select Existing User"
+                :search-url="route('web.gym.members.search.eligible-users', request()->query())"
+                :initial-item="$initialExistingUser ?? null"
+                placeholder="Search existing users by name, email, or phone"
+            />
             <div id="existing_user_hint" class="mt-3 hidden rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
                 Existing user selected. This will send a pending gym invitation; the user must accept before becoming a member of this gym.
             </div>
@@ -47,13 +26,11 @@
         <div data-existing-account-field>
             <x-form-input name="email" label="Email" type="email" :value="$member?->email" required />
         </div>
-        @if ($hasPhoneColumn)
-            <div data-existing-account-field>
-                <x-form-input name="phone" label="Phone" :value="$member?->phone" />
-            </div>
-        @endif
         <div data-existing-account-field>
-            <x-form-input name="avatar" label="Photo URL" :value="$member?->avatar" placeholder="https://..." />
+            <x-form-input name="phone" label="Phone Number" type="tel" inputmode="tel" autocomplete="tel" :value="$member?->phone" />
+        </div>
+        <div data-existing-account-field>
+            <x-profile-photo-upload :current-url="$member?->avatar" />
         </div>
         <div>
             <label for="branch_id" class="panel-label">Branch</label>
@@ -234,28 +211,18 @@
     @push('scripts')
         <script>
             document.addEventListener('DOMContentLoaded', () => {
-                const select = document.getElementById('existing_user_id');
-                if (!select) return;
+                const picker = document.querySelector('[data-remote-user-search] input[name="existing_user_id"]')?.closest('[data-remote-user-search]');
+                const selectedInput = document.getElementById('existing_user_id');
+                if (!picker || !selectedInput) return;
 
                 const hint = document.getElementById('existing_user_hint');
-                const accountFields = [...document.querySelectorAll('[data-existing-account-field]')];
-                const profileFields = [...document.querySelectorAll('[data-existing-profile-field]')];
-                const fieldMap = {
-                    name: 'name',
-                    email: 'email',
-                    phone: 'phone',
-                    avatar: 'avatar',
-                    fitness_goal: 'fitnessGoal',
-                    experience_level: 'experienceLevel',
-                    height_cm: 'heightCm',
-                    weight_kg: 'weightKg',
-                    gender: 'gender',
-                    medical_notes: 'medicalNotes',
-                    injury_notes: 'injuryNotes',
-                    emergency_contact_name: 'emergencyContactName',
-                    emergency_contact_phone: 'emergencyContactPhone',
-                    biometric_identifier: 'biometricIdentifier',
-                };
+                const accountFields = Array.from(document.querySelectorAll('[data-existing-account-field]'));
+                const profileFields = Array.from(document.querySelectorAll('[data-existing-profile-field]'));
+                const fieldNames = [
+                    'name', 'email', 'phone', 'fitness_goal', 'experience_level',
+                    'height_cm', 'weight_kg', 'gender', 'medical_notes', 'injury_notes',
+                    'emergency_contact_name', 'emergency_contact_phone', 'biometric_identifier',
+                ];
 
                 const setSectionState = (fields, hidden, disabled = false) => {
                     fields.forEach((field) => {
@@ -266,38 +233,37 @@
                     });
                 };
 
-                const fillFromSelectedUser = () => {
-                    const selected = select.selectedOptions[0];
-                    const hasExistingUser = Boolean(select.value);
-
+                const applyExistingUserState = (hasExistingUser) => {
                     hint?.classList.toggle('hidden', !hasExistingUser);
                     setSectionState(accountFields, hasExistingUser, hasExistingUser);
                     setSectionState(profileFields, hasExistingUser, false);
+                };
 
-                    if (!selected || !hasExistingUser) return;
-
-                    Object.entries(fieldMap).forEach(([fieldName, datasetKey]) => {
+                picker.addEventListener('remote-user-selected', (event) => {
+                    const user = event.detail || {};
+                    applyExistingUserState(true);
+                    fieldNames.forEach((fieldName) => {
                         const input = document.querySelector(`[name="${fieldName}"]`);
-                        if (input && selected.dataset[datasetKey] !== undefined) {
-                            input.value = selected.dataset[datasetKey] ?? '';
+                        if (input && user[fieldName] !== undefined) {
+                            input.value = user[fieldName] ?? '';
                         }
                     });
 
                     const biometricEnabled = document.querySelector('input[name="biometric_enabled"][value="1"]');
                     if (biometricEnabled) {
-                        biometricEnabled.checked = selected.dataset.biometricEnabled === '1';
+                        biometricEnabled.checked = Boolean(user.biometric_enabled);
                     }
-                };
+                });
 
-                select.addEventListener('change', fillFromSelectedUser);
-                fillFromSelectedUser();
+                picker.addEventListener('remote-user-cleared', () => applyExistingUserState(false));
+                applyExistingUserState(Boolean(selectedInput.value));
             });
         </script>
     @endpush
 @endif
 
 @push('scripts')
-    <script>
+        <script>
         document.addEventListener('DOMContentLoaded', () => {
             const branchSelect = document.getElementById('branch_id');
             const trainerSelect = document.getElementById('assigned_trainer_user_id');

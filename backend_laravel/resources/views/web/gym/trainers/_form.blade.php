@@ -6,27 +6,13 @@
 <div class="space-y-5">
     @if (! $trainer)
         <div>
-            <label for="existing_user_id" class="panel-label">Select Existing User</label>
-            <select id="existing_user_id" name="existing_user_id" class="panel-select">
-                <option value="">Create a new trainer user</option>
-                @foreach ($existingUsers as $existingUser)
-                    <option
-                        value="{{ $existingUser->id }}"
-                        data-name="{{ $existingUser->name }}"
-                        data-email="{{ $existingUser->email }}"
-                        @if ($hasPhoneColumn) data-phone="{{ $existingUser->phone }}" @endif
-                        data-avatar="{{ $existingUser->avatar }}"
-                        @selected(old('existing_user_id') == $existingUser->id)
-                    >
-                        {{ $existingUser->name }} • {{ $existingUser->email }}
-                        @if ($existingUser->hasRole(\App\Enums\RoleName::Member->value))
-                            • Existing member
-                        @elseif ($existingUser->hasRole(\App\Enums\RoleName::Trainer->value))
-                            • Trainer user
-                        @endif
-                    </option>
-                @endforeach
-            </select>
+            <x-remote-user-search
+                name="existing_user_id"
+                label="Select Existing User"
+                :search-url="route('web.gym.trainers.search.eligible-users', request()->query())"
+                :initial-item="$initialExistingUser ?? null"
+                placeholder="Search users by name, email, or phone"
+            />
             <div id="existing_user_hint" class="mt-3 hidden rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200">
                 Existing user selected. Account details are reused; only gym, branch, and coaching profile details are updated here.
             </div>
@@ -42,13 +28,11 @@
                 <div data-existing-account-field>
                     <x-form-input name="email" label="Email" :value="$trainer?->email" required />
                 </div>
-                @if ($hasPhoneColumn)
-                    <div data-existing-account-field>
-                        <x-form-input name="phone" label="Phone" :value="$trainer?->phone" />
-                    </div>
-                @endif
                 <div data-existing-account-field>
-                    <x-form-input name="profile_photo_url" label="Profile Photo" :value="$trainerProfile?->profile_photo_url" placeholder="https://..." />
+                    <x-form-input name="phone" label="Phone Number" type="tel" inputmode="tel" autocomplete="tel" :value="$trainer?->phone" />
+                </div>
+                <div data-existing-account-field>
+                    <x-profile-photo-upload :current-url="$trainerProfile?->profile_photo_url ?: $trainer?->avatar" />
                 </div>
             </div>
 
@@ -121,17 +105,12 @@
     @push('scripts')
         <script>
             document.addEventListener('DOMContentLoaded', () => {
-                const select = document.getElementById('existing_user_id');
-                if (!select) return;
+                const selectedInput = document.getElementById('existing_user_id');
+                const picker = selectedInput?.closest('[data-remote-user-search]');
+                if (!picker || !selectedInput) return;
 
                 const hint = document.getElementById('existing_user_hint');
-                const accountFields = [...document.querySelectorAll('[data-existing-account-field]')];
-                const fieldMap = {
-                    name: 'name',
-                    email: 'email',
-                    phone: 'phone',
-                    profile_photo_url: 'avatar',
-                };
+                const accountFields = Array.from(document.querySelectorAll('[data-existing-account-field]'));
 
                 const setSectionState = (fields, hidden, disabled = false) => {
                     fields.forEach((field) => {
@@ -142,25 +121,23 @@
                     });
                 };
 
-                const fillFromSelectedUser = () => {
-                    const selected = select.selectedOptions[0];
-                    const hasExistingUser = Boolean(select.value);
-
+                const applyExistingUserState = (hasExistingUser) => {
                     hint?.classList.toggle('hidden', !hasExistingUser);
                     setSectionState(accountFields, hasExistingUser, hasExistingUser);
-
-                    if (!selected || !hasExistingUser) return;
-
-                    Object.entries(fieldMap).forEach(([fieldName, datasetKey]) => {
-                        const input = document.querySelector(`[name="${fieldName}"]`);
-                        if (input && selected.dataset[datasetKey] !== undefined) {
-                            input.value = selected.dataset[datasetKey] ?? '';
-                        }
-                    });
                 };
 
-                select.addEventListener('change', fillFromSelectedUser);
-                fillFromSelectedUser();
+                picker.addEventListener('remote-user-selected', (event) => {
+                    applyExistingUserState(true);
+                    ['name', 'email', 'phone'].forEach((fieldName) => {
+                        const input = document.querySelector(`[name="${fieldName}"]`);
+                        if (input && event.detail[fieldName] !== undefined) {
+                            input.value = event.detail[fieldName] ?? '';
+                        }
+                    });
+                });
+
+                picker.addEventListener('remote-user-cleared', () => applyExistingUserState(false));
+                applyExistingUserState(Boolean(selectedInput.value));
             });
         </script>
     @endpush

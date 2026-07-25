@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/loading_state.dart';
+import '../../../core/widgets/premium_card.dart';
 import 'member_repository.dart';
 
 Map<String, dynamic> _trainerRecordMap(dynamic value) {
@@ -100,16 +101,6 @@ String _memberChatDayLabel(dynamic value) {
   return '${local.day.toString().padLeft(2, '0')}/${local.month.toString().padLeft(2, '0')}/${local.year}';
 }
 
-const _fitPrimary1 = Color(0xFF92A3FD);
-const _fitPrimary2 = Color(0xFF9DCEFF);
-const _fitSecondary1 = Color(0xFFC58BF2);
-const _fitSecondary2 = Color(0xFFEEA4CE);
-const _fitBlack = Color(0xFF1D1617);
-const _fitGray = Color(0xFF786F72);
-const _fitLightGray = Color(0xFFF7F8F8);
-const _fitPrimaryGradient = [_fitPrimary2, _fitPrimary1];
-const _fitSecondaryGradient = [_fitSecondary2, _fitSecondary1];
-
 class MemberAssignedTrainerScreen extends StatefulWidget {
   const MemberAssignedTrainerScreen({
     super.key,
@@ -117,6 +108,7 @@ class MemberAssignedTrainerScreen extends StatefulWidget {
     required this.socket,
     required this.chatEventVersion,
     required this.userState,
+    required this.currentUserName,
     required this.fallbackTrainerConnection,
     required this.onOpenAssignedWorkout,
   });
@@ -125,6 +117,7 @@ class MemberAssignedTrainerScreen extends StatefulWidget {
   final io.Socket? socket;
   final int chatEventVersion;
   final String userState;
+  final String currentUserName;
   final Map<String, dynamic> fallbackTrainerConnection;
   final VoidCallback onOpenAssignedWorkout;
 
@@ -332,15 +325,10 @@ class _MemberAssignedTrainerScreenState
         assignedTrainer['profile_photo_url']?.toString() ??
         assignedTrainer['avatar']?.toString() ??
         assignedTrainer['photo']?.toString();
+    final firstName = firstNameFromFullName(widget.currentUserName);
 
     return AppGradientScaffold(
       title: 'Chats',
-      actions: [
-        IconButton(
-          onPressed: _loading ? null : _load,
-          icon: const Icon(Icons.refresh_rounded),
-        ),
-      ],
       body: _loading && !hasTrainer
           ? const LoadingState(label: 'Loading your trainer chat...')
           : _error != null && !hasTrainer
@@ -356,6 +344,22 @@ class _MemberAssignedTrainerScreenState
                   120,
                 ),
                 children: [
+                  MemberPageGreetingHeader(
+                    firstName: firstName,
+                    subtitle: 'Chats and coaching follow-ups in one place.',
+                    actions: [
+                      MemberHeaderActionButton(
+                        icon: Icons.refresh_rounded,
+                        onTap: _load,
+                      ),
+                      if (hasTrainer)
+                        MemberHeaderActionButton(
+                          icon: Icons.fitness_center_rounded,
+                          onTap: widget.onOpenAssignedWorkout,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
                   RevealOnBuild(
                     child: _MemberChatInboxHero(
                       hasTrainer: hasTrainer,
@@ -421,120 +425,72 @@ class _MemberChatInboxHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: _fitPrimaryGradient,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: _fitPrimary1.withValues(alpha: 0.30),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Stack(
+    return PremiumCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            right: -24,
-            top: -28,
-            child: Container(
-              width: 118,
-              height: 118,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.10),
-              ),
-            ),
-          ),
-          Positioned(
-            right: 36,
-            bottom: -34,
-            child: Container(
-              width: 92,
-              height: 92,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.08),
-              ),
-            ),
-          ),
-          Column(
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Chats',
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: -0.6,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          hasTrainer
-                              ? 'Message $trainerName about workouts, progress and recovery.'
-                              : 'Your trainer conversation will appear here once the gym assigns a coach.',
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: Colors.white.withValues(alpha: 0.84),
-                                fontWeight: FontWeight.w600,
-                                height: 1.35,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  _MemberChatHeroAvatar(
-                    trainerAvatarUrl: trainerAvatarUrl,
-                    hasTrainer: hasTrainer,
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _MemberChatHeroPill(
-                    icon: hasTrainer
-                        ? Icons.lock_rounded
-                        : Icons.hourglass_top_rounded,
-                    label: hasTrainer ? 'Private 1:1 chat' : 'Pending trainer',
-                  ),
-                  const _MemberChatHeroPill(
-                    icon: Icons.notifications_active_rounded,
-                    label: 'Push alerts',
-                  ),
-                  if (onRefresh != null)
-                    InkWell(
-                      borderRadius: BorderRadius.circular(999),
-                      onTap: loading ? null : onRefresh,
-                      child: _MemberChatHeroPill(
-                        icon: loading
-                            ? Icons.sync_rounded
-                            : Icons.refresh_rounded,
-                        label: loading ? 'Syncing' : 'Refresh',
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Trainer chat',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                ],
+                    const SizedBox(height: 6),
+                    Text(
+                      hasTrainer
+                          ? 'Message $trainerName about workouts, progress, and recovery.'
+                          : 'Your trainer conversation will appear here once the gym assigns a coach.',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 14),
+              _MemberChatHeroAvatar(
+                trainerAvatarUrl: trainerAvatarUrl,
+                hasTrainer: hasTrainer,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _MemberChatHeroPill(
+                icon: hasTrainer
+                    ? Icons.lock_rounded
+                    : Icons.hourglass_top_rounded,
+                label: hasTrainer ? 'Private 1:1 chat' : 'Pending trainer',
+              ),
+              const _MemberChatHeroPill(
+                icon: Icons.notifications_active_rounded,
+                label: 'Push alerts',
+              ),
+              if (onRefresh != null)
+                InkWell(
+                  borderRadius: BorderRadius.circular(999),
+                  onTap: loading ? null : onRefresh,
+                  child: _MemberChatHeroPill(
+                    icon: loading ? Icons.sync_rounded : Icons.refresh_rounded,
+                    label: loading ? 'Syncing' : 'Refresh',
+                  ),
+                ),
             ],
           ),
         ],
@@ -560,30 +516,30 @@ class _MemberChatHeroAvatar extends StatelessWidget {
       height: 58,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.20),
+        color: AppColors.surfaceSoft,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.42)),
+        border: Border.all(color: AppColors.stroke),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(15),
         child: imageUrl == null || imageUrl.isEmpty
             ? Container(
-                color: Colors.white.withValues(alpha: 0.18),
+                color: AppColors.surface,
                 child: Icon(
                   hasTrainer
                       ? Icons.support_agent_rounded
                       : Icons.person_search_rounded,
-                  color: Colors.white,
+                  color: AppColors.primaryBright,
                 ),
               )
             : Image.network(
                 imageUrl,
                 fit: BoxFit.cover,
                 errorBuilder: (_, _, _) => Container(
-                  color: Colors.white.withValues(alpha: 0.18),
+                  color: AppColors.surface,
                   child: const Icon(
                     Icons.support_agent_rounded,
-                    color: Colors.white,
+                    color: AppColors.primaryBright,
                   ),
                 ),
               ),
@@ -603,19 +559,19 @@ class _MemberChatHeroPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.22),
+        color: AppColors.surfaceSoft,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
+        border: Border.all(color: AppColors.stroke),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 15, color: Colors.white),
+          Icon(icon, size: 15, color: AppColors.primaryBright),
           const SizedBox(width: 7),
           Text(
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Colors.white,
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -639,8 +595,6 @@ class _MemberChatQuickActions extends StatelessWidget {
             icon: Icons.fitness_center_rounded,
             title: 'Assigned workout',
             subtitle: 'Open current plan',
-            color: _fitPrimary1,
-            gradient: _fitPrimaryGradient,
             onTap: onOpenWorkout,
           ),
         ),
@@ -650,8 +604,6 @@ class _MemberChatQuickActions extends StatelessWidget {
             icon: Icons.verified_user_rounded,
             title: 'Trainer chat',
             subtitle: 'Private to you',
-            color: _fitSecondary1,
-            gradient: _fitSecondaryGradient,
           ),
         ),
       ],
@@ -664,77 +616,66 @@ class _MemberChatActionTile extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.color,
-    required this.gradient,
     this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
-  final Color color;
-  final List<Color> gradient;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
+    return PremiumCard(
+      padding: const EdgeInsets.all(12),
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 2,
-              offset: Offset(0, 1),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceSoft,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.stroke),
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(colors: gradient),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(icon, color: Colors.white, size: 20),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
+            child: Icon(icon, color: AppColors.primaryBright, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w700,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w500,
-                    ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w500,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          if (onTap != null)
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.textMuted,
+              size: 18,
+            ),
+        ],
       ),
     );
   }
@@ -747,15 +688,8 @@ class _MemberChatNoTrainerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return PremiumCard(
       padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0, 1)),
-        ],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -763,10 +697,14 @@ class _MemberChatNoTrainerCard extends StatelessWidget {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: _fitSecondaryGradient),
+              color: AppColors.surfaceSoft,
               borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: AppColors.stroke),
             ),
-            child: const Icon(Icons.person_search_rounded, color: Colors.white),
+            child: const Icon(
+              Icons.person_search_rounded,
+              color: AppColors.primaryBright,
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
@@ -793,29 +731,23 @@ class _MemberChatNoTrainerCard extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: _fitPrimaryGradient),
-                borderRadius: BorderRadius.circular(25),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 0.5,
-                    offset: Offset(0, 0.5),
-                  ),
-                ],
+                color: AppColors.surfaceSoft,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.stroke),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Icon(
                     Icons.refresh_rounded,
-                    color: Colors.white,
+                    color: AppColors.primaryBright,
                     size: 18,
                   ),
                   const SizedBox(width: 8),
                   Text(
                     'Check assignment',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -861,14 +793,7 @@ class _MemberTrainerChatCard extends StatelessWidget {
         lastMessage != null &&
         _memberIntValue(lastMessage['sender_id']) == trainerId;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0, 1)),
-        ],
-      ),
+    return PremiumCard(
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -879,23 +804,13 @@ class _MemberTrainerChatCard extends StatelessWidget {
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: _fitSecondaryGradient,
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  color: AppColors.surfaceSoft,
                   borderRadius: BorderRadius.circular(18),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _fitSecondary1.withValues(alpha: 0.22),
-                      blurRadius: 12,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
+                  border: Border.all(color: AppColors.stroke),
                 ),
                 child: const Icon(
                   Icons.chat_bubble_rounded,
-                  color: Colors.white,
+                  color: AppColors.primaryBright,
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -928,14 +843,12 @@ class _MemberTrainerChatCard extends StatelessWidget {
                   vertical: 7,
                 ),
                 decoration: BoxDecoration(
-                  color: trainerId == null
-                      ? _fitLightGray
-                      : _fitPrimary1.withValues(alpha: 0.14),
+                  color: AppColors.surfaceSoft,
                   borderRadius: BorderRadius.circular(999),
                   border: Border.all(
                     color: trainerId == null
-                        ? AppColors.primaryBright.withValues(alpha: 0.35)
-                        : _fitPrimary1.withValues(alpha: 0.28),
+                        ? AppColors.stroke
+                        : AppColors.primary.withValues(alpha: 0.18),
                   ),
                 ),
                 child: Row(
@@ -947,7 +860,7 @@ class _MemberTrainerChatCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: trainerId == null
                             ? AppColors.primaryBright
-                            : _fitPrimary1,
+                            : AppColors.success,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -957,7 +870,7 @@ class _MemberTrainerChatCard extends StatelessWidget {
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: trainerId == null
                             ? AppColors.textSecondary
-                            : _fitPrimary1,
+                            : AppColors.success,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -977,8 +890,8 @@ class _MemberTrainerChatCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(999),
               child: const LinearProgressIndicator(
                 minHeight: 4,
-                backgroundColor: _fitLightGray,
-                color: _fitPrimary1,
+                backgroundColor: AppColors.surfaceSoft,
+                color: AppColors.primaryBright,
               ),
             ),
           if (loading) const SizedBox(height: AppSpacing.md),
@@ -1001,6 +914,9 @@ class _MemberTrainerChatCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.error.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: AppColors.error.withValues(alpha: 0.14),
+                ),
               ),
               child: Row(
                 children: [
@@ -1048,14 +964,14 @@ class _MemberChatTopicChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.72),
+        color: AppColors.surfaceSoft,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0x1F0B7C66)),
+        border: Border.all(color: AppColors.stroke),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: _fitPrimary1,
+          color: AppColors.textSecondary,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -1086,168 +1002,157 @@ class _MemberConversationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(15),
+    return PremiumCard(
+      padding: const EdgeInsets.all(10),
       onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 2,
-              offset: Offset(0, 1),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: _fitPrimaryGradient),
-                    shape: BoxShape.circle,
-                  ),
-                  child: CircleAvatar(
-                    radius: 29,
-                    backgroundColor: AppColors.surfaceStrong,
-                    backgroundImage:
-                        trainerAvatarUrl != null &&
-                            trainerAvatarUrl!.trim().isNotEmpty
-                        ? NetworkImage(trainerAvatarUrl!)
-                        : null,
-                    child:
-                        trainerAvatarUrl == null ||
-                            trainerAvatarUrl!.trim().isEmpty
-                        ? Text(
-                            trainerName.trim().isEmpty
-                                ? 'T'
-                                : trainerName.trim()[0],
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          )
-                        : null,
-                  ),
+      child: Row(
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceSoft,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.stroke),
                 ),
-                Positioned(
-                  right: 2,
-                  bottom: 2,
-                  child: Container(
-                    width: 14,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      color: enabled ? _fitSecondary1 : AppColors.textMuted,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
-                    ),
-                  ),
+                child: CircleAvatar(
+                  radius: 29,
+                  backgroundColor: AppColors.surfaceStrong,
+                  backgroundImage:
+                      trainerAvatarUrl != null &&
+                          trainerAvatarUrl!.trim().isNotEmpty
+                      ? NetworkImage(trainerAvatarUrl!)
+                      : null,
+                  child:
+                      trainerAvatarUrl == null ||
+                          trainerAvatarUrl!.trim().isEmpty
+                      ? Text(
+                          trainerName.trim().isEmpty
+                              ? 'T'
+                              : trainerName.trim()[0],
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        )
+                      : null,
                 ),
-              ],
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    trainerName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
-                      Icon(
-                        enabled
-                            ? Icons.done_all_rounded
-                            : Icons.lock_outline_rounded,
-                        color: unreadCount > 0
-                            ? _fitPrimary1
-                            : AppColors.textMuted,
-                        size: 15,
-                      ),
-                      const SizedBox(width: 5),
-                      Expanded(
-                        child: Text(
-                          loading ? 'Syncing latest messages...' : preview,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: unreadCount > 0
-                                    ? AppColors.textPrimary
-                                    : AppColors.textMuted,
-                                fontWeight: unreadCount > 0
-                                    ? FontWeight.w800
-                                    : FontWeight.w600,
-                              ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
               ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+              Positioned(
+                right: 2,
+                bottom: 2,
+                child: Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: enabled ? AppColors.success : AppColors.textMuted,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  time,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: unreadCount > 0 ? _fitPrimary1 : AppColors.textMuted,
+                  trainerName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 8),
-                Container(
-                  width: unreadCount > 0 ? 24 : 30,
-                  height: 24,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: unreadCount > 0
-                        ? _fitPrimary1
-                        : const Color(0xFFF1F7F4),
-                    shape: unreadCount > 0
-                        ? BoxShape.circle
-                        : BoxShape.rectangle,
-                    borderRadius: unreadCount > 0
-                        ? null
-                        : BorderRadius.circular(999),
-                  ),
-                  child: unreadCount > 0
-                      ? Text(
-                          '$unreadCount',
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                        )
-                      : Icon(
-                          enabled
-                              ? Icons.chevron_right_rounded
-                              : Icons.lock_outline_rounded,
-                          size: 18,
-                          color: enabled ? _fitPrimary1 : AppColors.textMuted,
+                const SizedBox(height: 5),
+                Row(
+                  children: [
+                    Icon(
+                      enabled
+                          ? Icons.done_all_rounded
+                          : Icons.lock_outline_rounded,
+                      color: unreadCount > 0
+                          ? AppColors.primaryBright
+                          : AppColors.textMuted,
+                      size: 15,
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        loading ? 'Syncing latest messages...' : preview,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: unreadCount > 0
+                              ? AppColors.textPrimary
+                              : AppColors.textMuted,
+                          fontWeight: unreadCount > 0
+                              ? FontWeight.w800
+                              : FontWeight.w600,
                         ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                time,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: unreadCount > 0
+                      ? AppColors.primaryBright
+                      : AppColors.textMuted,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                width: unreadCount > 0 ? 24 : 30,
+                height: 24,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: unreadCount > 0
+                      ? AppColors.primaryBright
+                      : AppColors.surfaceSoft,
+                  shape: unreadCount > 0 ? BoxShape.circle : BoxShape.rectangle,
+                  borderRadius: unreadCount > 0
+                      ? null
+                      : BorderRadius.circular(999),
+                  border: unreadCount > 0
+                      ? null
+                      : Border.all(color: AppColors.stroke),
+                ),
+                child: unreadCount > 0
+                    ? Text(
+                        '$unreadCount',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      )
+                    : Icon(
+                        enabled
+                            ? Icons.chevron_right_rounded
+                            : Icons.lock_outline_rounded,
+                        size: 18,
+                        color: enabled
+                            ? AppColors.primaryBright
+                            : AppColors.textMuted,
+                      ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1539,7 +1444,7 @@ class _MemberTrainerChatThreadScreenState
         widget.trainer['photo']?.toString();
 
     return Scaffold(
-      backgroundColor: _fitLightGray,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -1556,7 +1461,7 @@ class _MemberTrainerChatThreadScreenState
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(
                       color: AppColors.error.withValues(alpha: 0.18),
@@ -1677,16 +1582,13 @@ class _MemberChatThreadHeader extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
       padding: const EdgeInsets.fromLTRB(6, 10, 10, 10),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(25),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: _fitPrimaryGradient,
-        ),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.stroke),
         boxShadow: [
           BoxShadow(
-            color: _fitPrimary1.withValues(alpha: 0.26),
-            blurRadius: 18,
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
             offset: const Offset(0, 8),
           ),
         ],
@@ -1695,14 +1597,17 @@ class _MemberChatThreadHeader extends StatelessWidget {
         children: [
           IconButton(
             onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+            icon: const Icon(
+              Icons.arrow_back_rounded,
+              color: AppColors.textPrimary,
+            ),
           ),
           Stack(
             clipBehavior: Clip.none,
             children: [
               CircleAvatar(
                 radius: 24,
-                backgroundColor: Colors.white24,
+                backgroundColor: AppColors.surfaceSoft,
                 backgroundImage:
                     trainerAvatarUrl != null &&
                         trainerAvatarUrl!.trim().isNotEmpty
@@ -1715,7 +1620,7 @@ class _MemberChatThreadHeader extends StatelessWidget {
                             ? 'T'
                             : trainerName.trim()[0],
                         style: const TextStyle(
-                          color: Colors.white,
+                          color: AppColors.textPrimary,
                           fontWeight: FontWeight.w900,
                         ),
                       )
@@ -1728,7 +1633,7 @@ class _MemberChatThreadHeader extends StatelessWidget {
                   width: 13,
                   height: 13,
                   decoration: BoxDecoration(
-                    color: _fitSecondary2,
+                    color: AppColors.success,
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 2),
                   ),
@@ -1746,8 +1651,8 @@ class _MemberChatThreadHeader extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -1757,7 +1662,7 @@ class _MemberChatThreadHeader extends StatelessWidget {
                       width: 6,
                       height: 6,
                       decoration: const BoxDecoration(
-                        color: Colors.white,
+                        color: AppColors.success,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -1765,8 +1670,8 @@ class _MemberChatThreadHeader extends StatelessWidget {
                     Text(
                       loading ? 'Syncing chat...' : 'Trainer conversation',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.86),
-                        fontWeight: FontWeight.w500,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -1778,7 +1683,9 @@ class _MemberChatThreadHeader extends StatelessWidget {
             onPressed: loading ? null : onRefresh,
             icon: Icon(
               Icons.refresh_rounded,
-              color: loading ? Colors.white38 : Colors.white,
+              color: loading
+                  ? AppColors.textMuted.withValues(alpha: 0.4)
+                  : AppColors.primaryBright,
             ),
           ),
         ],
@@ -1793,20 +1700,14 @@ class _MemberChatPatternBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Colors.white, _fitLightGray],
-        ),
-      ),
+      decoration: const BoxDecoration(color: AppColors.background),
       child: Stack(
         children: [
           Positioned(
             right: -42,
             top: 46,
             child: _MemberChatSoftOrb(
-              color: _fitPrimary2.withValues(alpha: 0.18),
+              color: AppColors.primary.withValues(alpha: 0.08),
               size: 150,
             ),
           ),
@@ -1814,7 +1715,7 @@ class _MemberChatPatternBackground extends StatelessWidget {
             left: -55,
             bottom: 90,
             child: _MemberChatSoftOrb(
-              color: _fitSecondary2.withValues(alpha: 0.18),
+              color: AppColors.primaryBright.withValues(alpha: 0.06),
               size: 170,
             ),
           ),
@@ -1850,11 +1751,9 @@ class _MemberChatDatePill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.86),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(999),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0, 1)),
-        ],
+        border: Border.all(color: AppColors.stroke),
       ),
       child: Text(
         label,
@@ -1879,39 +1778,36 @@ class _MemberLoadOlderMessagesButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: loading ? null : onPressed,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black12,
-                blurRadius: 2,
-                offset: Offset(0, 1),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                loading ? Icons.sync_rounded : Icons.history_rounded,
-                size: 16,
-                color: _fitPrimary1,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                loading ? 'Loading older messages' : 'Load older messages',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: _fitGray,
-                  fontWeight: FontWeight.w700,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: loading ? null : onPressed,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: AppColors.stroke),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  loading ? Icons.sync_rounded : Icons.history_rounded,
+                  size: 16,
+                  color: AppColors.primaryBright,
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                Text(
+                  loading ? 'Loading older messages' : 'Load older messages',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1927,19 +1823,8 @@ class _MemberChatEmptyState extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(28),
-        child: Container(
+        child: PremiumCard(
           padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black12,
-                blurRadius: 2,
-                offset: Offset(0, 1),
-              ),
-            ],
-          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1947,12 +1832,13 @@ class _MemberChatEmptyState extends StatelessWidget {
                 width: 68,
                 height: 68,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: _fitSecondaryGradient),
+                  color: AppColors.surfaceSoft,
                   borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: AppColors.stroke),
                 ),
                 child: const Icon(
                   Icons.chat_bubble_outline_rounded,
-                  color: Colors.white,
+                  color: AppColors.primaryBright,
                   size: 32,
                 ),
               ),
@@ -1996,31 +1882,16 @@ class _MemberChatComposer extends StatelessWidget {
       top: false,
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
-        decoration: const BoxDecoration(
-          color: _fitLightGray,
-          boxShadow: [
-            BoxShadow(
-              color: Color(0x101D1617),
-              blurRadius: 20,
-              offset: Offset(0, -8),
-            ),
-          ],
-        ),
+        decoration: const BoxDecoration(color: AppColors.background),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(25),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 2,
-                      offset: Offset(0, 1),
-                    ),
-                  ],
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: AppColors.stroke),
                 ),
                 child: TextField(
                   controller: controller,
@@ -2030,7 +1901,10 @@ class _MemberChatComposer extends StatelessWidget {
                   textInputAction: TextInputAction.send,
                   decoration: InputDecoration(
                     hintText: 'Message your trainer',
-                    prefixIcon: const Icon(Icons.lock_outline_rounded),
+                    prefixIcon: const Icon(
+                      Icons.lock_outline_rounded,
+                      color: AppColors.textMuted,
+                    ),
                     suffixIcon: Icon(
                       Icons.sentiment_satisfied_alt_rounded,
                       color: AppColors.textMuted.withValues(alpha: 0.75),
@@ -2050,15 +1924,11 @@ class _MemberChatComposer extends StatelessWidget {
             const SizedBox(width: 10),
             DecoratedBox(
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: _fitPrimaryGradient,
-                ),
+                color: AppColors.primaryBright,
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: _fitPrimary1.withValues(alpha: 0.32),
+                    color: AppColors.primaryBright.withValues(alpha: 0.22),
                     blurRadius: 10,
                     offset: const Offset(0, 5),
                   ),
@@ -2100,26 +1970,24 @@ class _MemberChatBubble extends StatelessWidget {
       alignment: isIncoming ? Alignment.centerLeft : Alignment.centerRight,
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.sizeOf(context).width * 0.78,
+          maxWidth: MediaQuery.sizeOf(context).width * 0.76,
         ),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 10, 10, 8),
+          padding: const EdgeInsets.fromLTRB(14, 10, 12, 8),
           decoration: BoxDecoration(
-            gradient: isIncoming
-                ? null
-                : const LinearGradient(colors: _fitPrimaryGradient),
-            color: isIncoming ? Colors.white : null,
+            color: isIncoming ? AppColors.surface : AppColors.primaryBright,
             borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(isIncoming ? 6 : 20),
-              topRight: Radius.circular(isIncoming ? 20 : 6),
-              bottomLeft: const Radius.circular(20),
-              bottomRight: const Radius.circular(20),
+              topLeft: Radius.circular(isIncoming ? 8 : 18),
+              topRight: Radius.circular(isIncoming ? 18 : 8),
+              bottomLeft: const Radius.circular(18),
+              bottomRight: const Radius.circular(18),
             ),
-            boxShadow: const [
+            border: isIncoming ? Border.all(color: AppColors.stroke) : null,
+            boxShadow: [
               BoxShadow(
-                color: Colors.black12,
-                blurRadius: 2,
-                offset: Offset(0, 1),
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -2130,9 +1998,9 @@ class _MemberChatBubble extends StatelessWidget {
               Text(
                 body,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: isIncoming ? _fitBlack : Colors.white,
+                  color: isIncoming ? AppColors.textPrimary : Colors.white,
                   fontWeight: FontWeight.w600,
-                  height: 1.28,
+                  height: 1.34,
                 ),
               ),
               const SizedBox(height: 5),
@@ -2145,7 +2013,7 @@ class _MemberChatBubble extends StatelessWidget {
                       color: failed
                           ? AppColors.error
                           : isIncoming
-                          ? _fitGray
+                          ? AppColors.textMuted
                           : Colors.white.withValues(alpha: 0.82),
                       fontWeight: FontWeight.w500,
                     ),
@@ -2164,7 +2032,7 @@ class _MemberChatBubble extends StatelessWidget {
                           : pending
                           ? AppColors.textMuted
                           : isIncoming
-                          ? _fitPrimary1
+                          ? AppColors.primaryBright
                           : Colors.white,
                     ),
                   ],

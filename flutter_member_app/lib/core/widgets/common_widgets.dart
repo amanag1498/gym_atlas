@@ -75,6 +75,148 @@ class AppGradientScaffold extends StatelessWidget {
   }
 }
 
+String firstNameFromFullName(String? fullName) {
+  final trimmed = fullName?.trim() ?? '';
+  if (trimmed.isEmpty) {
+    return 'Athlete';
+  }
+
+  return trimmed.split(RegExp(r'\s+')).first;
+}
+
+class MemberPageGreetingHeader extends StatelessWidget {
+  const MemberPageGreetingHeader({
+    super.key,
+    required this.firstName,
+    required this.subtitle,
+    this.actions = const <Widget>[],
+    this.topPadding = 6,
+  });
+
+  final String firstName;
+  final String subtitle;
+  final List<Widget> actions;
+  final double topPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: EdgeInsets.only(top: topPadding),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Hi, $firstName',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.7,
+                    height: 1.02,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (actions.isNotEmpty) ...[
+            const SizedBox(width: AppSpacing.md),
+            Wrap(spacing: 10, runSpacing: 10, children: actions),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class MemberHeaderActionButton extends StatelessWidget {
+  const MemberHeaderActionButton({
+    super.key,
+    required this.icon,
+    required this.onTap,
+    this.count = 0,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.stroke),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 14,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Center(child: Icon(icon, color: AppColors.textPrimary, size: 22)),
+              if (count > 0)
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryBright,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: AppColors.surface, width: 2),
+                    ),
+                    constraints: const BoxConstraints(minWidth: 22),
+                    child: Text(
+                      count > 99 ? '99+' : '$count',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class SectionCard extends StatelessWidget {
   const SectionCard({
     super.key,
@@ -255,10 +397,7 @@ class BrandMark extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: <Color>[
-            Theme.of(context).colorScheme.primary,
-            accent,
-          ],
+          colors: <Color>[Theme.of(context).colorScheme.primary, accent],
         ),
         boxShadow: [
           BoxShadow(
@@ -358,7 +497,10 @@ class AuthPanel extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  Text(description, style: Theme.of(context).textTheme.bodyLarge),
+                  Text(
+                    description,
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
                   const SizedBox(height: AppSpacing.xl),
                   Container(
                     padding: const EdgeInsets.all(AppSpacing.lg),
@@ -397,7 +539,9 @@ class AuthPanel extends StatelessWidget {
                       padding: const EdgeInsets.all(AppSpacing.md),
                       decoration: BoxDecoration(
                         color: AppColors.error.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusMd,
+                        ),
                         border: Border.all(
                           color: AppColors.error.withValues(alpha: 0.22),
                         ),

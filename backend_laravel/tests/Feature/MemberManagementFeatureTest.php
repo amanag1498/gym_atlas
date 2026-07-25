@@ -5,14 +5,16 @@ namespace Tests\Feature;
 use App\Enums\RoleName;
 use App\Models\Branch;
 use App\Models\Gym;
-use App\Models\MemberProfile;
 use App\Models\MemberGymInvitation;
 use App\Models\MemberMembership;
+use App\Models\MemberProfile;
 use App\Models\MembershipPlan;
 use App\Models\TrainerProfile;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class MemberManagementFeatureTest extends TestCase
@@ -29,6 +31,8 @@ class MemberManagementFeatureTest extends TestCase
 
     public function test_gym_owner_can_create_member_with_new_user(): void
     {
+        Storage::fake('public');
+
         $owner = $this->makeUser(RoleName::GymOwner->value, 'owner-member@example.com');
         $trainer = $this->makeUser(RoleName::Trainer->value, 'trainer-member@example.com');
 
@@ -74,9 +78,11 @@ class MemberManagementFeatureTest extends TestCase
         $this->post(route('web.gym.members.store', ['gym' => $gym->id, 'branch' => $branch->id]), [
             'name' => 'Riya Member',
             'email' => 'riya-member@example.com',
+            'phone' => '+91 98765 43210',
             'branch_id' => $branch->id,
             'assigned_trainer_user_id' => $trainer->id,
             'fitness_goal' => 'Fat Loss',
+            'profile_photo' => UploadedFile::fake()->image('riya-member.jpg', 200, 200),
             'status' => 'active',
             'membership_plan_id' => $plan->id,
             'start_date' => now()->toDateString(),
@@ -90,6 +96,28 @@ class MemberManagementFeatureTest extends TestCase
 
         $member = User::query()->where('email', 'riya-member@example.com')->firstOrFail();
         $this->assertTrue($member->hasRole(RoleName::Member->value));
+        $this->assertSame('+91 98765 43210', $member->phone);
+        $this->assertStringContainsString('/storage/member-profile-photos/', $member->avatar);
+        $this->assertCount(1, Storage::disk('public')->files('member-profile-photos'));
+        $originalAvatar = $member->avatar;
+
+        $this->put(route('web.gym.members.update', [
+            'gym' => $gym->id,
+            'branch' => $branch->id,
+            'member' => $member->id,
+        ]), [
+            'name' => 'Riya Member',
+            'email' => 'riya-member@example.com',
+            'phone' => '+91 98765 40000',
+            'branch_id' => $branch->id,
+            'status' => 'active',
+            'profile_photo' => UploadedFile::fake()->image('riya-member-updated.jpg', 200, 200),
+        ])->assertRedirect();
+
+        $member->refresh();
+        $this->assertSame('+91 98765 40000', $member->phone);
+        $this->assertNotSame($originalAvatar, $member->avatar);
+        $this->assertCount(2, Storage::disk('public')->files('member-profile-photos'));
         $this->assertDatabaseHas('member_profiles', [
             'user_id' => $member->id,
             'gym_id' => $gym->id,
@@ -183,6 +211,14 @@ class MemberManagementFeatureTest extends TestCase
             'is_active' => true,
         ]);
         $this->loginGymUser($owner);
+
+        $this->getJson(route('web.gym.members.search.eligible-users', [
+            'gym' => $gym->id,
+            'q' => 'existing-member',
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $existingUser->id)
+            ->assertJsonPath('data.0.email', $existingUser->email);
 
         $this->post(route('web.gym.members.store', ['gym' => $gym->id]), [
             'existing_user_id' => $existingUser->id,

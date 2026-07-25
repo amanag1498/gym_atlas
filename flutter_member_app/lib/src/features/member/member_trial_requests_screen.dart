@@ -33,8 +33,10 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _preferredDateController = TextEditingController();
-  final TextEditingController _preferredTimeController = TextEditingController();
+  final TextEditingController _preferredDateController =
+      TextEditingController();
+  final TextEditingController _preferredTimeController =
+      TextEditingController();
   final TextEditingController _notesController = TextEditingController();
 
   late final TabController _tabController;
@@ -42,7 +44,6 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
   bool _submitting = false;
   String? _error;
   String? _successMessage;
-  String _userState = 'independent_user';
   List<Map<String, dynamic>> _publicGyms = const [];
   List<Map<String, dynamic>> _trialRequests = const [];
   List<Map<String, dynamic>> _availableBranches = const [];
@@ -60,10 +61,7 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
         .split('T')
         .first;
     _preferredTimeController.text = '18:00';
-    _tabController = TabController(
-      length: 2,
-      vsync: this,
-    );
+    _tabController = TabController(length: 2, vsync: this);
     _load();
   }
 
@@ -86,7 +84,9 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
     });
 
     try {
-      final storedTrials = await _storage.readTrialRequests(widget.currentUser.id);
+      final storedTrials = await _storage.readTrialRequests(
+        widget.currentUser.id,
+      );
       final results = await Future.wait<Map<String, dynamic>>([
         widget.repository.fetchPublicGyms(),
         widget.repository.fetchContext(),
@@ -98,14 +98,11 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
       final contextData = Map<String, dynamic>.from(
         results[1]['data'] as Map? ?? const {},
       );
-      final userState = contextData['user_state']?.toString() ?? 'independent_user';
-      final normalizedTrials = _reconcileTrialRequests(
-        storedTrials,
-        userState,
-      );
+      final userState =
+          contextData['user_state']?.toString() ?? 'independent_user';
+      final normalizedTrials = _reconcileTrialRequests(storedTrials, userState);
 
       _publicGyms = gyms;
-      _userState = userState;
       _trialRequests = normalizedTrials;
 
       if (widget.initialGym != null) {
@@ -146,7 +143,9 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
     if (branches.length == 1) {
       _selectedBranchId = (branches.first['id'] as num?)?.toInt();
     } else if (_selectedBranchId != null &&
-        !branches.any((item) => (item['id'] as num?)?.toInt() == _selectedBranchId)) {
+        !branches.any(
+          (item) => (item['id'] as num?)?.toInt() == _selectedBranchId,
+        )) {
       _selectedBranchId = null;
     }
   }
@@ -170,27 +169,26 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
     List<Map<String, dynamic>> trialRequests,
     String userState,
   ) {
-    final normalized = trialRequests
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList()
-      ..sort((left, right) {
-        final rightDate = DateTime.tryParse(
-              right['created_at']?.toString() ?? '',
-            ) ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        final leftDate = DateTime.tryParse(
-              left['created_at']?.toString() ?? '',
-            ) ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        return rightDate.compareTo(leftDate);
-      });
+    final normalized =
+        trialRequests.map((item) => Map<String, dynamic>.from(item)).toList()
+          ..sort((left, right) {
+            final rightDate =
+                DateTime.tryParse(right['created_at']?.toString() ?? '') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+            final leftDate =
+                DateTime.tryParse(left['created_at']?.toString() ?? '') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+            return rightDate.compareTo(leftDate);
+          });
 
     if ((userState == 'gym_member' || userState == 'gym_member_with_trainer') &&
         normalized.isNotEmpty) {
       final mutable = normalized.firstWhere(
-        (item) => const ['pending', 'accepted', 'completed'].contains(
-          item['status']?.toString(),
-        ),
+        (item) => const [
+          'pending',
+          'accepted',
+          'completed',
+        ].contains(item['status']?.toString()),
         orElse: () => const <String, dynamic>{},
       );
 
@@ -262,177 +260,337 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message.replaceFirst('Exception: ', ''))));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message.replaceFirst('Exception: ', ''))),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return AppGradientScaffold(
       title: 'Trial Requests',
-      actions: [
-        IconButton(
-          onPressed: _loading ? null : _load,
-          icon: const Icon(Icons.refresh_rounded),
-        ),
-      ],
-      body: _loading
-          ? const _TrialSkeleton()
-          : _error != null
-          ? ErrorStateView(message: _error!, onRetry: _load)
-          : Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    AppSpacing.md,
-                    AppSpacing.lg,
-                    0,
+      body: SafeArea(
+        bottom: false,
+        child: _loading
+            ? const _TrialSkeleton()
+            : _error != null
+            ? ErrorStateView(message: _error!, onRetry: _load)
+            : Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      AppSpacing.sm,
+                      AppSpacing.lg,
+                      0,
+                    ),
+                    child: _TrialTopBar(
+                      title: 'Trial Requests',
+                      subtitle: 'Book a trial and track the outcome.',
+                      onRefresh: _load,
+                    ),
                   ),
-                  child: PremiumCard(
-                    glowColor: AppColors.accentPurple,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  if (_successMessage != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        AppSpacing.md,
+                        AppSpacing.lg,
+                        0,
+                      ),
+                      child: _TrialSuccessBanner(message: _successMessage!),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      AppSpacing.md,
+                      AppSpacing.lg,
+                      0,
+                    ),
+                    child: _TrialTabSlider(controller: _tabController),
+                  ),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
                       children: [
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 260),
-                          child: _successMessage == null
-                              ? const SizedBox.shrink()
-                              : Container(
-                                  key: ValueKey<String>(_successMessage!),
-                                  width: double.infinity,
-                                  margin: const EdgeInsets.only(
-                                    bottom: AppSpacing.md,
-                                  ),
-                                  padding: const EdgeInsets.all(AppSpacing.md),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(
-                                      AppSpacing.radiusMd,
-                                    ),
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        AppColors.success.withValues(alpha: 0.18),
-                                        AppColors.accentNeon.withValues(alpha: 0.08),
-                                      ],
-                                    ),
-                                    border: Border.all(
-                                      color: AppColors.success.withValues(alpha: 0.28),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.check_circle_rounded,
-                                        color: AppColors.success,
-                                      ),
-                                      const SizedBox(width: AppSpacing.sm),
-                                      Expanded(
-                                        child: Text(
-                                          _successMessage!,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                        _TrialRequestFormTab(
+                          publicGyms: _publicGyms,
+                          branches: _availableBranches,
+                          selectedGymId: _selectedGymId,
+                          selectedBranchId: _selectedBranchId,
+                          nameController: _nameController,
+                          phoneController: _phoneController,
+                          emailController: _emailController,
+                          preferredDateController: _preferredDateController,
+                          preferredTimeController: _preferredTimeController,
+                          notesController: _notesController,
+                          submitting: _submitting,
+                          onGymChanged: (gymId) async {
+                            if (gymId == null) {
+                              return;
+                            }
+                            setState(() {
+                              _selectedGymId = gymId;
+                              _selectedBranchId = null;
+                              _availableBranches = const [];
+                            });
+                            final gym = _publicGyms.firstWhere(
+                              (item) => (item['id'] as num?)?.toInt() == gymId,
+                              orElse: () => const <String, dynamic>{},
+                            );
+                            if (gym.isNotEmpty) {
+                              await _hydrateGymBranches(gym);
+                              if (mounted) {
+                                setState(() {});
+                              }
+                            }
+                          },
+                          onBranchChanged: (branchId) =>
+                              setState(() => _selectedBranchId = branchId),
+                          onSubmit: _submitTrial,
                         ),
-                        Text(
-                          'Book a trial and track the outcome',
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          'Send a trial request to a gym, then keep the status visible while you continue workouts and progress tracking.',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        Wrap(
-                          spacing: AppSpacing.sm,
-                          runSpacing: AppSpacing.sm,
-                          children: [
-                            StatusBadge(
-                              label: _titleCase(_userState),
-                              color: AppColors.statusColor(_userState),
-                            ),
-                            if (_trialRequests.isNotEmpty)
-                              StatusBadge(
-                                label: '${_trialRequests.length} requests',
-                                color: AppColors.primaryBright,
-                                icon: Icons.history_rounded,
+                        _TrialRequestsListTab(
+                          trialRequests: _trialRequests,
+                          onOpenDetail: (trial) {
+                            Navigator.of(context).push<void>(
+                              MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    TrialStatusDetailScreen(trial: trial),
                               ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        TabBar(
-                          controller: _tabController,
-                          isScrollable: true,
-                          tabs: const [
-                            Tab(text: 'Trial Form'),
-                            Tab(text: 'My Trial Requests'),
-                          ],
+                            );
+                          },
                         ),
                       ],
                     ),
                   ),
-                ),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _TrialRequestFormTab(
-                        publicGyms: _publicGyms,
-                        branches: _availableBranches,
-                        selectedGymId: _selectedGymId,
-                        selectedBranchId: _selectedBranchId,
-                        nameController: _nameController,
-                        phoneController: _phoneController,
-                        emailController: _emailController,
-                        preferredDateController: _preferredDateController,
-                        preferredTimeController: _preferredTimeController,
-                        notesController: _notesController,
-                        submitting: _submitting,
-                        onGymChanged: (gymId) async {
-                          if (gymId == null) {
-                            return;
-                          }
-                          setState(() {
-                            _selectedGymId = gymId;
-                            _selectedBranchId = null;
-                            _availableBranches = const [];
-                          });
-                          final gym = _publicGyms.firstWhere(
-                            (item) => (item['id'] as num?)?.toInt() == gymId,
-                            orElse: () => const <String, dynamic>{},
-                          );
-                          if (gym.isNotEmpty) {
-                            await _hydrateGymBranches(gym);
-                            if (mounted) {
-                              setState(() {});
-                            }
-                          }
-                        },
-                        onBranchChanged: (branchId) =>
-                            setState(() => _selectedBranchId = branchId),
-                        onSubmit: _submitTrial,
-                      ),
-                      _TrialRequestsListTab(
-                        trialRequests: _trialRequests,
-                        onOpenDetail: (trial) {
-                          Navigator.of(context).push<void>(
-                            MaterialPageRoute<void>(
-                              builder: (_) => TrialStatusDetailScreen(trial: trial),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _TrialTopBar extends StatelessWidget {
+  const _TrialTopBar({
+    required this.title,
+    required this.subtitle,
+    required this.onRefresh,
+  });
+
+  final String title;
+  final String subtitle;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        InkWell(
+          onTap: () => Navigator.of(context).maybePop(),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.stroke),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
+            child: const Icon(
+              Icons.arrow_back_rounded,
+              color: AppColors.textPrimary,
+              size: 20,
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        MemberHeaderActionButton(icon: Icons.refresh_rounded, onTap: onRefresh),
+      ],
+    );
+  }
+}
+
+class _TrialSuccessBanner extends StatelessWidget {
+  const _TrialSuccessBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.check_rounded,
+              size: 18,
+              color: AppColors.primaryBright,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrialTabSlider extends StatefulWidget {
+  const _TrialTabSlider({required this.controller});
+
+  final TabController controller;
+
+  @override
+  State<_TrialTabSlider> createState() => _TrialTabSliderState();
+}
+
+class _TrialTabSliderState extends State<_TrialTabSlider> {
+  static const _tabs = [
+    (label: 'Book Trial', icon: Icons.edit_calendar_rounded),
+    (label: 'Status', icon: Icons.history_rounded),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_handleTick);
+  }
+
+  @override
+  void didUpdateWidget(covariant _TrialTabSlider oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller == widget.controller) {
+      return;
+    }
+    oldWidget.controller.removeListener(_handleTick);
+    widget.controller.addListener(_handleTick);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_handleTick);
+    super.dispose();
+  }
+
+  void _handleTick() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PremiumCard(
+      padding: const EdgeInsets.all(6),
+      child: Row(
+        children: List.generate(_tabs.length, (index) {
+          final tab = _tabs[index];
+          final selected = widget.controller.index == index;
+
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => widget.controller.animateTo(index),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? AppColors.primary.withValues(alpha: 0.10)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: selected
+                        ? AppColors.primary.withValues(alpha: 0.18)
+                        : Colors.transparent,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      tab.icon,
+                      size: 18,
+                      color: selected
+                          ? AppColors.primaryBright
+                          : AppColors.textMuted,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        tab.label,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: selected
+                              ? AppColors.textPrimary
+                              : AppColors.textSecondary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
     );
   }
 }
@@ -473,15 +631,46 @@ class _TrialRequestFormTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.xl,
+      ),
       children: [
         PremiumCard(
+          padding: const EdgeInsets.all(AppSpacing.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Trial Request Form',
-                style: Theme.of(context).textTheme.titleLarge,
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceSoft,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.stroke),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Book a trial',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Choose the gym, pick your slot, and keep the request easy to follow.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
               DropdownButtonFormField<int>(
@@ -583,7 +772,7 @@ class _TrialRequestFormTab extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.lg),
               GradientButton(
-                label: 'Submit Trial Request',
+                label: 'Submit Trial',
                 icon: Icons.flash_on_rounded,
                 loading: submitting,
                 expanded: true,
@@ -621,12 +810,18 @@ class _TrialRequestsListTab extends StatelessWidget {
     }
 
     return ListView(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.xl,
+      ),
       children: trialRequests
           .map(
             (trial) => Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.md),
               child: PremiumCard(
+                padding: const EdgeInsets.all(AppSpacing.md),
                 onTap: () => onOpenDetail(trial),
                 child: Row(
                   children: [
@@ -656,20 +851,39 @@ class _TrialRequestsListTab extends StatelessWidget {
                           const SizedBox(height: AppSpacing.xs),
                           Text(
                             [
-                              if (trial['branch'] is Map)
-                                trial['branch']['name']?.toString() ?? '',
-                              _formatTrialDate(trial['preferred_date']),
-                            ].where((item) => item.trim().isNotEmpty).join(' • '),
-                            style: Theme.of(context).textTheme.bodySmall,
+                                  if (trial['branch'] is Map)
+                                    trial['branch']['name']?.toString() ?? '',
+                                  _formatTrialDate(trial['preferred_date']),
+                                ]
+                                .where((item) => item.trim().isNotEmpty)
+                                .join(' • '),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.w600,
+                                ),
                           ),
                         ],
                       ),
                     ),
-                    StatusBadge(
-                      label: _titleCase(trial['status']?.toString() ?? 'pending'),
-                      color: AppColors.statusColor(
-                        trial['status']?.toString() ?? 'pending',
-                      ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        StatusBadge(
+                          label: _titleCase(
+                            trial['status']?.toString() ?? 'pending',
+                          ),
+                          color: AppColors.statusColor(
+                            trial['status']?.toString() ?? 'pending',
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.textMuted,
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -682,10 +896,7 @@ class _TrialRequestsListTab extends StatelessWidget {
 }
 
 class TrialStatusDetailScreen extends StatelessWidget {
-  const TrialStatusDetailScreen({
-    super.key,
-    required this.trial,
-  });
+  const TrialStatusDetailScreen({super.key, required this.trial});
 
   final Map<String, dynamic> trial;
 
@@ -701,139 +912,374 @@ class TrialStatusDetailScreen extends StatelessWidget {
 
     return AppGradientScaffold(
       title: 'Trial Status Detail',
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        children: [
-          PremiumCard(
-            glowColor: AppColors.accentPurple,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  trial['gym'] is Map
-                      ? (trial['gym']['name']?.toString() ?? 'Gym')
-                      : 'Gym',
-                  style: Theme.of(context).textTheme.headlineSmall,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.sm,
+                AppSpacing.lg,
+                0,
+              ),
+              child: _TrialDetailTopBar(
+                title: 'Trial Status',
+                subtitle: 'Overview, timeline, and next update.',
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                  AppSpacing.lg,
+                  AppSpacing.xl,
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.sm,
-                  children: [
-                    StatusBadge(
-                      label: _titleCase(status),
-                      color: AppColors.statusColor(status),
-                      icon: Icons.flag_rounded,
+                children: [
+                  PremiumCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          trial['gym'] is Map
+                              ? (trial['gym']['name']?.toString() ?? 'Gym')
+                              : 'Gym',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Wrap(
+                          spacing: AppSpacing.sm,
+                          runSpacing: AppSpacing.sm,
+                          children: [
+                            StatusBadge(
+                              label: _titleCase(status),
+                              color: AppColors.statusColor(status),
+                              icon: Icons.flag_rounded,
+                            ),
+                            if (branch.isNotEmpty)
+                              StatusBadge(
+                                label: branch['name']?.toString() ?? 'Branch',
+                                color: AppColors.primaryBright,
+                                icon: Icons.account_tree_rounded,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _TrialDetailStatTile(
+                                label: 'Preferred date',
+                                value: _formatTrialDate(
+                                  trial['preferred_date'],
+                                ),
+                                icon: Icons.calendar_month_rounded,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: _TrialDetailStatTile(
+                                label: 'Preferred time',
+                                value:
+                                    _nullableText(
+                                      trial['preferred_time'],
+                                    ).isEmpty
+                                    ? 'Pending'
+                                    : _nullableText(trial['preferred_time']),
+                                icon: Icons.schedule_rounded,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if ((trial['notes']?.toString() ?? '')
+                            .trim()
+                            .isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(AppSpacing.md),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceSoft,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: AppColors.stroke),
+                            ),
+                            child: Text(
+                              trial['notes'].toString(),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.45,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                    if (branch.isNotEmpty)
-                      StatusBadge(
-                        label: branch['name']?.toString() ?? 'Branch',
-                        color: AppColors.primaryBright,
-                        icon: Icons.account_tree_rounded,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  'Preferred visit: ${_formatTrialDate(trial['preferred_date'])} ${_nullableText(trial['preferred_time'])}',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                if ((trial['notes']?.toString() ?? '').trim().isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    trial['notes'].toString(),
-                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  PremiumCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Status timeline',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        _TimelineStep(
+                          title: 'Trial submitted',
+                          subtitle:
+                              'Your request was recorded and shared with the gym team.',
+                          active: true,
+                        ),
+                        _TimelineStep(
+                          title: 'Gym review',
+                          subtitle:
+                              'The gym reviews your preferred slot and branch request.',
+                          active: const [
+                            'accepted',
+                            'completed',
+                            'converted',
+                          ].contains(status),
+                        ),
+                        _TimelineStep(
+                          title: 'Trial completed',
+                          subtitle:
+                              'Your trial is marked completed once the session is done.',
+                          active: const [
+                            'completed',
+                            'converted',
+                          ].contains(status),
+                        ),
+                        _TimelineStep(
+                          title: 'Converted to member',
+                          subtitle:
+                              'Membership unlocks automatically after conversion.',
+                          active: status == 'converted',
+                          isLast: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  PremiumCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Assignment',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        if (trainer.isNotEmpty)
+                          _TrialAssignmentRow(
+                            icon: Icons.person_pin_circle_rounded,
+                            label: 'Assigned trainer',
+                            value:
+                                trainer['name']?.toString() ??
+                                'Trainer assigned',
+                          )
+                        else
+                          const _TrialAssignmentRow(
+                            icon: Icons.hourglass_bottom_rounded,
+                            label: 'Trainer',
+                            value: 'Assignment pending',
+                          ),
+                        const SizedBox(height: AppSpacing.sm),
+                        const _TrialAssignmentRow(
+                          icon: Icons.notifications_active_rounded,
+                          label: 'Reminder',
+                          value:
+                              'Check back before your preferred date for updates.',
+                        ),
+                      ],
+                    ),
                   ),
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrialDetailTopBar extends StatelessWidget {
+  const _TrialDetailTopBar({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        InkWell(
+          onTap: () => Navigator.of(context).maybePop(),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.stroke),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 6),
+                ),
               ],
             ),
+            child: const Icon(
+              Icons.arrow_back_rounded,
+              color: AppColors.textPrimary,
+              size: 20,
+            ),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          PremiumCard(
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TrialDetailStatTile extends StatelessWidget {
+  const _TrialDetailStatTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSoft,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.stroke),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: AppColors.primaryBright),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: AppColors.textMuted,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrialAssignmentRow extends StatelessWidget {
+  const _TrialAssignmentRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSoft,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.stroke),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: AppColors.primaryBright, size: 18),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Status timeline',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                _TimelineStep(
-                  title: 'Trial submitted',
-                  subtitle:
-                      'Your request was recorded and shared with the gym team.',
-                  active: true,
-                ),
-                _TimelineStep(
-                  title: 'Gym review',
-                  subtitle:
-                      'The gym reviews your preferred slot and branch request.',
-                  active: const ['accepted', 'completed', 'converted'].contains(
-                    status,
+                  label,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AppColors.textMuted,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                _TimelineStep(
-                  title: 'Trial completed',
-                  subtitle:
-                      'Your trial is marked completed once you visit and finish the session.',
-                  active: const ['completed', 'converted'].contains(status),
-                ),
-                _TimelineStep(
-                  title: 'Converted to member',
-                  subtitle:
-                      'If the gym converts your request into membership, your member features unlock automatically.',
-                  active: status == 'converted',
-                  isLast: true,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          PremiumCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+                const SizedBox(height: 2),
                 Text(
-                  'Assignment & reminder',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                if (trainer.isNotEmpty)
-                  StatusBadge(
-                    label: trainer['name']?.toString() ?? 'Trainer assigned',
-                    color: AppColors.accentNeon,
-                    icon: Icons.person_pin_circle_rounded,
-                  )
-                else
-                  const StatusBadge(
-                    label: 'Trainer assignment pending',
-                    color: AppColors.warning,
-                    icon: Icons.hourglass_bottom_rounded,
-                  ),
-                const SizedBox(height: AppSpacing.md),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                    color: Colors.white.withValues(alpha: 0.04),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(
-                        Icons.notifications_active_rounded,
-                        color: AppColors.accentAmber,
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Text(
-                          'Trial reminder placeholder: keep this request visible and check back before your preferred date for updates from the gym.',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ),
-                    ],
+                  value,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],

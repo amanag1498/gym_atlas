@@ -9,22 +9,13 @@
 <div class="space-y-5">
     @if (! $staff)
         <div>
-            <label for="existing_user_id" class="panel-label">Select Existing User</label>
-            <select id="existing_user_id" name="existing_user_id" class="panel-select">
-                <option value="">Create a new staff user</option>
-                @foreach ($existingUsers as $existingUser)
-                    <option
-                        value="{{ $existingUser->id }}"
-                        data-name="{{ $existingUser->name }}"
-                        data-email="{{ $existingUser->email }}"
-                        data-avatar="{{ $existingUser->avatar }}"
-                        @if ($hasPhoneColumn) data-phone="{{ $existingUser->phone }}" @endif
-                        @selected(old('existing_user_id') == $existingUser->id)
-                    >
-                        {{ $existingUser->name }} • {{ $existingUser->email }}
-                    </option>
-                @endforeach
-            </select>
+            <x-remote-user-search
+                name="existing_user_id"
+                label="Select Existing User"
+                :search-url="route('web.gym.staff.search.eligible-users', request()->query())"
+                :initial-item="$initialExistingUser ?? null"
+                placeholder="Search users by name, email, or phone"
+            />
             <div id="existing_staff_hint" class="mt-3 hidden rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200">
                 Existing account selected. Identity fields are reused; only staff scope, role, and permissions are managed here.
             </div>
@@ -40,13 +31,11 @@
                 <div data-existing-account-field>
                     <x-form-input name="email" label="Email" :value="$staff?->email" required />
                 </div>
-                @if ($hasPhoneColumn)
-                    <div data-existing-account-field>
-                        <x-form-input name="phone" label="Phone" :value="$staff?->phone" />
-                    </div>
-                @endif
                 <div data-existing-account-field>
-                    <x-form-input name="avatar" label="Avatar URL" :value="$staff?->avatar" placeholder="https://..." />
+                    <x-form-input name="phone" label="Phone Number" type="tel" inputmode="tel" autocomplete="tel" :value="$staff?->phone" />
+                </div>
+                <div data-existing-account-field>
+                    <x-profile-photo-upload :current-url="$staff?->avatar" />
                 </div>
                 <div class="md:col-span-2" data-existing-account-field>
                     <div class="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-4 text-sm text-slate-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300">
@@ -133,9 +122,10 @@
 @push('scripts')
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const existingUserSelect = document.getElementById('existing_user_id');
+            const existingUserInput = document.getElementById('existing_user_id');
+            const existingUserPicker = existingUserInput?.closest('[data-remote-user-search]');
             const existingHint = document.getElementById('existing_staff_hint');
-            const accountFields = [...document.querySelectorAll('[data-existing-account-field]')];
+            const accountFields = Array.from(document.querySelectorAll('[data-existing-account-field]'));
             const roleSelect = document.querySelector('[data-staff-role]');
             const branchHint = document.getElementById('branch_scope_hint');
 
@@ -156,36 +146,25 @@
                 });
             };
 
-            const fillFromSelectedUser = () => {
-                if (!existingUserSelect) return;
-
-                const selected = existingUserSelect.selectedOptions[0];
-                const hasExistingUser = Boolean(existingUserSelect.value);
-
+            const applyExistingUserState = (hasExistingUser) => {
                 existingHint?.classList.toggle('hidden', !hasExistingUser);
                 setSectionState(hasExistingUser, hasExistingUser);
-
-                if (!selected || !hasExistingUser) return;
-
-                const mapping = {
-                    name: selected.dataset.name,
-                    email: selected.dataset.email,
-                    phone: selected.dataset.phone,
-                    avatar: selected.dataset.avatar,
-                };
-
-                Object.entries(mapping).forEach(([name, value]) => {
-                    const input = document.querySelector(`[name="${name}"]`);
-                    if (input && value !== undefined) {
-                        input.value = value ?? '';
-                    }
-                });
             };
 
-            existingUserSelect?.addEventListener('change', fillFromSelectedUser);
+            existingUserPicker?.addEventListener('remote-user-selected', (event) => {
+                applyExistingUserState(true);
+                ['name', 'email', 'phone'].forEach((fieldName) => {
+                    const input = document.querySelector(`[name="${fieldName}"]`);
+                    if (input && event.detail[fieldName] !== undefined) {
+                        input.value = event.detail[fieldName] ?? '';
+                    }
+                });
+            });
+
+            existingUserPicker?.addEventListener('remote-user-cleared', () => applyExistingUserState(false));
             roleSelect?.addEventListener('change', setRoleHint);
 
-            fillFromSelectedUser();
+            applyExistingUserState(Boolean(existingUserInput?.value));
             setRoleHint();
         });
     </script>

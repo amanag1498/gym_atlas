@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Gym\Admin;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class UpdateMemberRequest extends FormRequest
@@ -20,8 +19,10 @@ class UpdateMemberRequest extends FormRequest
         return [
             'name' => ['sometimes', 'string', 'max:160'],
             'email' => ['sometimes', 'email', 'max:255', Rule::unique('users', 'email')->ignore($memberId)],
+            'phone' => ['nullable', 'string', 'max:30'],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
             'avatar' => ['nullable', 'url', 'max:2048'],
+            'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'assigned_trainer_user_id' => ['nullable', 'integer', 'exists:users,id'],
             'fitness_goal' => ['nullable', 'string', 'max:255'],
@@ -39,9 +40,7 @@ class UpdateMemberRequest extends FormRequest
             'membership_status' => ['nullable', 'string', 'max:80'],
             'membership_expires_on' => ['nullable', 'date'],
             'is_active' => ['sometimes', 'boolean'],
-        ] + (Schema::hasColumn('users', 'phone') ? [
-            'phone' => ['nullable', 'string', 'max:30'],
-        ] : []);
+        ];
     }
 
     protected function prepareForValidation(): void

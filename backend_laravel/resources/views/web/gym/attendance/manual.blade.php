@@ -24,7 +24,7 @@
 
         <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <x-stat-card label="Branches" :value="$branches->count()" hint="Allowed attendance scope" tone="sky" />
-            <x-stat-card label="Members" :value="$members->count()" hint="Available for manual entry" tone="emerald" />
+            <x-stat-card label="Members" :value="$membersCount" hint="Available for manual entry" tone="emerald" />
             <x-stat-card label="Source Device" value="web-admin" hint="Stored with the check-in" tone="violet" />
             <x-stat-card label="Audit Mode" value="Strict" hint="Actor, notes, and time are retained" tone="amber" />
         </div>
@@ -42,7 +42,15 @@
                     @csrf
                     <input type="hidden" name="gym_id" value="{{ $gym->id }}">
                     <x-form-select name="branch_id" label="Branch" :selected="old('branch_id', request('branch_id'))" :options="$branches->pluck('name', 'id')->all()" required />
-                    <x-form-select name="member_id" label="Member" :selected="old('member_id', request('member_id'))" :options="$members->pluck('name', 'id')->all()" required />
+                    <x-remote-user-search
+                        name="member_id"
+                        label="Member"
+                        :search-url="route('web.gym.attendance.search.members', $scopeQuery)"
+                        :initial-item="$selectedMemberSearchItem"
+                        branch-source="branch_id"
+                        placeholder="Search members by name, email, or phone"
+                        required
+                    />
                     <x-form-input type="datetime-local" name="checked_in_at" label="Checked In At" :value="old('checked_in_at')" />
                     <x-form-input name="source_device" label="Source Device" :value="old('source_device', 'web-admin')" />
                     <div class="md:col-span-2">

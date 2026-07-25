@@ -4,10 +4,12 @@ namespace Tests\Feature;
 
 use App\Enums\RoleName;
 use App\Models\Branch;
+use App\Models\Exercise;
 use App\Models\FitnessGoal;
 use App\Models\Gym;
 use App\Models\MemberMembership;
 use App\Models\MembershipPlan;
+use App\Models\PersonalRecord;
 use App\Models\User;
 use App\Models\WeightLog;
 use App\Models\WorkoutSession;
@@ -99,6 +101,186 @@ class IndependentMemberFeatureTest extends TestCase
             'member_id' => $member->id,
             'gym_id' => null,
             'branch_id' => null,
+        ]);
+    }
+
+    public function test_independent_member_can_complete_custom_workout_from_global_exercise_library(): void
+    {
+        $this->seed(PermissionSeeder::class);
+
+        $member = User::factory()->create([
+            'active_role' => RoleName::Member->value,
+        ]);
+        $member->assignRole(RoleName::Member->value);
+
+        $exercise = Exercise::query()->create([
+            'name' => 'Push Up',
+            'muscle_group' => 'chest',
+            'equipment' => 'Bodyweight',
+            'difficulty' => 'beginner',
+            'instructions' => 'Keep the core tight throughout the movement.',
+            'is_global' => true,
+            'status' => 'approved',
+            'is_active' => true,
+        ]);
+
+        $sessionResponse = $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/workout-sessions/start', [
+                'session_date' => now()->toDateString(),
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.gym_id', null)
+            ->assertJsonPath('data.branch_id', null)
+            ->assertJsonPath('data.workout_plan_id', null);
+
+        $sessionId = $sessionResponse->json('data.id');
+
+        $this->actingAs($member, 'sanctum')
+            ->getJson('/api/member/workout-exercises')
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => $exercise->id,
+                'name' => 'Push Up',
+            ]);
+
+        $addExerciseResponse = $this->actingAs($member, 'sanctum')
+            ->postJson("/api/member/workout-sessions/{$sessionId}/exercises", [
+                'exercise_id' => $exercise->id,
+                'sort_order' => 1,
+                'planned_sets' => 3,
+                'planned_reps' => '12',
+                'target_weight' => 0,
+                'rest_timer_seconds' => 45,
+                'sets' => [
+                    [
+                        'set_number' => 1,
+                        'reps' => 12,
+                        'weight' => 0,
+                        'rest_seconds' => 45,
+                        'is_completed' => true,
+                    ],
+                    [
+                        'set_number' => 2,
+                        'reps' => 10,
+                        'weight' => 0,
+                        'rest_seconds' => 45,
+                        'is_completed' => true,
+                    ],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.exercises.0.exercise_id', $exercise->id);
+
+        $sessionExerciseId = $addExerciseResponse->json('data.exercises.0.id');
+
+        $this->actingAs($member, 'sanctum')
+            ->postJson("/api/member/workout-sessions/{$sessionId}/complete", [
+                'notes' => 'Completed custom workout',
+                'exercises' => [
+                    [
+                        'id' => $sessionExerciseId,
+                        'exercise_id' => $exercise->id,
+                        'sort_order' => 1,
+                        'planned_sets' => 3,
+                        'planned_reps' => '12',
+                        'target_weight' => 0,
+                        'rest_timer_seconds' => 45,
+                        'notes' => 'Bodyweight finisher',
+                        'sets' => [
+                            [
+                                'set_number' => 1,
+                                'reps' => 12,
+                                'weight' => 0,
+                                'rest_seconds' => 45,
+                                'is_completed' => true,
+                            ],
+                            [
+                                'set_number' => 2,
+                                'reps' => 10,
+                                'weight' => 0,
+                                'rest_seconds' => 45,
+                                'is_completed' => true,
+                            ],
+                            [
+                                'set_number' => 3,
+                                'reps' => 8,
+                                'weight' => 0,
+                                'rest_seconds' => 45,
+                                'is_completed' => true,
+                            ],
+                        ],
+                    ],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.workout_plan_id', null)
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.exercises.0.exercise_id', $exercise->id);
+
+        $this->actingAs($member, 'sanctum')
+            ->getJson('/api/member/logbook-summary')
+            ->assertOk()
+            ->assertJsonPath('data.recent_workouts_count', 1)
+            ->assertJsonPath('data.total_volume', 0);
+
+        $this->assertDatabaseHas(WorkoutSession::class, [
+            'id' => $sessionId,
+            'member_id' => $member->id,
+            'gym_id' => null,
+            'branch_id' => null,
+            'workout_plan_id' => null,
+            'status' => 'completed',
+            'total_volume' => 0,
+        ]);
+
+        $this->assertDatabaseHas(PersonalRecord::class, [
+            'member_id' => $member->id,
+            'exercise_id' => $exercise->id,
+            'gym_id' => null,
+            'branch_id' => null,
+            'workout_session_id' => $sessionId,
+            'best_reps' => 12,
+            'best_weight' => 0,
+            'best_volume' => 0,
+        ]);
+    }
+
+    public function test_independent_member_can_end_empty_workout_session_started_by_mistake(): void
+    {
+        $this->seed(PermissionSeeder::class);
+
+        $member = User::factory()->create([
+            'active_role' => RoleName::Member->value,
+        ]);
+        $member->assignRole(RoleName::Member->value);
+
+        $sessionResponse = $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/workout-sessions/start', [
+                'session_date' => now()->toDateString(),
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.workout_plan_id', null)
+            ->assertJsonPath('data.status', 'active');
+
+        $sessionId = $sessionResponse->json('data.id');
+
+        $this->actingAs($member, 'sanctum')
+            ->postJson("/api/member/workout-sessions/{$sessionId}/complete", [
+                'notes' => 'Ended without exercises',
+                'exercises' => [],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.id', $sessionId)
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.workout_plan_id', null)
+            ->assertJsonCount(0, 'data.exercises');
+
+        $this->assertDatabaseHas(WorkoutSession::class, [
+            'id' => $sessionId,
+            'member_id' => $member->id,
+            'status' => 'completed',
+            'workout_plan_id' => null,
+            'total_volume' => 0,
         ]);
     }
 

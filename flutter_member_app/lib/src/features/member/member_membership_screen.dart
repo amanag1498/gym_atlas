@@ -89,189 +89,201 @@ class _MemberMembershipScreenState extends State<MemberMembershipScreen> {
       membership?['payment_status']?.toString() ?? 'pending',
     );
 
-    return Scaffold(
-      backgroundColor: _FitColor.white,
-      appBar: _FitAppBar(
-        title: 'Membership',
-        onRefresh: _loading ? null : _load,
-      ),
-      body: _loading
-          ? const _FitLoadingState()
-          : _error != null
-          ? _FitErrorState(message: _error!, onRetry: _load)
-          : membership == null
-          ? _FitEmptyState(
-              icon: Icons.workspace_premium_outlined,
-              title: 'No active membership yet',
-              message: 'Join a gym to unlock QR check-in and member access.',
-              buttonLabel: 'Discover Gyms',
-              onPressed: _handleDiscoverGyms,
-            )
-          : RefreshIndicator(
-              onRefresh: _load,
-              color: _FitColor.primaryEnd,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
-                ),
-                padding: const EdgeInsets.fromLTRB(25, 15, 25, 32),
-                children: <Widget>[
-                  _FitAnimatedSection(
-                    child: _MembershipProfileHeader(
-                      gymName: gymName,
-                      branchName: branchName,
-                      status: status,
-                      onQr: widget.onShowQr,
-                    ),
+    return AppGradientScaffold(
+      title: 'Membership',
+      body: SafeArea(
+        bottom: false,
+        child: _loading
+            ? const _FitLoadingState()
+            : _error != null
+            ? _FitErrorState(message: _error!, onRetry: _load)
+            : membership == null
+            ? _FitEmptyState(
+                icon: Icons.workspace_premium_outlined,
+                title: 'No active membership yet',
+                message: 'Join a gym to unlock QR check-in and member access.',
+                buttonLabel: 'Discover Gyms',
+                onPressed: _handleDiscoverGyms,
+              )
+            : RefreshIndicator(
+                onRefresh: _load,
+                color: AppColors.primaryBright,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
                   ),
-                  const SizedBox(height: 15),
-                  _FitAnimatedSection(
-                    delay: const Duration(milliseconds: 70),
-                    child: Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: _FitInfoCell(
-                            title: status,
-                            subtitle: 'Status',
-                          ),
-                        ),
-                        const SizedBox(width: 15),
-                        Expanded(
-                          child: _FitInfoCell(
-                            title: _formatCurrency(membership['amount_paid']),
-                            subtitle: 'Paid',
-                          ),
-                        ),
-                        const SizedBox(width: 15),
-                        Expanded(
-                          child: _FitInfoCell(
-                            title: _formatDate(membership['expiry_date']),
-                            subtitle: 'Expiry',
-                          ),
-                        ),
-                      ],
-                    ),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                    AppSpacing.lg,
+                    AppSpacing.xl,
                   ),
-                  const SizedBox(height: 25),
-                  _FitAnimatedSection(
-                    delay: const Duration(milliseconds: 120),
-                    child: _FitGroup(
-                      title: 'Access',
-                      children: <Widget>[
-                        _FitRow(
-                          icon: Icons.qr_code_2_rounded,
-                          title: 'QR Check-in Pass',
-                          subtitle: branchName,
-                          onPressed: widget.onShowQr,
-                        ),
-                        _FitRow(
-                          icon: Icons.fact_check_outlined,
-                          title: 'Attendance History',
-                          subtitle: 'Recent check-ins',
-                          onPressed: widget.onOpenAttendance,
-                        ),
-                        _FitRow(
-                          icon: Icons.person_pin_circle_outlined,
-                          title: 'Assigned Trainer',
-                          subtitle: _stringValue(trainer['name']),
-                          showChevron: false,
-                        ),
-                      ],
+                  children: <Widget>[
+                    _MembershipTopBar(
+                      title: 'Membership',
+                      subtitle: 'Current access, payments, and plan details.',
+                      onRefresh: _loading ? null : _load,
                     ),
-                  ),
-                  const SizedBox(height: 25),
-                  _FitAnimatedSection(
-                    delay: const Duration(milliseconds: 170),
-                    child: _FitGroup(
-                      title: 'Payment',
-                      children: <Widget>[
-                        _FitValueRow(
-                          icon: Icons.payments_rounded,
-                          title: 'Final Payable',
-                          value: _formatCurrency(
-                            membership['final_payable_amount'],
-                          ),
-                        ),
-                        _FitValueRow(
-                          icon: Icons.account_balance_wallet_rounded,
-                          title: 'Due Amount',
-                          value: _formatCurrency(membership['due_amount']),
-                        ),
-                        _FitValueRow(
-                          icon: Icons.event_available_rounded,
-                          title: 'Due Date',
-                          value: _formatDate(membership['due_date']),
-                        ),
-                        _FitValueRow(
-                          icon: Icons.verified_rounded,
-                          title: 'Payment Status',
-                          value: paymentStatus,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 25),
-                  _FitAnimatedSection(
-                    delay: const Duration(milliseconds: 220),
-                    child: _FitGroup(
-                      title: 'Plan',
-                      children: <Widget>[
-                        _FitValueRow(
-                          icon: Icons.card_membership_rounded,
-                          title: 'Plan Name',
-                          value: _stringValue(plan['name']),
-                        ),
-                        _FitValueRow(
-                          icon: Icons.calendar_today_rounded,
-                          title: 'Start Date',
-                          value: _formatDate(membership['start_date']),
-                        ),
-                        _FitValueRow(
-                          icon: Icons.event_busy_rounded,
-                          title: 'Expiry Date',
-                          value: _formatDate(membership['expiry_date']),
-                        ),
-                        _FitValueRow(
-                          icon: Icons.location_city_rounded,
-                          title: 'Branch City',
-                          value: _stringValue(branch['city']),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (hasCustomFee) ...<Widget>[
-                    const SizedBox(height: 25),
+                    const SizedBox(height: AppSpacing.md),
                     _FitAnimatedSection(
-                      delay: const Duration(milliseconds: 270),
-                      child: _FitGroup(
-                        title: 'Custom Fee',
+                      child: _MembershipProfileHeader(
+                        gymName: gymName,
+                        branchName: branchName,
+                        status: status,
+                        onQr: widget.onShowQr,
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    _FitAnimatedSection(
+                      delay: const Duration(milliseconds: 70),
+                      child: Row(
                         children: <Widget>[
-                          _FitValueRow(
-                            icon: Icons.local_offer_rounded,
-                            title: 'Custom Fee',
-                            value: _formatCurrency(
-                              customFee['custom_fee_amount'],
+                          Expanded(
+                            child: _FitInfoCell(
+                              title: status,
+                              subtitle: 'Status',
                             ),
                           ),
-                          _FitValueRow(
-                            icon: Icons.add_card_rounded,
-                            title: 'Joining Fee',
-                            value: _formatCurrency(
-                              customFee['custom_joining_fee'],
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: _FitInfoCell(
+                              title: _formatCurrency(membership['amount_paid']),
+                              subtitle: 'Paid',
                             ),
                           ),
-                          _FitValueRow(
-                            icon: Icons.sports_gymnastics_rounded,
-                            title: 'PT Fee',
-                            value: _formatCurrency(customFee['pt_custom_fee']),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: _FitInfoCell(
+                              title: _formatDate(membership['expiry_date']),
+                              subtitle: 'Expiry',
+                            ),
                           ),
                         ],
                       ),
                     ),
+                    const SizedBox(height: 25),
+                    _FitAnimatedSection(
+                      delay: const Duration(milliseconds: 120),
+                      child: _FitGroup(
+                        title: 'Access',
+                        children: <Widget>[
+                          _FitRow(
+                            icon: Icons.qr_code_2_rounded,
+                            title: 'QR Check-in Pass',
+                            subtitle: branchName,
+                            onPressed: widget.onShowQr,
+                          ),
+                          _FitRow(
+                            icon: Icons.fact_check_outlined,
+                            title: 'Attendance History',
+                            subtitle: 'Recent check-ins',
+                            onPressed: widget.onOpenAttendance,
+                          ),
+                          _FitRow(
+                            icon: Icons.person_pin_circle_outlined,
+                            title: 'Assigned Trainer',
+                            subtitle: _stringValue(trainer['name']),
+                            showChevron: false,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 25),
+                    _FitAnimatedSection(
+                      delay: const Duration(milliseconds: 170),
+                      child: _FitGroup(
+                        title: 'Payment',
+                        children: <Widget>[
+                          _FitValueRow(
+                            icon: Icons.payments_rounded,
+                            title: 'Final Payable',
+                            value: _formatCurrency(
+                              membership['final_payable_amount'],
+                            ),
+                          ),
+                          _FitValueRow(
+                            icon: Icons.account_balance_wallet_rounded,
+                            title: 'Due Amount',
+                            value: _formatCurrency(membership['due_amount']),
+                          ),
+                          _FitValueRow(
+                            icon: Icons.event_available_rounded,
+                            title: 'Due Date',
+                            value: _formatDate(membership['due_date']),
+                          ),
+                          _FitValueRow(
+                            icon: Icons.verified_rounded,
+                            title: 'Payment Status',
+                            value: paymentStatus,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 25),
+                    _FitAnimatedSection(
+                      delay: const Duration(milliseconds: 220),
+                      child: _FitGroup(
+                        title: 'Plan',
+                        children: <Widget>[
+                          _FitValueRow(
+                            icon: Icons.card_membership_rounded,
+                            title: 'Plan Name',
+                            value: _stringValue(plan['name']),
+                          ),
+                          _FitValueRow(
+                            icon: Icons.calendar_today_rounded,
+                            title: 'Start Date',
+                            value: _formatDate(membership['start_date']),
+                          ),
+                          _FitValueRow(
+                            icon: Icons.event_busy_rounded,
+                            title: 'Expiry Date',
+                            value: _formatDate(membership['expiry_date']),
+                          ),
+                          _FitValueRow(
+                            icon: Icons.location_city_rounded,
+                            title: 'Branch City',
+                            value: _stringValue(branch['city']),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (hasCustomFee) ...<Widget>[
+                      const SizedBox(height: 25),
+                      _FitAnimatedSection(
+                        delay: const Duration(milliseconds: 270),
+                        child: _FitGroup(
+                          title: 'Custom Fee',
+                          children: <Widget>[
+                            _FitValueRow(
+                              icon: Icons.local_offer_rounded,
+                              title: 'Custom Fee',
+                              value: _formatCurrency(
+                                customFee['custom_fee_amount'],
+                              ),
+                            ),
+                            _FitValueRow(
+                              icon: Icons.add_card_rounded,
+                              title: 'Joining Fee',
+                              value: _formatCurrency(
+                                customFee['custom_joining_fee'],
+                              ),
+                            ),
+                            _FitValueRow(
+                              icon: Icons.sports_gymnastics_rounded,
+                              title: 'PT Fee',
+                              value: _formatCurrency(
+                                customFee['pt_custom_fee'],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
+      ),
     );
   }
 }
@@ -555,118 +567,169 @@ class _MemberAttendanceScreenState extends State<MemberAttendanceScreen> {
     final checkedInToday = _attendanceStatus['checked_in_today'] == true;
     final attendanceEnabled = _attendanceStatus['enabled'] == true;
 
-    return Scaffold(
-      backgroundColor: _FitColor.white,
-      appBar: _FitAppBar(
-        title: 'Activity History',
-        onRefresh: _loading ? null : _load,
-      ),
-      body: _loading
-          ? const _FitLoadingState()
-          : _error != null
-          ? _FitErrorState(message: _error!, onRetry: _load)
-          : RefreshIndicator(
-              onRefresh: _load,
-              color: _FitColor.primaryEnd,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
+    return AppGradientScaffold(
+      title: 'Activity History',
+      body: SafeArea(
+        bottom: false,
+        child: _loading
+            ? const _FitLoadingState()
+            : _error != null
+            ? _FitErrorState(message: _error!, onRetry: _load)
+            : RefreshIndicator(
+                onRefresh: _load,
+                color: AppColors.primaryBright,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                    AppSpacing.lg,
+                    AppSpacing.xl,
+                  ),
+                  children: <Widget>[
+                    _MembershipTopBar(
+                      title: 'Activity History',
+                      subtitle: 'Attendance history and latest check-ins.',
+                      onRefresh: _loading ? null : _load,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    _FitAnimatedSection(
+                      child: _AttendanceHeader(
+                        latestGym: latestGym,
+                        totalVisits: _attendance.length,
+                        checkedInToday: checkedInToday,
+                        enabled: attendanceEnabled,
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    _FitAnimatedSection(
+                      delay: const Duration(milliseconds: 70),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: _FitInfoCell(
+                              title: '${_attendance.length}',
+                              subtitle: 'Visits',
+                            ),
+                          ),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: _FitInfoCell(
+                              title: '$qrCount',
+                              subtitle: 'QR',
+                            ),
+                          ),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: _FitInfoCell(
+                              title: checkedInToday ? 'Yes' : 'No',
+                              subtitle: 'Today',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 25),
+                    _FitAnimatedSection(
+                      delay: const Duration(milliseconds: 120),
+                      child: _FitGroup(
+                        title: 'Recent Check-ins',
+                        children: _attendance.isEmpty
+                            ? <Widget>[
+                                const _FitInlineEmpty(
+                                  icon: Icons.fact_check_outlined,
+                                  title: 'No attendance history yet',
+                                  message:
+                                      'Your gym check-ins will appear here after your first visit.',
+                                ),
+                              ]
+                            : _attendance
+                                  .map(
+                                    (entry) =>
+                                        _AttendanceHistoryRow(entry: entry),
+                                  )
+                                  .toList(),
+                      ),
+                    ),
+                  ],
                 ),
-                padding: const EdgeInsets.fromLTRB(25, 15, 25, 32),
-                children: <Widget>[
-                  _FitAnimatedSection(
-                    child: _AttendanceHeader(
-                      latestGym: latestGym,
-                      totalVisits: _attendance.length,
-                      checkedInToday: checkedInToday,
-                      enabled: attendanceEnabled,
-                    ),
-                  ),
-                  const SizedBox(height: 15),
-                  _FitAnimatedSection(
-                    delay: const Duration(milliseconds: 70),
-                    child: Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: _FitInfoCell(
-                            title: '${_attendance.length}',
-                            subtitle: 'Visits',
-                          ),
-                        ),
-                        const SizedBox(width: 15),
-                        Expanded(
-                          child: _FitInfoCell(
-                            title: '$qrCount',
-                            subtitle: 'QR',
-                          ),
-                        ),
-                        const SizedBox(width: 15),
-                        Expanded(
-                          child: _FitInfoCell(
-                            title: checkedInToday ? 'Yes' : 'No',
-                            subtitle: 'Today',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 25),
-                  _FitAnimatedSection(
-                    delay: const Duration(milliseconds: 120),
-                    child: _FitGroup(
-                      title: 'Recent Check-ins',
-                      children: _attendance.isEmpty
-                          ? <Widget>[
-                              const _FitInlineEmpty(
-                                icon: Icons.fact_check_outlined,
-                                title: 'No attendance history yet',
-                                message:
-                                    'Your gym check-ins will appear here after your first visit.',
-                              ),
-                            ]
-                          : _attendance
-                                .map(
-                                  (entry) =>
-                                      _AttendanceHistoryRow(entry: entry),
-                                )
-                                .toList(),
-                    ),
-                  ),
-                ],
               ),
-            ),
+      ),
     );
   }
 }
 
-class _FitAppBar extends StatelessWidget implements PreferredSizeWidget {
-  const _FitAppBar({required this.title, required this.onRefresh});
+class _MembershipTopBar extends StatelessWidget {
+  const _MembershipTopBar({
+    required this.title,
+    required this.subtitle,
+    required this.onRefresh,
+  });
 
   final String title;
+  final String subtitle;
   final VoidCallback? onRefresh;
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
-
-  @override
   Widget build(BuildContext context) {
-    return AppBar(
-      backgroundColor: _FitColor.white,
-      centerTitle: true,
-      elevation: 0,
-      title: Text(
-        title,
-        style: TextStyle(
-          color: _FitColor.black,
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
+    return Row(
+      children: [
+        InkWell(
+          onTap: () => Navigator.of(context).maybePop(),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.stroke),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.arrow_back_rounded,
+              color: AppColors.textPrimary,
+              size: 20,
+            ),
+          ),
         ),
-      ),
-      actions: <Widget>[
-        Padding(
-          padding: const EdgeInsets.only(right: 16),
-          child: _FitIconButton(icon: Icons.refresh_rounded, onTap: onRefresh),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+              ),
+            ],
+          ),
         ),
+        if (onRefresh != null) ...[
+          const SizedBox(width: AppSpacing.md),
+          MemberHeaderActionButton(
+            icon: Icons.refresh_rounded,
+            onTap: onRefresh!,
+          ),
+        ],
       ],
     );
   }
@@ -718,59 +781,71 @@ class _MembershipProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Container(
-          width: 54,
-          height: 54,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(colors: _FitColor.primaryGradient),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: _FitColor.primaryEnd.withValues(alpha: 0.22),
-                blurRadius: 18,
-                offset: const Offset(0, 10),
+    return PremiumCard(
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceSoft,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppColors.stroke),
+            ),
+            child: const Icon(
+              Icons.fitness_center_rounded,
+              color: AppColors.primaryBright,
+              size: 26,
+            ),
+          ),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  gymName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  '$branchName • $status',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          InkWell(
+            onTap: onQr,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceSoft,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.stroke),
               ),
-            ],
-          ),
-          child: const Icon(
-            Icons.fitness_center_rounded,
-            color: Colors.white,
-            size: 26,
-          ),
-        ),
-        const SizedBox(width: 15),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                gymName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: _FitColor.black,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
+              child: Text(
+                'QR',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              const SizedBox(height: 5),
-              Text(
-                '$branchName • $status',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: _FitColor.gray,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-        _FitRoundButton(title: 'QR', width: 76, height: 34, onPressed: onQr),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -790,59 +865,60 @@ class _AttendanceHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Container(
-          width: 54,
-          height: 54,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(colors: _FitColor.secondaryGradient),
-            borderRadius: BorderRadius.circular(18),
+    return PremiumCard(
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceSoft,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppColors.stroke),
+            ),
+            child: Icon(
+              checkedInToday
+                  ? Icons.verified_rounded
+                  : enabled
+                  ? Icons.directions_walk_rounded
+                  : Icons.lock_outline_rounded,
+              color: AppColors.primaryBright,
+              size: 28,
+            ),
           ),
-          child: Icon(
-            checkedInToday
-                ? Icons.verified_rounded
-                : enabled
-                ? Icons.directions_walk_rounded
-                : Icons.lock_outline_rounded,
-            color: Colors.white,
-            size: 28,
-          ),
-        ),
-        const SizedBox(width: 15),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                'Attendance',
-                style: TextStyle(
-                  color: _FitColor.black,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Attendance',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                enabled
-                    ? checkedInToday
-                          ? 'Checked in today at $latestGym'
-                          : totalVisits == 0
-                          ? 'Ready for your first check-in'
-                          : 'Latest visit at $latestGym'
-                    : 'Attendance unlocks with active gym access',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: _FitColor.gray,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+                const SizedBox(height: 5),
+                Text(
+                  enabled
+                      ? checkedInToday
+                            ? 'Checked in today at $latestGym'
+                            : totalVisits == 0
+                            ? 'Ready for your first check-in'
+                            : 'Latest visit at $latestGym'
+                      : 'Attendance unlocks with active gym access',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -855,34 +931,19 @@ class _FitInfoCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 72,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: BoxDecoration(
-        color: _FitColor.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 2,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
+    return PremiumCard(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
-          ShaderMask(
-            blendMode: BlendMode.srcIn,
-            shaderCallback: (bounds) => LinearGradient(
-              colors: _FitColor.primaryGradient,
-            ).createShader(bounds),
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 5),
@@ -890,10 +951,9 @@ class _FitInfoCell extends StatelessWidget {
             subtitle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: _FitColor.gray,
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -910,28 +970,16 @@ class _FitGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
-      decoration: BoxDecoration(
-        color: _FitColor.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 2,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
+    return PremiumCard(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
             title,
-            style: TextStyle(
-              color: _FitColor.black,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 8),
@@ -976,10 +1024,9 @@ class _FitRow extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: _FitColor.black,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   if (subtitle != null) ...<Widget>[
@@ -989,9 +1036,9 @@ class _FitRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: _FitColor.gray,
+                        color: AppColors.textSecondary,
                         fontSize: 11,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -1001,7 +1048,7 @@ class _FitRow extends StatelessWidget {
             if (showChevron)
               Icon(
                 Icons.chevron_right_rounded,
-                color: _FitColor.gray,
+                color: AppColors.textMuted,
                 size: 20,
               ),
           ],
@@ -1035,10 +1082,9 @@ class _FitValueRow extends StatelessWidget {
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: _FitColor.black,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -1049,10 +1095,9 @@ class _FitValueRow extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.right,
-              style: TextStyle(
-                color: _FitColor.gray,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -1100,9 +1145,8 @@ class _AttendanceHistoryRow extends StatelessWidget {
                   gymName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: _FitColor.black,
-                    fontSize: 12,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -1111,10 +1155,9 @@ class _AttendanceHistoryRow extends StatelessWidget {
                   _formatDateTime(entry['checked_in_at']),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: _FitColor.gray,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -1153,9 +1196,8 @@ class _FitInlineEmpty extends StatelessWidget {
               children: <Widget>[
                 Text(
                   title,
-                  style: TextStyle(
-                    color: _FitColor.black,
-                    fontSize: 12,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -1164,10 +1206,9 @@ class _FitInlineEmpty extends StatelessWidget {
                   message,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: _FitColor.gray,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -1190,17 +1231,14 @@ class _FitMethodPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: secondary
-              ? _FitColor.secondaryGradient
-              : _FitColor.primaryGradient,
-        ),
+        color: secondary ? AppColors.surfaceSoft : AppColors.primaryBright,
         borderRadius: BorderRadius.circular(999),
+        border: secondary ? Border.all(color: AppColors.stroke) : null,
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: secondary ? AppColors.textPrimary : Colors.white,
           fontSize: 9,
           fontWeight: FontWeight.w800,
           letterSpacing: 0.4,
@@ -1222,56 +1260,24 @@ class _FitRowIcon extends StatelessWidget {
       width: 30,
       height: 30,
       decoration: BoxDecoration(
-        color: secondary
-            ? _FitColor.secondaryStart.withValues(alpha: 0.16)
-            : _FitColor.lightGray,
+        color: secondary ? AppColors.surfaceSoft : AppColors.surfaceSoft,
         borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.stroke),
       ),
       child: Icon(
         icon,
-        color: secondary ? _FitColor.secondaryEnd : _FitColor.primaryEnd,
+        color: secondary ? AppColors.textSecondary : AppColors.primaryBright,
         size: 16,
       ),
     );
   }
 }
 
-class _FitIconButton extends StatelessWidget {
-  const _FitIconButton({required this.icon, required this.onTap});
-
-  final IconData icon;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: _FitColor.lightGray,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(icon, color: _FitColor.black, size: 18),
-      ),
-    );
-  }
-}
-
 class _FitRoundButton extends StatelessWidget {
-  const _FitRoundButton({
-    required this.title,
-    required this.onPressed,
-    this.width = 120,
-    this.height = 40,
-  });
+  const _FitRoundButton({required this.title, required this.onPressed});
 
   final String title;
   final VoidCallback? onPressed;
-  final double width;
-  final double height;
 
   @override
   Widget build(BuildContext context) {
@@ -1279,26 +1285,20 @@ class _FitRoundButton extends StatelessWidget {
       opacity: onPressed == null ? 0.55 : 1,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(99),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
-          width: width,
-          height: height,
+          width: 120,
+          height: 40,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            gradient: LinearGradient(colors: _FitColor.primaryGradient),
-            borderRadius: BorderRadius.circular(99),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: _FitColor.primaryEnd.withValues(alpha: 0.22),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
+            color: AppColors.surfaceSoft,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.stroke),
           ),
           child: Text(
             title,
             style: const TextStyle(
-              color: Colors.white,
+              color: AppColors.textPrimary,
               fontSize: 12,
               fontWeight: FontWeight.w700,
             ),
@@ -1354,8 +1354,9 @@ class _FitSkeletonBlock extends StatelessWidget {
       child: Container(
         height: height,
         decoration: BoxDecoration(
-          color: _FitColor.lightGray,
-          borderRadius: BorderRadius.circular(15),
+          color: AppColors.surfaceSoft,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.stroke),
         ),
       ),
     );
@@ -1401,37 +1402,26 @@ class _FitEmptyState extends StatelessWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(25, 80, 25, 32),
       children: <Widget>[
-        Container(
+        PremiumCard(
           padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: _FitColor.white,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 2,
-                offset: const Offset(0, 1),
-              ),
-            ],
-          ),
           child: Column(
             children: <Widget>[
               Container(
                 width: 64,
                 height: 64,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: _FitColor.primaryGradient),
+                  color: AppColors.surfaceSoft,
                   borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: AppColors.stroke),
                 ),
-                child: Icon(icon, color: Colors.white, size: 32),
+                child: Icon(icon, color: AppColors.primaryBright, size: 32),
               ),
               const SizedBox(height: 18),
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: _FitColor.black,
-                  fontSize: 16,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppColors.textPrimary,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -1439,10 +1429,9 @@ class _FitEmptyState extends StatelessWidget {
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: _FitColor.gray,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
                   height: 1.4,
                 ),
               ),
@@ -1456,23 +1445,6 @@ class _FitEmptyState extends StatelessWidget {
       ],
     );
   }
-}
-
-class _FitColor {
-  static const Color black = Color(0xFF1D1617);
-  static const Color gray = Color(0xFF786F72);
-  static const Color white = Colors.white;
-  static const Color lightGray = Color(0xFFF7F8F8);
-  static const Color primaryStart = Color(0xFF9DCEFF);
-  static const Color primaryEnd = Color(0xFF92A3FD);
-  static const Color secondaryStart = Color(0xFFEEA4CE);
-  static const Color secondaryEnd = Color(0xFFC58BF2);
-
-  static const List<Color> primaryGradient = <Color>[primaryStart, primaryEnd];
-  static const List<Color> secondaryGradient = <Color>[
-    secondaryStart,
-    secondaryEnd,
-  ];
 }
 
 class _MemberStatusSkeleton extends StatelessWidget {

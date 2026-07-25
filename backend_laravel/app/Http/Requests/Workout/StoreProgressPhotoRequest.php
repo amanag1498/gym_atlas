@@ -16,7 +16,8 @@ class StoreProgressPhotoRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'photo_url' => ['required', 'url', 'max:2048'],
+            'photo_url' => ['nullable', 'url', 'max:2048', 'required_without:photo'],
+            'photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096', 'required_without:photo_url'],
             'photo_type' => ['nullable', Rule::in(array_column(ProgressPhotoType::cases(), 'value'))],
             'album_key' => ['nullable', 'string', 'max:255'],
             'captured_on' => ['required', 'date'],

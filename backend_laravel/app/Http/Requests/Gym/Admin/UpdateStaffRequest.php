@@ -5,7 +5,6 @@ namespace App\Http\Requests\Gym\Admin;
 use App\Enums\RoleName;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Illuminate\Support\Facades\Schema;
 
 class UpdateStaffRequest extends FormRequest
 {
@@ -21,8 +20,10 @@ class UpdateStaffRequest extends FormRequest
         return [
             'name' => ['sometimes', 'string', 'max:160'],
             'email' => ['sometimes', 'email', 'max:255', Rule::unique('users', 'email')->ignore($staffId)],
+            'phone' => ['nullable', 'string', 'max:30'],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
             'avatar' => ['nullable', 'url', 'max:2048'],
+            'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
             'role' => ['sometimes', Rule::in([RoleName::BranchManager->value, RoleName::GymStaff->value])],
             'branch_ids' => ['nullable', 'array'],
@@ -39,9 +40,7 @@ class UpdateStaffRequest extends FormRequest
                 'view_reports',
                 'manage_staff',
             ])],
-        ] + (Schema::hasColumn('users', 'phone') ? [
-                'phone' => ['nullable', 'string', 'max:30'],
-        ] : []);
+        ];
     }
 
     protected function prepareForValidation(): void

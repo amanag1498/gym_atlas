@@ -7,6 +7,7 @@ import '../../core/models.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/premium_card.dart';
 import 'member_repository.dart';
 import 'member_trial_requests_screen.dart';
 
@@ -348,23 +349,11 @@ class _MemberGymDiscoveryScreenState extends State<MemberGymDiscoveryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final firstName = firstNameFromFullName(widget.currentUser.name);
+
     return AppGradientScaffold(
       title: 'Nearby Gyms',
       subtitle: 'Discover, compare and shortlist your next training space',
-      actions: [
-        IconButton(
-          onPressed: _loading ? null : _load,
-          icon: const Icon(Icons.refresh_rounded),
-        ),
-        IconButton(
-          onPressed: () => widget.onOpenTrialRequests(initialStatusTab: true),
-          icon: const Icon(Icons.flag_outlined),
-        ),
-        IconButton(
-          onPressed: _openFilters,
-          icon: const Icon(Icons.tune_rounded),
-        ),
-      ],
       body: _loading
           ? const _DiscoverySkeleton()
           : _error != null
@@ -374,6 +363,26 @@ class _MemberGymDiscoveryScreenState extends State<MemberGymDiscoveryScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 children: [
+                  MemberPageGreetingHeader(
+                    firstName: firstName,
+                    subtitle: 'Discovery shortlist ready for today\'s session.',
+                    actions: [
+                      MemberHeaderActionButton(
+                        icon: Icons.refresh_rounded,
+                        onTap: _load,
+                      ),
+                      MemberHeaderActionButton(
+                        icon: Icons.flag_outlined,
+                        onTap: () =>
+                            widget.onOpenTrialRequests(initialStatusTab: true),
+                      ),
+                      MemberHeaderActionButton(
+                        icon: Icons.tune_rounded,
+                        onTap: _openFilters,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
                   _DiscoveryHeroPanel(
                     gymCount: _gyms.length,
                     savedCount: _savedGyms.length,
@@ -518,214 +527,220 @@ class _DiscoveryHeroPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.96, end: 1),
-      duration: const Duration(milliseconds: 420),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) =>
-          Transform.scale(scale: value, child: child),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(30),
       child: Container(
-        padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(32),
-          gradient: const LinearGradient(
-            colors: [Color(0xFF9DCEFF), Color(0xFF92A3FD), Color(0xFFC58BF2)],
+          gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
+            colors: [
+              Colors.white.withValues(alpha: 0.98),
+              const Color(0xFFF6FBFF),
+              const Color(0xFFF8FAFC),
+            ],
           ),
+          border: Border.all(color: AppColors.stroke.withValues(alpha: 0.8)),
           boxShadow: [
             BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.24),
-              blurRadius: 26,
-              offset: const Offset(0, 16),
+              color: AppColors.shadow.withValues(alpha: 0.06),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
         child: Stack(
           children: [
             Positioned(
-              right: -34,
-              top: -44,
-              child: _DiscoveryOrb(
-                size: 132,
-                color: Colors.white.withValues(alpha: 0.20),
+              top: -32,
+              right: -26,
+              child: Container(
+                width: 138,
+                height: 138,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primary.withValues(alpha: 0.10),
+                ),
               ),
             ),
-            Positioned(
-              right: 44,
-              bottom: 58,
-              child: _DiscoveryOrb(
-                size: 46,
-                color: Colors.white.withValues(alpha: 0.16),
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Find your training floor',
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Compare gyms, trials, pricing, and facilities in one clean view.',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.88),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                        ],
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 7,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.68),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(color: AppColors.stroke),
+                              ),
+                              child: Text(
+                                'DISCOVERY',
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(
+                                      color: AppColors.primaryBright,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.8,
+                                    ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Find the right training floor',
+                              style: Theme.of(context).textTheme.headlineSmall
+                                  ?.copyWith(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -0.9,
+                                    height: 0.98,
+                                  ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Compare gyms, pricing, trials, and facilities in the same premium flow as the rest of the app.',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.4,
+                                  ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    _DiscoveryHeaderBadge(
-                      value: '$gymCount',
-                      label: 'gyms',
-                      icon: Icons.storefront_rounded,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _DiscoveryHeroStat(
-                        value: '$savedCount',
-                        label: 'Saved',
-                        icon: Icons.bookmark_rounded,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _DiscoveryHeroStat(
-                        value: '$filterCount',
-                        label: 'Filters',
-                        icon: Icons.tune_rounded,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _DiscoveryHeroStat(
-                        value: filters.openNow ? 'Now' : 'All',
-                        label: 'Open',
-                        icon: Icons.schedule_rounded,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.12),
-                        blurRadius: 18,
-                        offset: const Offset(0, 10),
+                      const SizedBox(width: 12),
+                      _DiscoveryHeroBadge(
+                        value: '$gymCount',
+                        label: 'gyms',
+                        icon: Icons.storefront_rounded,
                       ),
                     ],
                   ),
-                  child: TextField(
-                    controller: searchController,
-                    onSubmitted: (_) => onSearch(),
-                    decoration: InputDecoration(
-                      hintText: 'Search gyms, city, or facility',
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      prefixIcon: const Icon(Icons.search_rounded),
-                      suffixIcon: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (searchController.text.trim().isNotEmpty)
+                  const SizedBox(height: 18),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _DiscoveryHeroChip(
+                        icon: Icons.bookmark_rounded,
+                        label: '$savedCount saved',
+                      ),
+                      _DiscoveryHeroChip(
+                        icon: Icons.tune_rounded,
+                        label: '$filterCount filters',
+                      ),
+                      _DiscoveryHeroChip(
+                        icon: Icons.schedule_rounded,
+                        label: filters.openNow ? 'Open now' : 'All hours',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: AppColors.stroke),
+                    ),
+                    child: TextField(
+                      controller: searchController,
+                      onSubmitted: (_) => onSearch(),
+                      decoration: InputDecoration(
+                        hintText: 'Search gyms, city, or facility',
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        suffixIcon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (searchController.text.trim().isNotEmpty)
+                              IconButton(
+                                onPressed: onClearSearch,
+                                icon: const Icon(Icons.close_rounded),
+                              ),
                             IconButton(
-                              onPressed: onClearSearch,
-                              icon: const Icon(Icons.close_rounded),
+                              onPressed: onSearch,
+                              icon: const Icon(Icons.arrow_forward_rounded),
                             ),
-                          IconButton(
-                            onPressed: onSearch,
-                            icon: const Icon(Icons.arrow_forward_rounded),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _DiscoveryFilterPill(
-                      label: filters.hasActiveFilters
-                          ? '$filterCount filters applied'
-                          : 'All gyms',
-                      icon: Icons.filter_alt_rounded,
-                      onTap: onOpenFilters,
-                    ),
-                    if (filters.city.isNotEmpty)
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
                       _DiscoveryFilterPill(
-                        label: filters.city,
-                        icon: Icons.location_city_rounded,
+                        label: filters.hasActiveFilters
+                            ? '$filterCount filters applied'
+                            : 'All gyms',
+                        icon: Icons.filter_alt_rounded,
                         onTap: onOpenFilters,
                       ),
-                    if (filters.trialAvailable)
-                      _DiscoveryFilterPill(
-                        label: 'Trial available',
-                        icon: Icons.flash_on_rounded,
-                        onTap: onOpenFilters,
+                      if (filters.city.isNotEmpty)
+                        _DiscoveryFilterPill(
+                          label: filters.city,
+                          icon: Icons.location_city_rounded,
+                          onTap: onOpenFilters,
+                        ),
+                      if (filters.trialAvailable)
+                        _DiscoveryFilterPill(
+                          label: 'Trial available',
+                          icon: Icons.flash_on_rounded,
+                          onTap: onOpenFilters,
+                        ),
+                      if (filters.verifiedOnly)
+                        _DiscoveryFilterPill(
+                          label: 'Verified',
+                          icon: Icons.verified_rounded,
+                          onTap: onOpenFilters,
+                        ),
+                      if (filters.featuredOnly)
+                        _DiscoveryFilterPill(
+                          label: 'Featured',
+                          icon: Icons.workspace_premium_rounded,
+                          onTap: onOpenFilters,
+                        ),
+                      if (filters.openNow)
+                        _DiscoveryFilterPill(
+                          label: 'Open now',
+                          icon: Icons.schedule_rounded,
+                          onTap: onOpenFilters,
+                        ),
+                      _DiscoveryLocationPill(
+                        enabled: locationEnabled,
+                        loading: locationLoading,
+                        error: locationError,
+                        distanceKm: nearbyDistanceKm,
+                        onUseLocation: onUseLocation,
+                        onClearLocation: onClearLocation,
                       ),
-                    if (filters.verifiedOnly)
-                      _DiscoveryFilterPill(
-                        label: 'Verified',
-                        icon: Icons.verified_rounded,
-                        onTap: onOpenFilters,
-                      ),
-                    if (filters.featuredOnly)
-                      _DiscoveryFilterPill(
-                        label: 'Featured',
-                        icon: Icons.workspace_premium_rounded,
-                        onTap: onOpenFilters,
-                      ),
-                    if (filters.openNow)
-                      _DiscoveryFilterPill(
-                        label: 'Open now',
-                        icon: Icons.schedule_rounded,
-                        onTap: onOpenFilters,
-                      ),
-                    _DiscoveryLocationPill(
-                      enabled: locationEnabled,
-                      loading: locationLoading,
-                      error: locationError,
-                      distanceKm: nearbyDistanceKm,
-                      onUseLocation: onUseLocation,
-                      onClearLocation: onClearLocation,
+                    ],
+                  ),
+                  if (locationEnabled) ...[
+                    const SizedBox(height: 12),
+                    _NearbyDistanceRail(
+                      options: nearbyDistanceOptions,
+                      selected: nearbyDistanceKm,
+                      onChanged: onDistanceChanged,
                     ),
                   ],
-                ),
-                if (locationEnabled) ...[
-                  const SizedBox(height: 12),
-                  _NearbyDistanceRail(
-                    options: nearbyDistanceOptions,
-                    selected: nearbyDistanceKm,
-                    onChanged: onDistanceChanged,
-                  ),
                 ],
-              ],
+              ),
             ),
           ],
         ),
@@ -754,7 +769,7 @@ class _NearbyDistanceRail extends StatelessWidget {
           Text(
             'Search radius',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Colors.white.withValues(alpha: 0.82),
+              color: AppColors.textSecondary,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -772,18 +787,14 @@ class _NearbyDistanceRail extends StatelessWidget {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: active
-                        ? Colors.white
-                        : Colors.white.withValues(alpha: 0.18),
+                    color: active ? AppColors.primary : AppColors.surfaceSoft,
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.24),
-                    ),
+                    border: Border.all(color: AppColors.stroke),
                   ),
                   child: Text(
                     '${distance.toStringAsFixed(0)} km',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: active ? AppColors.primary : Colors.white,
+                      color: active ? Colors.white : AppColors.textPrimary,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -835,14 +846,10 @@ class _DiscoveryLocationPill extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
-          color: enabled
-              ? Colors.white
-              : Colors.white.withValues(alpha: error == null ? 0.20 : 0.16),
+          color: enabled ? AppColors.primary : AppColors.surfaceSoft,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: enabled
-                ? Colors.white
-                : Colors.white.withValues(alpha: 0.22),
+            color: enabled ? AppColors.primary : AppColors.stroke,
           ),
         ),
         child: Row(
@@ -855,21 +862,21 @@ class _DiscoveryLocationPill extends StatelessWidget {
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
                   valueColor: AlwaysStoppedAnimation<Color>(
-                    enabled ? AppColors.primary : Colors.white,
+                    enabled ? Colors.white : AppColors.primaryBright,
                   ),
                 ),
               )
             else
               Icon(
                 icon,
-                color: enabled ? AppColors.primary : Colors.white,
+                color: enabled ? Colors.white : AppColors.primaryBright,
                 size: 15,
               ),
             const SizedBox(width: 6),
             Text(
               label,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: enabled ? AppColors.primary : Colors.white,
+                color: enabled ? Colors.white : AppColors.textPrimary,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -877,7 +884,7 @@ class _DiscoveryLocationPill extends StatelessWidget {
               const SizedBox(width: 6),
               Icon(
                 Icons.close_rounded,
-                color: AppColors.primary.withValues(alpha: 0.72),
+                color: Colors.white.withValues(alpha: 0.82),
                 size: 14,
               ),
             ],
@@ -888,8 +895,8 @@ class _DiscoveryLocationPill extends StatelessWidget {
   }
 }
 
-class _DiscoveryHeaderBadge extends StatelessWidget {
-  const _DiscoveryHeaderBadge({
+class _DiscoveryHeroBadge extends StatelessWidget {
+  const _DiscoveryHeroBadge({
     required this.value,
     required this.label,
     required this.icon,
@@ -905,27 +912,27 @@ class _DiscoveryHeaderBadge extends StatelessWidget {
       width: 82,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.20),
+        color: AppColors.surfaceSoft,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+        border: Border.all(color: AppColors.stroke),
       ),
       child: Column(
         children: [
-          Icon(icon, color: Colors.white, size: 20),
+          Icon(icon, color: AppColors.primaryBright, size: 20),
           const SizedBox(height: 6),
           Text(
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Colors.white,
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.w900,
             ),
           ),
           Text(
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Colors.white.withValues(alpha: 0.78),
+              color: AppColors.textSecondary,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -935,52 +942,31 @@ class _DiscoveryHeaderBadge extends StatelessWidget {
   }
 }
 
-class _DiscoveryHeroStat extends StatelessWidget {
-  const _DiscoveryHeroStat({
-    required this.value,
-    required this.label,
-    required this.icon,
-  });
+class _DiscoveryHeroChip extends StatelessWidget {
+  const _DiscoveryHeroChip({required this.icon, required this.label});
 
-  final String value;
-  final String label;
   final IconData icon;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(18),
+        color: AppColors.surfaceSoft,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.stroke),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.white, size: 17),
+          Icon(icon, color: AppColors.primaryBright, size: 15),
           const SizedBox(width: 7),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.78),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w900,
             ),
           ),
         ],
@@ -1002,24 +988,25 @@ class _DiscoveryFilterPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.20),
+          color: AppColors.surfaceSoft,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
+          border: Border.all(color: AppColors.stroke),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.white, size: 15),
+            Icon(icon, color: AppColors.primaryBright, size: 15),
             const SizedBox(width: 6),
             Text(
               label,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: Colors.white,
+                color: AppColors.textPrimary,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -1039,22 +1026,12 @@ class _SavedGymPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final heroImage = _gymHeroImage(gym);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 260,
+    return SizedBox(
+      width: 260,
+      child: PremiumCard(
+        onTap: onTap,
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.11),
-              blurRadius: 20,
-              offset: const Offset(0, 12),
-            ),
-          ],
-        ),
+        glowColor: AppColors.primaryBright,
         child: Row(
           children: [
             AppNetworkImage(
@@ -1072,7 +1049,7 @@ class _SavedGymPill extends StatelessWidget {
                   const StatusBadge(
                     label: 'Saved',
                     icon: Icons.bookmark_rounded,
-                    color: Color(0xFF92A3FD),
+                    color: AppColors.primaryBright,
                   ),
                   const Spacer(),
                   Text(
@@ -1134,8 +1111,8 @@ class _DiscoverySectionTitle extends StatelessWidget {
           Text(
             action,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w900,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w800,
             ),
           )
         else
@@ -1162,32 +1139,19 @@ class _DiscoveryEmptyPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
+    return PremiumCard(
       padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.10),
-            blurRadius: 24,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
       child: Column(
         children: [
           Container(
             width: 58,
             height: 58,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
-              ),
+              color: AppColors.surfaceSoft,
               borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: AppColors.stroke),
             ),
-            child: Icon(icon, color: Colors.white),
+            child: Icon(icon, color: AppColors.primaryBright),
           ),
           const SizedBox(height: 14),
           Text(
@@ -1209,22 +1173,6 @@ class _DiscoveryEmptyPanel extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _DiscoveryOrb extends StatelessWidget {
-  const _DiscoveryOrb({required this.size, required this.color});
-
-  final double size;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 }
@@ -1870,18 +1818,9 @@ class _NearbyGymCard extends StatelessWidget {
     final isOpen = gym['is_open_now'] == true;
     final heroImage = _gymHeroImage(gym);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.12),
-            blurRadius: 24,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
+    return PremiumCard(
+      padding: EdgeInsets.zero,
+      borderRadius: 28,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1889,15 +1828,15 @@ class _NearbyGymCard extends StatelessWidget {
             children: [
               AppNetworkImage(
                 imageUrl: heroImage,
-                height: 190,
+                height: 176,
                 width: double.infinity,
-                borderRadius: 32,
+                borderRadius: 28,
                 placeholderIcon: Icons.storefront_rounded,
               ),
               Positioned.fill(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(32),
+                    borderRadius: BorderRadius.circular(28),
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
@@ -1977,7 +1916,7 @@ class _NearbyGymCard extends StatelessWidget {
                         label: showPricing
                             ? 'From ${_money(feeSummary['min_price'])}'
                             : 'Pricing hidden',
-                        color: const Color(0xFF92A3FD),
+                        color: AppColors.primaryBright,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -1988,7 +1927,7 @@ class _NearbyGymCard extends StatelessWidget {
                             ? 'Trial available'
                             : 'No trial',
                         color: gym['trial_available'] == true
-                            ? const Color(0xFF40D9B8)
+                            ? AppColors.success
                             : AppColors.textSecondary,
                       ),
                     ),
@@ -2004,7 +1943,7 @@ class _NearbyGymCard extends StatelessWidget {
                         const StatusBadge(
                           label: 'Verified',
                           icon: Icons.verified_rounded,
-                          color: Color(0xFF92A3FD),
+                          color: AppColors.primaryBright,
                         ),
                       ...facilities.map(
                         (facility) => StatusBadge(
@@ -2016,11 +1955,39 @@ class _NearbyGymCard extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 14),
-                GradientButton(
-                  onPressed: onTap,
-                  label: 'View Details',
-                  icon: Icons.arrow_forward_rounded,
-                  expanded: true,
+                InkWell(
+                  onTap: onTap,
+                  borderRadius: BorderRadius.circular(18),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceSoft,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: AppColors.stroke),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          'View Details',
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                        const Spacer(),
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          color: AppColors.primaryBright,
+                          size: 18,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -2048,18 +2015,9 @@ class _GymDetailHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(34),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.14),
-            blurRadius: 26,
-            offset: const Offset(0, 16),
-          ),
-        ],
-      ),
+    return PremiumCard(
+      padding: EdgeInsets.zero,
+      borderRadius: 30,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2067,15 +2025,15 @@ class _GymDetailHero extends StatelessWidget {
             children: [
               AppNetworkImage(
                 imageUrl: imageUrl,
-                height: 250,
+                height: 224,
                 width: double.infinity,
-                borderRadius: 34,
+                borderRadius: 30,
                 placeholderIcon: Icons.storefront_rounded,
               ),
               Positioned.fill(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(34),
+                    borderRadius: BorderRadius.circular(30),
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
@@ -2099,13 +2057,13 @@ class _GymDetailHero extends StatelessWidget {
                       const StatusBadge(
                         label: 'Verified',
                         icon: Icons.verified_rounded,
-                        color: Color(0xFF92A3FD),
+                        color: AppColors.primaryBright,
                       ),
                     if (detail['is_featured'] == true)
                       const StatusBadge(
                         label: 'Featured',
                         icon: Icons.workspace_premium_rounded,
-                        color: Color(0xFFC58BF2),
+                        color: AppColors.accentPurple,
                       ),
                     StatusBadge(
                       label: isOpen ? 'Open now' : 'Closed',
@@ -2164,7 +2122,7 @@ class _GymDetailHero extends StatelessWidget {
                         label: canShowPricing && feeSummary.isNotEmpty
                             ? 'Starts ${_money(feeSummary['min_price'])}'
                             : 'Pricing hidden',
-                        color: const Color(0xFF92A3FD),
+                        color: AppColors.primaryBright,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -2172,7 +2130,7 @@ class _GymDetailHero extends StatelessWidget {
                       child: _DiscoveryCardPill(
                         icon: Icons.schedule_rounded,
                         label: _timingSummary(detail['timings']),
-                        color: const Color(0xFF40D9B8),
+                        color: AppColors.success,
                       ),
                     ),
                   ],
@@ -2181,7 +2139,7 @@ class _GymDetailHero extends StatelessWidget {
                 _DiscoveryCardPill(
                   icon: Icons.event_busy_rounded,
                   label: _weeklyOffSummary(detail['weekly_off']),
-                  color: const Color(0xFFC58BF2),
+                  color: AppColors.textSecondary,
                 ),
                 if ((detail['description']?.toString() ?? '')
                     .trim()
@@ -2216,13 +2174,13 @@ class _DiscoverySaveButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white.withValues(alpha: 0.92),
+      color: AppColors.surface,
       shape: const CircleBorder(),
       child: IconButton(
         onPressed: onPressed,
         icon: Icon(
           isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-          color: AppColors.primary,
+          color: AppColors.primaryBright,
         ),
       ),
     );
@@ -2245,8 +2203,9 @@ class _DiscoveryCardPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.11),
+        color: AppColors.surfaceSoft,
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.stroke),
       ),
       child: Row(
         children: [
@@ -2551,19 +2510,8 @@ class _DetailSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return PremiumCard(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.10),
-            blurRadius: 24,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2601,8 +2549,9 @@ class _PlanCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: const Color(0xFFF7F8F8),
+        borderRadius: BorderRadius.circular(20),
+        color: AppColors.surfaceSoft,
+        border: Border.all(color: AppColors.stroke),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2666,8 +2615,9 @@ class _BranchCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: const Color(0xFFF7F8F8),
+        borderRadius: BorderRadius.circular(20),
+        color: AppColors.surfaceSoft,
+        border: Border.all(color: AppColors.stroke),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2738,8 +2688,9 @@ class _TrainerCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: const Color(0xFFF7F8F8),
+        borderRadius: BorderRadius.circular(20),
+        color: AppColors.surfaceSoft,
+        border: Border.all(color: AppColors.stroke),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2813,15 +2764,9 @@ class _FilterSwitchTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.stroke),
       ),
       child: SwitchListTile.adaptive(
         value: value,

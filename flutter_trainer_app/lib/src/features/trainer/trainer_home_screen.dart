@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -208,10 +209,13 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         members: _members,
         plans: _plans,
         notifications: _notifications,
+        trialRequests: _trialRequests,
+        chatConversations: _chatConversations,
         onRefresh: _load,
         onEditProfile: _openProfileEditSheet,
         onOpenMembers: () => setState(() => _index = 1),
         onOpenWorkouts: () => setState(() => _index = 2),
+        onOpenChat: () => setState(() => _index = 3),
         onOpenNotifications: () => setState(() => _index = 4),
         onOpenSettings: _openSettingsScreen,
         onOpenTasks: _openTasksScreen,
@@ -225,7 +229,6 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       ),
       _MemberPage(
         members: _members,
-        templates: _templates,
         plans: _plans,
         onRefresh: _load,
         onOpenMember: _openMemberDetailSheet,
@@ -261,6 +264,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         notifications: _notifications,
         trialRequests: _trialRequests,
         members: _members,
+        onRefresh: _load,
         onMarkRead: (notificationId) async {
           await _repository.markNotificationRead(notificationId);
           await _load();
@@ -977,7 +981,7 @@ class _TrainerBottomNav extends StatelessWidget {
                   color: Colors.white,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.10),
+                      color: AppColors.shadow.withValues(alpha: 0.10),
                       blurRadius: 14,
                       offset: const Offset(0, -3),
                     ),
@@ -1055,14 +1059,11 @@ class _TrainerBottomNavItem extends StatelessWidget {
               duration: const Duration(milliseconds: 180),
               curve: Curves.easeOutCubic,
               scale: active ? 1.08 : 1,
-              child: active
-                  ? ShaderMask(
-                      shaderCallback: (bounds) => const LinearGradient(
-                        colors: [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
-                      ).createShader(bounds),
-                      child: Icon(icon, color: Colors.white, size: 25),
-                    )
-                  : Icon(icon, color: const Color(0xFFB6ADB1), size: 25),
+              child: Icon(
+                icon,
+                color: active ? AppColors.primary : AppColors.textMuted,
+                size: 25,
+              ),
             ),
             AnimatedContainer(
               duration: const Duration(milliseconds: 180),
@@ -1075,9 +1076,7 @@ class _TrainerBottomNavItem extends StatelessWidget {
               width: active ? 5 : 0,
               height: active ? 5 : 0,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFEEA4CE), Color(0xFFC58BF2)],
-                ),
+                color: AppColors.primaryBright,
                 borderRadius: BorderRadius.circular(3),
               ),
             ),
@@ -1111,9 +1110,9 @@ class _TrainerCenterAction extends StatelessWidget {
             color: Colors.white,
             boxShadow: [
               BoxShadow(
-                color: const Color(
-                  0xFF92A3FD,
-                ).withValues(alpha: active ? 0.34 : 0.24),
+                color: AppColors.primary.withValues(
+                  alpha: active ? 0.34 : 0.24,
+                ),
                 blurRadius: active ? 24 : 16,
                 offset: const Offset(0, 8),
               ),
@@ -1122,7 +1121,7 @@ class _TrainerCenterAction extends StatelessWidget {
           child: Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
+                colors: [AppColors.primaryBright, AppColors.primary],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -1320,10 +1319,13 @@ class _DashboardPage extends StatelessWidget {
     required this.members,
     required this.plans,
     required this.notifications,
+    required this.trialRequests,
+    required this.chatConversations,
     required this.onRefresh,
     required this.onEditProfile,
     required this.onOpenMembers,
     required this.onOpenWorkouts,
+    required this.onOpenChat,
     required this.onOpenNotifications,
     required this.onOpenSettings,
     required this.onOpenTasks,
@@ -1337,10 +1339,13 @@ class _DashboardPage extends StatelessWidget {
   final List<Map<String, dynamic>> members;
   final List<Map<String, dynamic>> plans;
   final List<Map<String, dynamic>> notifications;
+  final List<Map<String, dynamic>> trialRequests;
+  final List<Map<String, dynamic>> chatConversations;
   final Future<void> Function() onRefresh;
   final Future<void> Function() onEditProfile;
   final VoidCallback onOpenMembers;
   final VoidCallback onOpenWorkouts;
+  final VoidCallback onOpenChat;
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenTasks;
@@ -2389,11 +2394,14 @@ class _DashboardPage extends StatelessWidget {
       followUpPreview: followUpPreview,
       recentProgressMembers: recentProgressMembers,
       notifications: notifications,
+      trialRequests: trialRequests,
+      chatConversations: chatConversations,
       idleDashboard: idleDashboard,
       onRefresh: onRefresh,
       onEditProfile: onEditProfile,
       onOpenMembers: onOpenMembers,
       onOpenWorkouts: onOpenWorkouts,
+      onOpenChat: onOpenChat,
       onOpenNotifications: onOpenNotifications,
       onOpenSettings: onOpenSettings,
       onOpenTasks: onOpenTasks,
@@ -2435,11 +2443,14 @@ class _TrainerFitnessDashboard extends StatelessWidget {
     required this.followUpPreview,
     required this.recentProgressMembers,
     required this.notifications,
+    required this.trialRequests,
+    required this.chatConversations,
     required this.idleDashboard,
     required this.onRefresh,
     required this.onEditProfile,
     required this.onOpenMembers,
     required this.onOpenWorkouts,
+    required this.onOpenChat,
     required this.onOpenNotifications,
     required this.onOpenSettings,
     required this.onOpenTasks,
@@ -2463,11 +2474,14 @@ class _TrainerFitnessDashboard extends StatelessWidget {
   final List<Map<String, dynamic>> followUpPreview;
   final List<Map<String, dynamic>> recentProgressMembers;
   final List<Map<String, dynamic>> notifications;
+  final List<Map<String, dynamic>> trialRequests;
+  final List<Map<String, dynamic>> chatConversations;
   final bool idleDashboard;
   final Future<void> Function() onRefresh;
   final Future<void> Function() onEditProfile;
   final VoidCallback onOpenMembers;
   final VoidCallback onOpenWorkouts;
+  final VoidCallback onOpenChat;
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenTasks;
@@ -2477,207 +2491,438 @@ class _TrainerFitnessDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final isWide = size.width >= 760;
-    final profilePhoto = _resolveTrainerPhotoUrl(
-      trainerProfile: trainerProfile,
-      trainerUser: trainerUser,
-    );
+    final hasWideSplit = size.width >= 680;
     final completion =
         (trainerProfile['profile_completion_percentage'] as num?)?.toDouble() ??
         0;
     final specialization = trainerProfile['primary_specialization']
         ?.toString()
         .trim();
-    final heroStats = [
+    final gymName = assignedGym['name']?.toString().trim().isNotEmpty == true
+        ? assignedGym['name']!.toString().trim()
+        : 'Trainer workspace';
+    final branchName =
+        assignedBranch['name']?.toString().trim().isNotEmpty == true
+        ? assignedBranch['name']!.toString().trim()
+        : 'Branch pending';
+    final unreadChatsCount = chatConversations.fold<int>(0, (total, item) {
+      return total +
+          ((_map(item)['trainer_unread_count'] as num?)?.toInt() ?? 0);
+    });
+    final trialLeadCount = trialRequests.length;
+    final trialPreview = trialRequests.take(3).toList();
+    final snapshotMetrics = <_DashboardStatData>[
       _DashboardStatData(
-        label: 'Clients',
+        label: 'Members',
         value: '$assignedMembersCount',
+        helper: 'Assigned roster',
         icon: Icons.groups_rounded,
-        color: const Color(0xFF92A3FD),
+        color: AppColors.primary,
       ),
       _DashboardStatData(
         label: 'Today',
         value: '$todaysClientsCount',
-        icon: Icons.calendar_today_rounded,
-        color: const Color(0xFF9DCEFF),
+        helper: 'Coaching queue',
+        icon: Icons.today_rounded,
+        color: AppColors.primaryBright,
+      ),
+      _DashboardStatData(
+        label: 'Follow-ups',
+        value: '$pendingFollowUpsCount',
+        helper: 'Pending tasks',
+        icon: Icons.assignment_late_outlined,
+        color: AppColors.accentPurple,
       ),
       _DashboardStatData(
         label: 'Plans',
         value: '$workoutPlansAssignedCount',
+        helper: 'Assigned workouts',
         icon: Icons.fitness_center_rounded,
-        color: const Color(0xFFC58BF2),
+        color: AppColors.primaryBright,
       ),
     ];
-    final targetItems = [
-      _DashboardStatData(
-        label: 'Follow ups',
-        value: '$pendingFollowUpsCount',
-        icon: Icons.task_alt_rounded,
-        color: const Color(0xFFFFB86B),
-      ),
-      _DashboardStatData(
-        label: 'Progress',
-        value: '$progressUpdatesCount',
-        icon: Icons.trending_up_rounded,
-        color: const Color(0xFF5AD7A8),
-      ),
-    ];
-    final alertItems = [
-      _DashboardStatData(
-        label: 'Missed',
-        value: '$missedWorkoutsCount',
-        icon: Icons.warning_amber_rounded,
-        color: const Color(0xFFFF7F9A),
-      ),
-      _DashboardStatData(
-        label: 'Unread',
-        value: '$unreadMessages',
-        icon: Icons.notifications_active_rounded,
-        color: const Color(0xFF7DD3FC),
-      ),
-    ];
+    final focusBanner = pendingFollowUpsCount > 0
+        ? _TrainerFocusBannerData(
+            eyebrow: 'Coaching focus',
+            title: '$pendingFollowUpsCount follow-ups need attention',
+            description:
+                'Open your task queue and complete the next member follow-up.',
+            label: 'Open tasks',
+            icon: Icons.assignment_late_outlined,
+            onTap: onOpenTasks,
+          )
+        : unreadChatsCount > 0
+        ? _TrainerFocusBannerData(
+            eyebrow: 'Messages',
+            title: '$unreadChatsCount unread member messages',
+            description:
+                'Continue your coaching conversations and clear the inbox.',
+            label: 'Open chats',
+            icon: Icons.chat_bubble_rounded,
+            onTap: onOpenChat,
+          )
+        : trialLeadCount > 0
+        ? _TrainerFocusBannerData(
+            eyebrow: 'Trial leads',
+            title: '$trialLeadCount trial requests are assigned',
+            description:
+                'Review the latest requests and prepare for upcoming trials.',
+            label: 'View leads',
+            icon: Icons.person_add_alt_1_rounded,
+            onTap: onOpenNotifications,
+          )
+        : _TrainerFocusBannerData(
+            eyebrow: 'Today focus',
+            title: 'Your coaching workspace is ready',
+            description:
+                'Review assigned members and prepare their next workout plan.',
+            label: 'View members',
+            icon: Icons.groups_rounded,
+            onTap: onOpenMembers,
+          );
 
     return RefreshIndicator(
       onRefresh: onRefresh,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
-        children: [
-          _FitnessWelcomeBar(
-            firstName: firstName,
-            unreadMessages: unreadMessages,
-            onOpenNotifications: onOpenNotifications,
-            onOpenSettings: onOpenSettings,
-          ),
-          const SizedBox(height: 18),
-          _FitnessHeroCard(
-            firstName: firstName,
-            profilePhoto: profilePhoto,
-            gymName: assignedGym['name']?.toString() ?? 'Trainer workspace',
-            branchName: assignedBranch['name']?.toString() ?? 'Branch pending',
-            specialization: specialization?.isNotEmpty == true
-                ? specialization!
-                : 'Complete trainer profile',
-            completion: completion,
-            stats: heroStats,
-            onOpenMembers: onOpenMembers,
-            onEditProfile: onEditProfile,
-          ),
-          const SizedBox(height: 18),
-          _TodayTargetStrip(
-            primaryItems: targetItems,
-            alertItems: alertItems,
-            onOpenTasks: onOpenTasks,
-          ),
-          const SizedBox(height: 18),
-          _SectionTitleRow(
-            title: 'Coach shortcuts',
-            subtitle: 'Fast actions for your daily trainer flow',
-            actionLabel: 'Refresh',
-            onAction: onRefresh,
-          ),
-          const SizedBox(height: 12),
-          _QuickActionRail(
-            actions: [
-              _QuickActionData(
-                title: 'Members',
-                subtitle: 'Roster',
-                icon: Icons.groups_rounded,
-                color: const Color(0xFF92A3FD),
-                onTap: onOpenMembers,
+      child: _PremiumDashboardBackground(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(18, 10, 18, 104),
+          children: [
+            RevealOnBuild(
+              child: _FitnessWelcomeBar(
+                firstName: firstName,
+                subtitle: 'Ready for today\'s coaching?',
+                unreadMessages: unreadMessages,
+                onOpenNotifications: onOpenNotifications,
+                onOpenSettings: onOpenSettings,
               ),
-              _QuickActionData(
-                title: 'Workout',
-                subtitle: 'Create plan',
-                icon: Icons.fitness_center_rounded,
-                color: const Color(0xFFC58BF2),
-                onTap: onOpenWorkouts,
+            ),
+            const SizedBox(height: 14),
+            RevealOnBuild(
+              delay: const Duration(milliseconds: 40),
+              child: _FitnessHeroCard(
+                gymName: gymName,
+                branchName: branchName,
+                specialization: specialization?.isNotEmpty == true
+                    ? specialization!
+                    : 'Complete trainer profile',
+                completion: completion,
+                onOpenMembers: onOpenMembers,
+                onEditProfile: onEditProfile,
               ),
-              _QuickActionData(
-                title: 'Note',
-                subtitle: 'Follow-up',
-                icon: Icons.edit_note_rounded,
-                color: const Color(0xFF5AD7A8),
-                onTap: onAddNote,
+            ),
+            const SizedBox(height: 16),
+            RevealOnBuild(
+              delay: const Duration(milliseconds: 65),
+              child: _DashboardSection(
+                eyebrow: 'Snapshot',
+                title: 'Today at a glance',
+                child: _TrainerMetricGrid(metrics: snapshotMetrics),
               ),
-              _QuickActionData(
-                title: 'Tasks',
-                subtitle: 'Queue',
-                icon: Icons.fact_check_rounded,
-                color: const Color(0xFFFFB86B),
-                onTap: onOpenTasks,
+            ),
+            const SizedBox(height: 16),
+            RevealOnBuild(
+              delay: const Duration(milliseconds: 85),
+              child: _DashboardSection(
+                eyebrow: 'Focus',
+                title: 'What deserves attention now',
+                child: _TrainerFocusBanner(data: focusBanner),
+              ),
+            ),
+            const SizedBox(height: 16),
+            RevealOnBuild(
+              delay: const Duration(milliseconds: 110),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  if (!hasWideSplit) {
+                    return Column(
+                      children: [
+                        _DashboardSection(
+                          eyebrow: 'Clients',
+                          title: 'Today\'s coaching queue',
+                          child: _TodayClientsPanel(
+                            clients: todayClientPreview,
+                            onOpenMembers: onOpenMembers,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _DashboardSection(
+                          eyebrow: 'Tasks',
+                          title: 'Pending follow-ups',
+                          child: _FollowUpPanel(
+                            followUps: followUpPreview,
+                            onOpenTasks: onOpenTasks,
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _DashboardSection(
+                          eyebrow: 'Clients',
+                          title: 'Today\'s coaching queue',
+                          child: _TodayClientsPanel(
+                            clients: todayClientPreview,
+                            onOpenMembers: onOpenMembers,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _DashboardSection(
+                          eyebrow: 'Tasks',
+                          title: 'Pending follow-ups',
+                          child: _FollowUpPanel(
+                            followUps: followUpPreview,
+                            onOpenTasks: onOpenTasks,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+            RevealOnBuild(
+              delay: const Duration(milliseconds: 130),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  if (!hasWideSplit) {
+                    return Column(
+                      children: [
+                        _DashboardSection(
+                          eyebrow: 'Insights',
+                          title: 'Trial leads',
+                          child: _TrialLeadPanel(
+                            trialRequests: trialPreview,
+                            onOpenNotifications: onOpenNotifications,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _DashboardSection(
+                          eyebrow: 'Progress',
+                          title: 'Recent member progress',
+                          child: _ProgressPanel(members: recentProgressMembers),
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _DashboardSection(
+                          eyebrow: 'Insights',
+                          title: 'Trial leads',
+                          child: _TrialLeadPanel(
+                            trialRequests: trialPreview,
+                            onOpenNotifications: onOpenNotifications,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _DashboardSection(
+                          eyebrow: 'Progress',
+                          title: 'Recent member progress',
+                          child: _ProgressPanel(members: recentProgressMembers),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+            RevealOnBuild(
+              delay: const Duration(milliseconds: 145),
+              child: _DashboardSection(
+                eyebrow: 'Chats',
+                title: 'Unread conversations',
+                child: _ChatPanel(
+                  chatConversations: chatConversations,
+                  onOpenChat: onOpenChat,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardSection extends StatelessWidget {
+  const _DashboardSection({
+    required this.eyebrow,
+    required this.title,
+    required this.child,
+  });
+
+  final String eyebrow;
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                eyebrow.toUpperCase(),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.9,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          if (idleDashboard) ...[
-            _SoftInfoCard(
-              icon: Icons.space_dashboard_rounded,
-              title: 'Dashboard is ready',
-              subtitle:
-                  'Members, plans, progress updates, and alerts will appear here as your gym routes clients to you.',
-              actionLabel: 'Refresh dashboard',
-              onAction: onRefresh,
-            ),
-            const SizedBox(height: 20),
-          ],
-          if (isWide)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _TodayClientsPanel(
-                    clients: todayClientPreview,
-                    onOpenMembers: onOpenMembers,
-                  ),
+        ),
+        child,
+      ],
+    );
+  }
+}
+
+class _PremiumDashboardBackground extends StatefulWidget {
+  const _PremiumDashboardBackground({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_PremiumDashboardBackground> createState() =>
+      _PremiumDashboardBackgroundState();
+}
+
+class _PremiumDashboardBackgroundState
+    extends State<_PremiumDashboardBackground>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 14),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final phase = _controller.value * math.pi * 2;
+        final topRightDx = math.sin(phase) * 10;
+        final topRightDy = math.cos(phase) * 8;
+        final leftDx = math.cos(phase * 0.8) * 8;
+        final leftDy = math.sin(phase * 0.8) * 10;
+        final bottomDx = math.sin(phase * 0.6) * 12;
+        final bottomDy = math.cos(phase * 0.6) * 9;
+
+        return Stack(
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    const Color(0xFFF8FAFC),
+                    const Color(0xFFF1F5F9).withValues(alpha: 0.92),
+                  ],
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: _FollowUpPanel(
-                    followUps: followUpPreview,
-                    onOpenTasks: onOpenTasks,
-                  ),
-                ),
-              ],
-            )
-          else ...[
-            _TodayClientsPanel(
-              clients: todayClientPreview,
-              onOpenMembers: onOpenMembers,
+              ),
             ),
-            const SizedBox(height: 14),
-            _FollowUpPanel(
-              followUps: followUpPreview,
-              onOpenTasks: onOpenTasks,
+            Positioned(
+              top: -96 + topRightDy,
+              right: -82 + topRightDx,
+              child: const _DashboardGlowOrb(
+                size: 220,
+                color: AppColors.primary,
+                opacity: 0.08,
+              ),
             ),
+            Positioned(
+              top: 280 + leftDy,
+              left: -110 + leftDx,
+              child: const _DashboardGlowOrb(
+                size: 210,
+                color: AppColors.primaryBright,
+                opacity: 0.04,
+              ),
+            ),
+            Positioned(
+              bottom: 140 + bottomDy,
+              right: -120 + bottomDx,
+              child: const _DashboardGlowOrb(
+                size: 230,
+                color: AppColors.accentPurple,
+                opacity: 0.035,
+              ),
+            ),
+            widget.child,
           ],
-          const SizedBox(height: 18),
-          if (isWide)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: _ProgressPanel(members: recentProgressMembers)),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: _NotificationPanel(
-                    notifications: notifications,
-                    unreadMessages: unreadMessages,
-                    onOpenNotifications: onOpenNotifications,
-                    titleCase: titleCase,
-                  ),
-                ),
-              ],
-            )
-          else ...[
-            _ProgressPanel(members: recentProgressMembers),
-            const SizedBox(height: 14),
-            _NotificationPanel(
-              notifications: notifications,
-              unreadMessages: unreadMessages,
-              onOpenNotifications: onOpenNotifications,
-              titleCase: titleCase,
-            ),
-          ],
-        ],
+        );
+      },
+    );
+  }
+}
+
+class _DashboardGlowOrb extends StatelessWidget {
+  const _DashboardGlowOrb({
+    required this.size,
+    required this.color,
+    required this.opacity,
+  });
+
+  final double size;
+  final Color color;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [
+              color.withValues(alpha: opacity),
+              color.withValues(alpha: 0),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -2763,136 +3008,146 @@ class _DashboardStatData {
   const _DashboardStatData({
     required this.label,
     required this.value,
+    this.helper = '',
     required this.icon,
     required this.color,
   });
 
   final String label;
   final String value;
+  final String helper;
   final IconData icon;
   final Color color;
-}
-
-class _QuickActionData {
-  const _QuickActionData({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
 }
 
 class _FitnessWelcomeBar extends StatelessWidget {
   const _FitnessWelcomeBar({
     required this.firstName,
+    required this.subtitle,
     required this.unreadMessages,
     required this.onOpenNotifications,
     required this.onOpenSettings,
   });
 
   final String firstName;
+  final String subtitle;
   final int unreadMessages;
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Welcome Back,',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w600,
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Hi, $firstName',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.7,
+                    height: 1.02,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                firstName,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.textPrimary,
+                const SizedBox(height: 6),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ),
-        _SquareIconButton(icon: Icons.settings_rounded, onTap: onOpenSettings),
-        const SizedBox(width: 10),
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            _SquareIconButton(
-              icon: Icons.notifications_rounded,
-              onTap: onOpenNotifications,
+              ],
             ),
-            if (unreadMessages > 0)
-              Positioned(
-                right: -3,
-                top: -3,
-                child: Container(
-                  width: 18,
-                  height: 18,
-                  alignment: Alignment.center,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFF7F9A),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text(
-                    unreadMessages > 9 ? '9+' : '$unreadMessages',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ],
+          ),
+          _SquareIconButton(
+            icon: Icons.notifications_none_rounded,
+            count: unreadMessages,
+            onTap: onOpenNotifications,
+          ),
+          const SizedBox(width: 10),
+          _SquareIconButton(
+            icon: Icons.settings_rounded,
+            onTap: onOpenSettings,
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _SquareIconButton extends StatelessWidget {
-  const _SquareIconButton({required this.icon, required this.onTap});
+  const _SquareIconButton({
+    required this.icon,
+    required this.onTap,
+    this.count = 0,
+  });
 
   final IconData icon;
   final VoidCallback onTap;
+  final int count;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.86),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.stroke),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.shadow.withValues(alpha: 0.45),
-              blurRadius: 18,
-              offset: const Offset(0, 10),
+      borderRadius: BorderRadius.circular(18),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.92),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.shadow.withValues(alpha: 0.10),
+                  blurRadius: 14,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: AppColors.stroke.withValues(alpha: 0.5),
+              ),
             ),
-          ],
-        ),
-        child: Icon(icon, color: AppColors.textPrimary, size: 20),
+            child: Icon(icon, color: AppColors.textPrimary, size: 21),
+          ),
+          if (count > 0)
+            Positioned(
+              top: -4,
+              right: -4,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 19, minHeight: 19),
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  count > 9 ? '9+' : '$count',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -2900,416 +3155,575 @@ class _SquareIconButton extends StatelessWidget {
 
 class _FitnessHeroCard extends StatelessWidget {
   const _FitnessHeroCard({
-    required this.firstName,
-    required this.profilePhoto,
     required this.gymName,
     required this.branchName,
     required this.specialization,
     required this.completion,
-    required this.stats,
     required this.onOpenMembers,
     required this.onEditProfile,
   });
 
-  final String firstName;
-  final String profilePhoto;
   final String gymName;
   final String branchName;
   final String specialization;
   final double completion;
-  final List<_DashboardStatData> stats;
   final VoidCallback onOpenMembers;
   final Future<void> Function() onEditProfile;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF92A3FD), Color(0xFF9DCEFF)],
+    final theme = Theme.of(context);
+    final progress = (completion.clamp(0, 100) / 100).toDouble();
+    final chips = <_TrainerHeroChipData>[
+      _TrainerHeroChipData(icon: Icons.storefront_rounded, label: gymName),
+      _TrainerHeroChipData(icon: Icons.location_on_outlined, label: branchName),
+    ];
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(34),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white.withValues(alpha: 0.98),
+              const Color(0xFFF6FBFF),
+              const Color(0xFFF8FAFC),
+            ],
+          ),
+          border: Border.all(color: AppColors.stroke.withValues(alpha: 0.8)),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.shadow.withValues(alpha: 0.06),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF92A3FD).withValues(alpha: 0.35),
-            blurRadius: 30,
-            offset: const Offset(0, 18),
+        child: Stack(
+          children: [
+            Positioned(
+              top: -54,
+              left: -28,
+              child: Container(
+                width: 134,
+                height: 134,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.34),
+                ),
+              ),
+            ),
+            const Positioned(
+              top: -34,
+              right: -28,
+              child: _DashboardGlowOrb(
+                size: 154,
+                color: AppColors.primary,
+                opacity: 0.14,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 360;
+                  final ringSize = compact ? 86.0 : 104.0;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 7,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.68),
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                      color: AppColors.stroke.withValues(
+                                        alpha: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    specialization.toUpperCase(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.9,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Coaching overview',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.displaySmall?.copyWith(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w900,
+                                    height: 0.95,
+                                    letterSpacing: -1.4,
+                                    fontSize: compact ? 28 : null,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Members, plans and follow-ups in one place',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          _TrainerHeroProgressOrb(
+                            progress: progress,
+                            progressLabel: '${completion.round()}%',
+                            size: ringSize,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: chips
+                            .map((chip) => _TrainerHeroChip(data: chip))
+                            .toList(),
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _ReferenceMiniButton(
+                              title: 'Assigned Members',
+                              onPressed: onOpenMembers,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _ReferenceMiniButton(
+                              title: 'Edit Profile',
+                              secondary: true,
+                              onPressed: onEditProfile,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReferenceMiniButton extends StatelessWidget {
+  const _ReferenceMiniButton({
+    required this.title,
+    required this.onPressed,
+    this.secondary = false,
+  });
+
+  final String title;
+  final VoidCallback onPressed;
+  final bool secondary;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        height: 48,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          gradient: secondary
+              ? null
+              : const LinearGradient(
+                  colors: [AppColors.primaryBright, AppColors.primary],
+                ),
+          color: secondary ? Colors.white.withValues(alpha: 0.70) : null,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: secondary
+                ? AppColors.stroke.withValues(alpha: 0.72)
+                : Colors.transparent,
+          ),
+        ),
+        child: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: secondary ? AppColors.textPrimary : Colors.white,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrainerHeroChipData {
+  const _TrainerHeroChipData({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+}
+
+class _TrainerHeroChip extends StatelessWidget {
+  const _TrainerHeroChip({required this.data});
+
+  final _TrainerHeroChipData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(data.icon, size: 14, color: AppColors.primary),
+          const SizedBox(width: 6),
+          Text(
+            data.label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ],
       ),
-      child: Stack(
-        children: [
-          Positioned(
-            right: -36,
-            top: -32,
-            child: _HeroBubble(size: 122, alpha: 0.18),
-          ),
-          Positioned(
-            right: 18,
-            bottom: 18,
-            child: _HeroBubble(size: 62, alpha: 0.13),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 7,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.20),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            specialization,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        Text(
-                          'Coach smarter,\n$firstName',
-                          style: Theme.of(context).textTheme.headlineMedium
-                              ?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                height: 1.03,
-                              ),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          '$gymName • $branchName',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.78),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Container(
-                    width: 86,
-                    height: 104,
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.30),
-                      borderRadius: BorderRadius.circular(28),
-                    ),
-                    child: AppNetworkImage(
-                      imageUrl: profilePhoto,
-                      height: 96,
-                      width: 78,
-                      borderRadius: 24,
-                      fallbackIcon: Icons.person_4_rounded,
-                    ),
+    );
+  }
+}
+
+class _TrainerHeroProgressOrb extends StatelessWidget {
+  const _TrainerHeroProgressOrb({
+    required this.progress,
+    required this.progressLabel,
+    required this.size,
+  });
+
+  final double progress;
+  final String progressLabel;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.78),
+                border: Border.all(
+                  color: AppColors.stroke.withValues(alpha: 0.7),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.10),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(child: _CompletionPill(completion: completion)),
-                  const SizedBox(width: 10),
-                  SizedBox(
-                    height: 42,
-                    child: ElevatedButton(
-                      onPressed: onEditProfile,
-                      style: ElevatedButton.styleFrom(
-                        elevation: 0,
-                        backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFF92A3FD),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                      child: const Text('Edit'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: stats
-                    .map(
-                      (item) => Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.only(
-                            right: item == stats.last ? 0 : 8,
-                          ),
-                          child: _HeroStatCell(data: item),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: onOpenMembers,
-                  icon: const Icon(Icons.groups_rounded),
-                  label: const Text('View assigned members'),
-                  style: ElevatedButton.styleFrom(
-                    elevation: 0,
-                    backgroundColor: const Color(0xFFC58BF2),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
+            ),
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0, end: progress),
+              duration: const Duration(milliseconds: 850),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, _) => SizedBox(
+                width: size - 26,
+                height: size - 26,
+                child: CircularProgressIndicator(
+                  value: value,
+                  strokeWidth: size < 100 ? 8 : 10,
+                  backgroundColor: AppColors.stroke.withValues(alpha: 0.8),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    AppColors.primary,
                   ),
                 ),
               ),
-            ],
+            ),
+            Text(
+              progressLabel,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w900,
+                fontSize: size < 100 ? 18 : null,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrainerFocusBannerData {
+  const _TrainerFocusBannerData({
+    required this.eyebrow,
+    required this.title,
+    required this.description,
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String eyebrow;
+  final String title;
+  final String description;
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+}
+
+class _TrainerMetricGrid extends StatelessWidget {
+  const _TrainerMetricGrid({required this.metrics});
+
+  final List<_DashboardStatData> metrics;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 620 ? 4 : 2;
+        final spacing = constraints.maxWidth >= 620 ? 12.0 : 10.0;
+        final tileWidth =
+            (constraints.maxWidth - (spacing * (columns - 1))) / columns;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final entry in metrics.asMap().entries)
+              SizedBox(
+                width: tileWidth,
+                child: RevealOnBuild(
+                  delay: Duration(milliseconds: 30 * entry.key),
+                  offset: const Offset(0, 0.06),
+                  duration: const Duration(milliseconds: 420),
+                  child: _TrainerMetricCard(data: entry.value),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _TrainerMetricCard extends StatelessWidget {
+  const _TrainerMetricCard({required this.data});
+
+  final _DashboardStatData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.75)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadow.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 8),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _HeroBubble extends StatelessWidget {
-  const _HeroBubble({required this.size, required this.alpha});
-
-  final double size;
-  final double alpha;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.white.withValues(alpha: alpha),
-      ),
-    );
-  }
-}
-
-class _CompletionPill extends StatelessWidget {
-  const _CompletionPill({required this.completion});
-
-  final double completion;
-
-  @override
-  Widget build(BuildContext context) {
-    final value = (completion.clamp(0, 100) / 100).toDouble();
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Profile completion ${completion.round()}%',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 12,
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: data.color.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: data.color.withValues(alpha: 0.14)),
             ),
+            child: Icon(data.icon, color: data.color, size: 20),
           ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: value,
-              minHeight: 8,
-              color: Colors.white,
-              backgroundColor: Colors.white.withValues(alpha: 0.24),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroStatCell extends StatelessWidget {
-  const _HeroStatCell({required this.data});
-
-  final _DashboardStatData data;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.20),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        children: [
-          Icon(data.icon, color: Colors.white, size: 19),
-          const SizedBox(height: 8),
+          const SizedBox(height: 18),
           Text(
             data.value,
-            style: const TextStyle(
-              color: Colors.white,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.w900,
-              fontSize: 20,
             ),
           ),
+          const SizedBox(height: 4),
           Text(
             data.label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.78),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w800,
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TodayTargetStrip extends StatelessWidget {
-  const _TodayTargetStrip({
-    required this.primaryItems,
-    required this.alertItems,
-    required this.onOpenTasks,
-  });
-
-  final List<_DashboardStatData> primaryItems;
-  final List<_DashboardStatData> alertItems;
-  final VoidCallback onOpenTasks;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF9DCEFF).withValues(alpha: 0.22),
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Today Target',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              SizedBox(
-                height: 32,
-                child: ElevatedButton(
-                  onPressed: onOpenTasks,
-                  style: ElevatedButton.styleFrom(
-                    elevation: 0,
-                    backgroundColor: const Color(0xFF92A3FD),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                  child: const Text('Check'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [...primaryItems, ...alertItems]
-                .map(
-                  (item) => Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        right: item == alertItems.last ? 0 : 8,
-                      ),
-                      child: _TargetMiniCell(data: item),
-                    ),
-                  ),
-                )
-                .toList(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TargetMiniCell extends StatelessWidget {
-  const _TargetMiniCell({required this.data});
-
-  final _DashboardStatData data;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        children: [
-          Icon(data.icon, color: data.color, size: 19),
-          const SizedBox(height: 6),
+          const SizedBox(height: 2),
           Text(
-            data.value,
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w900,
-              fontSize: 16,
-            ),
-          ),
-          Text(
-            data.label,
+            data.helper,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
+              color: AppColors.textMuted,
               fontWeight: FontWeight.w700,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TrainerFocusBanner extends StatelessWidget {
+  const _TrainerFocusBanner({required this.data});
+
+  final _TrainerFocusBannerData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: data.onTap,
+      borderRadius: BorderRadius.circular(28),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppColors.surface, AppColors.surfaceSoft],
+          ),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: AppColors.stroke.withValues(alpha: 0.72)),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.shadow.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: AppColors.primaryBright.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: AppColors.primaryBright.withValues(alpha: 0.14),
+                ),
+              ),
+              child: Icon(data.icon, color: AppColors.primaryBright, size: 24),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    data.eyebrow.toUpperCase(),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppColors.primaryBright,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.7,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    data.title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    data.description,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w700,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  data.label,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AppColors.primaryBright,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Icon(
+                  Icons.arrow_forward_rounded,
+                  color: AppColors.primaryBright,
+                  size: 18,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _SectionTitleRow extends StatelessWidget {
-  const _SectionTitleRow({
-    required this.title,
-    required this.subtitle,
-    this.actionLabel,
-    this.onAction,
-  });
+  const _SectionTitleRow({required this.title, required this.subtitle});
 
   final String title;
   final String subtitle;
-  final String? actionLabel;
-  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -3322,143 +3736,23 @@ class _SectionTitleRow extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
               const SizedBox(height: 3),
-              Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                subtitle,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
         ),
-        if (onAction != null && actionLabel != null)
-          TextButton(onPressed: onAction, child: Text(actionLabel!)),
       ],
-    );
-  }
-}
-
-class _QuickActionRail extends StatelessWidget {
-  const _QuickActionRail({required this.actions});
-
-  final List<_QuickActionData> actions;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 116,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: actions.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (context, index) => _QuickActionTile(data: actions[index]),
-      ),
-    );
-  }
-}
-
-class _QuickActionTile extends StatelessWidget {
-  const _QuickActionTile({required this.data});
-
-  final _QuickActionData data;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: data.onTap,
-      borderRadius: BorderRadius.circular(22),
-      child: Container(
-        width: 138,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.90),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: AppColors.stroke),
-          boxShadow: [
-            BoxShadow(
-              color: data.color.withValues(alpha: 0.16),
-              blurRadius: 24,
-              offset: const Offset(0, 14),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [data.color, data.color.withValues(alpha: 0.58)],
-                ),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(data.icon, color: Colors.white, size: 20),
-            ),
-            const Spacer(),
-            Text(
-              data.title,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            Text(
-              data.subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(
-                context,
-              ).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SoftInfoCard extends StatelessWidget {
-  const _SoftInfoCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.actionLabel,
-    required this.onAction,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String actionLabel;
-  final VoidCallback onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFFC58BF2).withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: const Color(0xFFC58BF2), size: 34),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 4),
-                Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
-              ],
-            ),
-          ),
-          TextButton(onPressed: onAction, child: Text(actionLabel)),
-        ],
-      ),
     );
   }
 }
@@ -3477,8 +3771,6 @@ class _TodayClientsPanel extends StatelessWidget {
     return _FitnessPanel(
       title: 'Today clients',
       subtitle: 'Live coaching queue',
-      actionLabel: 'View all',
-      onAction: onOpenMembers,
       children: clients.isEmpty
           ? const [
               _PanelEmpty(
@@ -3500,7 +3792,7 @@ class _TodayClientsPanel extends StatelessWidget {
                     'Ready for coaching attention',
                 meta: status,
                 icon: Icons.person_rounded,
-                color: const Color(0xFF92A3FD),
+                color: AppColors.primary,
                 onTap: onOpenMembers,
               );
             }).toList(),
@@ -3519,8 +3811,6 @@ class _FollowUpPanel extends StatelessWidget {
     return _FitnessPanel(
       title: 'Pending follow-ups',
       subtitle: 'Notes and outreach tasks',
-      actionLabel: 'Open queue',
-      onAction: onOpenTasks,
       children: followUps.isEmpty
           ? const [
               _PanelEmpty(
@@ -3537,7 +3827,7 @@ class _FollowUpPanel extends StatelessWidget {
                 subtitle: 'Follow up $due',
                 meta: 'Pending',
                 icon: Icons.event_note_rounded,
-                color: const Color(0xFFFFB86B),
+                color: AppColors.primaryBright,
                 onTap: onOpenTasks,
               );
             }).toList(),
@@ -3573,56 +3863,105 @@ class _ProgressPanel extends StatelessWidget {
                     'Weight ${progress['weight_kg'] ?? '--'} kg',
                 meta: 'Update',
                 icon: Icons.insights_rounded,
-                color: const Color(0xFF5AD7A8),
+                color: AppColors.primary,
               );
             }).toList(),
     );
   }
 }
 
-class _NotificationPanel extends StatelessWidget {
-  const _NotificationPanel({
-    required this.notifications,
-    required this.unreadMessages,
+class _TrialLeadPanel extends StatelessWidget {
+  const _TrialLeadPanel({
+    required this.trialRequests,
     required this.onOpenNotifications,
-    required this.titleCase,
   });
 
-  final List<Map<String, dynamic>> notifications;
-  final int unreadMessages;
+  final List<Map<String, dynamic>> trialRequests;
   final VoidCallback onOpenNotifications;
-  final String Function(String value) titleCase;
 
   @override
   Widget build(BuildContext context) {
-    final unread = notifications
-        .where((item) => item['read_at'] == null)
+    return _FitnessPanel(
+      title: 'Trial leads',
+      subtitle: 'Assigned trial follow-ups',
+      children: trialRequests.isEmpty
+          ? const [
+              _PanelEmpty(
+                icon: Icons.person_add_alt_1_rounded,
+                title: 'No active trial leads',
+                subtitle: 'New trial requests will appear here.',
+              ),
+            ]
+          : trialRequests.map((item) {
+              final member = _map(item['member']);
+              final preferredDate = prettyDate(item['preferred_date']);
+              final preferredTime = item['preferred_time']?.toString().trim();
+              final subtitle = [
+                if (preferredDate.isNotEmpty && preferredDate != '--')
+                  preferredDate,
+                if (preferredTime != null && preferredTime.isNotEmpty)
+                  preferredTime,
+              ].join(' • ');
+              return _WorkoutStyleRow(
+                title:
+                    member['name']?.toString() ??
+                    item['name']?.toString() ??
+                    'Trial lead',
+                subtitle: subtitle.isEmpty
+                    ? 'Assigned trial request'
+                    : subtitle,
+                meta: item['status']?.toString() ?? 'pending',
+                icon: Icons.person_add_alt_1_rounded,
+                color: AppColors.accentPurple,
+                onTap: onOpenNotifications,
+              );
+            }).toList(),
+    );
+  }
+}
+
+class _ChatPanel extends StatelessWidget {
+  const _ChatPanel({required this.chatConversations, required this.onOpenChat});
+
+  final List<Map<String, dynamic>> chatConversations;
+  final VoidCallback onOpenChat;
+
+  @override
+  Widget build(BuildContext context) {
+    final unread = chatConversations
+        .where(
+          (item) =>
+              ((_map(item)['trainer_unread_count'] as num?)?.toInt() ?? 0) > 0,
+        )
         .take(4)
         .toList();
+
     return _FitnessPanel(
-      title: 'Notifications',
-      subtitle: '$unreadMessages unread updates',
-      actionLabel: 'Open',
-      onAction: onOpenNotifications,
+      title: 'Chats',
+      subtitle: 'Unread member conversations',
       children: unread.isEmpty
           ? const [
               _PanelEmpty(
-                icon: Icons.mark_email_read_rounded,
-                title: 'Inbox is clear',
-                subtitle: 'New trainer updates will appear here.',
+                icon: Icons.chat_bubble_outline_rounded,
+                title: 'No unread chats',
+                subtitle: 'New member messages will appear here.',
               ),
             ]
           : unread.map((item) {
+              final peer = _map(item['peer']);
+              final lastMessage = _map(item['last_message']);
+              final unreadCount =
+                  ((_map(item)['trainer_unread_count'] as num?)?.toInt() ?? 0);
               return _WorkoutStyleRow(
-                title: titleCase(item['type']?.toString() ?? 'notification'),
+                title: peer['name']?.toString() ?? 'Member chat',
                 subtitle:
-                    item['message']?.toString() ??
-                    item['body']?.toString() ??
-                    'Unread notification',
-                meta: 'Unread',
-                icon: Icons.notifications_active_rounded,
-                color: const Color(0xFF7DD3FC),
-                onTap: onOpenNotifications,
+                    lastMessage['body']?.toString().trim().isNotEmpty == true
+                    ? lastMessage['body']!.toString()
+                    : 'Unread member message',
+                meta: unreadCount == 1 ? '1 unread' : '$unreadCount unread',
+                icon: Icons.chat_bubble_rounded,
+                color: AppColors.primaryBright,
+                onTap: onOpenChat,
               );
             }).toList(),
     );
@@ -3634,46 +3973,37 @@ class _FitnessPanel extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.children,
-    this.actionLabel,
-    this.onAction,
   });
 
   final String title;
   final String subtitle;
   final List<Widget> children;
-  final String? actionLabel;
-  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.stroke),
+        color: Colors.white.withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.75)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.shadow.withValues(alpha: 0.35),
-            blurRadius: 24,
-            offset: const Offset(0, 14),
+            color: AppColors.shadow.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionTitleRow(
-            title: title,
-            subtitle: subtitle,
-            actionLabel: actionLabel,
-            onAction: onAction,
-          ),
-          const SizedBox(height: 12),
+          _SectionTitleRow(title: title, subtitle: subtitle),
+          const SizedBox(height: 4),
           ...children.expand((child) sync* {
             yield child;
             if (child != children.last) {
-              yield const SizedBox(height: 10);
+              yield Divider(height: 1, color: AppColors.stroke);
             }
           }),
         ],
@@ -3704,27 +4034,23 @@ class _WorkoutStyleRow extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.backgroundAlt.withValues(alpha: 0.70),
-          borderRadius: BorderRadius.circular(18),
-        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(
           children: [
             Container(
-              width: 48,
-              height: 48,
+              width: 46,
+              height: 46,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    color.withValues(alpha: 0.95),
-                    color.withValues(alpha: 0.50),
+                    color.withValues(alpha: 0.10),
+                    AppColors.primaryBright.withValues(alpha: 0.06),
                   ],
                 ),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(17),
               ),
-              child: Icon(icon, color: Colors.white),
+              child: Icon(icon, color: color),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -3743,9 +4069,12 @@ class _WorkoutStyleRow extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     subtitle,
-                    maxLines: 2,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
@@ -3754,8 +4083,8 @@ class _WorkoutStyleRow extends StatelessWidget {
             Text(
               meta,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w800,
+                color: AppColors.primary,
+                fontWeight: FontWeight.w900,
               ),
             ),
           ],
@@ -3778,30 +4107,33 @@ class _PanelEmpty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.backgroundAlt.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 4),
+      child: Row(
         children: [
-          Icon(icon, color: AppColors.textSecondary, size: 30),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w900,
+          Icon(icon, color: AppColors.primary, size: 24),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
       ),
@@ -3812,7 +4144,6 @@ class _PanelEmpty extends StatelessWidget {
 class _MemberPage extends StatefulWidget {
   const _MemberPage({
     required this.members,
-    required this.templates,
     required this.plans,
     required this.onRefresh,
     required this.onOpenMember,
@@ -3824,7 +4155,6 @@ class _MemberPage extends StatefulWidget {
   });
 
   final List<Map<String, dynamic>> members;
-  final List<Map<String, dynamic>> templates;
   final List<Map<String, dynamic>> plans;
   final Future<void> Function() onRefresh;
   final Future<void> Function(Map<String, dynamic>) onOpenMember;
@@ -3916,19 +4246,57 @@ class _MemberPageState extends State<_MemberPage> {
     }).toList();
 
     if (widget.members.isEmpty) {
-      return EmptyStateView(
-        title: 'No assigned members yet',
-        message:
-            'Once your gym assigns Members, they will appear here with notes and workout actions.',
-        icon: Icons.groups_outlined,
-        action: SizedBox(
-          width: 220,
-          child: GradientButton(
-            label: 'Refresh',
-            icon: Icons.refresh_rounded,
-            expanded: true,
-            onPressed: widget.onRefresh,
-          ),
+      return RefreshIndicator(
+        onRefresh: widget.onRefresh,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(18, 10, 18, 104),
+          children: [
+            _MembersFitnessHeader(
+              totalCount: 0,
+              visibleCount: 0,
+              dueCount: 0,
+              needsPlanCount: 0,
+              onRefresh: widget.onRefresh,
+            ),
+            const SizedBox(height: 16),
+            PremiumCard(
+              padding: const EdgeInsets.all(22),
+              child: Column(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: const Icon(
+                      Icons.groups_outlined,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'No assigned members yet',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Members assigned by your gym will appear here.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -3936,7 +4304,7 @@ class _MemberPageState extends State<_MemberPage> {
     return RefreshIndicator(
       onRefresh: widget.onRefresh,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 26),
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 104),
         children: [
           _MembersFitnessHeader(
             totalCount: widget.members.length,
@@ -3957,17 +4325,6 @@ class _MemberPageState extends State<_MemberPage> {
               );
             }).length,
             onRefresh: widget.onRefresh,
-          ),
-          const SizedBox(height: 16),
-          _MembersFlowCard(
-            libraryCount: widget.templates.length,
-            assignedPlanCount: widget.plans.length,
-            needsPlanCount: widget.members.where((assignment) {
-              final memberId = (assignment['member_id'] as num?)?.toInt();
-              return widget.plans.every(
-                (plan) => (plan['member_id'] as num?)?.toInt() != memberId,
-              );
-            }).length,
           ),
           const SizedBox(height: 16),
           _MembersSearchCard(
@@ -6653,63 +7010,38 @@ class _ChatPage extends StatelessWidget {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-          child: GlassCard(
-            gradient: LinearGradient(
-              colors: [
-                const Color(0xFF111827),
-                Theme.of(context).colorScheme.primary.withValues(alpha: 0.20),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: const Icon(Icons.forum_rounded),
+          padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
+          child: Column(
+            children: [
+              _TrainerTabHeader(
+                eyebrow: 'PRIVATE COACHING',
+                title: 'Messages',
+                subtitle: '${members.length} member conversations',
+                icon: Icons.forum_rounded,
+                onRefresh: onRefresh,
+                refreshing: loading,
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: AppColors.error.withValues(alpha: 0.14),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Messages',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          Text(
-                            '${members.length} private member chats',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (onRefresh != null)
-                      IconButton(
-                        onPressed: loading ? null : onRefresh,
-                        icon: const Icon(Icons.refresh_rounded),
-                      ),
-                  ],
-                ),
-                if (error != null) ...[
-                  const SizedBox(height: 10),
-                  Text(
+                  ),
+                  child: Text(
                     error!,
                     style: Theme.of(
                       context,
                     ).textTheme.bodySmall?.copyWith(color: AppColors.error),
                   ),
-                ],
+                ),
               ],
-            ),
+            ],
           ),
         ),
         Expanded(child: inbox),
@@ -6732,6 +7064,92 @@ class _ChatPage extends StatelessWidget {
     }
 
     return const <String, dynamic>{};
+  }
+}
+
+class _TrainerTabHeader extends StatelessWidget {
+  const _TrainerTabHeader({
+    required this.eyebrow,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    this.onRefresh,
+    this.onSecondaryAction,
+    this.secondaryIcon,
+    this.refreshing = false,
+  });
+
+  final String eyebrow;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Future<void> Function()? onRefresh;
+  final VoidCallback? onSecondaryAction;
+  final IconData? secondaryIcon;
+  final bool refreshing;
+
+  @override
+  Widget build(BuildContext context) {
+    return PremiumCard(
+      padding: const EdgeInsets.all(18),
+      child: Row(
+        children: [
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceSoft,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppColors.stroke),
+            ),
+            child: Icon(icon, color: AppColors.primaryBright, size: 23),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  eyebrow,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (onSecondaryAction != null && secondaryIcon != null)
+            _SquareIconButton(icon: secondaryIcon!, onTap: onSecondaryAction!),
+          if (onSecondaryAction != null &&
+              secondaryIcon != null &&
+              onRefresh != null)
+            const SizedBox(width: 8),
+          if (onRefresh != null)
+            _SquareIconButton(
+              icon: refreshing ? Icons.sync_rounded : Icons.refresh_rounded,
+              onTap: refreshing ? () {} : () => onRefresh!(),
+            ),
+        ],
+      ),
+    );
   }
 }
 
@@ -6761,7 +7179,7 @@ class _TrainerChatInboxList extends StatelessWidget {
     final compact = selectedMemberId != null;
 
     return ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.fromLTRB(18, 2, 18, 104),
       itemCount: members.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
@@ -6822,9 +7240,9 @@ class _ChatInboxCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ConstrainedBox(
-      constraints: BoxConstraints(minHeight: compact ? 72 : 88),
+      constraints: BoxConstraints(minHeight: compact ? 72 : 82),
       child: InkWell(
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(24),
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
@@ -6833,49 +7251,49 @@ class _ChatInboxCard extends StatelessWidget {
             vertical: compact ? 8 : 14,
           ),
           decoration: BoxDecoration(
-            gradient: isSelected
-                ? LinearGradient(
-                    colors: [
-                      Theme.of(context).colorScheme.primary,
-                      Theme.of(context).colorScheme.secondary,
-                    ],
-                  )
-                : null,
-            color: isSelected ? null : AppColors.surfaceOverlay,
-            borderRadius: BorderRadius.circular(26),
+            color: isSelected
+                ? AppColors.surfaceSoft
+                : Colors.white.withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: isSelected ? Colors.white24 : AppColors.strokeStrong,
+              color: isSelected
+                  ? AppColors.primary.withValues(alpha: 0.22)
+                  : AppColors.stroke.withValues(alpha: 0.75),
             ),
-            boxShadow: const [
+            boxShadow: [
               BoxShadow(
-                color: AppColors.shadow,
-                blurRadius: 18,
-                offset: Offset(0, 10),
+                color: AppColors.shadow.withValues(alpha: 0.08),
+                blurRadius: 14,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
           child: Row(
             children: [
-              CircleAvatar(
-                radius: compact ? 22 : 28,
-                backgroundColor: isSelected
-                    ? Colors.white.withValues(alpha: 0.20)
-                    : AppColors.surfaceStrong,
-                backgroundImage:
-                    avatarUrl != null && avatarUrl!.trim().isNotEmpty
-                    ? NetworkImage(avatarUrl!)
-                    : null,
-                child: avatarUrl == null || avatarUrl!.trim().isEmpty
-                    ? Text(
-                        name.trim().isEmpty ? 'M' : name.trim()[0],
-                        style: TextStyle(
-                          color: isSelected
-                              ? Colors.white
-                              : AppColors.textPrimary,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      )
-                    : null,
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceSoft,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.stroke),
+                ),
+                child: CircleAvatar(
+                  radius: compact ? 21 : 25,
+                  backgroundColor: AppColors.surfaceStrong,
+                  backgroundImage:
+                      avatarUrl != null && avatarUrl!.trim().isNotEmpty
+                      ? NetworkImage(avatarUrl!)
+                      : null,
+                  child: avatarUrl == null || avatarUrl!.trim().isEmpty
+                      ? Text(
+                          name.trim().isEmpty ? 'M' : name.trim()[0],
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        )
+                      : null,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -6889,9 +7307,7 @@ class _ChatInboxCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: isSelected
-                            ? Colors.white
-                            : AppColors.textPrimary,
+                        color: AppColors.textPrimary,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -6901,9 +7317,12 @@ class _ChatInboxCard extends StatelessWidget {
                       maxLines: compact ? 1 : 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: isSelected
-                            ? Colors.white70
+                        color: unreadCount > 0
+                            ? AppColors.textSecondary
                             : AppColors.textMuted,
+                        fontWeight: unreadCount > 0
+                            ? FontWeight.w700
+                            : FontWeight.w500,
                       ),
                     ),
                     if (!compact) const SizedBox(height: 8),
@@ -6914,18 +7333,11 @@ class _ChatInboxCard extends StatelessWidget {
                             child: Text(
                               time,
                               style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(
-                                    color: isSelected
-                                        ? Colors.white70
-                                        : AppColors.textMuted,
-                                  ),
+                                  ?.copyWith(color: AppColors.textMuted),
                             ),
                           ),
                           if (unreadCount > 0)
-                            _ChatUnreadBadge(
-                              unreadCount: unreadCount,
-                              isSelected: isSelected,
-                            ),
+                            _ChatUnreadBadge(unreadCount: unreadCount),
                         ],
                       ),
                   ],
@@ -6943,17 +7355,12 @@ class _ChatInboxCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: isSelected
-                            ? Colors.white70
-                            : AppColors.textMuted,
+                        color: AppColors.textMuted,
                       ),
                     ),
                     if (unreadCount > 0) ...[
                       const SizedBox(height: 4),
-                      _ChatUnreadBadge(
-                        unreadCount: unreadCount,
-                        isSelected: isSelected,
-                      ),
+                      _ChatUnreadBadge(unreadCount: unreadCount),
                     ],
                   ],
                 ),
@@ -6967,25 +7374,22 @@ class _ChatInboxCard extends StatelessWidget {
 }
 
 class _ChatUnreadBadge extends StatelessWidget {
-  const _ChatUnreadBadge({required this.unreadCount, required this.isSelected});
+  const _ChatUnreadBadge({required this.unreadCount});
 
   final int unreadCount;
-  final bool isSelected;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: isSelected
-            ? Colors.white
-            : Theme.of(context).colorScheme.primary,
+        color: AppColors.primary,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         unreadCount > 99 ? '99+' : '$unreadCount',
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: isSelected ? AppColors.textPrimary : Colors.white,
+          color: Colors.white,
           fontWeight: FontWeight.w900,
         ),
       ),
@@ -7012,9 +7416,6 @@ class _ChatThreadHeader extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.stroke)),
-      ),
       child: Row(
         children: [
           CircleAvatar(
@@ -7338,17 +7739,11 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
   Widget build(BuildContext context) {
     return AppGradientScaffold(
       title: widget.member['name']?.toString() ?? 'Member chat',
-      actions: [
-        IconButton(
-          onPressed: _loading ? null : _load,
-          icon: const Icon(Icons.refresh_rounded),
-        ),
-      ],
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-            child: GlassCard(
+            padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
+            child: PremiumCard(
               padding: EdgeInsets.zero,
               child: _ChatThreadHeader(
                 member: widget.member,
@@ -7359,12 +7754,23 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
           ),
           if (_error != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-              child: Text(
-                _error!,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppColors.error),
+              padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: AppColors.error.withValues(alpha: 0.14),
+                  ),
+                ),
+                child: Text(
+                  _error!,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.error),
+                ),
               ),
             ),
           Expanded(
@@ -7377,7 +7783,7 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
                     icon: Icons.chat_bubble_outline_rounded,
                   )
                 : ListView.separated(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
                     itemCount: _messages.length + (_hasOlderMessages ? 1 : 0),
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
@@ -7412,8 +7818,12 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
           ),
           SafeArea(
             top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.94),
+                border: const Border(top: BorderSide(color: AppColors.stroke)),
+              ),
               child: Row(
                 children: [
                   Expanded(
@@ -7423,7 +7833,7 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
                       maxLines: 4,
                       enabled: !_sending,
                       decoration: const InputDecoration(
-                        labelText: 'Message this member',
+                        hintText: 'Message this member',
                         prefixIcon: Icon(Icons.lock_outline_rounded),
                       ),
                       onSubmitted: (_) => _send(),
@@ -7497,15 +7907,15 @@ class _ChatBubble extends StatelessWidget {
           decoration: BoxDecoration(
             gradient: isOutgoing
                 ? LinearGradient(
-                    colors: [
-                      failed
-                          ? AppColors.error
-                          : Theme.of(context).colorScheme.primary,
-                      Theme.of(context).colorScheme.secondary,
-                    ],
+                    colors: failed
+                        ? [AppColors.error, AppColors.error]
+                        : [AppColors.primaryBright, AppColors.primary],
                   )
                 : null,
-            color: isOutgoing ? null : AppColors.surfaceStrong,
+            color: isOutgoing ? null : Colors.white.withValues(alpha: 0.94),
+            border: isOutgoing
+                ? null
+                : Border.all(color: AppColors.stroke.withValues(alpha: 0.8)),
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(22),
               topRight: const Radius.circular(22),
@@ -7544,6 +7954,7 @@ class _NotificationPage extends StatelessWidget {
     required this.notifications,
     required this.trialRequests,
     required this.members,
+    required this.onRefresh,
     required this.onMarkRead,
     required this.onMarkAllRead,
     required this.onUpdateTrial,
@@ -7553,6 +7964,7 @@ class _NotificationPage extends StatelessWidget {
   final List<Map<String, dynamic>> notifications;
   final List<Map<String, dynamic>> trialRequests;
   final List<Map<String, dynamic>> members;
+  final Future<void> Function() onRefresh;
   final Future<void> Function(int notificationId) onMarkRead;
   final Future<void> Function() onMarkAllRead;
   final Future<void> Function(int trialRequestId, String status) onUpdateTrial;
@@ -7565,112 +7977,112 @@ class _NotificationPage extends StatelessWidget {
         .where((item) => item['read_at'] == null)
         .length;
 
-    if (notifications.isEmpty && trialRequests.isEmpty && members.isEmpty) {
-      return const EmptyStateView(
-        title: 'No trainer notifications yet',
-        message:
-            'Alerts, assignments, reminders, trial leads, and progress updates will show here.',
-        icon: Icons.notifications_none_rounded,
-      );
-    }
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(25, 15, 25, 28),
-      children: [
-        _TrainerNotificationSummaryBand(
-          unreadCount: unreadCount,
-          totalCount: notifications.length,
-          trialCount: trialRequests.length,
-          canMarkAllRead: unreadCount > 0,
-          canSendUpdate: members.isNotEmpty,
-          onMarkAllRead: () async {
-            try {
-              await onMarkAllRead();
-            } catch (exception) {
-              if (context.mounted) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text(exception.toString())));
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 104),
+        children: [
+          _TrainerTabHeader(
+            eyebrow: 'COACHING INBOX',
+            title: 'Notifications',
+            subtitle: '$unreadCount unread updates',
+            icon: Icons.notifications_none_rounded,
+            onRefresh: onRefresh,
+            onSecondaryAction: members.isEmpty
+                ? null
+                : () => _openAnnouncementSheet(context),
+            secondaryIcon: Icons.campaign_rounded,
+          ),
+          const SizedBox(height: 16),
+          _TrainerNotificationSummaryBand(
+            unreadCount: unreadCount,
+            totalCount: notifications.length,
+            trialCount: trialRequests.length,
+            canMarkAllRead: unreadCount > 0,
+            onMarkAllRead: () async {
+              try {
+                await onMarkAllRead();
+              } catch (exception) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(exception.toString())));
+                }
               }
-            }
-          },
-          onSendUpdate: () => _openAnnouncementSheet(context),
-        ),
-        if (trialRequests.isNotEmpty) ...[
+            },
+          ),
+          if (trialRequests.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            const _TrainerNotificationSectionTitle(
+              title: 'Trial requests',
+              action: 'Assigned',
+            ),
+            const SizedBox(height: 10),
+            ...trialRequests.take(5).map((trial) {
+              final id = (trial['id'] as num?)?.toInt();
+              final member = _map(trial['member']);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _TrainerTrialLeadCard(
+                  title:
+                      member['name']?.toString() ??
+                      trial['name']?.toString() ??
+                      'Trial lead',
+                  subtitle:
+                      'Preferred ${prettyDate(trial['preferred_date'])} ${trial['preferred_time'] ?? ''}',
+                  status: trial['status']?.toString() ?? 'pending',
+                  onAccept: id == null
+                      ? null
+                      : () => onUpdateTrial(id, 'accepted'),
+                  onCompleted: id == null
+                      ? null
+                      : () => onUpdateTrial(id, 'completed'),
+                ),
+              );
+            }),
+          ],
           const SizedBox(height: 18),
           const _TrainerNotificationSectionTitle(
-            title: 'Trial requests',
-            action: 'Assigned',
+            title: 'Updates',
+            action: 'Latest',
           ),
-          const SizedBox(height: 10),
-          ...trialRequests.take(5).map((trial) {
-            final id = (trial['id'] as num?)?.toInt();
-            final member = _map(trial['member']);
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _TrainerTrialLeadCard(
-                title:
-                    member['name']?.toString() ??
-                    trial['name']?.toString() ??
-                    'Trial lead',
-                subtitle:
-                    'Preferred ${prettyDate(trial['preferred_date'])} ${trial['preferred_time'] ?? ''}',
-                status: trial['status']?.toString() ?? 'pending',
-                onAccept: id == null
-                    ? null
-                    : () => onUpdateTrial(id, 'accepted'),
-                onCompleted: id == null
-                    ? null
-                    : () => onUpdateTrial(id, 'completed'),
-              ),
-            );
-          }),
-        ],
-        const SizedBox(height: 18),
-        const _TrainerNotificationSectionTitle(
-          title: 'Updates',
-          action: 'Latest',
-        ),
-        const SizedBox(height: 2),
-        if (notifications.isEmpty)
-          const EmptyStateView(
-            title: 'No notification feed items',
-            message:
-                'Member updates you send and backend alerts will appear in this feed when available.',
-            icon: Icons.notifications_none_rounded,
-          )
-        else
-          ...notifications.asMap().entries.expand((entry) {
-            final item = entry.value;
-            final isUnread = item['read_at'] == null;
-            return [
-              _TrainerNotificationRow(
-                notification: item,
-                isUnread: isUnread,
-                onMarkRead: () async {
-                  final id = (item['id'] as num?)?.toInt();
-                  if (id == null) {
-                    return;
-                  }
-                  try {
-                    await onMarkRead(id);
-                  } catch (exception) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(exception.toString())),
-                      );
+          const SizedBox(height: 2),
+          if (notifications.isEmpty)
+            const EmptyStateView(
+              title: 'No notification feed items',
+              message: 'Member updates and coaching alerts will appear here.',
+              icon: Icons.notifications_none_rounded,
+            )
+          else
+            ...notifications.asMap().entries.expand((entry) {
+              final item = entry.value;
+              final isUnread = item['read_at'] == null;
+              return [
+                _TrainerNotificationRow(
+                  notification: item,
+                  isUnread: isUnread,
+                  onMarkRead: () async {
+                    final id = (item['id'] as num?)?.toInt();
+                    if (id == null) {
+                      return;
                     }
-                  }
-                },
-              ),
-              if (entry.key < notifications.length - 1)
-                Divider(
-                  color: const Color(0xFF786F72).withValues(alpha: 0.20),
-                  height: 1,
+                    try {
+                      await onMarkRead(id);
+                    } catch (exception) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(exception.toString())),
+                        );
+                      }
+                    }
+                  },
                 ),
-            ];
-          }),
-      ],
+                if (entry.key < notifications.length - 1)
+                  Divider(color: AppColors.stroke, height: 1),
+              ];
+            }),
+        ],
+      ),
     );
   }
 
@@ -7830,7 +8242,7 @@ class _TrainerSendUpdateSheet extends StatelessWidget {
                   width: 52,
                   height: 5,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE5E7EB),
+                    color: AppColors.strokeStrong,
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
@@ -7842,37 +8254,36 @@ class _TrainerSendUpdateSheet extends StatelessWidget {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF92A3FD), Color(0xFFC58BF2)],
-                      ),
-                      borderRadius: BorderRadius.circular(16),
+                      color: AppColors.surfaceSoft,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: AppColors.stroke),
                     ),
                     child: const Icon(
                       Icons.campaign_rounded,
-                      color: Colors.white,
+                      color: AppColors.primaryBright,
                     ),
                   ),
                   const SizedBox(width: 14),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'Send member update',
-                          style: TextStyle(
-                            color: Color(0xFF1D1617),
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                          ),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w900,
+                              ),
                         ),
                         SizedBox(height: 4),
                         Text(
                           'Share a focused coaching reminder.',
-                          style: TextStyle(
-                            color: Color(0xFF786F72),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
                         ),
                       ],
                     ),
@@ -7883,12 +8294,9 @@ class _TrainerSendUpdateSheet extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  ),
-                  borderRadius: BorderRadius.circular(24),
+                  color: AppColors.surfaceSoft,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.stroke),
                 ),
                 child: Row(
                   children: [
@@ -7897,7 +8305,7 @@ class _TrainerSendUpdateSheet extends StatelessWidget {
                       height: 44,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.22),
+                        color: AppColors.primary.withValues(alpha: 0.10),
                         shape: BoxShape.circle,
                       ),
                       child: Text(
@@ -7905,7 +8313,7 @@ class _TrainerSendUpdateSheet extends StatelessWidget {
                             ? 'M'
                             : selectedMemberName.trim()[0].toUpperCase(),
                         style: const TextStyle(
-                          color: Colors.white,
+                          color: AppColors.primary,
                           fontWeight: FontWeight.w900,
                           fontSize: 18,
                         ),
@@ -7920,22 +8328,22 @@ class _TrainerSendUpdateSheet extends StatelessWidget {
                             selectedMemberName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w900,
-                            ),
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w900,
+                                ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             selectedMemberSubtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.82),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.w700,
+                                ),
                           ),
                         ],
                       ),
@@ -7984,43 +8392,19 @@ class _TrainerSendUpdateSheet extends StatelessWidget {
               const SizedBox(height: 18),
               SizedBox(
                 height: 54,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF92A3FD), Color(0xFFC58BF2)],
-                    ),
-                    borderRadius: BorderRadius.circular(99),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF92A3FD).withValues(alpha: 0.28),
-                        blurRadius: 18,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  child: FilledButton.icon(
-                    onPressed: saving ? null : onSend,
-                    icon: saving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.send_rounded),
-                    label: Text(saving ? 'Sending update...' : 'Send update'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      disabledBackgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                    ),
-                  ),
+                child: FilledButton.icon(
+                  onPressed: saving ? null : onSend,
+                  icon: saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.send_rounded),
+                  label: Text(saving ? 'Sending update...' : 'Send update'),
                 ),
               ),
             ],
@@ -8034,20 +8418,20 @@ class _TrainerSendUpdateSheet extends StatelessWidget {
 InputDecoration _fitInputDecoration(String label, IconData icon) {
   return InputDecoration(
     labelText: label,
-    prefixIcon: Icon(icon, color: const Color(0xFF92A3FD)),
+    prefixIcon: Icon(icon, color: AppColors.primary),
     filled: true,
-    fillColor: const Color(0xFFF7F8F8),
+    fillColor: AppColors.surfaceStrong,
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(18),
-      borderSide: BorderSide.none,
+      borderSide: const BorderSide(color: AppColors.stroke),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(18),
-      borderSide: BorderSide.none,
+      borderSide: const BorderSide(color: AppColors.stroke),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(18),
-      borderSide: const BorderSide(color: Color(0xFF92A3FD)),
+      borderSide: const BorderSide(color: AppColors.primary),
     ),
   );
 }
@@ -8058,156 +8442,68 @@ class _TrainerNotificationSummaryBand extends StatelessWidget {
     required this.totalCount,
     required this.trialCount,
     required this.canMarkAllRead,
-    required this.canSendUpdate,
     required this.onMarkAllRead,
-    required this.onSendUpdate,
   });
 
   final int unreadCount;
   final int totalCount;
   final int trialCount;
   final bool canMarkAllRead;
-  final bool canSendUpdate;
   final VoidCallback onMarkAllRead;
-  final VoidCallback onSendUpdate;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF92A3FD).withValues(alpha: 0.25),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
+    return PremiumCard(
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.24),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.notifications_active_rounded,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '$unreadCount unread updates',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      trialCount == 0
-                          ? '$totalCount total notifications'
-                          : '$totalCount updates • $trialCount trial leads',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.82),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceSoft,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppColors.stroke),
+            ),
+            child: const Icon(
+              Icons.notifications_active_rounded,
+              color: AppColors.primaryBright,
+            ),
           ),
-          if (canMarkAllRead || canSendUpdate) ...[
-            const SizedBox(height: 12),
-            Row(
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (canMarkAllRead)
-                  Expanded(
-                    child: _WhitePillButton(
-                      label: 'Read all',
-                      icon: Icons.done_all_rounded,
-                      onTap: onMarkAllRead,
-                    ),
+                Text(
+                  '$unreadCount unread updates',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w900,
                   ),
-                if (canMarkAllRead && canSendUpdate) const SizedBox(width: 10),
-                if (canSendUpdate)
-                  Expanded(
-                    child: _WhitePillButton(
-                      label: 'Send update',
-                      icon: Icons.campaign_rounded,
-                      onTap: onSendUpdate,
-                    ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  trialCount == 0
+                      ? '$totalCount total notifications'
+                      : '$totalCount updates • $trialCount trial leads',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
                   ),
+                ),
               ],
             ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _WhitePillButton extends StatelessWidget {
-  const _WhitePillButton({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.24),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: Colors.white, size: 17),
-            const SizedBox(width: 7),
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
-                ),
-              ),
+          ),
+          if (canMarkAllRead)
+            TextButton.icon(
+              onPressed: onMarkAllRead,
+              icon: const Icon(Icons.done_all_rounded, size: 17),
+              label: const Text('Read all'),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -8229,18 +8525,16 @@ class _TrainerNotificationSectionTitle extends StatelessWidget {
         Expanded(
           child: Text(
             title,
-            style: const TextStyle(
-              color: Color(0xFF1D1617),
-              fontSize: 16,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.w800,
             ),
           ),
         ),
         Text(
           action,
-          style: const TextStyle(
-            color: Color(0xFF786F72),
-            fontSize: 11,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: AppColors.textSecondary,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -8266,23 +8560,8 @@ class _TrainerTrialLeadCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return PremiumCard(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFFFFF), Color(0xFFF7F9FF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF92A3FD).withValues(alpha: 0.14),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
       child: Column(
         children: [
           Row(
@@ -8290,15 +8569,14 @@ class _TrainerTrialLeadCard extends StatelessWidget {
               Container(
                 width: 46,
                 height: 46,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Color(0xFFC58BF2), Color(0xFF92A3FD)],
-                  ),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceSoft,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.stroke),
                 ),
                 child: const Icon(
                   Icons.person_add_alt_1_rounded,
-                  color: Colors.white,
+                  color: AppColors.primaryBright,
                 ),
               ),
               const SizedBox(width: 12),
@@ -8310,10 +8588,9 @@ class _TrainerTrialLeadCard extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF1D1617),
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: AppColors.textPrimary,
                         fontWeight: FontWeight.w900,
-                        fontSize: 14,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -8321,10 +8598,9 @@ class _TrainerTrialLeadCard extends StatelessWidget {
                       subtitle,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF786F72),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
                         fontWeight: FontWeight.w600,
-                        fontSize: 11,
                       ),
                     ),
                   ],
@@ -8348,15 +8624,10 @@ class _TrainerTrialLeadCard extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: ElevatedButton.icon(
+                child: FilledButton.icon(
                   onPressed: onCompleted,
                   icon: const Icon(Icons.check_rounded, size: 17),
                   label: const Text('Done'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF92A3FD),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                  ),
                 ),
               ),
             ],
@@ -8398,19 +8669,11 @@ class _TrainerNotificationRow extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    color.withValues(alpha: 0.88),
-                    color.withValues(alpha: 0.58),
-                  ],
-                ),
-                shape: BoxShape.circle,
+                color: color.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: color.withValues(alpha: 0.14)),
               ),
-              child: Icon(
-                _notificationIcon(type),
-                color: Colors.white,
-                size: 20,
-              ),
+              child: Icon(_notificationIcon(type), color: color, size: 20),
             ),
             const SizedBox(width: 15),
             Expanded(
@@ -8424,14 +8687,14 @@ class _TrainerNotificationRow extends StatelessWidget {
                           title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: const Color(0xFF1D1617),
-                            fontWeight: isUnread
-                                ? FontWeight.w800
-                                : FontWeight.w600,
-                            fontSize: 13,
-                            height: 1.25,
-                          ),
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: isUnread
+                                    ? FontWeight.w800
+                                    : FontWeight.w600,
+                                height: 1.25,
+                              ),
                         ),
                       ),
                       if (isUnread)
@@ -8440,7 +8703,7 @@ class _TrainerNotificationRow extends StatelessWidget {
                           height: 8,
                           margin: const EdgeInsets.only(left: 8),
                           decoration: const BoxDecoration(
-                            color: Color(0xFF92A3FD),
+                            color: AppColors.primary,
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -8451,9 +8714,8 @@ class _TrainerNotificationRow extends StatelessWidget {
                     body,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF786F72),
-                      fontSize: 11,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
                       height: 1.35,
                       fontWeight: FontWeight.w500,
                     ),
@@ -8464,11 +8726,11 @@ class _TrainerNotificationRow extends StatelessWidget {
                       Expanded(
                         child: Text(
                           prettyDateTime(notification['created_at']),
-                          style: const TextStyle(
-                            color: Color(0xFF786F72),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: AppColors.textMuted,
+                                fontWeight: FontWeight.w500,
+                              ),
                         ),
                       ),
                       Container(
@@ -8477,14 +8739,14 @@ class _TrainerNotificationRow extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF7F8F8),
+                          color: AppColors.surfaceSoft,
                           borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: AppColors.stroke),
                         ),
                         child: Text(
                           _notificationLabel(type),
                           style: TextStyle(
                             color: color,
-                            fontSize: 9,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -8499,7 +8761,7 @@ class _TrainerNotificationRow extends StatelessWidget {
               IconButton(
                 onPressed: onMarkRead,
                 icon: const Icon(Icons.done_rounded),
-                color: const Color(0xFF92A3FD),
+                color: AppColors.primary,
               ),
             ],
           ],
@@ -8529,17 +8791,18 @@ class _MembersFitnessHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF92A3FD), Color(0xFF9DCEFF)],
+        gradient: LinearGradient(
+          colors: [Colors.white.withValues(alpha: 0.98), AppColors.surfaceSoft],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.75)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF92A3FD).withValues(alpha: 0.28),
-            blurRadius: 26,
-            offset: const Offset(0, 16),
+            color: AppColors.shadow.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -8553,21 +8816,29 @@ class _MembersFitnessHeader extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Coach your squad',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.80),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                      'COACHING ROSTER',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.9,
                       ),
                     ),
                     const SizedBox(height: 6),
-                    const Text(
-                      'Members',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 26,
+                    Text(
+                      'Assigned members',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.7,
+                          ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      '$totalCount members in your coaching roster',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: -0.5,
                       ),
                     ),
                   ],
@@ -8582,13 +8853,23 @@ class _MembersFitnessHeader extends StatelessWidget {
                   width: 46,
                   height: 46,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.22),
+                    color: Colors.white.withValues(alpha: 0.92),
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.26),
+                      color: AppColors.stroke.withValues(alpha: 0.5),
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.shadow.withValues(alpha: 0.10),
+                        blurRadius: 14,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
-                  child: const Icon(Icons.refresh_rounded, color: Colors.white),
+                  child: const Icon(
+                    Icons.refresh_rounded,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
             ],
@@ -8601,6 +8882,7 @@ class _MembersFitnessHeader extends StatelessWidget {
                   label: 'Visible',
                   value: '$visibleCount',
                   icon: Icons.groups_2_rounded,
+                  color: AppColors.primary,
                 ),
               ),
               const SizedBox(width: 10),
@@ -8609,6 +8891,7 @@ class _MembersFitnessHeader extends StatelessWidget {
                   label: 'Need plan',
                   value: '$needsPlanCount',
                   icon: Icons.playlist_add_check_rounded,
+                  color: AppColors.primaryBright,
                 ),
               ),
               const SizedBox(width: 10),
@@ -8617,18 +8900,10 @@ class _MembersFitnessHeader extends StatelessWidget {
                   label: 'Dues',
                   value: '$dueCount',
                   icon: Icons.payments_rounded,
+                  color: AppColors.accentPurple,
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '$totalCount total assigned members',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.78),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
           ),
         ],
       ),
@@ -8638,151 +8913,6 @@ class _MembersFitnessHeader extends StatelessWidget {
 
 class _MembersHeaderMetric extends StatelessWidget {
   const _MembersHeaderMetric({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.20),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: Colors.white, size: 18),
-          const SizedBox(height: 10),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.76),
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MembersFlowCard extends StatelessWidget {
-  const _MembersFlowCard({
-    required this.libraryCount,
-    required this.assignedPlanCount,
-    required this.needsPlanCount,
-  });
-
-  final int libraryCount;
-  final int assignedPlanCount;
-  final int needsPlanCount;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: const Color(0xFFEDEDED)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF1D1617).withValues(alpha: 0.05),
-            blurRadius: 22,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.route_rounded, color: _TrainerWorkoutColor.primaryEnd),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Simple workout assignment flow',
-                  style: TextStyle(
-                    color: _TrainerWorkoutColor.black,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Create reusable workouts in Builder. On this page, choose a member and assign one saved library workout only to that member.',
-            style: TextStyle(
-              color: _TrainerWorkoutColor.gray,
-              fontSize: 12,
-              height: 1.35,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: _MembersFlowMetric(
-                  label: 'Library',
-                  value: '$libraryCount',
-                  icon: Icons.library_books_rounded,
-                  color: const Color(0xFF92A3FD),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _MembersFlowMetric(
-                  label: 'Assigned',
-                  value: '$assignedPlanCount',
-                  icon: Icons.assignment_turned_in_rounded,
-                  color: const Color(0xFF34D399),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _MembersFlowMetric(
-                  label: 'Need plan',
-                  value: '$needsPlanCount',
-                  icon: Icons.playlist_add_rounded,
-                  color: const Color(0xFFFFB86B),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MembersFlowMetric extends StatelessWidget {
-  const _MembersFlowMetric({
     required this.label,
     required this.value,
     required this.icon,
@@ -8797,21 +8927,23 @@ class _MembersFlowMetric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(11),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.12)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 17),
-          const SizedBox(height: 8),
+          Icon(icon, color: color, size: 18),
+          const SizedBox(height: 10),
           Text(
             value,
-            style: const TextStyle(
-              color: _TrainerWorkoutColor.black,
-              fontSize: 16,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -8820,9 +8952,8 @@ class _MembersFlowMetric extends StatelessWidget {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: _TrainerWorkoutColor.gray,
-              fontSize: 10,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.textSecondary,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -8868,15 +8999,16 @@ class _MembersSearchCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(26),
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.75)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1D1617).withValues(alpha: 0.06),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
+            color: AppColors.shadow.withValues(alpha: 0.08),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -8896,10 +9028,14 @@ class _MembersSearchCard extends StatelessWidget {
                       icon: const Icon(Icons.close_rounded),
                     ),
               filled: true,
-              fillColor: const Color(0xFFF7F8F8),
+              fillColor: AppColors.surfaceStrong,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(18),
-                borderSide: BorderSide.none,
+                borderSide: const BorderSide(color: AppColors.stroke),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: const BorderSide(color: AppColors.stroke),
               ),
             ),
           ),
@@ -9042,17 +9178,18 @@ class _FitnessMemberRow extends StatelessWidget {
 
     return InkWell(
       onTap: onOpen,
-      borderRadius: BorderRadius.circular(26),
+      borderRadius: BorderRadius.circular(28),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.96),
-          borderRadius: BorderRadius.circular(26),
+          color: Colors.white.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: AppColors.stroke.withValues(alpha: 0.75)),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF1D1617).withValues(alpha: 0.06),
-              blurRadius: 22,
-              offset: const Offset(0, 12),
+              color: AppColors.shadow.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
@@ -9063,13 +9200,14 @@ class _FitnessMemberRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 58,
-                  height: 58,
+                  width: 54,
+                  height: 54,
                   padding: const EdgeInsets.all(3),
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [Color(0xFFC58BF2), Color(0xFF92A3FD)],
+                    color: AppColors.primary.withValues(alpha: 0.10),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.18),
                     ),
                   ),
                   child: CircleAvatar(
@@ -9080,7 +9218,7 @@ class _FitnessMemberRow extends StatelessWidget {
                     child: avatar.isEmpty
                         ? const Icon(
                             Icons.person_rounded,
-                            color: Color(0xFF92A3FD),
+                            color: AppColors.primary,
                           )
                         : null,
                   ),
@@ -9094,22 +9232,22 @@ class _FitnessMemberRow extends StatelessWidget {
                         name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF1D1617),
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w900,
+                            ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         email,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF786F72),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w600,
+                            ),
                       ),
                       const SizedBox(height: 8),
                       Wrap(
@@ -9118,12 +9256,12 @@ class _FitnessMemberRow extends StatelessWidget {
                         children: [
                           StatusBadge(
                             label: goal,
-                            color: const Color(0xFF92A3FD),
+                            color: AppColors.primary,
                             icon: Icons.flag_rounded,
                           ),
                           StatusBadge(
                             label: _attendanceLabel(attendanceSummary),
-                            color: const Color(0xFF22D3EE),
+                            color: AppColors.primaryBright,
                             icon: Icons.qr_code_scanner_rounded,
                           ),
                         ],
@@ -9131,11 +9269,48 @@ class _FitnessMemberRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (dueAmount > 0)
-                  StatusBadge(
-                    label: 'Due ${_currency(dueAmount)}',
-                    color: const Color(0xFFF97316),
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (dueAmount > 0)
+                      StatusBadge(
+                        label: 'Due ${_currency(dueAmount)}',
+                        color: AppColors.accentPurple,
+                      ),
+                    PopupMenuButton<String>(
+                      tooltip: 'More member actions',
+                      icon: const Icon(
+                        Icons.more_horiz_rounded,
+                        color: AppColors.textSecondary,
+                      ),
+                      onSelected: (value) {
+                        if (value == 'note') {
+                          onQuickNote();
+                        } else if (value == 'follow_up') {
+                          onAddFollowUp();
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: 'note',
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.edit_note_rounded),
+                            title: Text('Add note'),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'follow_up',
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.event_available_rounded),
+                            title: Text('Add follow-up'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 14),
@@ -9146,7 +9321,7 @@ class _FitnessMemberRow extends StatelessWidget {
                     label: 'Workout',
                     value: completionLabel,
                     icon: Icons.fitness_center_rounded,
-                    color: const Color(0xFF92A3FD),
+                    color: AppColors.primary,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -9157,7 +9332,7 @@ class _FitnessMemberRow extends StatelessWidget {
                       membershipSummary['status']?.toString() ?? 'active',
                     ),
                     icon: Icons.verified_rounded,
-                    color: const Color(0xFF34D399),
+                    color: AppColors.primaryBright,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -9166,7 +9341,7 @@ class _FitnessMemberRow extends StatelessWidget {
                     label: 'Score',
                     value: engagement['score']?.toString() ?? '--',
                     icon: Icons.insights_rounded,
-                    color: const Color(0xFFC58BF2),
+                    color: AppColors.accentPurple,
                   ),
                 ),
               ],
@@ -9178,8 +9353,9 @@ class _FitnessMemberRow extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF7F8F8),
+                  color: AppColors.surfaceStrong,
                   borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.stroke),
                 ),
                 child: Text(
                   latestProgressUpdate ??
@@ -9187,9 +9363,8 @@ class _FitnessMemberRow extends StatelessWidget {
                       'No progress note has been added yet.',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF786F72),
-                    fontSize: 11,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
                     height: 1.35,
                     fontWeight: FontWeight.w600,
                   ),
@@ -9197,36 +9372,24 @@ class _FitnessMemberRow extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 14),
-            Wrap(
-              spacing: 9,
-              runSpacing: 9,
+            Row(
               children: [
-                QuickActionButton(
-                  label: 'View',
-                  icon: Icons.visibility_rounded,
-                  onPressed: onOpen,
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onSendMessage,
+                    icon: const Icon(Icons.chat_bubble_outline_rounded),
+                    label: const Text('Message'),
+                  ),
                 ),
-                QuickActionButton(
-                  label: 'Note',
-                  icon: Icons.edit_note_rounded,
-                  onPressed: onQuickNote,
-                ),
-                QuickActionButton(
-                  label: memberPlans.isEmpty ? 'Assign' : 'Manage',
-                  icon: Icons.playlist_add_check_circle_outlined,
-                  onPressed: memberPlans.isEmpty
-                      ? onQuickAssign
-                      : onManageWorkouts,
-                ),
-                QuickActionButton(
-                  label: 'Follow-up',
-                  icon: Icons.event_available_rounded,
-                  onPressed: onAddFollowUp,
-                ),
-                QuickActionButton(
-                  label: 'Message',
-                  icon: Icons.chat_bubble_rounded,
-                  onPressed: onSendMessage,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: memberPlans.isEmpty
+                        ? onQuickAssign
+                        : onManageWorkouts,
+                    icon: const Icon(Icons.playlist_add_check_circle_outlined),
+                    label: Text(memberPlans.isEmpty ? 'Assign' : 'Manage'),
+                  ),
                 ),
               ],
             ),
@@ -9255,8 +9418,9 @@ class _MemberRowMetric extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(18),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.10)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -9267,9 +9431,8 @@ class _MemberRowMetric extends StatelessWidget {
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Color(0xFF1D1617),
-              fontSize: 12,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -9278,9 +9441,8 @@ class _MemberRowMetric extends StatelessWidget {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Color(0xFF786F72),
-              fontSize: 9,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.textSecondary,
               fontWeight: FontWeight.w700,
             ),
           ),

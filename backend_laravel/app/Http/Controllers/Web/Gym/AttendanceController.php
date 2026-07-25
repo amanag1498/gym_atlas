@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Web\Gym;
 
-use App\Enums\RoleName;
 use App\Enums\PermissionName;
+use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Attendance\BiometricAttendanceRequest;
 use App\Http\Requests\Attendance\ManualAttendanceRequest;
@@ -18,9 +18,11 @@ use App\Services\Audit\AuditLogService;
 use App\Services\Authorization\ScopedPermissionResolver;
 use App\Services\Web\CsvStreamService;
 use App\Services\Web\GymWebPanelService;
-use Illuminate\Support\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -33,8 +35,7 @@ class AttendanceController extends Controller
         private readonly AttendanceCorrectionService $attendanceCorrectionService,
         private readonly AuditLogService $auditLogService,
         private readonly CsvStreamService $csvStreamService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View|StreamedResponse
     {
@@ -97,6 +98,11 @@ class AttendanceController extends Controller
             );
         }
 
+        $membersQuery = $this->attendanceMembersQuery($gym, $branchIds);
+        $selectedMember = $request->filled('member_id')
+            ? (clone $membersQuery)->find($request->integer('member_id'))
+            : null;
+
         return view('web.gym.attendance.index', [
             'pageTitle' => 'Attendance',
             'breadcrumbs' => ['Gym', 'Attendance'],
@@ -112,8 +118,8 @@ class AttendanceController extends Controller
                 ->take(6)
                 ->get(),
             'branches' => $this->gymWebPanelService->accessibleBranches($request, $gym),
-            'members' => User::query()->whereHas('memberProfile', fn ($builder) => $builder->where('gym_id', $gym->id)->whereIn('branch_id', $branchIds))->orderBy('name')->get(),
-            'selectedMember' => $request->filled('member_id') ? User::query()->find($request->integer('member_id')) : null,
+            'selectedMember' => $selectedMember,
+            'selectedMemberSearchItem' => $selectedMember ? $this->attendanceMemberSearchItem($selectedMember) : null,
             'canManageAttendance' => $this->canManageAttendance($request, $gym, $request->integer('branch_id') ?: null),
             'duplicateProtectionEnabled' => (bool) $gym->prevent_duplicate_same_day_checkins,
             'summary' => [
@@ -170,13 +176,58 @@ class AttendanceController extends Controller
         $this->assertAttendanceManageAccess($request, $gym, $request->integer('branch_id') ?: null);
         $branchIds = $this->gymWebPanelService->selectedBranchIds($request, $gym);
 
+        $membersQuery = $this->attendanceMembersQuery($gym, $branchIds);
+        $selectedMemberId = old('member_id', $request->integer('member_id') ?: null);
+        $selectedMember = $selectedMemberId ? (clone $membersQuery)->find($selectedMemberId) : null;
+
         return view('web.gym.attendance.manual', [
             'pageTitle' => 'Manual Attendance',
             'breadcrumbs' => ['Gym', 'Attendance', 'Manual'],
             'gym' => $gym,
             'branches' => $gym->branches()->whereIn('id', $branchIds)->orderBy('name')->get(),
-            'members' => User::query()->whereHas('memberProfile', fn ($builder) => $builder->where('gym_id', $gym->id)->whereIn('branch_id', $branchIds))->orderBy('name')->get(),
+            'membersCount' => (clone $membersQuery)->count(),
+            'selectedMemberSearchItem' => $selectedMember ? $this->attendanceMemberSearchItem($selectedMember) : null,
         ]);
+    }
+
+    public function searchMembers(Request $request): JsonResponse
+    {
+        $gym = $this->gymWebPanelService->resolveGym($request);
+        $this->gymWebPanelService->assertAnyPermission($request, [
+            PermissionName::AttendanceView->value,
+            PermissionName::AttendanceManage->value,
+        ], $gym);
+        $this->assertAttendanceViewAccess($request, $gym, $request->integer('branch_id') ?: null);
+
+        $validated = $request->validate([
+            'q' => ['required', 'string', 'min:2', 'max:100'],
+            'branch_id' => ['nullable', 'integer'],
+        ]);
+        $branchIds = $this->gymWebPanelService->accessibleBranchIds($request, $gym);
+
+        if (! empty($validated['branch_id'])) {
+            abort_unless(in_array((int) $validated['branch_id'], $branchIds, true), 404);
+            $branchIds = [(int) $validated['branch_id']];
+        }
+
+        $search = '%'.$validated['q'].'%';
+        $hasPhoneColumn = Schema::hasColumn('users', 'phone');
+        $members = $this->attendanceMembersQuery($gym, $branchIds)
+            ->where(function ($query) use ($search, $hasPhoneColumn): void {
+                $query->where('name', 'like', $search)
+                    ->orWhere('email', 'like', $search);
+
+                if ($hasPhoneColumn) {
+                    $query->orWhere('phone', 'like', $search);
+                }
+            })
+            ->orderBy('name')
+            ->limit(20)
+            ->get()
+            ->map(fn (User $member): array => $this->attendanceMemberSearchItem($member))
+            ->values();
+
+        return response()->json(['data' => $members]);
     }
 
     public function storeManual(ManualAttendanceRequest $request): RedirectResponse
@@ -398,5 +449,38 @@ class AttendanceController extends Controller
         }
 
         return $this->scopedPermissionResolver->hasCustomPermission($user, 'manage_attendance', $gym->id, $branchId);
+    }
+
+    /**
+     * @param  list<int>  $branchIds
+     */
+    private function attendanceMembersQuery($gym, array $branchIds)
+    {
+        return User::query()
+            ->with('memberProfile.branch')
+            ->whereHas('memberProfile', fn ($builder) => $builder
+                ->where('gym_id', $gym->id)
+                ->whereIn('branch_id', $branchIds));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function attendanceMemberSearchItem(User $member): array
+    {
+        $description = $member->email;
+        $branchName = $member->memberProfile?->branch?->name;
+
+        if ($branchName) {
+            $description .= ' • '.$branchName;
+        }
+
+        return [
+            'id' => $member->id,
+            'label' => $member->name,
+            'description' => $description,
+            'avatar' => $member->avatar,
+            'branch_id' => $member->memberProfile?->branch_id,
+        ];
     }
 }

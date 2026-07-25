@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import '../../core/api_client.dart';
 
 class MemberRepository {
@@ -160,6 +162,15 @@ class MemberRepository {
   Future<Map<String, dynamic>> fetchProfile() => _client.get('/member/profile');
   Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> payload) =>
       _client.put('/member/profile', data: payload);
+  Future<Map<String, dynamic>> uploadProfilePhoto({
+    required List<int> bytes,
+    required String filename,
+  }) => _client.post(
+    '/member/profile/photo',
+    data: FormData.fromMap({
+      'photo': MultipartFile.fromBytes(bytes, filename: filename),
+    }),
+  );
   Future<Map<String, dynamic>> submitTrialRequest(
     Map<String, dynamic> payload,
   ) => _client.post('/member/trial-requests', data: payload);
@@ -211,4 +222,23 @@ class MemberRepository {
   ) => _client.post('/member/progress/body-measurements', data: payload);
   Future<Map<String, dynamic>> addProgressPhoto(Map<String, dynamic> payload) =>
       _client.post('/member/progress/photos', data: payload);
+
+  Future<Map<String, dynamic>> uploadProgressPhoto({
+    required List<int> bytes,
+    required String filename,
+    required String photoType,
+    required String capturedOn,
+    String? notes,
+    String? albumKey,
+  }) => _client.post(
+    '/member/progress/photos',
+    data: FormData.fromMap({
+      'photo': MultipartFile.fromBytes(bytes, filename: filename),
+      'photo_type': photoType,
+      'captured_on': capturedOn,
+      if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+      if (albumKey != null && albumKey.trim().isNotEmpty)
+        'album_key': albumKey.trim(),
+    }),
+  );
 }

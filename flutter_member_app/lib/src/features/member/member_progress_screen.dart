@@ -1,10 +1,13 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
-import '../../../core/widgets/confirmation_dialog.dart';
+import '../../../core/widgets/premium_card.dart';
 import 'member_repository.dart';
 
 class MemberProgressScreen extends StatefulWidget {
@@ -13,11 +16,13 @@ class MemberProgressScreen extends StatefulWidget {
     required this.repository,
     required this.initialSummary,
     required this.onRefreshParent,
+    this.memberName = 'Athlete',
   });
 
   final MemberRepository repository;
   final Map<String, dynamic> initialSummary;
   final Future<void> Function() onRefreshParent;
+  final String memberName;
 
   @override
   State<MemberProgressScreen> createState() => _MemberProgressScreenState();
@@ -48,10 +53,12 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
   final _calfController = TextEditingController();
   final _bodyFatController = TextEditingController();
   final _measurementNotesController = TextEditingController();
-  final _photoUrlController = TextEditingController();
   final _photoNotesController = TextEditingController();
+  final ImagePicker _imagePicker = ImagePicker();
   late final TabController _tabController;
   String _photoType = 'front';
+  XFile? _selectedPhoto;
+  Uint8List? _selectedPhotoBytes;
 
   @override
   void initState() {
@@ -74,7 +81,6 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
     _calfController.dispose();
     _bodyFatController.dispose();
     _measurementNotesController.dispose();
-    _photoUrlController.dispose();
     _photoNotesController.dispose();
     super.dispose();
   }
@@ -134,16 +140,109 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _showUploadUnavailableDialog() async {
-    await showDialog<bool>(
+  Future<void> _showPhotoSourceSheet() async {
+    if (_savingPhoto) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
       context: context,
-      builder: (context) => const ConfirmationDialog(
-        title: 'Device upload is not available yet',
-        message:
-            'This member API currently accepts hosted photo URLs only. Local gallery upload and media permission prompts are intentionally disabled in this build so progress photo actions stay safe and never crash.',
-        confirmLabel: 'Understood',
-      ),
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              0,
+              AppSpacing.lg,
+              AppSpacing.lg,
+            ),
+            child: PremiumCard(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Choose progress photo',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Pick a clean photo from your gallery or capture a new one.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  _PhotoSourceAction(
+                    icon: Icons.photo_library_outlined,
+                    title: 'Gallery',
+                    subtitle: 'Choose from saved photos',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _pickPhoto(ImageSource.gallery);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  _PhotoSourceAction(
+                    icon: Icons.photo_camera_outlined,
+                    title: 'Camera',
+                    subtitle: 'Take a new progress photo',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _pickPhoto(ImageSource.camera);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
+  }
+
+  Future<void> _pickPhoto(ImageSource source) async {
+    try {
+      final file = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 88,
+        maxWidth: 1800,
+      );
+
+      if (file == null) {
+        return;
+      }
+
+      final bytes = await file.readAsBytes();
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _selectedPhoto = file;
+        _selectedPhotoBytes = bytes;
+      });
+    } catch (exception) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+    }
+  }
+
+  void _clearSelectedPhoto() {
+    setState(() {
+      _selectedPhoto = null;
+      _selectedPhotoBytes = null;
+    });
   }
 
   Future<void> _saveWeight() async {
@@ -233,26 +332,29 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
   }
 
   Future<void> _savePhoto() async {
-    final photoUrl = _photoUrlController.text.trim();
-    final uri = Uri.tryParse(photoUrl);
-    if (photoUrl.isEmpty || uri == null || !uri.hasScheme) {
+    final photoBytes = _selectedPhotoBytes;
+    final photoFile = _selectedPhoto;
+    if (photoBytes == null || photoFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid hosted photo URL.')),
+        const SnackBar(content: Text('Choose a progress photo first.')),
       );
       return;
     }
 
     setState(() => _savingPhoto = true);
     try {
-      await widget.repository.addProgressPhoto({
-        'photo_url': photoUrl,
-        'photo_type': _photoType,
-        'captured_on': DateTime.now().toIso8601String().split('T').first,
-        'notes': _nullable(_photoNotesController.text),
-      });
-      _photoUrlController.clear();
+      await widget.repository.uploadProgressPhoto(
+        bytes: photoBytes,
+        filename: photoFile.name.isEmpty
+            ? 'progress-photo.jpg'
+            : photoFile.name,
+        photoType: _photoType,
+        capturedOn: DateTime.now().toIso8601String().split('T').first,
+        notes: _nullable(_photoNotesController.text),
+      );
+      _clearSelectedPhoto();
       _photoNotesController.clear();
-      await _afterSave('Progress photo saved.');
+      await _afterSave('Progress photo uploaded.');
     } catch (exception) {
       if (!mounted) {
         return;
@@ -279,22 +381,36 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
         (_summary['recent_progress_photos'] as List<dynamic>? ?? const [])
             .map((item) => Map<String, dynamic>.from(item as Map))
             .toList();
+    final firstName = firstNameFromFullName(widget.memberName);
 
     return AppGradientScaffold(
       title: 'Strength Tracking',
       subtitle: 'Weight, measurements, and progress photos',
-      actions: [
-        IconButton(
-          onPressed: _loading ? null : _load,
-          icon: const Icon(Icons.refresh_rounded),
-        ),
-      ],
       body: _loading
           ? const _ProgressSkeleton()
           : _error != null
           ? ErrorStateView(message: _error!, onRetry: _load)
           : Column(
               children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.md,
+                    AppSpacing.lg,
+                    0,
+                  ),
+                  child: MemberPageGreetingHeader(
+                    firstName: firstName,
+                    subtitle:
+                        'Body metrics, steps, and progress tracking in one place.',
+                    actions: [
+                      MemberHeaderActionButton(
+                        icon: Icons.refresh_rounded,
+                        onTap: _load,
+                      ),
+                    ],
+                  ),
+                ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
                     AppSpacing.lg,
@@ -353,12 +469,16 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
                       _ProgressPhotosTab(
                         photos: _photos,
                         recentPhotos: recentPhotos,
-                        photoUrlController: _photoUrlController,
+                        selectedPhoto: _selectedPhoto,
+                        selectedPhotoBytes: _selectedPhotoBytes,
                         notesController: _photoNotesController,
                         selectedType: _photoType,
                         onTypeChanged: (value) =>
                             setState(() => _photoType = value),
-                        onDeviceUploadPressed: _showUploadUnavailableDialog,
+                        onChoosePhotoPressed: _showPhotoSourceSheet,
+                        onClearPhotoPressed: _selectedPhotoBytes == null
+                            ? null
+                            : _clearSelectedPhoto,
                         saving: _savingPhoto,
                         onSave: _savePhoto,
                       ),
@@ -396,169 +516,287 @@ class _StrengthTrackingHeader extends StatelessWidget {
     final weightLabel = weight > 0
         ? '${weight.toStringAsFixed(1)} kg'
         : 'No log';
+    final progress =
+        weightCount == 0 && measurementCount == 0 && photoCount == 0
+        ? 0.18
+        : ((weightCount + measurementCount + photoCount) /
+                  (weightCount + measurementCount + photoCount + stepCount + 2))
+              .clamp(0.28, 0.88)
+              .toDouble();
 
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.96, end: 1),
-      duration: const Duration(milliseconds: 420),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) =>
-          Transform.scale(scale: value, child: child),
-      child: Container(
-        padding: const EdgeInsets.all(22),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(32),
-          gradient: const LinearGradient(
-            colors: [Color(0xFF9DCEFF), Color(0xFF92A3FD), Color(0xFFC58BF2)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.24),
-              blurRadius: 26,
-              offset: const Offset(0, 16),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              right: -28,
-              top: -36,
-              child: _SoftOrb(
-                size: 118,
-                color: Colors.white.withValues(alpha: 0.22),
+    return Column(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(30),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withValues(alpha: 0.98),
+                  const Color(0xFFF6FBFF),
+                  const Color(0xFFF8FAFC),
+                ],
               ),
-            ),
-            Positioned(
-              right: 36,
-              bottom: 42,
-              child: _SoftOrb(
-                size: 44,
-                color: Colors.white.withValues(alpha: 0.16),
+              border: Border.all(
+                color: AppColors.stroke.withValues(alpha: 0.8),
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.shadow.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Stack(
               children: [
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 260),
-                  child: successMessage == null
-                      ? const SizedBox.shrink()
-                      : Padding(
-                          key: ValueKey(successMessage),
-                          padding: const EdgeInsets.only(bottom: 14),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.20),
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.28),
+                Positioned(
+                  top: -34,
+                  right: -28,
+                  child: Container(
+                    width: 146,
+                    height: 146,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.primary.withValues(alpha: 0.10),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (successMessage != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceSoft,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: AppColors.stroke),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.check_circle_rounded,
+                                color: AppColors.primaryBright,
+                                size: 18,
                               ),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.check_circle_rounded,
-                                  color: Colors.white,
-                                  size: 18,
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  successMessage!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: AppColors.textPrimary,
+                                        fontWeight: FontWeight.w800,
+                                      ),
                                 ),
-                                const SizedBox(width: 8),
-                                Expanded(
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                      ],
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 7,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.68),
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(color: AppColors.stroke),
+                                  ),
                                   child: Text(
-                                    successMessage!,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context).textTheme.bodySmall
+                                    'BODY METRICS',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
                                         ?.copyWith(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w800,
+                                          color: AppColors.primaryBright,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 0.8,
                                         ),
                                   ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Track the numbers that move with you',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineSmall
+                                      ?.copyWith(
+                                        color: AppColors.textPrimary,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: -0.9,
+                                        height: 0.98,
+                                      ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Weight, measurements, steps, and progress photos in the same premium tracking flow.',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: AppColors.textSecondary,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.4,
+                                      ),
                                 ),
                               ],
                             ),
                           ),
-                        ),
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Strength Tracking',
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Body metrics, progress photos, and transformation timeline.',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.88),
-                                  fontWeight: FontWeight.w600,
-                                ),
+                          const SizedBox(width: 12),
+                          _StrengthHeroRing(
+                            progress: progress,
+                            label: weightLabel == 'No log' ? '--' : weightLabel,
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    _StrengthHeaderStat(value: weightLabel, label: 'latest'),
-                  ],
+                      const SizedBox(height: 18),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _StrengthHeroChip(
+                            icon: Icons.monitor_weight_rounded,
+                            label: '$weightCount weight logs',
+                          ),
+                          _StrengthHeroChip(
+                            icon: Icons.straighten_rounded,
+                            label: '$measurementCount measurements',
+                          ),
+                          _StrengthHeroChip(
+                            icon: Icons.directions_walk_rounded,
+                            label: '$stepCount step days',
+                          ),
+                          _StrengthHeroChip(
+                            icon: Icons.photo_camera_back_rounded,
+                            label: '$photoCount photos',
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _StrengthHeaderMiniStat(
-                        value: '$weightCount',
-                        label: 'Weight',
-                        icon: Icons.monitor_weight_rounded,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _StrengthHeaderMiniStat(
-                        value: '$measurementCount',
-                        label: 'Measures',
-                        icon: Icons.straighten_rounded,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _StrengthHeaderMiniStat(
-                        value: '$stepCount',
-                        label: 'Step days',
-                        icon: Icons.directions_walk_rounded,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _StrengthHeaderMiniStat(
-                        value: '$photoCount',
-                        label: 'Photos',
-                        icon: Icons.photo_camera_back_rounded,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                _StrengthTabSlider(controller: tabController),
               ],
             ),
-          ],
+          ),
         ),
+        const SizedBox(height: AppSpacing.md),
+        _StrengthTabSlider(controller: tabController),
+      ],
+    );
+  }
+}
+
+class _StrengthHeroRing extends StatelessWidget {
+  const _StrengthHeroRing({required this.progress, required this.label});
+
+  final double progress;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 96,
+      height: 96,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 96,
+            height: 96,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withValues(alpha: 0.78),
+              border: Border.all(
+                color: AppColors.stroke.withValues(alpha: 0.7),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 72,
+            height: 72,
+            child: CircularProgressIndicator(
+              value: 1,
+              strokeWidth: 8,
+              backgroundColor: AppColors.stroke.withValues(alpha: 0.8),
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.stroke),
+            ),
+          ),
+          SizedBox(
+            width: 72,
+            height: 72,
+            child: CircularProgressIndicator(
+              value: progress,
+              strokeWidth: 8,
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                AppColors.primaryBright,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StrengthHeroChip extends StatelessWidget {
+  const _StrengthHeroChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSoft,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.stroke),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: AppColors.primaryBright),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -612,17 +850,11 @@ class _StrengthTabSliderState extends State<_StrengthTabSlider> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(5),
+      padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.82),
+        color: AppColors.surfaceOverlay,
         borderRadius: BorderRadius.circular(999),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.10),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        border: Border.all(color: AppColors.stroke),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -664,8 +896,9 @@ class _StrengthTabPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
@@ -676,23 +909,7 @@ class _StrengthTabPill extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(999),
-          gradient: active
-              ? const LinearGradient(
-                  colors: [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          color: active ? null : Colors.transparent,
-          boxShadow: active
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFF92A3FD).withValues(alpha: 0.24),
-                    blurRadius: 14,
-                    offset: const Offset(0, 8),
-                  ),
-                ]
-              : null,
+          color: active ? AppColors.primary : Colors.transparent,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1195,22 +1412,26 @@ class _ProgressPhotosTab extends StatelessWidget {
   const _ProgressPhotosTab({
     required this.photos,
     required this.recentPhotos,
-    required this.photoUrlController,
+    required this.selectedPhoto,
+    required this.selectedPhotoBytes,
     required this.notesController,
     required this.selectedType,
     required this.onTypeChanged,
-    required this.onDeviceUploadPressed,
+    required this.onChoosePhotoPressed,
+    required this.onClearPhotoPressed,
     required this.saving,
     required this.onSave,
   });
 
   final List<Map<String, dynamic>> photos;
   final List<Map<String, dynamic>> recentPhotos;
-  final TextEditingController photoUrlController;
+  final XFile? selectedPhoto;
+  final Uint8List? selectedPhotoBytes;
   final TextEditingController notesController;
   final String selectedType;
   final ValueChanged<String> onTypeChanged;
-  final VoidCallback onDeviceUploadPressed;
+  final VoidCallback onChoosePhotoPressed;
+  final VoidCallback? onClearPhotoPressed;
   final bool saving;
   final VoidCallback onSave;
 
@@ -1244,16 +1465,41 @@ class _ProgressPhotosTab extends StatelessWidget {
         _StrengthFormPanel(
           title: 'Add progress photo',
           subtitle:
-              'Hosted URL only in this API build. Device upload is disabled safely.',
+              'Keep your visual timeline current with a simple device upload.',
           icon: Icons.photo_camera_back_rounded,
           color: const Color(0xFFFFB86C),
           children: [
-            OutlinedButton.icon(
-              onPressed: onDeviceUploadPressed,
-              icon: const Icon(Icons.perm_media_rounded),
-              label: const Text('Upload from device'),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: saving ? null : onChoosePhotoPressed,
+                    icon: const Icon(Icons.perm_media_rounded),
+                    label: Text(
+                      selectedPhotoBytes == null
+                          ? 'Choose photo'
+                          : 'Change photo',
+                    ),
+                  ),
+                ),
+                if (onClearPhotoPressed != null) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  OutlinedButton(
+                    onPressed: saving ? null : onClearPhotoPressed,
+                    child: const Text('Clear'),
+                  ),
+                ],
+              ],
             ),
             const SizedBox(height: AppSpacing.sm),
+            if (selectedPhotoBytes != null) ...[
+              _SelectedPhotoPreview(
+                bytes: selectedPhotoBytes!,
+                label: _titleCase(selectedType),
+                filename: selectedPhoto?.name ?? 'Selected photo',
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
             DropdownButtonFormField<String>(
               initialValue: selectedType,
               decoration: const InputDecoration(
@@ -1274,14 +1520,6 @@ class _ProgressPhotosTab extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.md),
             TextField(
-              controller: photoUrlController,
-              decoration: const InputDecoration(
-                labelText: 'Hosted photo URL',
-                prefixIcon: Icon(Icons.link_rounded),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
               controller: notesController,
               maxLines: 2,
               decoration: const InputDecoration(
@@ -1291,7 +1529,7 @@ class _ProgressPhotosTab extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.md),
             GradientButton(
-              label: 'Save Progress Photo',
+              label: 'Upload Progress Photo',
               icon: Icons.add_photo_alternate_rounded,
               loading: saving,
               expanded: true,
@@ -1309,7 +1547,7 @@ class _ProgressPhotosTab extends StatelessWidget {
           const _StrengthEmptyPanel(
             title: 'No progress photos yet',
             message:
-                'Add hosted photo links over time to build a transformation timeline.',
+                'Add progress photos over time to build a clean transformation timeline.',
             icon: Icons.photo_library_outlined,
           )
         else
@@ -1320,6 +1558,134 @@ class _ProgressPhotosTab extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _PhotoSourceAction extends StatelessWidget {
+  const _PhotoSourceAction({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceSoft,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.stroke),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.stroke),
+              ),
+              child: Icon(icon, color: AppColors.primaryBright, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.textMuted,
+              size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectedPhotoPreview extends StatelessWidget {
+  const _SelectedPhotoPreview({
+    required this.bytes,
+    required this.label,
+    required this.filename,
+  });
+
+  final Uint8List bytes;
+  final String label;
+  final String filename;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSoft,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.stroke),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+            child: AspectRatio(
+              aspectRatio: 0.82,
+              child: Image.memory(bytes, fit: BoxFit.cover),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                StatusBadge(label: label, color: AppColors.primaryBright),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    filename,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1362,53 +1728,46 @@ class _StrengthMetricTile extends StatelessWidget {
           child: child,
         ),
       ),
-      child: Container(
+      child: SizedBox(
         width: 168,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(26),
-          boxShadow: [
-            BoxShadow(
-              color: data.color.withValues(alpha: 0.14),
-              blurRadius: 20,
-              offset: const Offset(0, 12),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: data.color.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(15),
+        child: PremiumCard(
+          glowColor: data.color,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceSoft,
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: AppColors.stroke),
+                ),
+                child: Icon(data.icon, color: data.color, size: 20),
               ),
-              child: Icon(data.icon, color: data.color, size: 20),
-            ),
-            const Spacer(),
-            Text(
-              data.value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w900,
+              const Spacer(),
+              Text(
+                data.value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              data.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w700,
+              const SizedBox(height: 3),
+              Text(
+                data.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1446,19 +1805,9 @@ class _StrengthFormPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return PremiumCard(
+      glowColor: color,
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.14),
-            blurRadius: 24,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1468,12 +1817,11 @@ class _StrengthFormPanel extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [color.withValues(alpha: 0.82), color],
-                  ),
+                  color: AppColors.surfaceSoft,
                   borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.stroke),
                 ),
-                child: Icon(icon, color: Colors.white),
+                child: Icon(icon, color: color),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1525,23 +1873,8 @@ class _StrengthInsightPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return PremiumCard(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFFFFF), Color(0xFFF7F9FF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.10),
-            blurRadius: 24,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1551,10 +1884,11 @@ class _StrengthInsightPanel extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFC58BF2).withValues(alpha: 0.14),
+                  color: AppColors.surfaceSoft,
                   borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.stroke),
                 ),
-                child: Icon(icon, color: const Color(0xFFC58BF2), size: 20),
+                child: Icon(icon, color: AppColors.primaryBright, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1609,27 +1943,18 @@ class _StrengthTimelineRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cleanDetail = detail?.trim() ?? '';
-    return Container(
+    return PremiumCard(
+      glowColor: color,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.10),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
       child: Row(
         children: [
           Container(
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.13),
+              color: AppColors.surfaceSoft,
               borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppColors.stroke),
             ),
             child: Icon(icon, color: color),
           ),
@@ -1686,19 +2011,9 @@ class _StrengthMeasurementSnapshot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return PremiumCard(
+      glowColor: AppColors.primaryBright,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFC58BF2).withValues(alpha: 0.12),
-            blurRadius: 22,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1708,12 +2023,13 @@ class _StrengthMeasurementSnapshot extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFC58BF2).withValues(alpha: 0.14),
+                  color: AppColors.surfaceSoft,
                   borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.stroke),
                 ),
                 child: const Icon(
                   Icons.straighten_rounded,
-                  color: Color(0xFFC58BF2),
+                  color: AppColors.primaryBright,
                 ),
               ),
               const SizedBox(width: 12),
@@ -1726,7 +2042,10 @@ class _StrengthMeasurementSnapshot extends StatelessWidget {
                   ),
                 ),
               ),
-              const StatusBadge(label: 'Snapshot', color: Color(0xFFC58BF2)),
+              const StatusBadge(
+                label: 'Snapshot',
+                color: AppColors.primaryBright,
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -1795,8 +2114,9 @@ class _MetricChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7F8F8),
+        color: AppColors.surfaceSoft,
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.stroke),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1831,19 +2151,9 @@ class _StrengthPhotoTimelineTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = photo['photo_url']?.toString() ?? '';
-    return Container(
+    return PremiumCard(
+      glowColor: AppColors.primaryBright,
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFFFB86C).withValues(alpha: 0.12),
-            blurRadius: 22,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1854,14 +2164,14 @@ class _StrengthPhotoTimelineTile extends StatelessWidget {
               height: 112,
               child: url.isEmpty
                   ? Container(
-                      color: const Color(0xFFF7F8F8),
+                      color: AppColors.surfaceSoft,
                       child: const Icon(Icons.photo_library_outlined),
                     )
                   : Image.network(
                       url,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
-                        color: const Color(0xFFF7F8F8),
+                        color: AppColors.surfaceSoft,
                         child: const Icon(Icons.broken_image_outlined),
                       ),
                     ),
@@ -1874,7 +2184,7 @@ class _StrengthPhotoTimelineTile extends StatelessWidget {
               children: [
                 StatusBadge(
                   label: _titleCase(photo['photo_type']?.toString() ?? 'other'),
-                  color: const Color(0xFFFFB86C),
+                  color: AppColors.primaryBright,
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -1917,7 +2227,7 @@ class _PhotoFrame extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        StatusBadge(label: label, color: const Color(0xFFC58BF2)),
+        StatusBadge(label: label, color: AppColors.primaryBright),
         const SizedBox(height: AppSpacing.sm),
         ClipRRect(
           borderRadius: BorderRadius.circular(22),
@@ -1925,14 +2235,14 @@ class _PhotoFrame extends StatelessWidget {
             aspectRatio: 0.78,
             child: url.isEmpty
                 ? Container(
-                    color: const Color(0xFFF7F8F8),
+                    color: AppColors.surfaceSoft,
                     child: const Icon(Icons.photo_library_outlined),
                   )
                 : Image.network(
                     url,
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(
-                      color: const Color(0xFFF7F8F8),
+                      color: AppColors.surfaceSoft,
                       child: const Icon(Icons.broken_image_outlined),
                     ),
                   ),
@@ -1965,8 +2275,8 @@ class _StrengthSectionTitle extends StatelessWidget {
         Text(
           action,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: AppColors.primary,
-            fontWeight: FontWeight.w900,
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ],
@@ -1987,32 +2297,19 @@ class _StrengthEmptyPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
+    return PremiumCard(
       padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.10),
-            blurRadius: 24,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
       child: Column(
         children: [
           Container(
             width: 58,
             height: 58,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
-              ),
+              color: AppColors.surfaceSoft,
               borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: AppColors.stroke),
             ),
-            child: Icon(icon, color: Colors.white),
+            child: Icon(icon, color: AppColors.primaryBright),
           ),
           const SizedBox(height: 14),
           Text(
@@ -2050,12 +2347,13 @@ class _StrengthMiniEmpty extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7F8F8),
+        color: AppColors.surfaceSoft,
         borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.stroke),
       ),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.primary),
+          Icon(icon, color: AppColors.primaryBright),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -2068,118 +2366,6 @@ class _StrengthMiniEmpty extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _StrengthHeaderStat extends StatelessWidget {
-  const _StrengthHeaderStat({required this.value, required this.label});
-
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 104),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.20),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Colors.white.withValues(alpha: 0.78),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StrengthHeaderMiniStat extends StatelessWidget {
-  const _StrengthHeaderMiniStat({
-    required this.value,
-    required this.label,
-    required this.icon,
-  });
-
-  final String value;
-  final String label;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.white, size: 17),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.78),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SoftOrb extends StatelessWidget {
-  const _SoftOrb({required this.size, required this.color});
-
-  final double size;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 }

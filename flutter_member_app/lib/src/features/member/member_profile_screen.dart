@@ -1,10 +1,14 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/error_state.dart';
+import '../../../core/widgets/premium_card.dart';
 import 'member_repository.dart';
 
 class MemberProfileScreen extends StatefulWidget {
@@ -175,223 +179,312 @@ class _MemberProfileScreenState extends State<MemberProfileScreen> {
     final currentGymName = _stringValue(currentGym['name']);
     final hasCurrentGym = currentGym.isNotEmpty && currentGym['id'] != null;
 
-    return Scaffold(
-      backgroundColor: _EditFitColor.white,
-      appBar: AppBar(
-        backgroundColor: _EditFitColor.white,
-        centerTitle: true,
-        elevation: 0,
-        title: Text(
-          'Profile',
-          style: TextStyle(
-            color: _EditFitColor.black,
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        actions: <Widget>[
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: _EditIconButton(
-              icon: Icons.refresh_rounded,
-              onTap: _loading ? null : _loadProfile,
-            ),
-          ),
-        ],
-      ),
-      body: _loading
-          ? const _ProfileSkeleton()
-          : _error != null
-          ? ErrorState(message: _error!, onRetry: _loadProfile)
-          : RefreshIndicator(
-              onRefresh: _loadProfile,
-              color: _EditFitColor.primaryEnd,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
-                ),
-                padding: const EdgeInsets.fromLTRB(25, 15, 25, 30),
-                children: <Widget>[
-                  _EditAnimatedSection(
-                    child: Row(
-                      children: <Widget>[
-                        _ProfileAvatar(
-                          imageUrl: photoUrl,
-                          name: _stringValue(_profile['name']),
-                          size: 54,
-                        ),
-                        const SizedBox(width: 15),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                _stringValue(
-                                  _profile['name'],
-                                  fallback: 'Member profile',
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: _EditFitColor.black,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 5),
-                              Text(
-                                _stringValue(
-                                  _profile['email'],
-                                  fallback: 'Email unavailable',
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: _EditFitColor.gray,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(
-                          width: 70,
-                          height: 25,
-                          child: _EditRoundButton(
-                            title: 'Edit',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w400,
-                            onPressed: _openEditProfile,
-                          ),
-                        ),
-                      ],
-                    ),
+    return AppGradientScaffold(
+      title: 'Profile',
+      body: SafeArea(
+        bottom: false,
+        child: _loading
+            ? const _ProfileSkeleton()
+            : _error != null
+            ? ErrorState(message: _error!, onRetry: _loadProfile)
+            : RefreshIndicator(
+                onRefresh: _loadProfile,
+                color: AppColors.primaryBright,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
                   ),
-                  const SizedBox(height: 15),
-                  _EditAnimatedSection(
-                    delay: const Duration(milliseconds: 70),
-                    child: Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: _EditTitleCell(
-                            title: _numericLabel(_profile['height_cm'], 'cm'),
-                            subtitle: 'Height',
-                          ),
-                        ),
-                        const SizedBox(width: 15),
-                        Expanded(
-                          child: _EditTitleCell(
-                            title: _numericLabel(_profile['weight_kg'], 'kg'),
-                            subtitle: 'Weight',
-                          ),
-                        ),
-                        const SizedBox(width: 15),
-                        Expanded(
-                          child: _EditTitleCell(
-                            title: '$completionPercent%',
-                            subtitle: 'Ready',
-                          ),
-                        ),
-                      ],
-                    ),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                    AppSpacing.lg,
+                    AppSpacing.xl,
                   ),
-                  if (_showSuccess) ...<Widget>[
-                    const SizedBox(height: 15),
-                    const _SuccessPill(),
-                  ],
-                  const SizedBox(height: 25),
-                  _EditAnimatedSection(
-                    delay: const Duration(milliseconds: 120),
-                    child: _EditGroup(
-                      title: 'Training Profile',
-                      children: <Widget>[
-                        _OverviewValueRow(
-                          icon: Icons.trending_up_rounded,
-                          title: 'Experience Level',
-                          value: _stringValue(_profile['experience_level']),
-                        ),
-                        _OverviewGoalsRow(goals: _fitnessGoalNames(_profile)),
-                        _OverviewValueRow(
-                          icon: Icons.track_changes_rounded,
-                          title: 'Profile Completion',
-                          value: completion.missingLabels.isEmpty
-                              ? 'Complete'
-                              : '${completion.missingLabels.length} missing',
-                          onPressed: _openCompletionDetails,
-                        ),
-                      ],
+                  children: <Widget>[
+                    _ProfileTopBar(
+                      title: 'Profile Overview',
+                      subtitle:
+                          'Training details, gym access, and health notes.',
+                      onRefresh: _loading ? null : _loadProfile,
                     ),
-                  ),
-                  const SizedBox(height: 25),
-                  _EditAnimatedSection(
-                    delay: const Duration(milliseconds: 170),
-                    child: _EditGroup(
-                      title: 'Gym Access',
-                      children: <Widget>[
-                        _OverviewValueRow(
-                          icon: Icons.fitness_center_rounded,
-                          title: 'Current Gym',
-                          value: currentGymName,
-                        ),
-                        _OverviewValueRow(
-                          icon: Icons.location_on_outlined,
-                          title: 'Current Branch',
-                          value: _stringValue(currentBranch['name']),
-                        ),
-                        _OverviewValueRow(
-                          icon: Icons.support_agent_rounded,
-                          title: 'Assigned Trainer',
-                          value: _stringValue(assignedTrainer['name']),
-                        ),
-                        if (hasCurrentGym)
-                          _OverviewValueRow(
-                            icon: Icons.logout_rounded,
-                            title: _leavingGym ? 'Leaving Gym...' : 'Leave Gym',
-                            value: 'Keep history, remove active app access',
-                            onPressed: _leavingGym
-                                ? null
-                                : () => _confirmLeaveGym(currentGymName),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 25),
-                  _EditAnimatedSection(
-                    delay: const Duration(milliseconds: 220),
-                    child: _EditGroup(
-                      title: 'Health Notes',
-                      children: <Widget>[
-                        _OverviewValueRow(
-                          icon: Icons.healing_rounded,
-                          title: 'Injuries / Limitations',
-                          value: _stringValue(_profile['injuries_limitations']),
-                          multiline: true,
-                        ),
-                        _OverviewValueRow(
-                          icon: Icons.medical_information_outlined,
-                          title: 'Medical Notes',
-                          value: _stringValue(_profile['medical_notes']),
-                          multiline: true,
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (_isProfileEffectivelyEmpty(_profile)) ...<Widget>[
-                    const SizedBox(height: 25),
+                    const SizedBox(height: AppSpacing.md),
                     _EditAnimatedSection(
-                      delay: const Duration(milliseconds: 270),
-                      child: _EditInlineNote(
-                        icon: Icons.person_add_alt_1_rounded,
-                        title: 'Complete your profile',
-                        message:
-                            'Add goals, metrics and safety notes for a better member experience.',
+                      child: PremiumCard(
+                        child: Row(
+                          children: <Widget>[
+                            _ProfileAvatar(
+                              imageUrl: photoUrl,
+                              name: _stringValue(_profile['name']),
+                              size: 56,
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Text(
+                                    _stringValue(
+                                      _profile['name'],
+                                      fallback: 'Member profile',
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          color: AppColors.textPrimary,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _stringValue(
+                                      _profile['email'],
+                                      fallback: 'Email unavailable',
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: AppColors.textSecondary,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            InkWell(
+                              onTap: _openEditProfile,
+                              borderRadius: BorderRadius.circular(16),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceSoft,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: AppColors.stroke),
+                                ),
+                                child: Text(
+                                  'Edit',
+                                  style: Theme.of(context).textTheme.labelLarge
+                                      ?.copyWith(
+                                        color: AppColors.textPrimary,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
+                    const SizedBox(height: 15),
+                    _EditAnimatedSection(
+                      delay: const Duration(milliseconds: 70),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: _EditTitleCell(
+                              title: _numericLabel(_profile['height_cm'], 'cm'),
+                              subtitle: 'Height',
+                            ),
+                          ),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: _EditTitleCell(
+                              title: _numericLabel(_profile['weight_kg'], 'kg'),
+                              subtitle: 'Weight',
+                            ),
+                          ),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: _EditTitleCell(
+                              title: '$completionPercent%',
+                              subtitle: 'Ready',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_showSuccess) ...<Widget>[
+                      const SizedBox(height: 15),
+                      const _SuccessPill(),
+                    ],
+                    const SizedBox(height: 25),
+                    _EditAnimatedSection(
+                      delay: const Duration(milliseconds: 120),
+                      child: _EditGroup(
+                        title: 'Training Profile',
+                        children: <Widget>[
+                          _OverviewValueRow(
+                            icon: Icons.trending_up_rounded,
+                            title: 'Experience Level',
+                            value: _stringValue(_profile['experience_level']),
+                          ),
+                          _OverviewGoalsRow(goals: _fitnessGoalNames(_profile)),
+                          _OverviewValueRow(
+                            icon: Icons.track_changes_rounded,
+                            title: 'Profile Completion',
+                            value: completion.missingLabels.isEmpty
+                                ? 'Complete'
+                                : '${completion.missingLabels.length} missing',
+                            onPressed: _openCompletionDetails,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 25),
+                    _EditAnimatedSection(
+                      delay: const Duration(milliseconds: 170),
+                      child: _EditGroup(
+                        title: 'Gym Access',
+                        children: <Widget>[
+                          _OverviewValueRow(
+                            icon: Icons.fitness_center_rounded,
+                            title: 'Current Gym',
+                            value: currentGymName,
+                          ),
+                          _OverviewValueRow(
+                            icon: Icons.location_on_outlined,
+                            title: 'Current Branch',
+                            value: _stringValue(currentBranch['name']),
+                          ),
+                          _OverviewValueRow(
+                            icon: Icons.support_agent_rounded,
+                            title: 'Assigned Trainer',
+                            value: _stringValue(assignedTrainer['name']),
+                          ),
+                          if (hasCurrentGym)
+                            _OverviewValueRow(
+                              icon: Icons.logout_rounded,
+                              title: _leavingGym
+                                  ? 'Leaving Gym...'
+                                  : 'Leave Gym',
+                              value: 'Keep history, remove active app access',
+                              onPressed: _leavingGym
+                                  ? null
+                                  : () => _confirmLeaveGym(currentGymName),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 25),
+                    _EditAnimatedSection(
+                      delay: const Duration(milliseconds: 220),
+                      child: _EditGroup(
+                        title: 'Health Notes',
+                        children: <Widget>[
+                          _OverviewValueRow(
+                            icon: Icons.healing_rounded,
+                            title: 'Injuries / Limitations',
+                            value: _stringValue(
+                              _profile['injuries_limitations'],
+                            ),
+                            multiline: true,
+                          ),
+                          _OverviewValueRow(
+                            icon: Icons.medical_information_outlined,
+                            title: 'Medical Notes',
+                            value: _stringValue(_profile['medical_notes']),
+                            multiline: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_isProfileEffectivelyEmpty(_profile)) ...<Widget>[
+                      const SizedBox(height: 25),
+                      _EditAnimatedSection(
+                        delay: const Duration(milliseconds: 270),
+                        child: _EditInlineNote(
+                          icon: Icons.person_add_alt_1_rounded,
+                          title: 'Complete your profile',
+                          message:
+                              'Add goals, metrics and safety notes for a better member experience.',
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
+      ),
+    );
+  }
+}
+
+class _ProfileTopBar extends StatelessWidget {
+  const _ProfileTopBar({
+    required this.title,
+    required this.subtitle,
+    required this.onRefresh,
+  });
+
+  final String title;
+  final String subtitle;
+  final VoidCallback? onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        InkWell(
+          onTap: () => Navigator.of(context).maybePop(),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.stroke),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
+            child: const Icon(
+              Icons.arrow_back_rounded,
+              color: AppColors.textPrimary,
+              size: 20,
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ),
+        if (onRefresh != null) ...[
+          const SizedBox(width: AppSpacing.md),
+          MemberHeaderActionButton(
+            icon: Icons.refresh_rounded,
+            onTap: onRefresh!,
+          ),
+        ],
+      ],
     );
   }
 }
@@ -411,18 +504,26 @@ class _MemberProfileEditScreen extends StatefulWidget {
 }
 
 class _MemberProfileEditScreenState extends State<_MemberProfileEditScreen> {
+  static const List<String> _experienceLevels = <String>[
+    'beginner',
+    'intermediate',
+    'advanced',
+  ];
+
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final ImagePicker _imagePicker = ImagePicker();
   bool _saving = false;
+  bool _uploadingPhoto = false;
   String? _error;
   late final TextEditingController _nameController;
   late final TextEditingController _photoController;
   late final TextEditingController _heightController;
   late final TextEditingController _weightController;
-  late final TextEditingController _experienceController;
   late final TextEditingController _injuriesController;
   late final TextEditingController _medicalController;
   late final List<Map<String, dynamic>> _availableGoals;
   late final Set<int> _selectedGoalIds;
+  late String _experienceLevel;
 
   @override
   void initState() {
@@ -440,9 +541,13 @@ class _MemberProfileEditScreenState extends State<_MemberProfileEditScreen> {
     _weightController = TextEditingController(
       text: _editableNumber(profile['weight_kg']),
     );
-    _experienceController = TextEditingController(
-      text: _stringValue(profile['experience_level'], fallback: ''),
-    );
+    final initialExperience = _stringValue(
+      profile['experience_level'],
+      fallback: '',
+    ).toLowerCase();
+    _experienceLevel = _experienceLevels.contains(initialExperience)
+        ? initialExperience
+        : 'beginner';
     _injuriesController = TextEditingController(
       text: _stringValue(profile['injuries_limitations'], fallback: ''),
     );
@@ -466,10 +571,147 @@ class _MemberProfileEditScreenState extends State<_MemberProfileEditScreen> {
     _photoController.dispose();
     _heightController.dispose();
     _weightController.dispose();
-    _experienceController.dispose();
     _injuriesController.dispose();
     _medicalController.dispose();
     super.dispose();
+  }
+
+  Future<void> _showPhotoSourceSheet() async {
+    if (_saving || _uploadingPhoto) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              0,
+              AppSpacing.lg,
+              AppSpacing.lg,
+            ),
+            child: PremiumCard(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Choose profile photo',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Use a clear profile image from your gallery or camera.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  _EditPickerAction(
+                    icon: Icons.photo_library_outlined,
+                    title: 'Gallery',
+                    subtitle: 'Choose a saved photo',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _pickAndUploadPhoto(ImageSource.gallery);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  _EditPickerAction(
+                    icon: Icons.photo_camera_outlined,
+                    title: 'Camera',
+                    subtitle: 'Capture a new photo',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _pickAndUploadPhoto(ImageSource.camera);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickAndUploadPhoto(ImageSource source) async {
+    try {
+      final file = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 88,
+        maxWidth: 1600,
+      );
+
+      if (file == null) {
+        return;
+      }
+
+      final bytes = await file.readAsBytes();
+      await _uploadSelectedPhoto(bytes: bytes, filename: file.name);
+    } catch (exception) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_profileSaveError(exception))));
+    }
+  }
+
+  Future<void> _uploadSelectedPhoto({
+    required Uint8List bytes,
+    required String filename,
+  }) async {
+    setState(() {
+      _uploadingPhoto = true;
+      _error = null;
+    });
+
+    try {
+      final response = await widget.repository.uploadProfilePhoto(
+        bytes: bytes,
+        filename: filename.isEmpty ? 'profile-photo.jpg' : filename,
+      );
+      final data = Map<String, dynamic>.from(
+        response['data'] as Map? ?? const <String, dynamic>{},
+      );
+      final uploadedPhotoUrl = _stringValue(data['photo'], fallback: '');
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _photoController.text = uploadedPhotoUrl;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profile photo updated.')));
+    } catch (exception) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _error = _profileSaveError(exception));
+    } finally {
+      if (mounted) {
+        setState(() => _uploadingPhoto = false);
+      }
+    }
+  }
+
+  void _removePhoto() {
+    setState(() {
+      _photoController.clear();
+    });
   }
 
   Future<void> _save() async {
@@ -489,7 +731,7 @@ class _MemberProfileEditScreenState extends State<_MemberProfileEditScreen> {
         'height_cm': _nullableDouble(_heightController.text),
         'weight_kg': _nullableDouble(_weightController.text),
         'fitness_goal_ids': _selectedGoalIds.toList()..sort(),
-        'experience_level': _nullableText(_experienceController.text),
+        'experience_level': _experienceLevel,
         'injury_notes': _nullableText(_injuriesController.text),
         'medical_notes': _nullableText(_medicalController.text),
         'member_onboarding_completed': true,
@@ -512,216 +754,280 @@ class _MemberProfileEditScreenState extends State<_MemberProfileEditScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _EditFitColor.white,
-      appBar: AppBar(
-        backgroundColor: _EditFitColor.white,
-        centerTitle: true,
-        elevation: 0,
-        title: Text(
-          'Edit Profile',
-          style: TextStyle(
-            color: _EditFitColor.black,
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        actions: <Widget>[
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: _EditIconButton(
-              icon: Icons.close_rounded,
-              onTap: () => Navigator.of(context).maybePop(),
+    return AppGradientScaffold(
+      title: 'Edit Profile',
+      body: SafeArea(
+        bottom: false,
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              AppSpacing.xl,
             ),
-          ),
-        ],
-      ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(25, 15, 25, 30),
-          children: <Widget>[
-            _EditAnimatedSection(
-              child: _EditProfileHeader(
-                imageUrl: _photoController.text.trim(),
-                name: _nameController.text.trim().isEmpty
-                    ? 'Member'
-                    : _nameController.text.trim(),
-                subtitle: _selectedGoalIds.isEmpty
-                    ? 'Fitness profile'
-                    : '${_selectedGoalIds.length} active goals',
+            children: <Widget>[
+              const _EditProfileTopBar(
+                title: 'Edit Profile',
+                subtitle: 'Update your details, goals, and training notes.',
               ),
-            ),
-            const SizedBox(height: 15),
-            _EditAnimatedSection(
-              delay: const Duration(milliseconds: 70),
-              child: Row(
-                children: <Widget>[
-                  Expanded(
-                    child: _EditTitleCell(
-                      title: _heightController.text.trim().isEmpty
-                          ? '--'
-                          : '${_heightController.text.trim()}cm',
-                      subtitle: 'Height',
-                    ),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: _EditTitleCell(
-                      title: _weightController.text.trim().isEmpty
-                          ? '--'
-                          : '${_weightController.text.trim()}kg',
-                      subtitle: 'Weight',
-                    ),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: _EditTitleCell(
-                      title: _experienceController.text.trim().isEmpty
-                          ? '--'
-                          : _experienceController.text.trim(),
-                      subtitle: 'Level',
-                    ),
-                  ),
-                ],
+              const SizedBox(height: AppSpacing.md),
+              _EditAnimatedSection(
+                child: _EditProfileHeader(
+                  imageUrl: _photoController.text.trim(),
+                  name: _nameController.text.trim().isEmpty
+                      ? 'Member'
+                      : _nameController.text.trim(),
+                  subtitle: _selectedGoalIds.isEmpty
+                      ? 'Fitness profile'
+                      : '${_selectedGoalIds.length} active goals',
+                ),
               ),
-            ),
-            const SizedBox(height: 25),
-            _EditAnimatedSection(
-              delay: const Duration(milliseconds: 120),
-              child: _EditGroup(
-                title: 'Basic Details',
-                children: <Widget>[
-                  _EditTextField(
-                    controller: _nameController,
-                    label: 'Name',
-                    icon: Icons.person_outline_rounded,
-                    textCapitalization: TextCapitalization.words,
-                    validator: (value) {
-                      if ((value ?? '').trim().isEmpty) {
-                        return 'Name is required.';
-                      }
-                      return null;
-                    },
-                    onChanged: (_) => setState(() {}),
-                  ),
-                  _EditTextField(
-                    controller: _experienceController,
-                    label: 'Experience Level',
-                    icon: Icons.trending_up_rounded,
-                    textCapitalization: TextCapitalization.words,
-                    onChanged: (_) => setState(() {}),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 25),
-            _EditAnimatedSection(
-              delay: const Duration(milliseconds: 170),
-              child: _EditGroup(
-                title: 'Body Metrics',
-                children: <Widget>[
-                  _EditTextField(
-                    controller: _heightController,
-                    label: 'Height (cm)',
-                    icon: Icons.height_rounded,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
+              const SizedBox(height: 15),
+              _EditAnimatedSection(
+                delay: const Duration(milliseconds: 70),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: _EditTitleCell(
+                        title: _heightController.text.trim().isEmpty
+                            ? '--'
+                            : '${_heightController.text.trim()}cm',
+                        subtitle: 'Height',
+                      ),
                     ),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                  _EditTextField(
-                    controller: _weightController,
-                    label: 'Weight (kg)',
-                    icon: Icons.monitor_weight_outlined,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: _EditTitleCell(
+                        title: _weightController.text.trim().isEmpty
+                            ? '--'
+                            : '${_weightController.text.trim()}kg',
+                        subtitle: 'Weight',
+                      ),
                     ),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                ],
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: _EditTitleCell(
+                        title: _experienceLabel(_experienceLevel),
+                        subtitle: 'Level',
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 25),
-            _EditAnimatedSection(
-              delay: const Duration(milliseconds: 220),
-              child: _EditGroup(
-                title: 'Fitness Goals',
-                children: <Widget>[
-                  if (_availableGoals.isEmpty)
-                    const _EditInlineNote(
-                      icon: Icons.flag_outlined,
-                      title: 'No goals available',
-                      message: 'The platform goal catalog is empty right now.',
-                    )
-                  else
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: _availableGoals.map((goal) {
-                        final id = (goal['id'] as num?)?.toInt();
-                        final selected =
-                            id != null && _selectedGoalIds.contains(id);
+              const SizedBox(height: 25),
+              _EditAnimatedSection(
+                delay: const Duration(milliseconds: 120),
+                child: _EditGroup(
+                  title: 'Basic Details',
+                  children: <Widget>[
+                    _EditTextField(
+                      controller: _nameController,
+                      label: 'Name',
+                      icon: Icons.person_outline_rounded,
+                      textCapitalization: TextCapitalization.words,
+                      validator: (value) {
+                        if ((value ?? '').trim().isEmpty) {
+                          return 'Name is required.';
+                        }
+                        return null;
+                      },
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    _EditPhotoPickerField(
+                      imageUrl: _photoController.text.trim(),
+                      uploading: _uploadingPhoto,
+                      onChoosePhoto: _showPhotoSourceSheet,
+                      onRemovePhoto: _photoController.text.trim().isEmpty
+                          ? null
+                          : _removePhoto,
+                    ),
+                    const SizedBox(height: 2),
+                    _EditOptionSelector(
+                      label: 'Experience Level',
+                      icon: Icons.trending_up_rounded,
+                      options: _experienceLevels,
+                      selectedValue: _experienceLevel,
+                      onChanged: (value) {
+                        setState(() => _experienceLevel = value);
+                      },
+                      labelBuilder: _experienceLabel,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 25),
+              _EditAnimatedSection(
+                delay: const Duration(milliseconds: 170),
+                child: _EditGroup(
+                  title: 'Body Metrics',
+                  children: <Widget>[
+                    _EditTextField(
+                      controller: _heightController,
+                      label: 'Height (cm)',
+                      icon: Icons.height_rounded,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    _EditTextField(
+                      controller: _weightController,
+                      label: 'Weight (kg)',
+                      icon: Icons.monitor_weight_outlined,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 25),
+              _EditAnimatedSection(
+                delay: const Duration(milliseconds: 220),
+                child: _EditGroup(
+                  title: 'Fitness Goals',
+                  children: <Widget>[
+                    if (_availableGoals.isEmpty)
+                      const _EditInlineNote(
+                        icon: Icons.flag_outlined,
+                        title: 'No goals available',
+                        message:
+                            'The platform goal catalog is empty right now.',
+                      )
+                    else
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: _availableGoals.map((goal) {
+                          final id = (goal['id'] as num?)?.toInt();
+                          final selected =
+                              id != null && _selectedGoalIds.contains(id);
 
-                        return _EditGoalChip(
-                          label: goal['name']?.toString() ?? 'Goal',
-                          selected: selected,
-                          onSelected: id == null
-                              ? null
-                              : (value) {
-                                  setState(() {
-                                    if (value) {
-                                      _selectedGoalIds.add(id);
-                                    } else {
-                                      _selectedGoalIds.remove(id);
-                                    }
-                                  });
-                                },
-                        );
-                      }).toList(),
+                          return _EditGoalChip(
+                            label: goal['name']?.toString() ?? 'Goal',
+                            selected: selected,
+                            onSelected: id == null
+                                ? null
+                                : (value) {
+                                    setState(() {
+                                      if (value) {
+                                        _selectedGoalIds.add(id);
+                                      } else {
+                                        _selectedGoalIds.remove(id);
+                                      }
+                                    });
+                                  },
+                          );
+                        }).toList(),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 25),
+              _EditAnimatedSection(
+                delay: const Duration(milliseconds: 270),
+                child: _EditGroup(
+                  title: 'Training Notes',
+                  children: <Widget>[
+                    _EditTextField(
+                      controller: _injuriesController,
+                      label: 'Injuries / Limitations',
+                      icon: Icons.healing_rounded,
+                      minLines: 2,
+                      maxLines: 3,
                     ),
-                ],
+                    _EditTextField(
+                      controller: _medicalController,
+                      label: 'Medical Notes',
+                      icon: Icons.medical_information_outlined,
+                      minLines: 2,
+                      maxLines: 3,
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 25),
-            _EditAnimatedSection(
-              delay: const Duration(milliseconds: 270),
-              child: _EditGroup(
-                title: 'Training Notes',
-                children: <Widget>[
-                  _EditTextField(
-                    controller: _injuriesController,
-                    label: 'Injuries / Limitations',
-                    icon: Icons.healing_rounded,
-                    minLines: 2,
-                    maxLines: 3,
-                  ),
-                  _EditTextField(
-                    controller: _medicalController,
-                    label: 'Medical Notes',
-                    icon: Icons.medical_information_outlined,
-                    minLines: 2,
-                    maxLines: 3,
-                  ),
-                ],
+              if (_error != null) ...<Widget>[
+                const SizedBox(height: 18),
+                _EditInlineError(message: _error!, onRetry: _save),
+              ],
+              const SizedBox(height: 25),
+              _EditAnimatedSection(
+                delay: const Duration(milliseconds: 320),
+                child: _EditRoundButton(
+                  title: _saving ? 'Saving...' : 'Save Profile',
+                  onPressed: _saving ? null : _save,
+                ),
               ),
-            ),
-            if (_error != null) ...<Widget>[
-              const SizedBox(height: 18),
-              _EditInlineError(message: _error!, onRetry: _save),
             ],
-            const SizedBox(height: 25),
-            _EditAnimatedSection(
-              delay: const Duration(milliseconds: 320),
-              child: _EditRoundButton(
-                title: _saving ? 'Saving...' : 'Save Profile',
-                onPressed: _saving ? null : _save,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+class _EditProfileTopBar extends StatelessWidget {
+  const _EditProfileTopBar({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        InkWell(
+          onTap: () => Navigator.of(context).maybePop(),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.stroke),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.arrow_back_rounded,
+              color: AppColors.textPrimary,
+              size: 20,
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -745,9 +1051,9 @@ class _OverviewValueRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onPressed,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
         child: Row(
           crossAxisAlignment: multiline
               ? CrossAxisAlignment.start
@@ -763,9 +1069,8 @@ class _OverviewValueRow extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: _EditFitColor.black,
-                      fontSize: 12,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textPrimary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -774,10 +1079,9 @@ class _OverviewValueRow extends StatelessWidget {
                     value,
                     maxLines: multiline ? 3 : 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: _EditFitColor.gray,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
                       height: 1.35,
                     ),
                   ),
@@ -788,7 +1092,7 @@ class _OverviewValueRow extends StatelessWidget {
               const SizedBox(width: 10),
               Icon(
                 Icons.chevron_right_rounded,
-                color: _EditFitColor.gray.withValues(alpha: 0.65),
+                color: AppColors.textMuted,
                 size: 20,
               ),
             ],
@@ -819,9 +1123,8 @@ class _OverviewGoalsRow extends StatelessWidget {
               children: <Widget>[
                 Text(
                   'Fitness Goals',
-                  style: TextStyle(
-                    color: _EditFitColor.black,
-                    fontSize: 12,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -829,40 +1132,36 @@ class _OverviewGoalsRow extends StatelessWidget {
                 if (goals.isEmpty)
                   Text(
                     'No goals selected',
-                    style: TextStyle(
-                      color: _EditFitColor.gray,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
                     ),
                   )
                 else
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: goals
-                        .map(
-                          (goal) => Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: _EditFitColor.primaryGradient,
-                              ),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              goal,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
+                    children: goals.map((goal) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceSoft,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: AppColors.stroke),
+                        ),
+                        child: Text(
+                          goal,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: AppColors.textPrimary,
                                 fontWeight: FontWeight.w700,
                               ),
-                            ),
-                          ),
-                        )
-                        .toList(),
+                        ),
+                      );
+                    }).toList(),
                   ),
               ],
             ),
@@ -917,39 +1216,39 @@ class _EditProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        _ProfileAvatar(imageUrl: imageUrl, name: name, size: 54),
-        const SizedBox(width: 15),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: _EditFitColor.black,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
+    return PremiumCard(
+      child: Row(
+        children: <Widget>[
+          _ProfileAvatar(imageUrl: imageUrl, name: name, size: 54),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: _EditFitColor.gray,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+                const SizedBox(height: 5),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -962,34 +1261,19 @@ class _EditTitleCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 72,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: BoxDecoration(
-        color: _EditFitColor.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 2,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
+    return PremiumCard(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
-          ShaderMask(
-            blendMode: BlendMode.srcIn,
-            shaderCallback: (bounds) => LinearGradient(
-              colors: _EditFitColor.primaryGradient,
-            ).createShader(bounds),
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 5),
@@ -997,10 +1281,9 @@ class _EditTitleCell extends StatelessWidget {
             subtitle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: _EditFitColor.gray,
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -1017,28 +1300,16 @@ class _EditGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
-      decoration: BoxDecoration(
-        color: _EditFitColor.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 2,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
+    return PremiumCard(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
             title,
-            style: TextStyle(
-              color: _EditFitColor.black,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 12),
@@ -1084,36 +1355,41 @@ class _EditTextField extends StatelessWidget {
         onChanged: onChanged,
         minLines: minLines,
         maxLines: maxLines,
-        style: TextStyle(
-          color: _EditFitColor.black,
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: AppColors.textPrimary,
+          fontWeight: FontWeight.w700,
         ),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: TextStyle(color: _EditFitColor.gray, fontSize: 12),
-          prefixIcon: Icon(icon, color: _EditFitColor.primaryEnd, size: 18),
+          labelStyle: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+          prefixIcon: Icon(icon, color: AppColors.primaryBright, size: 18),
           filled: true,
-          fillColor: _EditFitColor.lightGray,
+          fillColor: AppColors.surfaceSoft,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 14,
             vertical: 14,
           ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
+            borderSide: const BorderSide(color: AppColors.stroke),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
+            borderSide: const BorderSide(color: AppColors.stroke),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: _EditFitColor.primaryEnd),
+            borderSide: const BorderSide(color: AppColors.primaryBright),
           ),
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFFE24A4A)),
+            borderSide: const BorderSide(color: AppColors.error),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: AppColors.error),
           ),
         ),
       ),
@@ -1139,20 +1415,270 @@ class _EditGoalChip extends StatelessWidget {
       selected: selected,
       onSelected: onSelected,
       showCheckmark: false,
-      labelStyle: TextStyle(
-        color: selected ? Colors.white : _EditFitColor.black,
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
+      labelStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
+        color: selected ? Colors.white : AppColors.textPrimary,
+        fontWeight: FontWeight.w700,
       ),
-      selectedColor: _EditFitColor.primaryEnd,
-      backgroundColor: _EditFitColor.lightGray,
+      selectedColor: AppColors.primaryBright,
+      backgroundColor: AppColors.surfaceSoft,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(999),
         side: BorderSide(
-          color: selected ? _EditFitColor.primaryEnd : Colors.transparent,
+          color: selected ? AppColors.primaryBright : AppColors.stroke,
         ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    );
+  }
+}
+
+class _EditOptionSelector extends StatelessWidget {
+  const _EditOptionSelector({
+    required this.label,
+    required this.icon,
+    required this.options,
+    required this.selectedValue,
+    required this.onChanged,
+    required this.labelBuilder,
+  });
+
+  final String label;
+  final IconData icon;
+  final List<String> options;
+  final String selectedValue;
+  final ValueChanged<String> onChanged;
+  final String Function(String value) labelBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(icon, color: AppColors.primaryBright, size: 18),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: options.map((option) {
+              return _EditGoalChip(
+                label: labelBuilder(option),
+                selected: selectedValue == option,
+                onSelected: (_) => onChanged(option),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EditPhotoPickerField extends StatelessWidget {
+  const _EditPhotoPickerField({
+    required this.imageUrl,
+    required this.uploading,
+    required this.onChoosePhoto,
+    required this.onRemovePhoto,
+  });
+
+  final String imageUrl;
+  final bool uploading;
+  final VoidCallback onChoosePhoto;
+  final VoidCallback? onRemovePhoto;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = imageUrl.trim().isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceSoft,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.stroke),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                const Icon(
+                  Icons.photo_camera_back_outlined,
+                  color: AppColors.primaryBright,
+                  size: 18,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Profile Photo',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (hasPhoto)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: SizedBox(
+                  width: 88,
+                  height: 88,
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: AppColors.surface,
+                      child: const Icon(
+                        Icons.person_outline_rounded,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            else
+              Container(
+                width: 88,
+                height: 88,
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.stroke),
+                ),
+                child: const Icon(
+                  Icons.person_outline_rounded,
+                  color: AppColors.textMuted,
+                  size: 28,
+                ),
+              ),
+            const SizedBox(height: 12),
+            Text(
+              uploading
+                  ? 'Uploading photo...'
+                  : hasPhoto
+                  ? 'Choose a new image or remove the current one.'
+                  : 'Add a clean profile image from your device.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: uploading ? null : onChoosePhoto,
+                    icon: Icon(
+                      hasPhoto
+                          ? Icons.sync_alt_rounded
+                          : Icons.add_a_photo_outlined,
+                    ),
+                    label: Text(hasPhoto ? 'Change Photo' : 'Choose Photo'),
+                  ),
+                ),
+                if (onRemovePhoto != null) ...<Widget>[
+                  const SizedBox(width: 10),
+                  OutlinedButton(
+                    onPressed: uploading ? null : onRemovePhoto,
+                    child: const Text('Remove'),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EditPickerAction extends StatelessWidget {
+  const _EditPickerAction({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceSoft,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.stroke),
+        ),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.stroke),
+              ),
+              child: Icon(icon, color: AppColors.primaryBright, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.textMuted,
+              size: 20,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1170,35 +1696,42 @@ class _EditInlineNote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        _EditRowIcon(icon: icon),
-        const SizedBox(width: 15),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                title,
-                style: TextStyle(
-                  color: _EditFitColor.black,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSoft,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.stroke),
+      ),
+      child: Row(
+        children: <Widget>[
+          _EditRowIcon(icon: icon),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                message,
-                style: TextStyle(
-                  color: _EditFitColor.gray,
-                  fontSize: 11,
-                  height: 1.4,
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                    height: 1.4,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -1214,26 +1747,32 @@ class _EditInlineError extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF1F1),
-        borderRadius: BorderRadius.circular(15),
+        color: AppColors.error.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.16)),
       ),
       child: Row(
         children: <Widget>[
-          const Icon(Icons.error_outline_rounded, color: Color(0xFFE24A4A)),
+          const Icon(Icons.error_outline_rounded, color: AppColors.error),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xFFE24A4A),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.error,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
-          TextButton(onPressed: onRetry, child: const Text('Retry')),
+          TextButton(
+            onPressed: onRetry,
+            child: const Text(
+              'Retry',
+              style: TextStyle(color: AppColors.error),
+            ),
+          ),
         ],
       ),
     );
@@ -1250,15 +1789,16 @@ class _EditIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        width: 32,
-        height: 32,
+        width: 42,
+        height: 42,
         decoration: BoxDecoration(
-          color: _EditFitColor.lightGray,
-          borderRadius: BorderRadius.circular(10),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.stroke),
         ),
-        child: Icon(icon, color: _EditFitColor.black, size: 18),
+        child: Icon(icon, color: AppColors.textPrimary, size: 18),
       ),
     );
   }
@@ -1275,26 +1815,20 @@ class _EditRowIcon extends StatelessWidget {
       width: 30,
       height: 30,
       decoration: BoxDecoration(
-        color: _EditFitColor.lightGray,
+        color: AppColors.surfaceSoft,
         borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.stroke),
       ),
-      child: Icon(icon, color: _EditFitColor.primaryEnd, size: 16),
+      child: Icon(icon, color: AppColors.primaryBright, size: 16),
     );
   }
 }
 
 class _EditRoundButton extends StatelessWidget {
-  const _EditRoundButton({
-    required this.title,
-    required this.onPressed,
-    this.fontSize = 16,
-    this.fontWeight = FontWeight.w700,
-  });
+  const _EditRoundButton({required this.title, required this.onPressed});
 
   final String title;
   final VoidCallback? onPressed;
-  final double fontSize;
-  final FontWeight fontWeight;
 
   @override
   Widget build(BuildContext context) {
@@ -1302,17 +1836,17 @@ class _EditRoundButton extends StatelessWidget {
       opacity: onPressed == null ? 0.65 : 1,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(25),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
           height: 50,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            gradient: LinearGradient(colors: _EditFitColor.primaryGradient),
-            borderRadius: BorderRadius.circular(25),
+            color: AppColors.primaryBright,
+            borderRadius: BorderRadius.circular(18),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.10),
-                blurRadius: 8,
+                color: AppColors.primaryBright.withValues(alpha: 0.18),
+                blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
             ],
@@ -1321,8 +1855,8 @@ class _EditRoundButton extends StatelessWidget {
             title,
             style: TextStyle(
               color: Colors.white,
-              fontSize: fontSize,
-              fontWeight: fontWeight,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
@@ -1333,13 +1867,9 @@ class _EditRoundButton extends StatelessWidget {
 
 class _EditFitColor {
   static const Color black = Color(0xFF1D1617);
-  static const Color gray = Color(0xFF786F72);
   static const Color white = Colors.white;
   static const Color lightGray = Color(0xFFF7F8F8);
-  static const Color primaryStart = Color(0xFF9DCEFF);
   static const Color primaryEnd = Color(0xFF92A3FD);
-
-  static const List<Color> primaryGradient = <Color>[primaryStart, primaryEnd];
 }
 
 class _ProfileCompletionScreen extends StatelessWidget {
@@ -1496,21 +2026,13 @@ class _ProfileAvatar extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: const LinearGradient(
-          colors: <Color>[Color(0xFF27D3FF), Color(0xFF8B5CF6)],
-        ),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.22),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        color: AppColors.surfaceSoft,
+        border: Border.all(color: AppColors.stroke),
       ),
       child: Padding(
         padding: const EdgeInsets.all(2),
         child: CircleAvatar(
-          backgroundColor: const Color(0xFF10171F),
+          backgroundColor: AppColors.surface,
           backgroundImage: imageUrl.trim().isNotEmpty
               ? NetworkImage(imageUrl.trim())
               : null,
@@ -1741,4 +2263,17 @@ String _profileSaveError(Object exception) {
   }
 
   return exception.toString().replaceFirst('Exception: ', '');
+}
+
+String _experienceLabel(String value) {
+  switch (value.trim().toLowerCase()) {
+    case 'beginner':
+      return 'Beginner';
+    case 'intermediate':
+      return 'Intermediate';
+    case 'advanced':
+      return 'Advanced';
+    default:
+      return 'Beginner';
+  }
 }

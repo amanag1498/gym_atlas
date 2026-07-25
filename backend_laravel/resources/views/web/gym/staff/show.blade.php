@@ -3,12 +3,21 @@
 @section('content')
     <div class="space-y-5">
         <div class="flex flex-wrap items-start justify-between gap-4">
-            <div>
-                <h2 class="text-2xl font-semibold text-slate-950 dark:text-white">{{ $staff->name }}</h2>
-                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $staff->email }}</p>
-                @if ($staff->phone)
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $staff->phone }}</p>
-                @endif
+            <div class="flex items-center gap-4">
+                <div class="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
+                    @if ($staff->avatar)
+                        <img src="{{ $staff->avatar }}" alt="{{ $staff->name }}" class="h-full w-full object-cover">
+                    @else
+                        <span class="text-lg font-semibold text-slate-600 dark:text-slate-300">{{ strtoupper(substr($staff->name, 0, 1)) }}</span>
+                    @endif
+                </div>
+                <div>
+                    <h2 class="text-2xl font-semibold text-slate-950 dark:text-white">{{ $staff->name }}</h2>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $staff->email }}</p>
+                    @if ($staff->phone)
+                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $staff->phone }}</p>
+                    @endif
+                </div>
             </div>
             <div class="flex flex-wrap gap-2">
                 <x-status-badge :label="str($staff->roles->pluck('name')->first() ?? 'gym_staff')->replace('_', ' ')->title()" />

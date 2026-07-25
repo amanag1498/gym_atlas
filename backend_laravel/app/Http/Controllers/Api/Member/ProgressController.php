@@ -15,6 +15,7 @@ use App\Models\ProgressPhoto;
 use App\Models\WeightLog;
 use App\Services\Audit\AuditLogService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class ProgressController extends Controller
 {
@@ -120,12 +121,18 @@ class ProgressController extends Controller
     public function storePhoto(StoreProgressPhotoRequest $request)
     {
         $memberProfile = $this->resolveMemberProfile($request);
+        $payload = $request->safe()->except(['photo']);
+        if ($request->hasFile('photo')) {
+            $storedPath = $request->file('photo')->store('member-progress-photos', 'public');
+            $payload['photo_url'] = $request->getSchemeAndHttpHost().Storage::url($storedPath);
+        }
+
         $photo = ProgressPhoto::query()->create([
             'gym_id' => $memberProfile?->gym_id,
             'branch_id' => $memberProfile?->branch_id,
             'member_id' => $request->user()->id,
             'uploaded_by_user_id' => $request->user()->id,
-            ...$request->validated(),
+            ...$payload,
             'photo_type' => $request->validated('photo_type', 'other'),
         ]);
 

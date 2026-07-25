@@ -22,7 +22,7 @@
                     </div>
                     <h1 class="mt-4 text-3xl font-semibold tracking-tight">{{ $member->name }}</h1>
                     <p class="mt-2 text-sm leading-6 text-slate-300">
-                        {{ $member->email }} · {{ $memberProfile->branch?->name ?? 'Gym-wide' }} ·
+                        {{ $member->email }} @if ($member->phone) · {{ $member->phone }} @endif · {{ $memberProfile->branch?->name ?? 'Gym-wide' }} ·
                         {{ $currentMembership?->membershipPlan?->name ?? 'No active plan' }}
                     </p>
                     <div class="mt-5 flex flex-wrap gap-3">

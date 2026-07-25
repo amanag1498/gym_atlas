@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Gym\Admin;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class UpdateTrainerRequest extends FormRequest
@@ -20,7 +19,9 @@ class UpdateTrainerRequest extends FormRequest
         return [
             'name' => ['sometimes', 'string', 'max:160'],
             'email' => ['sometimes', 'email', 'max:255', Rule::unique('users', 'email')->ignore($trainerId)],
+            'phone' => ['nullable', 'string', 'max:30'],
             'avatar' => ['nullable', 'url', 'max:2048'],
+            'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'profile_photo_url' => ['nullable', 'url', 'max:2048'],
             'bio' => ['nullable', 'string', 'max:5000'],
@@ -36,9 +37,7 @@ class UpdateTrainerRequest extends FormRequest
             'is_active' => ['sometimes', 'boolean'],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
             'verification_status' => ['nullable', 'string', 'max:80'],
-        ] + (Schema::hasColumn('users', 'phone') ? [
-            'phone' => ['nullable', 'string', 'max:30'],
-        ] : []);
+        ];
     }
 
     protected function prepareForValidation(): void

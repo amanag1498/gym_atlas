@@ -15,9 +15,10 @@ use App\Services\Gym\StaffManagementService;
 use App\Services\Users\ManagedUserService;
 use App\Services\Web\GymWebPanelService;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class StaffController extends Controller
@@ -28,8 +29,7 @@ class StaffController extends Controller
         private readonly AuditLogService $auditLogService,
         private readonly AuditTimelineService $auditTimelineService,
         private readonly StaffManagementService $staffManagementService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -88,12 +88,6 @@ class StaffController extends Controller
                     return count(array_filter($decoded, 'is_string'));
                 }),
             ],
-            'existingUsers' => User::query()
-                ->where('is_active', true)
-                ->whereDoesntHave('gyms', fn (Builder $builder) => $builder->where('gyms.id', $gym->id))
-                ->orderBy('name')
-                ->limit(50)
-                ->get(),
         ]);
     }
 
@@ -101,6 +95,10 @@ class StaffController extends Controller
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
         $this->gymWebPanelService->assertPermission($request, PermissionName::StaffManage->value, $gym);
+
+        $initialExistingUser = $request->old('existing_user_id')
+            ? $this->eligibleExistingUsersQuery($gym)->find($request->old('existing_user_id'))
+            : null;
 
         return view('web.gym.staff.create', [
             'pageTitle' => 'Create Staff',
@@ -112,13 +110,38 @@ class StaffController extends Controller
             'allowedCustomPermissions' => $this->staffManagementService->allowedCustomPermissions($request, $gym),
             'defaultCustomPermissions' => $this->staffManagementService->defaultCustomPermissions($gym),
             'hasPhoneColumn' => $this->staffManagementService->hasPhoneColumn(),
-            'existingUsers' => User::query()
-                ->where('is_active', true)
-                ->whereDoesntHave('gyms', fn (Builder $builder) => $builder->where('gyms.id', $gym->id))
-                ->orderBy('name')
-                ->limit(50)
-                ->get(),
+            'initialExistingUser' => $initialExistingUser
+                ? $this->existingUserSearchItem($initialExistingUser)
+                : null,
         ]);
+    }
+
+    public function searchEligibleUsers(Request $request): JsonResponse
+    {
+        $gym = $this->gymWebPanelService->resolveGym($request);
+        $this->gymWebPanelService->assertPermission($request, PermissionName::StaffManage->value, $gym);
+        $validated = $request->validate([
+            'q' => ['required', 'string', 'min:2', 'max:100'],
+        ]);
+        $search = '%'.$validated['q'].'%';
+        $hasPhoneColumn = $this->staffManagementService->hasPhoneColumn();
+
+        $users = $this->eligibleExistingUsersQuery($gym)
+            ->where(function (Builder $query) use ($search, $hasPhoneColumn): void {
+                $query->where('name', 'like', $search)
+                    ->orWhere('email', 'like', $search);
+
+                if ($hasPhoneColumn) {
+                    $query->orWhere('phone', 'like', $search);
+                }
+            })
+            ->orderBy('name')
+            ->limit(20)
+            ->get()
+            ->map(fn (User $user): array => $this->existingUserSearchItem($user))
+            ->values();
+
+        return response()->json(['data' => $users]);
     }
 
     public function store(StoreStaffRequest $request): RedirectResponse
@@ -344,6 +367,7 @@ class StaffController extends Controller
         if ($existingUser) {
             $payload['name'] = $existingUser->name;
             $payload['email'] = $existingUser->email;
+            $payload['avatar'] = $existingUser->avatar;
             if ($this->staffManagementService->hasPhoneColumn()) {
                 $payload['phone'] = $existingUser->phone;
             }
@@ -359,6 +383,12 @@ class StaffController extends Controller
             }
         }
 
+        if (! $existingUser && $request->hasFile('profile_photo')) {
+            $storedPath = $request->file('profile_photo')->store('staff-profile-photos', 'public');
+            $payload['avatar'] = $request->getSchemeAndHttpHost().Storage::url($storedPath);
+        }
+        unset($payload['profile_photo']);
+
         $payload['role'] = $request->validated('role', $staff ? $this->currentStaffRole($staff) : RoleName::GymStaff->value);
         $payload['branch_ids'] = $request->has('branch_ids')
             ? $request->validated('branch_ids', [])
@@ -373,6 +403,35 @@ class StaffController extends Controller
             : ($staff?->is_active ?? true);
 
         return $payload;
+    }
+
+    private function eligibleExistingUsersQuery($gym): Builder
+    {
+        return User::query()
+            ->where('is_active', true)
+            ->whereDoesntHave('gyms', fn (Builder $builder) => $builder->where('gyms.id', $gym->id));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function existingUserSearchItem(User $user): array
+    {
+        $description = $user->email;
+
+        if ($this->staffManagementService->hasPhoneColumn() && filled($user->phone)) {
+            $description .= ' • '.$user->phone;
+        }
+
+        return [
+            'id' => $user->id,
+            'label' => $user->name,
+            'description' => $description,
+            'avatar' => $user->avatar,
+            'name' => $user->name,
+            'email' => $user->email,
+            'phone' => $this->staffManagementService->hasPhoneColumn() ? $user->phone : null,
+        ];
     }
 
     private function currentCustomPermissions(User $staff, $gym): array

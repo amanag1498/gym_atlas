@@ -15,6 +15,9 @@
                     <div>
                         <h2 class="text-2xl font-semibold text-slate-950 dark:text-white">{{ $trainer->name }}</h2>
                         <p class="text-sm text-slate-500 dark:text-slate-400">{{ $trainer->email }}</p>
+                        @if ($trainer->phone)
+                            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $trainer->phone }}</p>
+                        @endif
                         <div class="mt-3 flex flex-wrap gap-2">
                             <x-status-badge :label="$trainerProfile?->status ?? ($trainer->is_active ? 'Active' : 'Inactive')" />
                             <x-status-badge :label="$trainerProfile?->branch?->name ?? 'Gym-wide'" tone="info" />

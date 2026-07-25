@@ -7,7 +7,7 @@
             <p class="panel-section-copy">Update member profile, trainer assignment, body metrics, and medical context without leaving the gym panel.</p>
         </div>
 
-        <form action="{{ route('web.gym.members.update', ['member' => $member->id] + request()->query()) }}" method="POST" class="space-y-6">
+        <form action="{{ route('web.gym.members.update', ['member' => $member->id] + request()->query()) }}" method="POST" enctype="multipart/form-data" class="space-y-6">
             @csrf
             @method('PUT')
             @include('web.gym.members._form')

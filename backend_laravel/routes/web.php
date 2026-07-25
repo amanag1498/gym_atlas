@@ -394,6 +394,7 @@ Route::prefix('gym')
 
         Route::get('/trainers', [WebGymTrainerController::class, 'index'])->name('trainers.index');
         Route::get('/trainers/create', [WebGymTrainerController::class, 'create'])->name('trainers.create');
+        Route::get('/trainers/search/eligible-users', [WebGymTrainerController::class, 'searchEligibleUsers'])->name('trainers.search.eligible-users');
         Route::post('/trainers', [WebGymTrainerController::class, 'store'])->name('trainers.store');
         Route::get('/trainers/{trainer}', [WebGymTrainerController::class, 'show'])->name('trainers.show');
         Route::get('/trainers/{trainer}/edit', [WebGymTrainerController::class, 'edit'])->name('trainers.edit');
@@ -405,6 +406,7 @@ Route::prefix('gym')
 
         Route::get('/staff', [WebGymStaffController::class, 'index'])->name('staff.index');
         Route::get('/staff/create', [WebGymStaffController::class, 'create'])->name('staff.create');
+        Route::get('/staff/search/eligible-users', [WebGymStaffController::class, 'searchEligibleUsers'])->name('staff.search.eligible-users');
         Route::post('/staff', [WebGymStaffController::class, 'store'])->name('staff.store');
         Route::get('/staff/{staff}', [WebGymStaffController::class, 'show'])->name('staff.show');
         Route::get('/staff/{staff}/edit', [WebGymStaffController::class, 'edit'])->name('staff.edit');
@@ -416,6 +418,7 @@ Route::prefix('gym')
 
         Route::get('/members', [WebGymMemberController::class, 'index'])->name('members.index');
         Route::get('/members/create', [WebGymMemberController::class, 'create'])->name('members.create');
+        Route::get('/members/search/eligible-users', [WebGymMemberController::class, 'searchEligibleUsers'])->name('members.search.eligible-users');
         Route::post('/members', [WebGymMemberController::class, 'store'])->name('members.store');
         Route::post('/members/import/preview', [WebGymMemberController::class, 'previewImport'])->name('members.import.preview');
         Route::post('/members/import', [WebGymMemberController::class, 'import'])->name('members.import.store');
@@ -468,6 +471,7 @@ Route::prefix('gym')
         Route::post('/payments/{payment}/reverse', [WebGymPaymentController::class, 'reverse'])->name('payments.reverse');
 
         Route::get('/attendance', [WebGymAttendanceController::class, 'index'])->name('attendance.index');
+        Route::get('/attendance/search/members', [WebGymAttendanceController::class, 'searchMembers'])->name('attendance.search.members');
         Route::get('/attendance/manual', [WebGymAttendanceController::class, 'manualForm'])->name('attendance.manual');
         Route::post('/attendance/manual', [WebGymAttendanceController::class, 'storeManual'])->name('attendance.manual.store');
         Route::post('/attendance/biometric-scan', [WebGymAttendanceController::class, 'biometricScan'])->name('attendance.biometric-scan');

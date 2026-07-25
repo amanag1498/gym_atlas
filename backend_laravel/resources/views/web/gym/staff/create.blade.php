@@ -8,7 +8,7 @@
                 <p class="panel-section-copy">Create a branch manager or staff account, or attach an existing user and define their operational scope from the start.</p>
             </div>
 
-            <form action="{{ route('web.gym.staff.store', ['gym' => $gym->id]) }}" method="POST" class="mt-6 space-y-5">
+            <form action="{{ route('web.gym.staff.store', ['gym' => $gym->id]) }}" method="POST" enctype="multipart/form-data" class="mt-6 space-y-5">
                 @csrf
                 @include('web.gym.staff._form')
 

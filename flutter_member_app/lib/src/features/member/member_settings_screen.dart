@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/premium_card.dart';
 import '../../core/config.dart';
 import '../auth/session_controller.dart';
 import 'member_repository.dart';
@@ -37,8 +41,9 @@ class MemberSettingsScreen extends StatelessWidget {
             port: baseUri.hasPort ? baseUri.port : null,
           ).toString();
     final contactUrl = webBase == null ? '/contact' : '$webBase/contact';
-    final privacyUrl =
-        webBase == null ? '/privacy-policy' : '$webBase/privacy-policy';
+    final privacyUrl = webBase == null
+        ? '/privacy-policy'
+        : '$webBase/privacy-policy';
     final termsUrl = webBase == null ? '/terms' : '$webBase/terms';
     final user = session.user;
     final name = user?.name.trim().isNotEmpty == true ? user!.name : 'Member';
@@ -49,38 +54,26 @@ class MemberSettingsScreen extends StatelessWidget {
         ? user!.activeRole
         : 'member';
 
-    return Scaffold(
-      backgroundColor: _FitColor.white,
-      appBar: AppBar(
-        backgroundColor: _FitColor.white,
-        centerTitle: true,
-        elevation: 0,
-        leadingWidth: 0,
-        title: Text(
-          'Settings',
-          style: TextStyle(
-            color: _FitColor.black,
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
+    return AppGradientScaffold(
+      title: 'Settings',
+      body: SafeArea(
+        bottom: false,
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
+            AppSpacing.xl,
           ),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: _FitIconButton(
-              icon: Icons.more_horiz_rounded,
-              onTap: () {},
-            ),
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(25, 15, 25, 30),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              const _SettingsTopBar(
+                title: 'Settings',
+                subtitle: 'Profile, membership, activity, and app preferences.',
+              ),
+              const SizedBox(height: AppSpacing.md),
               _AnimatedSection(
                 child: _ProfileHeader(
                   name: name,
@@ -190,9 +183,7 @@ class MemberSettingsScreen extends StatelessWidget {
               const SizedBox(height: 25),
               _AnimatedSection(
                 delay: const Duration(milliseconds: 270),
-                child: _SessionCard(
-                  onLogout: () => session.logout(),
-                ),
+                child: _SessionCard(onLogout: () => session.logout()),
               ),
             ],
           ),
@@ -226,15 +217,76 @@ class MemberSettingsScreen extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _SettingsTopBar extends StatelessWidget {
+  const _SettingsTopBar({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        InkWell(
+          onTap: () => Navigator.of(context).maybePop(),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.stroke),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.arrow_back_rounded,
+              color: AppColors.textPrimary,
+              size: 20,
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 
 class _AnimatedSection extends StatelessWidget {
-  const _AnimatedSection({
-    required this.child,
-    this.delay = Duration.zero,
-  });
+  const _AnimatedSection({required this.child, this.delay = Duration.zero});
 
   final Widget child;
   final Duration delay;
@@ -249,8 +301,8 @@ class _AnimatedSection extends StatelessWidget {
         final delayed = delay == Duration.zero
             ? value
             : ((value * (420 + delay.inMilliseconds) - delay.inMilliseconds) /
-                    420)
-                .clamp(0.0, 1.0);
+                      420)
+                  .clamp(0.0, 1.0);
         return Opacity(
           opacity: delayed,
           child: Transform.translate(
@@ -289,105 +341,98 @@ class _ProfileHeader extends StatelessWidget {
         .map((part) => part[0].toUpperCase())
         .join();
 
-    return Row(
-      children: [
-        Container(
-          width: 50,
-          height: 50,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(colors: _FitColor.primaryG),
-            borderRadius: BorderRadius.circular(30),
-          ),
-          child: Text(
-            initials.isEmpty ? 'M' : initials,
-            style: TextStyle(
-              color: _FitColor.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
+    return PremiumCard(
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceSoft,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.stroke),
+            ),
+            child: Text(
+              initials.isEmpty ? 'M' : initials,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: AppColors.primaryBright,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 15),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: _FitColor.black,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$role • ${isActive ? 'Active account' : email}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          InkWell(
+            onTap: onEdit,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceSoft,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.stroke),
+              ),
+              child: Text(
+                'Edit',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                '$role • ${isActive ? 'Active account' : email}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: _FitColor.gray,
-                  fontSize: 12,
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        SizedBox(
-          width: 70,
-          height: 25,
-          child: _RoundButton(
-            title: 'Edit',
-            fontSize: 12,
-            fontWeight: FontWeight.w400,
-            onPressed: onEdit,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
 class _TitleSubtitleCell extends StatelessWidget {
-  const _TitleSubtitleCell({
-    required this.title,
-    required this.subtitle,
-  });
+  const _TitleSubtitleCell({required this.title, required this.subtitle});
 
   final String title;
   final String subtitle;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      decoration: BoxDecoration(
-        color: _FitColor.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)],
-      ),
+    return PremiumCard(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
       child: Column(
         children: [
-          ShaderMask(
-            blendMode: BlendMode.srcIn,
-            shaderCallback: (bounds) => LinearGradient(
-              colors: _FitColor.primaryG,
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-            ).createShader(Rect.fromLTWH(0, 0, bounds.width, bounds.height)),
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: _FitColor.white.withValues(alpha: 0.7),
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 2),
@@ -395,9 +440,9 @@ class _TitleSubtitleCell extends StatelessWidget {
             subtitle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: _FitColor.gray,
-              fontSize: 12,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -407,35 +452,26 @@ class _TitleSubtitleCell extends StatelessWidget {
 }
 
 class _SettingsGroup extends StatelessWidget {
-  const _SettingsGroup({
-    required this.title,
-    required this.children,
-  });
+  const _SettingsGroup({required this.title, required this.children});
 
   final String title;
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
-      decoration: BoxDecoration(
-        color: _FitColor.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)],
-      ),
+    return PremiumCard(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
-            style: TextStyle(
-              color: _FitColor.black,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           ...children,
         ],
       ),
@@ -458,8 +494,10 @@ class _SettingsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onPressed,
-      child: SizedBox(
-        height: 42,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -468,16 +506,16 @@ class _SettingsRow extends StatelessWidget {
             Expanded(
               child: Text(
                 title,
-                style: TextStyle(
-                  color: _FitColor.black,
-                  fontSize: 12,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
             Icon(
               Icons.chevron_right_rounded,
               size: 18,
-              color: _FitColor.gray.withValues(alpha: 0.65),
+              color: AppColors.textMuted,
             ),
           ],
         ),
@@ -487,9 +525,7 @@ class _SettingsRow extends StatelessWidget {
 }
 
 class _NotificationPreferenceRow extends StatelessWidget {
-  const _NotificationPreferenceRow({
-    required this.onPressed,
-  });
+  const _NotificationPreferenceRow({required this.onPressed});
 
   final Future<void> Function() onPressed;
 
@@ -497,8 +533,10 @@ class _NotificationPreferenceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onPressed,
-      child: SizedBox(
-        height: 42,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -507,9 +545,9 @@ class _NotificationPreferenceRow extends StatelessWidget {
             Expanded(
               child: Text(
                 'Pop-up Notification',
-                style: TextStyle(
-                  color: _FitColor.black,
-                  fontSize: 12,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -522,45 +560,53 @@ class _NotificationPreferenceRow extends StatelessWidget {
 }
 
 class _SessionCard extends StatelessWidget {
-  const _SessionCard({
-    required this.onLogout,
-  });
+  const _SessionCard({required this.onLogout});
 
   final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 15),
-      decoration: BoxDecoration(
-        color: _FitColor.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)],
-      ),
+    return PremiumCard(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Session',
-            style: TextStyle(
-              color: _FitColor.black,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             'Sign out securely. Your stored member token will be cleared.',
-            style: TextStyle(
-              color: _FitColor.gray,
-              fontSize: 12,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 14),
-          _RoundButton(
-            title: 'Logout',
-            type: _RoundButtonType.secondaryGradient,
-            onPressed: onLogout,
+          InkWell(
+            onTap: onLogout,
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceSoft,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.stroke),
+              ),
+              child: Text(
+                'Logout',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -568,66 +614,29 @@ class _SessionCard extends StatelessWidget {
   }
 }
 
-class _FitIconButton extends StatelessWidget {
-  const _FitIconButton({
-    required this.icon,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        height: 40,
-        width: 40,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: _FitColor.lightGray,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(icon, size: 20, color: _FitColor.black),
-      ),
-    );
-  }
-}
-
 class _RowIcon extends StatelessWidget {
-  const _RowIcon({
-    required this.icon,
-  });
+  const _RowIcon({required this.icon});
 
   final IconData icon;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 24,
-      width: 24,
+      height: 30,
+      width: 30,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: _FitColor.lightGray,
-        borderRadius: BorderRadius.circular(8),
+        color: AppColors.surfaceSoft,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.stroke),
       ),
-      child: ShaderMask(
-        blendMode: BlendMode.srcIn,
-        shaderCallback: (bounds) => LinearGradient(
-          colors: _FitColor.primaryG,
-        ).createShader(Rect.fromLTWH(0, 0, bounds.width, bounds.height)),
-        child: Icon(icon, size: 15),
-      ),
+      child: Icon(icon, size: 16, color: AppColors.primaryBright),
     );
   }
 }
 
 class _GradientSwitchPreview extends StatelessWidget {
-  const _GradientSwitchPreview({
-    required this.onTap,
-  });
+  const _GradientSwitchPreview({required this.onTap});
 
   final Future<void> Function() onTap;
 
@@ -648,8 +657,9 @@ class _GradientSwitchPreview extends StatelessWidget {
               height: 30,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: _FitColor.secondaryG),
+                  color: AppColors.surfaceSoft,
                   borderRadius: BorderRadius.circular(50),
+                  border: Border.all(color: AppColors.stroke),
                 ),
               ),
             ),
@@ -659,14 +669,13 @@ class _GradientSwitchPreview extends StatelessWidget {
                 width: 26,
                 height: 26,
                 decoration: BoxDecoration(
-                  color: _FitColor.white,
+                  color: AppColors.primaryBright,
                   borderRadius: BorderRadius.circular(50),
-                  boxShadow: const [
+                  boxShadow: [
                     BoxShadow(
-                      color: Colors.black38,
-                      spreadRadius: 0.05,
-                      blurRadius: 1.1,
-                      offset: Offset(0, 0.8),
+                      color: AppColors.primaryBright.withValues(alpha: 0.18),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
                     ),
                   ],
                 ),
@@ -677,73 +686,4 @@ class _GradientSwitchPreview extends StatelessWidget {
       ),
     );
   }
-}
-
-enum _RoundButtonType { primaryGradient, secondaryGradient }
-
-class _RoundButton extends StatelessWidget {
-  const _RoundButton({
-    required this.title,
-    required this.onPressed,
-    this.type = _RoundButtonType.primaryGradient,
-    this.fontSize = 16,
-    this.fontWeight = FontWeight.w700,
-  });
-
-  final String title;
-  final _RoundButtonType type;
-  final VoidCallback onPressed;
-  final double fontSize;
-  final FontWeight fontWeight;
-
-  @override
-  Widget build(BuildContext context) {
-    final gradient = type == _RoundButtonType.secondaryGradient
-        ? _FitColor.secondaryG
-        : _FitColor.primaryG;
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: gradient),
-        borderRadius: BorderRadius.circular(25),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 0.5,
-            offset: Offset(0, 0.5),
-          ),
-        ],
-      ),
-      child: MaterialButton(
-        onPressed: onPressed,
-        height: 50,
-        minWidth: double.maxFinite,
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-        color: Colors.transparent,
-        textColor: _FitColor.white,
-        child: Text(
-          title,
-          style: TextStyle(
-            color: _FitColor.white,
-            fontSize: fontSize,
-            fontWeight: fontWeight,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FitColor {
-  static Color get primaryColor1 => const Color(0xff92A3FD);
-  static Color get primaryColor2 => const Color(0xff9DCEFF);
-  static Color get secondaryColor1 => const Color(0xffC58BF2);
-  static Color get secondaryColor2 => const Color(0xffEEA4CE);
-  static List<Color> get primaryG => [primaryColor2, primaryColor1];
-  static List<Color> get secondaryG => [secondaryColor2, secondaryColor1];
-  static Color get black => const Color(0xff1D1617);
-  static Color get gray => const Color(0xff786F72);
-  static Color get white => Colors.white;
-  static Color get lightGray => const Color(0xffF7F8F8);
 }

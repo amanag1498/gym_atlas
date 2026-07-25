@@ -230,6 +230,26 @@ class AttendanceManagementFeatureTest extends TestCase
         ]);
 
         $this->actingAs($manager)
+            ->getJson(route('web.gym.attendance.search.members', [
+                'gym' => $gym->id,
+                'branch' => $branch->id,
+                'branch_id' => $branch->id,
+                'q' => $otherMember->email,
+            ]))
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->actingAs($manager)
+            ->getJson(route('web.gym.attendance.search.members', [
+                'gym' => $gym->id,
+                'branch' => $branch->id,
+                'branch_id' => $branch->id,
+                'q' => $member->email,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $member->id);
+
+        $this->actingAs($manager)
             ->get(route('web.gym.members.attendance', [
                 'gym' => $gym->id,
                 'branch' => $branch->id,

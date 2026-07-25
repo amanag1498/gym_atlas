@@ -10,6 +10,8 @@ use App\Models\TrainerProfile;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class TrainerManagementFeatureTest extends TestCase
@@ -26,6 +28,8 @@ class TrainerManagementFeatureTest extends TestCase
 
     public function test_gym_owner_can_create_trainer_and_assign_members_via_web(): void
     {
+        Storage::fake('public');
+
         $owner = $this->makeUser(RoleName::GymOwner->value, 'owner-trainer@example.com');
 
         $gym = Gym::query()->create([
@@ -57,6 +61,8 @@ class TrainerManagementFeatureTest extends TestCase
         $this->post(route('web.gym.trainers.store', ['gym' => $gym->id, 'branch' => $branch->id]), [
             'name' => 'Coach Arjun',
             'email' => 'coach-arjun@example.com',
+            'phone' => '+91 99887 76655',
+            'profile_photo' => UploadedFile::fake()->image('coach-arjun.jpg', 200, 200),
             'branch_id' => $branch->id,
             'specialization' => 'Strength',
             'experience_years' => 4,
@@ -67,6 +73,30 @@ class TrainerManagementFeatureTest extends TestCase
         $trainer = User::query()->where('email', 'coach-arjun@example.com')->firstOrFail();
         $this->assertTrue($trainer->hasRole(RoleName::Trainer->value));
         $this->assertNull($trainer->password);
+        $this->assertSame('+91 99887 76655', $trainer->phone);
+        $this->assertStringContainsString('/storage/trainer-profile-photos/', $trainer->avatar);
+        $this->assertCount(1, Storage::disk('public')->files('trainer-profile-photos'));
+        $originalAvatar = $trainer->avatar;
+
+        $this->put(route('web.gym.trainers.update', [
+            'gym' => $gym->id,
+            'branch' => $branch->id,
+            'trainer' => $trainer->id,
+        ]), [
+            'name' => 'Coach Arjun',
+            'email' => 'coach-arjun@example.com',
+            'phone' => '+91 99887 70000',
+            'branch_id' => $branch->id,
+            'specialization' => 'Strength',
+            'experience_years' => 4,
+            'status' => 'active',
+            'profile_photo' => UploadedFile::fake()->image('coach-arjun-updated.jpg', 200, 200),
+        ])->assertRedirect();
+
+        $trainer->refresh();
+        $this->assertSame('+91 99887 70000', $trainer->phone);
+        $this->assertNotSame($originalAvatar, $trainer->avatar);
+        $this->assertCount(2, Storage::disk('public')->files('trainer-profile-photos'));
         $this->assertDatabaseHas('trainer_profiles', [
             'user_id' => $trainer->id,
             'gym_id' => $gym->id,
@@ -168,11 +198,29 @@ class TrainerManagementFeatureTest extends TestCase
 
         $this->get(route('web.gym.trainers.create', ['gym' => $gym->id]))
             ->assertOk()
-            ->assertSee('free-trainer@example.com')
-            ->assertSee('visible-member@example.com')
-            ->assertSee('outside-member@example.com')
-            ->assertDontSee('listed-trainer@example.com')
+            ->assertSee('Search users by name, email, or phone')
             ->assertDontSee('name="password"', false);
+
+        $this->getJson(route('web.gym.trainers.search.eligible-users', [
+            'gym' => $gym->id,
+            'q' => 'free-trainer',
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $freeTrainer->id);
+
+        $this->getJson(route('web.gym.trainers.search.eligible-users', [
+            'gym' => $gym->id,
+            'q' => 'visible-member',
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $existingMember->id);
+
+        $this->getJson(route('web.gym.trainers.search.eligible-users', [
+            'gym' => $gym->id,
+            'q' => 'listed-trainer',
+        ]))
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
 
         $this->assertTrue($existingMember->hasRole(RoleName::Member->value));
         $this->assertTrue($outsideMember->hasRole(RoleName::Member->value));

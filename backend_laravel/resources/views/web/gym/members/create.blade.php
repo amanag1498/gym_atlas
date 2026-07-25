@@ -10,7 +10,7 @@
             </div>
         </div>
 
-        <form action="{{ route('web.gym.members.store', request()->query()) }}" method="POST" class="space-y-6">
+        <form action="{{ route('web.gym.members.store', request()->query()) }}" method="POST" enctype="multipart/form-data" class="space-y-6">
             @csrf
             @include('web.gym.members._form')
             <div class="flex justify-end gap-3">

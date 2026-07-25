@@ -8,6 +8,8 @@ use App\Models\Gym;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class StaffManagementFeatureTest extends TestCase
@@ -24,6 +26,8 @@ class StaffManagementFeatureTest extends TestCase
 
     public function test_gym_owner_can_create_staff_with_permissions_and_access_is_enforced(): void
     {
+        Storage::fake('public');
+
         $owner = $this->makeUser(RoleName::GymOwner->value, 'owner@example.com');
 
         $gym = Gym::query()->create([
@@ -47,6 +51,8 @@ class StaffManagementFeatureTest extends TestCase
         $this->post(route('web.gym.staff.store', ['gym' => $gym->id, 'branch' => $branch->id]), [
             'name' => 'Cash Desk Staff',
             'email' => 'cashdesk@example.com',
+            'phone' => '+91 90000 11111',
+            'profile_photo' => UploadedFile::fake()->image('cashdesk.jpg', 200, 200),
             'password' => 'secret123',
             'password_confirmation' => 'secret123',
             'role' => RoleName::GymStaff->value,
@@ -56,6 +62,31 @@ class StaffManagementFeatureTest extends TestCase
 
         $staff = User::query()->where('email', 'cashdesk@example.com')->firstOrFail();
         $this->assertTrue($staff->hasRole(RoleName::GymStaff->value));
+        $this->assertSame('+91 90000 11111', $staff->phone);
+        $this->assertStringContainsString('/storage/staff-profile-photos/', $staff->avatar);
+        $this->assertCount(1, Storage::disk('public')->files('staff-profile-photos'));
+        $originalAvatar = $staff->avatar;
+
+        $this->put(route('web.gym.staff.update', [
+            'gym' => $gym->id,
+            'branch' => $branch->id,
+            'staff' => $staff->id,
+        ]), [
+            'name' => 'Cash Desk Staff',
+            'email' => 'cashdesk@example.com',
+            'phone' => '+91 90000 12222',
+            'profile_photo' => UploadedFile::fake()->image('cashdesk-updated.jpg', 200, 200),
+            'role' => RoleName::GymStaff->value,
+            'branch_ids' => [$branch->id],
+            'custom_permissions_present' => 1,
+            'custom_permissions' => ['collect_payment', 'view_billing'],
+            'status' => 'active',
+        ])->assertRedirect();
+
+        $staff->refresh();
+        $this->assertSame('+91 90000 12222', $staff->phone);
+        $this->assertNotSame($originalAvatar, $staff->avatar);
+        $this->assertCount(2, Storage::disk('public')->files('staff-profile-photos'));
 
         $pivot = $staff->gyms()->where('gyms.id', $gym->id)->firstOrFail()->pivot;
         $permissions = is_array($pivot->custom_permissions)
@@ -105,6 +136,13 @@ class StaffManagementFeatureTest extends TestCase
 
         $this->attachToGymAndBranches($owner, $gym, [$branch], []);
         $this->loginGymUser($owner);
+
+        $this->getJson(route('web.gym.staff.search.eligible-users', [
+            'gym' => $gym->id,
+            'q' => 'existing-staff',
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $existingUser->id);
 
         $this->post(route('web.gym.staff.store', ['gym' => $gym->id]), [
             'existing_user_id' => $existingUser->id,

@@ -11,7 +11,7 @@
                 <x-status-badge :label="$trainerProfile?->status ?? 'Active'" />
             </div>
 
-            <form action="{{ route('web.gym.trainers.update', ['trainer' => $trainer->id] + request()->query()) }}" method="POST" class="space-y-6">
+            <form action="{{ route('web.gym.trainers.update', ['trainer' => $trainer->id] + request()->query()) }}" method="POST" enctype="multipart/form-data" class="space-y-6">
                 @csrf
                 @method('PUT')
                 @include('web.gym.trainers._form')

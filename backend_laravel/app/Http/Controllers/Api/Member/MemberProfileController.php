@@ -10,6 +10,7 @@ use App\Services\Member\MemberAppService;
 use App\Services\Member\MemberFitnessGoalService;
 use App\Services\Onboarding\OnboardingProgressService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class MemberProfileController extends Controller
 {
@@ -49,7 +50,13 @@ class MemberProfileController extends Controller
             'member_profile' => $currentProfile?->toArray(),
         ];
 
-        $user->fill($request->safe()->only(['name', 'avatar']));
+        $userPayload = $request->safe()->only(['name', 'avatar', 'photo']);
+        if (array_key_exists('photo', $userPayload) && ! array_key_exists('avatar', $userPayload)) {
+            $userPayload['avatar'] = $userPayload['photo'];
+        }
+        unset($userPayload['photo']);
+
+        $user->fill($userPayload);
         $user->save();
 
         $memberProfilePayload = $request->safe()->only($profileFields);
@@ -96,5 +103,45 @@ class MemberProfileController extends Controller
         );
 
         return $this->success(MemberAppProfileResource::make($freshUser), 'Member profile updated successfully.');
+    }
+
+    public function uploadPhoto(Request $request)
+    {
+        $validated = $request->validate([
+            'photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+        ]);
+
+        $user = $request->user();
+        $currentProfile = $this->memberAppService->memberProfileFor($user);
+        $oldValues = [
+            'user' => $user->only(['name', 'avatar']),
+            'member_profile' => $currentProfile?->toArray(),
+        ];
+        $storedPath = $validated['photo']->store('member-profile-photos', 'public');
+        $photoUrl = $request->getSchemeAndHttpHost().Storage::url($storedPath);
+
+        $user->update(['avatar' => $photoUrl]);
+
+        $freshUser = $user->fresh();
+        $this->memberAppService->memberProfileFor($freshUser);
+
+        $this->auditLogService->log(
+            event: 'member.profile.photo.updated',
+            action: 'update',
+            request: $request,
+            subject: $freshUser,
+            gym: $freshUser->memberProfile?->gym,
+            branch: $freshUser->memberProfile?->branch,
+            oldValues: $oldValues,
+            newValues: [
+                'user' => $freshUser->only(['name', 'avatar']),
+                'member_profile' => $freshUser->memberProfile?->toArray(),
+            ],
+        );
+
+        return $this->success([
+            'photo' => $photoUrl,
+            'member_profile' => MemberAppProfileResource::make($freshUser),
+        ], 'Member profile photo uploaded successfully.');
     }
 }

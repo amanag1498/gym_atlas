@@ -27,6 +27,7 @@ dependencies:
   cached_network_image: ^3.4.1
   google_fonts: ^6.3.2
   timelines_plus: ^2.0.0
+  image_picker: ^1.1.2
   gym_flutter_core:
     path: ../gym_flutter_core
 

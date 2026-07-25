@@ -6,7 +6,6 @@ use App\Enums\RoleName;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
-use Illuminate\Support\Facades\Schema;
 
 class StoreStaffRequest extends FormRequest
 {
@@ -21,8 +20,10 @@ class StoreStaffRequest extends FormRequest
             'existing_user_id' => ['nullable', 'integer', 'exists:users,id'],
             'name' => ['nullable', 'string', 'max:160'],
             'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')],
+            'phone' => ['nullable', 'string', 'max:30'],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
             'avatar' => ['nullable', 'url', 'max:2048'],
+            'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
             'role' => ['required', Rule::in([RoleName::BranchManager->value, RoleName::GymStaff->value])],
             'branch_ids' => ['nullable', 'array'],
@@ -40,10 +41,6 @@ class StoreStaffRequest extends FormRequest
                 'manage_staff',
             ])],
         ];
-
-        if (Schema::hasColumn('users', 'phone')) {
-            $rules['phone'] = ['nullable', 'string', 'max:30'];
-        }
 
         return $rules;
     }
