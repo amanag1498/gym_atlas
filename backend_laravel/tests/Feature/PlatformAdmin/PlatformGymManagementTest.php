@@ -7,6 +7,7 @@ use App\Models\Branch;
 use App\Models\Facility;
 use App\Models\Gym;
 use App\Models\User;
+use App\Services\Authorization\ScopeResolver;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -180,6 +181,19 @@ class PlatformGymManagementTest extends TestCase
         $this->get(route('public.gyms.show', $gym->slug))
             ->assertOk()
             ->assertSee('Discovery Only Gym');
+
+        $gym->forceFill(['trial_available' => true])->save();
+        $this->post(route('public.gyms.trial-request', $gym->slug), [
+            'name' => 'Listing Visitor',
+            'phone' => '+919876543210',
+        ])->assertSessionHasErrors('gym_id');
+        $this->assertDatabaseMissing('trial_requests', ['gym_id' => $gym->id]);
+
+        $staff = User::factory()->create(['is_active' => true, 'active_role' => RoleName::GymStaff->value]);
+        $staff->assignRole(RoleName::GymStaff->value);
+        $gym->users()->attach($staff->id, ['role_name' => RoleName::GymStaff->value, 'status' => 'active', 'is_primary' => false]);
+
+        $this->assertFalse(app(ScopeResolver::class)->canAccessGym($staff, $gym));
     }
 
     public function test_platform_admin_can_update_gym_from_web_panel_with_existing_owner(): void

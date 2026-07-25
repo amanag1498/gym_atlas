@@ -9,17 +9,17 @@ use App\Models\Gym;
 use App\Models\TrainerProfile;
 use App\Models\TrialRequest;
 use App\Models\User;
-use App\Services\Users\ManagedUserService;
 use App\Services\Audit\AuditLogService;
 use App\Services\Authorization\ScopeResolver;
 use App\Services\Notification\NotificationService;
 use App\Services\Notification\TransactionalEmailService;
+use App\Services\Users\ManagedUserService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class TrialRequestService
@@ -30,8 +30,7 @@ class TrialRequestService
         private readonly AuditLogService $auditLogService,
         private readonly ManagedUserService $managedUserService,
         private readonly TransactionalEmailService $transactionalEmailService,
-    ) {
-    }
+    ) {}
 
     public function createPublic(array $data, ?User $actor = null, ?Request $request = null): TrialRequest
     {
@@ -40,6 +39,7 @@ class TrialRequestService
 
         if (! $gym->public_listing_enabled
             || $gym->public_listing_approval_status !== 'approved'
+            || ! $gym->operational_access_enabled
             || ! $gym->trial_available
             || ! $gym->is_active
             || $gym->status !== 'active'
@@ -353,7 +353,7 @@ class TrialRequestService
     {
         $trialRequest = $this->resolveForActor($actor, $trialRequest);
 
-        return DB::transaction(function () use ($actor, $trialRequest, $data, $request): array {
+        return DB::transaction(function () use ($trialRequest, $data, $request): array {
             $existingMember = $this->resolveExistingMemberUser($trialRequest, $data);
             $payload = [
                 'name' => $data['name'] ?? $trialRequest->name ?? $existingMember?->name ?? 'Trial Member',
