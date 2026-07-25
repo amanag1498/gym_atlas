@@ -6,17 +6,25 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Diet\StoreDietPlanRequest;
 use App\Http\Requests\Diet\UpdateDietPlanRequest;
 use App\Http\Resources\Diet\DietPlanResource;
+use App\Http\Resources\Diet\DietPlanTemplateResource;
 use App\Models\DietPlan;
+use App\Models\DietPlanTemplate;
 use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Diet\DietPlanService;
+use App\Services\Diet\DietPlanTemplateService;
 use App\Services\Trainer\TrainerScopeService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class DietPlanController extends Controller
 {
-    public function __construct(private readonly DietPlanService $dietPlanService, private readonly TrainerScopeService $trainerScopeService, private readonly AuditLogService $auditLogService) {}
+    public function __construct(
+        private readonly DietPlanService $dietPlanService,
+        private readonly DietPlanTemplateService $dietPlanTemplateService,
+        private readonly TrainerScopeService $trainerScopeService,
+        private readonly AuditLogService $auditLogService,
+    ) {}
 
     public function index(Request $request)
     {
@@ -41,6 +49,69 @@ class DietPlanController extends Controller
         }
 
         return $this->success(DietPlanResource::collection($plans), 'Diet plan assigned successfully.', 201);
+    }
+
+    public function templates(Request $request)
+    {
+        $this->trainerScopeService->resolveTrainerProfile($request);
+        $templates = DietPlanTemplate::query()
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get();
+
+        return $this->success(
+            DietPlanTemplateResource::collection($templates),
+            'Global diet templates fetched successfully.',
+        );
+    }
+
+    public function assignTemplate(Request $request, DietPlanTemplate $dietPlanTemplate)
+    {
+        $profile = $this->trainerScopeService->resolveTrainerProfile($request);
+        $data = $request->validate([
+            'member_ids' => ['required', 'array', 'min:1'],
+            'member_ids.*' => ['integer', 'exists:users,id'],
+            'name' => ['nullable', 'string', 'max:255'],
+            'starts_on' => ['nullable', 'date'],
+            'ends_on' => ['nullable', 'date', 'after_or_equal:starts_on'],
+        ]);
+        foreach ($data['member_ids'] as $memberId) {
+            $this->trainerScopeService->resolveAssignedMember(
+                $profile,
+                User::query()->findOrFail($memberId),
+            );
+        }
+
+        $templatePayload = $this->dietPlanTemplateService->planPayload($dietPlanTemplate);
+        $payload = array_merge($templatePayload, array_filter([
+            'name' => $data['name'] ?? null,
+            'starts_on' => $data['starts_on'] ?? null,
+            'ends_on' => $data['ends_on'] ?? null,
+        ], static fn ($value) => $value !== null && $value !== ''), [
+            'gym_id' => $profile->gym_id,
+            'branch_id' => $profile->branch_id,
+            'member_ids' => $data['member_ids'],
+            'status' => 'active',
+        ]);
+        $plans = $this->dietPlanService->create($request->user(), $payload);
+        foreach ($plans as $plan) {
+            $this->auditLogService->log(
+                event: 'diet_plan.assigned_from_global_template',
+                action: 'create',
+                request: $request,
+                subject: $plan,
+                gym: $plan->gym,
+                branch: $plan->branch,
+                newValues: $plan->toArray(),
+                context: ['diet_template_id' => $dietPlanTemplate->id],
+            );
+        }
+
+        return $this->success(
+            DietPlanResource::collection($plans),
+            'Global diet template assigned successfully.',
+            201,
+        );
     }
 
     public function show(Request $request, DietPlan $dietPlan)

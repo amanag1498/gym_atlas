@@ -1,0 +1,26 @@
+<?php
+
+namespace App\Http\Resources\Diet;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+class DietPlanTemplateResource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'goal' => $this->goal,
+            'daily_calorie_target' => $this->daily_calorie_target,
+            'protein_target_g' => (float) $this->protein_target_g,
+            'carbs_target_g' => (float) $this->carbs_target_g,
+            'fats_target_g' => (float) $this->fats_target_g,
+            'dietary_preferences' => $this->dietary_preferences,
+            'allergies_and_restrictions' => $this->allergies_and_restrictions,
+            'notes' => $this->notes,
+            'meals' => collect($this->meals ?? [])->values(),
+        ];
+    }
+}

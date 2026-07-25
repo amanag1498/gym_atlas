@@ -151,11 +151,21 @@ class TrainerRepository {
   );
   Future<Map<String, dynamic>> fetchWorkoutPlans() async =>
       _client.get('/trainer/workout-plans');
-  Future<Map<String, dynamic>> fetchDietPlans() => _client.get('/trainer/diet-plans');
+  Future<Map<String, dynamic>> fetchDietPlans() =>
+      _client.get('/trainer/diet-plans');
+  Future<Map<String, dynamic>> fetchDietTemplates() =>
+      _client.get('/trainer/diet-templates');
+  Future<Map<String, dynamic>> assignDietTemplate(
+    int templateId,
+    Map<String, dynamic> payload,
+  ) =>
+      _client.post('/trainer/diet-templates/$templateId/assign', data: payload);
   Future<Map<String, dynamic>> createDietPlan(Map<String, dynamic> payload) =>
       _client.post('/trainer/diet-plans', data: payload);
-  Future<Map<String, dynamic>> updateDietPlan(int planId, Map<String, dynamic> payload) =>
-      _client.put('/trainer/diet-plans/$planId', data: payload);
+  Future<Map<String, dynamic>> updateDietPlan(
+    int planId,
+    Map<String, dynamic> payload,
+  ) => _client.put('/trainer/diet-plans/$planId', data: payload);
   Future<Map<String, dynamic>> deleteDietPlan(int planId) =>
       _client.delete('/trainer/diet-plans/$planId');
   Future<Map<String, dynamic>> fetchTrialRequests({int page = 1}) async =>

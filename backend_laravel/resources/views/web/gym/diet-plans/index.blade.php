@@ -41,32 +41,7 @@
                         <textarea name="dietary_preferences" class="panel-textarea" placeholder="Dietary preferences (vegetarian, halal, etc.)">{{ old('dietary_preferences') }}</textarea>
                         <textarea name="allergies_and_restrictions" class="panel-textarea" placeholder="Allergies and restrictions">{{ old('allergies_and_restrictions') }}</textarea>
                         <textarea name="notes" class="panel-textarea" placeholder="Coach notes for the member">{{ old('notes') }}</textarea>
-                        <div class="space-y-3 rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
-                            <p class="panel-label">Daily meal slots</p>
-                            @foreach ([['Breakfast', 'breakfast'], ['Lunch', 'lunch'], ['Dinner', 'dinner']] as $index => [$label, $type])
-                                <div class="space-y-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-                                    <div class="grid gap-3 sm:grid-cols-[1fr_110px]">
-                                        <input name="meals[{{ $index }}][name]" class="panel-input" value="{{ old("meals.$index.name", $label) }}" required>
-                                        <input name="meals[{{ $index }}][scheduled_time]" type="time" class="panel-input" value="{{ old("meals.$index.scheduled_time") }}">
-                                    </div>
-                                    <input type="hidden" name="meals[{{ $index }}][meal_type]" value="{{ $type }}">
-                                    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                        <input name="meals[{{ $index }}][calories]" type="number" min="0" class="panel-input" placeholder="kcal" value="{{ old("meals.$index.calories") }}">
-                                        <input name="meals[{{ $index }}][protein_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Protein g" value="{{ old("meals.$index.protein_g") }}">
-                                        <input name="meals[{{ $index }}][carbs_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Carbs g" value="{{ old("meals.$index.carbs_g") }}">
-                                        <input name="meals[{{ $index }}][fats_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Fats g" value="{{ old("meals.$index.fats_g") }}">
-                                    </div>
-                                    <textarea name="meals[{{ $index }}][notes]" class="panel-textarea" placeholder="Meal instructions / substitutions">{{ old("meals.$index.notes") }}</textarea>
-                                    <p class="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Food item (optional)</p>
-                                    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                        <input name="meals[{{ $index }}][items][0][name]" class="panel-input" placeholder="Food name" value="{{ old("meals.$index.items.0.name") }}">
-                                        <input name="meals[{{ $index }}][items][0][quantity]" class="panel-input" placeholder="Quantity" value="{{ old("meals.$index.items.0.quantity") }}">
-                                        <input name="meals[{{ $index }}][items][0][calories]" type="number" min="0" class="panel-input" placeholder="Item kcal" value="{{ old("meals.$index.items.0.calories") }}">
-                                        <input name="meals[{{ $index }}][items][0][notes]" class="panel-input" placeholder="Item notes" value="{{ old("meals.$index.items.0.notes") }}">
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
+                        <x-diet-builder :meals="old('meals', [])" />
                         <x-action-button type="submit" class="w-full justify-center">Assign Diet Plan</x-action-button>
                     </form>
                 @else

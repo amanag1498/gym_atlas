@@ -27,6 +27,15 @@ class MemberRepository {
       _client.get('/member/workout-plans/$workoutPlanId');
   Future<Map<String, dynamic>> fetchDietPlans() =>
       _client.get('/member/diet-plans');
+  Future<Map<String, dynamic>> fetchDietTemplates() =>
+      _client.get('/member/diet-templates');
+  Future<Map<String, dynamic>> adoptDietTemplate(
+    int templateId, {
+    String? name,
+  }) => _client.post(
+    '/member/diet-templates/$templateId/adopt',
+    data: {if (name != null && name.trim().isNotEmpty) 'name': name.trim()},
+  );
   Future<Map<String, dynamic>> createDietPlan(Map<String, dynamic> payload) =>
       _client.post('/member/diet-plans', data: payload);
   Future<Map<String, dynamic>> updateDietPlan(

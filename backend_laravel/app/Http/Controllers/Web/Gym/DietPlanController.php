@@ -65,14 +65,39 @@ class DietPlanController extends Controller
         $gym = $this->gymWebPanelService->resolveGym($request);
         $branch = $this->gymWebPanelService->resolveBranch($request, $gym);
         $this->gymWebPanelService->assertPermission($request, PermissionName::MembersManage->value, $gym, $branch?->id);
-        $request->merge(['meals' => collect($request->input('meals', []))->map(function (array $meal): array {
-            $meal['items'] = collect($meal['items'] ?? [])->filter(fn (array $item): bool => filled($item['name'] ?? null))->values()->all();
 
-            return $meal;
-        })->values()->all()]);
+        if ($request->filled('diet_template_id')) {
+            $template = DietPlanTemplate::query()
+                ->where('status', 'active')
+                ->findOrFail($request->integer('diet_template_id'));
+
+            $request->merge($this->dietPlanTemplateService->planPayload($template));
+        }
+
+        $request->merge([
+            'meals' => collect($request->input('meals', []))
+                ->filter(fn ($meal) => is_array($meal))
+                ->map(function (array $meal): array {
+                    $meal['items'] = collect($meal['items'] ?? [])
+                        ->filter(
+                            fn ($item): bool => is_array($item)
+                                && filled($item['name'] ?? null)
+                        )
+                        ->values()
+                        ->all();
+
+                    return $meal;
+                })
+                ->values()
+                ->all(),
+        ]);
 
         $data = $request->validate([
-            'diet_template_id' => ['nullable', 'integer', 'exists:diet_plan_templates,id'],
+            'diet_template_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('diet_plan_templates', 'id')->where('status', 'active'),
+            ],
             'member_id' => ['required', 'integer'],
             'name' => ['required', 'string', 'max:255'],
             'goal' => ['nullable', 'string', 'max:255'],
@@ -103,9 +128,6 @@ class DietPlanController extends Controller
             'meals.*.items.*.fats_g' => ['nullable', 'numeric', 'min:0'],
             'meals.*.items.*.notes' => ['nullable', 'string', 'max:1000'],
         ]);
-        if (! empty($data['diet_template_id'])) {
-            $data = array_merge($data, $this->dietPlanTemplateService->planPayload(DietPlanTemplate::query()->findOrFail($data['diet_template_id'])));
-        }
 
         $memberExists = MemberProfile::query()
             ->where('gym_id', $gym->id)

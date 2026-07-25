@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/diet_plan_form_codec.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -19,6 +20,7 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _plans = const [];
+  List<Map<String, dynamic>> _templates = const [];
   int? _selectedPlanId;
   final Set<int> _completedMealIds = <int>{};
 
@@ -34,10 +36,19 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
       _error = null;
     });
     try {
-      final response = await widget.repository.fetchDietPlans();
-      _plans = (response['data'] as List<dynamic>? ?? const [])
+      final plansResponse = await widget.repository.fetchDietPlans();
+      _plans = (plansResponse['data'] as List<dynamic>? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map))
           .toList();
+      try {
+        final templatesResponse = await widget.repository.fetchDietTemplates();
+        _templates =
+            (templatesResponse['data'] as List<dynamic>? ?? const [])
+                .map((item) => Map<String, dynamic>.from(item as Map))
+                .toList();
+      } catch (_) {
+        _templates = const [];
+      }
       _selectedPlanId ??= (_plans.isNotEmpty
           ? (_plans.first['id'] as num?)?.toInt()
           : null);
@@ -68,6 +79,132 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
     await widget.repository.deleteDietPlan(id);
     _selectedPlanId = null;
     await _load();
+  }
+
+  Future<void> _editPersonalPlan(Map<String, dynamic> plan) async {
+    final planId = (plan['id'] as num?)?.toInt();
+    if (planId == null || plan['is_member_owned'] != true) return;
+    final name = TextEditingController(text: plan['name']?.toString() ?? '');
+    final meals = _meals(plan);
+    final foodLines = meals
+        .map(
+          (meal) => TextEditingController(
+            text: DietPlanFormCodec.itemsToLines(
+              meal['items'] as List<dynamic>?,
+            ),
+          ),
+        )
+        .toList();
+    try {
+      final changed = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => Padding(
+          padding: EdgeInsets.only(
+            left: AppSpacing.lg,
+            right: AppSpacing.lg,
+            bottom: MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
+          ),
+          child: PremiumCard(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Edit personal plan foods',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextField(
+                    controller: name,
+                    decoration: const InputDecoration(labelText: 'Plan name'),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  ...meals.asMap().entries.map(
+                    (entry) => Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: TextField(
+                        controller: foodLines[entry.key],
+                        minLines: 3,
+                        maxLines: 8,
+                        decoration: InputDecoration(
+                          labelText:
+                              '${entry.value['name'] ?? 'Meal'} products',
+                          helperText:
+                              'name | quantity | kcal | protein | carbs | fats | notes',
+                          alignLabelWithHint: true,
+                        ),
+                      ),
+                    ),
+                  ),
+                  GradientButton(
+                    label: 'Save changes',
+                    expanded: true,
+                    onPressed: () async {
+                      if (name.text.trim().isEmpty) return;
+                      try {
+                        await widget.repository.updateDietPlan(planId, {
+                          'name': name.text.trim(),
+                          'goal': plan['goal'],
+                          'daily_calorie_target': plan['daily_calorie_target'],
+                          'protein_target_g': plan['protein_target_g'],
+                          'carbs_target_g': plan['carbs_target_g'],
+                          'fats_target_g': plan['fats_target_g'],
+                          'dietary_preferences': plan['dietary_preferences'],
+                          'allergies_and_restrictions':
+                              plan['allergies_and_restrictions'],
+                          'notes': plan['notes'],
+                          'status': plan['status'],
+                          'starts_on': plan['starts_on'],
+                          'ends_on': plan['ends_on'],
+                          'meals': meals.asMap().entries.map((entry) {
+                            final meal = entry.value;
+                            final rawTime = meal['scheduled_time']?.toString();
+                            return {
+                              'name': meal['name'],
+                              'meal_type': meal['meal_type'],
+                              'scheduled_time':
+                                  rawTime != null && rawTime.length >= 5
+                                  ? rawTime.substring(0, 5)
+                                  : rawTime,
+                              'calories': meal['calories'],
+                              'protein_g': meal['protein_g'],
+                              'carbs_g': meal['carbs_g'],
+                              'fats_g': meal['fats_g'],
+                              'notes': meal['notes'],
+                              'items': DietPlanFormCodec.linesToItems(
+                                foodLines[entry.key].text,
+                              ),
+                            };
+                          }).toList(),
+                        });
+                        if (context.mounted) {
+                          Navigator.of(context).pop(true);
+                        }
+                      } catch (error) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(error.toString())),
+                          );
+                        }
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      if (changed == true) await _load();
+    } finally {
+      name.dispose();
+      for (final controller in foodLines) {
+        controller.dispose();
+      }
+    }
   }
 
   List<Map<String, dynamic>> _meals(Map<String, dynamic> plan) =>
@@ -119,6 +256,7 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
     final carbs = TextEditingController();
     final fats = TextEditingController();
     final mealNames = ['Breakfast', 'Lunch', 'Dinner'];
+    int? templateId;
     var saving = false;
     try {
       final created = await showModalBottomSheet<bool>(
@@ -151,13 +289,46 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: AppSpacing.lg),
+                      DropdownButtonFormField<int?>(
+                        initialValue: templateId,
+                        isExpanded: true,
+                        items: [
+                          const DropdownMenuItem<int?>(
+                            value: null,
+                            child: Text('Build a custom personal plan'),
+                          ),
+                          ..._templates.map(
+                            (template) => DropdownMenuItem<int?>(
+                              value: (template['id'] as num?)?.toInt(),
+                              child: Text(
+                                template['name']?.toString() ??
+                                    'Global template',
+                              ),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) =>
+                            setSheetState(() => templateId = value),
+                        decoration: const InputDecoration(
+                          labelText: 'Start from global template',
+                        ),
+                      ),
+                      if (templateId != null) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          'All meals and food products will be copied into your editable personal plan.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                      const SizedBox(height: AppSpacing.sm),
                       TextFormField(
                         controller: name,
                         decoration: const InputDecoration(
                           labelText: 'Plan name',
                         ),
                         validator: (value) =>
-                            value == null || value.trim().isEmpty
+                            templateId == null &&
+                                (value == null || value.trim().isEmpty)
                             ? 'Plan name is required'
                             : null,
                       ),
@@ -235,36 +406,43 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                                 if (!formKey.currentState!.validate()) return;
                                 setSheetState(() => saving = true);
                                 try {
-                                  await widget.repository.createDietPlan({
-                                    'name': name.text.trim(),
-                                    'goal': goal.text.trim(),
-                                    'daily_calorie_target': int.tryParse(
-                                      calories.text.trim(),
-                                    ),
-                                    'protein_target_g': double.tryParse(
-                                      protein.text.trim(),
-                                    ),
-                                    'carbs_target_g': double.tryParse(
-                                      carbs.text.trim(),
-                                    ),
-                                    'fats_target_g': double.tryParse(
-                                      fats.text.trim(),
-                                    ),
-                                    'meals': mealNames
-                                        .asMap()
-                                        .entries
-                                        .map(
-                                          (entry) => {
-                                            'name': entry.value,
-                                            'meal_type': [
-                                              'breakfast',
-                                              'lunch',
-                                              'dinner',
-                                            ][entry.key],
-                                          },
-                                        )
-                                        .toList(),
-                                  });
+                                  if (templateId != null) {
+                                    await widget.repository.adoptDietTemplate(
+                                      templateId!,
+                                      name: name.text,
+                                    );
+                                  } else {
+                                    await widget.repository.createDietPlan({
+                                      'name': name.text.trim(),
+                                      'goal': goal.text.trim(),
+                                      'daily_calorie_target': int.tryParse(
+                                        calories.text.trim(),
+                                      ),
+                                      'protein_target_g': double.tryParse(
+                                        protein.text.trim(),
+                                      ),
+                                      'carbs_target_g': double.tryParse(
+                                        carbs.text.trim(),
+                                      ),
+                                      'fats_target_g': double.tryParse(
+                                        fats.text.trim(),
+                                      ),
+                                      'meals': mealNames
+                                          .asMap()
+                                          .entries
+                                          .map(
+                                            (entry) => {
+                                              'name': entry.value,
+                                              'meal_type': [
+                                                'breakfast',
+                                                'lunch',
+                                                'dinner',
+                                              ][entry.key],
+                                            },
+                                          )
+                                          .toList(),
+                                    });
+                                  }
                                   if (context.mounted) {
                                     Navigator.of(context).pop(true);
                                   }
@@ -359,16 +537,23 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                     ],
                     _Hero(plan: plan),
                     if (plan['is_member_owned'] == true)
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          onPressed: () => _deletePersonalPlan(plan),
-                          icon: const Icon(
-                            Icons.delete_outline_rounded,
-                            color: AppColors.error,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton.icon(
+                            onPressed: () => _editPersonalPlan(plan),
+                            icon: const Icon(Icons.edit_outlined),
+                            label: const Text('Edit foods'),
                           ),
-                          label: const Text('Delete personal plan'),
-                        ),
+                          TextButton.icon(
+                            onPressed: () => _deletePersonalPlan(plan),
+                            icon: const Icon(
+                              Icons.delete_outline_rounded,
+                              color: AppColors.error,
+                            ),
+                            label: const Text('Delete'),
+                          ),
+                        ],
                       ),
                     const SizedBox(height: AppSpacing.lg),
                     if (_hasGuidance(plan)) ...[

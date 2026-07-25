@@ -3,14 +3,17 @@
 namespace App\Http\Controllers\Api\Member;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\Diet\DietPlanResource;
 use App\Http\Requests\Diet\StoreMemberDietPlanRequest;
 use App\Http\Requests\Diet\UpdateDietPlanRequest;
+use App\Http\Resources\Diet\DietPlanResource;
+use App\Http\Resources\Diet\DietPlanTemplateResource;
 use App\Models\DietMealLog;
 use App\Models\DietPlan;
 use App\Models\DietPlanMeal;
+use App\Models\DietPlanTemplate;
 use App\Services\Audit\AuditLogService;
 use App\Services\Diet\DietPlanService;
+use App\Services\Diet\DietPlanTemplateService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -18,6 +21,7 @@ class DietPlanController extends Controller
 {
     public function __construct(
         private readonly DietPlanService $dietPlanService,
+        private readonly DietPlanTemplateService $dietPlanTemplateService,
         private readonly AuditLogService $auditLogService,
     ) {}
 
@@ -70,6 +74,61 @@ class DietPlanController extends Controller
         $this->auditLogService->log(event: 'member.diet_plan.created', action: 'create', request: $request, subject: $plan, gym: $plan->gym, branch: $plan->branch, newValues: $plan->toArray());
 
         return $this->success(DietPlanResource::make($plan), 'Personal diet plan created successfully.', 201);
+    }
+
+    public function templates(Request $request)
+    {
+        if (! $request->user()->memberProfile?->gym_id) {
+            return $this->success([], 'Join a gym to use global diet templates.');
+        }
+
+        return $this->success(
+            DietPlanTemplateResource::collection(
+                DietPlanTemplate::query()
+                    ->where('status', 'active')
+                    ->orderBy('name')
+                    ->get()
+            ),
+            'Global diet templates fetched successfully.',
+        );
+    }
+
+    public function adoptTemplate(Request $request, DietPlanTemplate $dietPlanTemplate)
+    {
+        $profile = $request->user()->memberProfile;
+        if (! $profile?->gym_id) {
+            throw ValidationException::withMessages([
+                'diet_template_id' => ['Join a gym before adopting a diet template.'],
+            ]);
+        }
+        $data = $request->validate(['name' => ['nullable', 'string', 'max:255']]);
+        $payload = array_merge(
+            $this->dietPlanTemplateService->planPayload($dietPlanTemplate),
+            array_filter(['name' => $data['name'] ?? null]),
+            [
+                'gym_id' => $profile->gym_id,
+                'branch_id' => $profile->branch_id,
+                'member_ids' => [$request->user()->id],
+                'status' => 'active',
+            ],
+        );
+        $plan = $this->dietPlanService->create($request->user(), $payload)[0];
+        $this->auditLogService->log(
+            event: 'member.diet_plan.adopted_from_global_template',
+            action: 'create',
+            request: $request,
+            subject: $plan,
+            gym: $plan->gym,
+            branch: $plan->branch,
+            newValues: $plan->toArray(),
+            context: ['diet_template_id' => $dietPlanTemplate->id],
+        );
+
+        return $this->success(
+            DietPlanResource::make($plan),
+            'Global diet template added to your personal plans.',
+            201,
+        );
     }
 
     public function update(UpdateDietPlanRequest $request, DietPlan $dietPlan)

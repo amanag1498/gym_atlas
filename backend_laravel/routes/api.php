@@ -572,6 +572,8 @@ Route::prefix('trainer')
             ->middleware('permission:workout_plan.manage');
         Route::get('diet-plans', [TrainerDietPlanController::class, 'index'])->middleware('permission:workout_plan.view|workout_plan.manage');
         Route::post('diet-plans', [TrainerDietPlanController::class, 'store'])->middleware('permission:workout_plan.manage');
+        Route::get('diet-templates', [TrainerDietPlanController::class, 'templates'])->middleware('permission:workout_plan.view|workout_plan.manage');
+        Route::post('diet-templates/{dietPlanTemplate}/assign', [TrainerDietPlanController::class, 'assignTemplate'])->middleware('permission:workout_plan.manage');
         Route::get('diet-plans/{dietPlan}', [TrainerDietPlanController::class, 'show'])->middleware('permission:workout_plan.view|workout_plan.manage');
         Route::put('diet-plans/{dietPlan}', [TrainerDietPlanController::class, 'update'])->middleware('permission:workout_plan.manage');
         Route::delete('diet-plans/{dietPlan}', [TrainerDietPlanController::class, 'destroy'])->middleware('permission:workout_plan.manage');
@@ -635,6 +637,8 @@ Route::prefix('member')
             ->middleware('permission:workout_plan.view');
         Route::get('diet-plans', [MemberDietPlanController::class, 'index']);
         Route::post('diet-plans', [MemberDietPlanController::class, 'store']);
+        Route::get('diet-templates', [MemberDietPlanController::class, 'templates']);
+        Route::post('diet-templates/{dietPlanTemplate}/adopt', [MemberDietPlanController::class, 'adoptTemplate']);
         Route::get('diet-plans/{dietPlan}', [MemberDietPlanController::class, 'show']);
         Route::put('diet-plans/{dietPlan}', [MemberDietPlanController::class, 'update']);
         Route::delete('diet-plans/{dietPlan}', [MemberDietPlanController::class, 'destroy']);
