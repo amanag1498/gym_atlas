@@ -67,7 +67,7 @@ class AttendanceController extends Controller
             return $this->csvStreamService->download(
                 'gym-attendance-'.$gym->id.'-'.now()->format('Ymd-His').'.csv',
                 ['Member', 'Branch', 'Check-in Method', 'Checked In At', 'Checked In By', 'Notes', 'Source Device'],
-                $query->get()->map(fn (AttendanceLog $log) => [
+                (clone $query)->latest('checked_in_at')->get()->map(fn (AttendanceLog $log) => [
                     $log->member?->name ?? '',
                     $log->branch?->name ?? '',
                     $log->check_in_method,
@@ -88,7 +88,7 @@ class AttendanceController extends Controller
             'pageTitle' => 'Attendance',
             'breadcrumbs' => ['Gym', 'Attendance'],
             'gym' => $gym,
-            'logs' => $query->paginate(15)->withQueryString(),
+            'logs' => (clone $query)->latest('checked_in_at')->paginate(15)->withQueryString(),
             'todayCount' => AttendanceLog::query()->where('gym_id', $gym->id)->whereIn('branch_id', $branchIds)->whereDate('checked_in_at', now()->toDateString())->count(),
             'todayLogs' => AttendanceLog::query()
                 ->with(['member', 'checkedInByUser', 'branch'])
@@ -368,8 +368,7 @@ class AttendanceController extends Controller
         $query = AttendanceLog::query()
             ->with(['member', 'checkedInByUser', 'branch'])
             ->where('gym_id', $gym->id)
-            ->whereIn('branch_id', $branchIds)
-            ->latest('checked_in_at');
+            ->whereIn('branch_id', $branchIds);
 
         if ($request->filled('member_id')) {
             $query->where('member_id', $request->integer('member_id'));

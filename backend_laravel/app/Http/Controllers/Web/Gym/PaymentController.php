@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Web\Gym;
 
-use App\Enums\PermissionName;
 use App\Enums\PaymentRecordStatus;
 use App\Enums\PaymentStatus;
+use App\Enums\PermissionName;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Billing\MarkMembershipPaymentStatusRequest;
 use App\Http\Requests\Billing\ReversePaymentRequest;
@@ -24,12 +24,10 @@ use App\Services\Billing\PaymentService;
 use App\Services\Gym\GymLedgerService;
 use App\Services\Web\CsvStreamService;
 use App\Services\Web\GymWebPanelService;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -44,8 +42,7 @@ class PaymentController extends Controller
         private readonly CsvStreamService $csvStreamService,
         private readonly ScopedPermissionResolver $scopedPermissionResolver,
         private readonly GymLedgerService $gymLedgerService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View|StreamedResponse
     {
@@ -474,7 +471,10 @@ class PaymentController extends Controller
             );
         }
 
-        $payments = $paymentsQuery->latest('paid_at')->paginate(15)->withQueryString();
+        $payments = (clone $paymentsQuery)
+            ->latest('paid_at')
+            ->paginate(15)
+            ->withQueryString();
         $ledgerPaginator = (clone $ledgerQuery)
             ->orderByDesc('occurred_at')
             ->orderByDesc('id')

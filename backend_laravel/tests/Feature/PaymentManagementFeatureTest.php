@@ -12,6 +12,7 @@ use App\Models\Payment;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class PaymentManagementFeatureTest extends TestCase
@@ -43,9 +44,14 @@ class PaymentManagementFeatureTest extends TestCase
         $this->attachToGym($member, $gym, [$branch], []);
         $this->loginGymUser($owner);
 
+        DB::enableQueryLog();
+
         $this->get(route('web.gym.payments.index', ['gym' => $gym->id, 'branch' => $branch->id]))
             ->assertOk()
             ->assertSee('Payments');
+
+        $this->assertAggregatesDoNotInheritDisplayOrder('paid_at');
+        DB::disableQueryLog();
 
         $this->post(route('web.gym.payments.store', ['gym' => $gym->id, 'branch' => $branch->id]), [
             'member_membership_id' => $membership->id,
@@ -213,6 +219,19 @@ class PaymentManagementFeatureTest extends TestCase
             ], $headers)
             ->assertUnprocessable()
             ->assertJsonPath('errors.membership.0', 'Payments cannot be recorded for a cancelled membership.');
+    }
+
+    private function assertAggregatesDoNotInheritDisplayOrder(string $column): void
+    {
+        $invalidQuery = collect(DB::getQueryLog())->first(function (array $query) use ($column): bool {
+            $sql = strtolower($query['query']);
+
+            return preg_match('/select\s+(?:count|sum|avg)\s*\(/', $sql) === 1
+                && str_contains($sql, 'order by')
+                && str_contains($sql, $column);
+        });
+
+        $this->assertNull($invalidQuery, 'Aggregate query inherited display ordering: '.($invalidQuery['query'] ?? ''));
     }
 
     private function makeScopedMembership(User $owner, User $member, array $membershipOverrides = []): array

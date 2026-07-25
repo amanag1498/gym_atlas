@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\Attendance\AttendanceService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class AttendanceManagementFeatureTest extends TestCase
@@ -287,9 +288,27 @@ class AttendanceManagementFeatureTest extends TestCase
             $staff->id => ['is_primary' => true, 'custom_permissions' => json_encode(['manage_attendance'])],
         ]);
 
+        DB::enableQueryLog();
+
         $this->actingAs($staff)
             ->get(route('web.gym.attendance.index', ['gym' => $gym->id, 'branch' => $branch->id]))
             ->assertOk();
+
+        $this->assertAggregatesDoNotInheritDisplayOrder('checked_in_at');
+        DB::disableQueryLog();
+    }
+
+    private function assertAggregatesDoNotInheritDisplayOrder(string $column): void
+    {
+        $invalidQuery = collect(DB::getQueryLog())->first(function (array $query) use ($column): bool {
+            $sql = strtolower($query['query']);
+
+            return preg_match('/select\s+(?:count|sum|avg)\s*\(/', $sql) === 1
+                && str_contains($sql, 'order by')
+                && str_contains($sql, $column);
+        });
+
+        $this->assertNull($invalidQuery, 'Aggregate query inherited display ordering: '.($invalidQuery['query'] ?? ''));
     }
 
     /**
