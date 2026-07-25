@@ -17,6 +17,9 @@ use App\Services\Member\EngagementScoreService;
 use App\Services\Member\MemberAppService;
 use App\Services\Authorization\ScopeResolver;
 use App\Services\Users\ManagedUserService;
+use App\Services\Members\MemberGymInvitationService;
+use App\Services\Members\MemberEmailInvitationService;
+use App\Enums\RoleName;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
@@ -29,6 +32,8 @@ class MemberController extends Controller
         private readonly MemberTimelineService $memberTimelineService,
         private readonly EngagementScoreService $engagementScoreService,
         private readonly MemberAppService $memberAppService,
+        private readonly MemberGymInvitationService $memberGymInvitationService,
+        private readonly MemberEmailInvitationService $memberEmailInvitationService,
     ) {
     }
 
@@ -115,19 +120,15 @@ class MemberController extends Controller
         $this->assertBranchAndTrainerInScope($request, $gym, $payload['branch_id'] ?? null, $payload['assigned_trainer_user_id'] ?? null);
 
         $existingUser = isset($payload['existing_user_id']) ? User::query()->find($payload['existing_user_id']) : null;
-        $user = $this->managedUserService->upsertMember($existingUser, $gym, $payload);
-
-        $this->auditLogService->log(
-            event: 'gym.member.created',
-            action: 'create',
-            request: $request,
-            subject: $user,
-            gym: $gym,
-            branch: $user->memberProfile?->branch,
-            newValues: $user->toArray(),
-        );
-
-        return $this->success(UserResource::make($user), 'Member created successfully.', 201);
+        if ($existingUser) {
+            if (! $existingUser->hasRole(RoleName::Member->value)) {
+                return response()->json(['message' => 'Only individual member users can be invited to join a gym.'], 422);
+            }
+            $invitation = $this->memberGymInvitationService->invite($request->user(), $existingUser, $gym, $payload);
+            return $this->success(['invitation_id' => $invitation->id, 'approval_channel' => 'app'], 'Membership invitation sent. The member must approve it in the app.', 202);
+        }
+        $emailInvitation = $this->memberEmailInvitationService->invite($request->user(), $gym, $payload);
+        return $this->success(['invitation_id' => $emailInvitation->id, 'approval_channel' => 'email'], 'Enrollment approval email sent. The member will be created after approval.', 202);
     }
 
     public function show(Request $request, User $member)

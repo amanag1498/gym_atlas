@@ -46,6 +46,8 @@ use App\Services\Trials\TrialRequestService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Web\MemberEmailInvitationController;
+use App\Http\Controllers\Web\TrainerEmailInvitationController;
 
 Route::get('/', function (GymDiscoveryService $discoveryService) {
     if (! Schema::hasTable('gyms')) {
@@ -516,3 +518,9 @@ Route::prefix('gym')
         Route::get('/public-listing-settings', [WebGymPublicListingController::class, 'edit'])->name('public-listing.edit');
         Route::put('/public-listing-settings', [WebGymPublicListingController::class, 'update'])->name('public-listing.update');
     });
+Route::middleware('signed')->group(function (): void {
+    Route::get('/member-email-invitations/{invitation}/review', [MemberEmailInvitationController::class, 'review'])->name('member-email-invitations.review');
+    Route::post('/member-email-invitations/{invitation}/review', [MemberEmailInvitationController::class, 'respond'])->name('member-email-invitations.respond');
+    Route::get('/trainer-email-invitations/{invitation}/review', [TrainerEmailInvitationController::class, 'review'])->name('trainer-email-invitations.review');
+    Route::post('/trainer-email-invitations/{invitation}/review', [TrainerEmailInvitationController::class, 'respond'])->name('trainer-email-invitations.respond');
+});

@@ -57,6 +57,8 @@ use App\Http\Controllers\Api\Trainer\TaskController as TrainerTaskController;
 use App\Http\Controllers\Api\Trainer\TrainerMemberNoteController;
 use App\Http\Controllers\Api\Trainer\TrainerContextController;
 use App\Http\Controllers\Api\Trainer\TrainerNotificationController;
+use App\Http\Controllers\Api\Trainer\TrainerMemberInvitationController;
+use App\Http\Controllers\Api\Trainer\TrainerGymInvitationController;
 use App\Http\Controllers\Api\Trainer\TrainerProfileController;
 use App\Http\Controllers\Api\Trainer\TrialRequestController as TrainerTrialRequestController;
 use App\Http\Controllers\Api\Trainer\WorkoutPlanController as TrainerWorkoutPlanController;
@@ -506,6 +508,8 @@ Route::prefix('trainer')
             ->middleware('permission:trainer.self.manage|trainer.manage');
         Route::get('assigned-members', [TrainerAssignedMemberController::class, 'index'])
             ->middleware('permission:trainer.view|member.view');
+        Route::post('member-invitations', [TrainerMemberInvitationController::class, 'store'])
+            ->middleware('permission:trainer.view|member.view');
         Route::get('assigned-members/{member}', [TrainerAssignedMemberController::class, 'show'])
             ->middleware('permission:trainer.view|member.view');
         Route::get('assigned-members/{member}/attendance', [TrainerAssignedMemberController::class, 'attendance'])
@@ -567,6 +571,10 @@ Route::prefix('trainer')
         Route::put('trial-requests/{trialRequest}', [TrainerTrialRequestController::class, 'update'])
             ->middleware('permission:trial_request.manage');
     });
+
+Route::prefix('trainer-invitations')->middleware(['auth:sanctum', 'role:trainer', 'active_role:trainer'])->group(function (): void {
+    Route::post('{invitation}/respond', [TrainerGymInvitationController::class, 'respond']);
+});
 
 Route::prefix('member')
     ->middleware([

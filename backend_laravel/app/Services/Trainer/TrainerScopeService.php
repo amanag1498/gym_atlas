@@ -79,7 +79,10 @@ class TrainerScopeService
                 'attendanceLogs' => fn ($query) => $query->latest('checked_in_at'),
             ])
             ->where('assigned_trainer_user_id', $trainerProfile->user_id)
-            ->where('gym_id', $trainerProfile->gym_id)
+            ->where(function (Builder $query) use ($trainerProfile): void {
+                $query->where('gym_id', $trainerProfile->gym_id)
+                    ->orWhere('type', 'trainer_gym_invitation');
+            })
             ->when($trainerProfile->branch_id, fn ($query) => $query->where('branch_id', $trainerProfile->branch_id));
     }
 

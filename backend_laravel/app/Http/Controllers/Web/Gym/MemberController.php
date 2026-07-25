@@ -27,6 +27,7 @@ use App\Services\Billing\MembershipEnrollmentService;
 use App\Services\Member\EngagementScoreService;
 use App\Services\Member\MemberAppService;
 use App\Services\Members\MemberGymInvitationService;
+use App\Services\Members\MemberEmailInvitationService;
 use App\Services\Notification\ReminderService;
 use App\Services\Users\ManagedUserService;
 use App\Services\Web\CsvStreamService;
@@ -59,6 +60,7 @@ class MemberController extends Controller
         private readonly GymMemberImportService $gymMemberImportService,
         private readonly CsvStreamService $csvStreamService,
         private readonly MemberGymInvitationService $memberGymInvitationService,
+        private readonly MemberEmailInvitationService $memberEmailInvitationService,
         private readonly MemberAppService $memberAppService,
     ) {}
 
@@ -102,6 +104,11 @@ class MemberController extends Controller
             $invitation = $this->memberGymInvitationService->invite($request->user(), $existingUser, $gym, $payload);
 
             return back()->with('status', 'Membership invitation sent to '.$invitation->invited_email.'. The member must accept before they are added to this gym.');
+        }
+
+        if (! $existingUser) {
+            $invitation = $this->memberEmailInvitationService->invite($request->user(), $gym, $payload);
+            return back()->with('status', 'Enrollment approval email sent to '.$invitation->invited_email.'. The member will be created only after approval.');
         }
 
         $user = DB::transaction(function () use ($request, $gym, $existingUser, $payload): User {

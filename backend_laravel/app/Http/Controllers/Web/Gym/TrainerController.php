@@ -16,6 +16,7 @@ use App\Services\Audit\AuditLogService;
 use App\Services\Audit\AuditTimelineService;
 use App\Services\Gym\TrainerManagementService;
 use App\Services\Users\ManagedUserService;
+use App\Services\Members\TrainerEmailInvitationService;
 use App\Services\Web\GymWebPanelService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -33,6 +34,7 @@ class TrainerController extends Controller
         private readonly AuditLogService $auditLogService,
         private readonly AuditTimelineService $auditTimelineService,
         private readonly TrainerManagementService $trainerManagementService,
+        private readonly TrainerEmailInvitationService $trainerEmailInvitationService,
     ) {}
 
     public function index(Request $request): View
@@ -139,22 +141,8 @@ class TrainerController extends Controller
         $this->ensureBranchWithinScope($request, $gym, $branchId);
         $payload = $this->normalizedPayload($request);
 
-        $existingUser = isset($payload['existing_user_id']) ? User::query()->find($payload['existing_user_id']) : null;
-        $user = $this->managedUserService->upsertTrainer($existingUser, $gym, $payload);
-
-        $this->auditLogService->log(
-            event: 'web.gym.trainer.created',
-            action: 'create',
-            request: $request,
-            subject: $user,
-            gym: $gym,
-            branch: $user->managedTrainerProfile?->branch,
-            newValues: $user->fresh(['managedTrainerProfile', 'branches', 'roles'])->toArray(),
-        );
-
-        return redirect()
-            ->route('web.gym.trainers.show', ['trainer' => $user->id, 'gym' => $gym->id])
-            ->with('status', 'Trainer created successfully.');
+        $invitation = $this->trainerEmailInvitationService->invite($request->user(), $gym, $payload);
+        return back()->with('status', 'Trainer approval email sent to '.$invitation->invited_email.'. The trainer will be created after approval.');
     }
 
     public function show(Request $request, User $trainer): View

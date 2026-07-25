@@ -26,6 +26,15 @@ class TrainerRepository {
 
   Future<Map<String, dynamic>> fetchContext() async =>
       _client.get('/trainer/context');
+  Future<Map<String, dynamic>> inviteMember(Map<String, dynamic> payload) =>
+      _client.post('/trainer/member-invitations', data: payload);
+  Future<Map<String, dynamic>> respondToGymInvitation(
+    int invitationId,
+    String decision,
+  ) => _client.post(
+    '/trainer-invitations/$invitationId/respond',
+    data: {'decision': decision},
+  );
   Future<Map<String, dynamic>> fetchTasks() async =>
       _client.get('/trainer/tasks');
   Future<Map<String, dynamic>> fetchTodayClients({int page = 1}) async =>

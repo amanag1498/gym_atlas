@@ -273,6 +273,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         onManageWorkouts: _openWorkoutManagerForMember,
         onSendMessage: _openChatWithMember,
         onAddFollowUp: _openQuickNoteSheet,
+        onAddMember: _openMemberInvitationSheet,
       ),
       _WorkoutPage(
         contextData: _contextData,
@@ -317,6 +318,10 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         },
         onCreateAnnouncement: (payload) async {
           await _repository.createAnnouncement(payload);
+          await _load();
+        },
+        onRespondGymInvitation: (id, decision) async {
+          await _repository.respondToGymInvitation(id, decision);
           await _load();
         },
       ),
@@ -662,6 +667,132 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _openMemberInvitationSheet() async {
+    final nameController = TextEditingController();
+    final emailController = TextEditingController();
+    final phoneController = TextEditingController();
+    final goalController = TextEditingController();
+    bool submitting = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surfaceOverlay,
+      builder: (modalContext) => StatefulBuilder(
+        builder: (modalContext, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            24,
+            24,
+            24,
+            MediaQuery.of(modalContext).viewInsets.bottom + 24,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Invite a member',
+                  style: Theme.of(modalContext).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Existing app users approve in the app. Everyone else receives an email approval link.',
+                  style: Theme.of(modalContext).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(labelText: 'Full name'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(labelText: 'Email address'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Phone (optional)',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: goalController,
+                  decoration: const InputDecoration(
+                    labelText: 'Fitness goal (optional)',
+                  ),
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: submitting
+                        ? null
+                        : () async {
+                            if (nameController.text.trim().isEmpty ||
+                                emailController.text.trim().isEmpty) {
+                              return;
+                            }
+                            final navigator = Navigator.of(modalContext);
+                            final rootMessenger = ScaffoldMessenger.of(context);
+                            setModalState(() => submitting = true);
+                            try {
+                              final response = await _repository.inviteMember({
+                                'name': nameController.text.trim(),
+                                'email': emailController.text.trim(),
+                                if (phoneController.text.trim().isNotEmpty)
+                                  'phone': phoneController.text.trim(),
+                                if (goalController.text.trim().isNotEmpty)
+                                  'fitness_goal': goalController.text.trim(),
+                              });
+                              if (!modalContext.mounted) {
+                                return;
+                              }
+                              navigator.pop();
+                              final channel = _map(
+                                response['data'],
+                              )['approval_channel'];
+                              rootMessenger.showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    channel == 'app'
+                                        ? 'Invitation sent for in-app approval.'
+                                        : 'Enrollment approval email sent.',
+                                  ),
+                                ),
+                              );
+                            } catch (error) {
+                              if (modalContext.mounted) {
+                                ScaffoldMessenger.of(modalContext).showSnackBar(
+                                  SnackBar(content: Text(error.toString())),
+                                );
+                              }
+                            } finally {
+                              if (modalContext.mounted) {
+                                setModalState(() => submitting = false);
+                              }
+                            }
+                          },
+                    child: Text(submitting ? 'Sending...' : 'Send invitation'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    nameController.dispose();
+    emailController.dispose();
+    phoneController.dispose();
+    goalController.dispose();
   }
 
   Future<void> _openQuickAssignSheet(Map<String, dynamic> assignment) async {
@@ -4207,6 +4338,7 @@ class _MemberPage extends StatefulWidget {
     required this.onManageWorkouts,
     required this.onSendMessage,
     required this.onAddFollowUp,
+    required this.onAddMember,
   });
 
   final List<Map<String, dynamic>> members;
@@ -4218,6 +4350,7 @@ class _MemberPage extends StatefulWidget {
   final Future<void> Function(Map<String, dynamic>) onManageWorkouts;
   final Future<void> Function(Map<String, dynamic>) onSendMessage;
   final Future<void> Function(Map<String, dynamic>) onAddFollowUp;
+  final Future<void> Function() onAddMember;
 
   @override
   State<_MemberPage> createState() => _MemberPageState();
@@ -4313,6 +4446,12 @@ class _MemberPageState extends State<_MemberPage> {
               needsPlanCount: 0,
               onRefresh: widget.onRefresh,
             ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: widget.onAddMember,
+              icon: const Icon(Icons.person_add_alt_1_rounded),
+              label: const Text('Invite a member'),
+            ),
             const SizedBox(height: 16),
             PremiumCard(
               padding: const EdgeInsets.all(22),
@@ -4380,6 +4519,12 @@ class _MemberPageState extends State<_MemberPage> {
               );
             }).length,
             onRefresh: widget.onRefresh,
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: widget.onAddMember,
+            icon: const Icon(Icons.person_add_alt_1_rounded),
+            label: const Text('Invite a member'),
           ),
           const SizedBox(height: 16),
           _MembersSearchCard(
@@ -8051,6 +8196,7 @@ class _NotificationPage extends StatelessWidget {
     required this.onMarkAllRead,
     required this.onUpdateTrial,
     required this.onCreateAnnouncement,
+    required this.onRespondGymInvitation,
   });
 
   final List<Map<String, dynamic>> notifications;
@@ -8062,6 +8208,8 @@ class _NotificationPage extends StatelessWidget {
   final Future<void> Function(int trialRequestId, String status) onUpdateTrial;
   final Future<void> Function(Map<String, dynamic> payload)
   onCreateAnnouncement;
+  final Future<void> Function(int invitationId, String decision)
+  onRespondGymInvitation;
 
   @override
   Widget build(BuildContext context) {
@@ -8153,6 +8301,7 @@ class _NotificationPage extends StatelessWidget {
                 _TrainerNotificationRow(
                   notification: item,
                   isUnread: isUnread,
+                  onRespondGymInvitation: onRespondGymInvitation,
                   onMarkRead: () async {
                     final id = (item['id'] as num?)?.toInt();
                     if (id == null) {
@@ -8735,11 +8884,14 @@ class _TrainerNotificationRow extends StatelessWidget {
     required this.notification,
     required this.isUnread,
     required this.onMarkRead,
+    required this.onRespondGymInvitation,
   });
 
   final Map<String, dynamic> notification;
   final bool isUnread;
   final VoidCallback onMarkRead;
+  final Future<void> Function(int invitationId, String decision)
+  onRespondGymInvitation;
 
   @override
   Widget build(BuildContext context) {
@@ -8749,6 +8901,12 @@ class _TrainerNotificationRow extends StatelessWidget {
         ? notification['body'].toString()
         : _notificationFallbackBody(type);
     final color = _notificationColor(context, type);
+    final invitationId = (_map(notification['data'])['invitation_id'] as num?)
+        ?.toInt();
+    final canRespond =
+        type == 'trainer_gym_invitation' &&
+        invitationId != null &&
+        _map(notification['data'])['status'] == 'pending';
 
     return InkWell(
       onTap: isUnread ? onMarkRead : null,
@@ -8813,6 +8971,23 @@ class _TrainerNotificationRow extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
+                  if (canRespond)
+                    Row(
+                      children: [
+                        OutlinedButton(
+                          onPressed: () =>
+                              onRespondGymInvitation(invitationId, 'reject'),
+                          child: const Text('Decline'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed: () =>
+                              onRespondGymInvitation(invitationId, 'accept'),
+                          child: const Text('Accept'),
+                        ),
+                      ],
+                    ),
+                  if (canRespond) const SizedBox(height: 8),
                   Row(
                     children: [
                       Expanded(

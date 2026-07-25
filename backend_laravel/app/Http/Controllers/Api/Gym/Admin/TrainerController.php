@@ -14,6 +14,7 @@ use App\Services\Audit\AuditLogService;
 use App\Services\Authorization\ScopeResolver;
 use App\Services\Gym\TrainerManagementService;
 use App\Services\Users\ManagedUserService;
+use App\Services\Members\TrainerEmailInvitationService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +26,7 @@ class TrainerController extends Controller
         private readonly ManagedUserService $managedUserService,
         private readonly AuditLogService $auditLogService,
         private readonly TrainerManagementService $trainerManagementService,
+        private readonly TrainerEmailInvitationService $trainerEmailInvitationService,
     ) {
     }
 
@@ -85,24 +87,8 @@ class TrainerController extends Controller
         $payload = $this->normalizedPayload($request);
         $this->assertBranchWithinScope($request, $gym, $payload['branch_id'] ?? null);
 
-        $existingUser = isset($payload['existing_user_id']) ? User::query()->find($payload['existing_user_id']) : null;
-        $user = $this->managedUserService->upsertTrainer($existingUser, $gym, $payload);
-
-        $this->auditLogService->log(
-            event: 'gym.trainer.created',
-            action: 'create',
-            request: $request,
-            subject: $user,
-            gym: $gym,
-            branch: $user->managedTrainerProfile?->branch,
-            newValues: $user->fresh(['managedTrainerProfile', 'branches', 'roles'])->toArray(),
-        );
-
-        return $this->success(
-            UserResource::make($user->load(['managedTrainerProfile.gym', 'managedTrainerProfile.branch', 'assignedMembers'])),
-            'Trainer created successfully.',
-            201
-        );
+        $invitation = $this->trainerEmailInvitationService->invite($request->user(), $gym, $payload);
+        return $this->success(['invitation_id' => $invitation->id, 'approval_channel' => 'email'], 'Trainer approval email sent. The trainer will be created after approval.', 202);
     }
 
     public function show(Request $request, User $trainer)
