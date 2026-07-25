@@ -2,6 +2,7 @@
 
 namespace App\Services\Notification;
 
+use App\Enums\NotificationType;
 use App\Models\Notification;
 use App\Models\NotificationPreference;
 use App\Models\User;
@@ -106,9 +107,11 @@ class NotificationService
     private function isCriticalType(string $type): bool
     {
         return in_array($type, [
-            \App\Enums\NotificationType::MembershipExpiry->value,
-            \App\Enums\NotificationType::PaymentDue->value,
-            \App\Enums\NotificationType::CustomDue->value,
+            NotificationType::MembershipExpiry->value,
+            NotificationType::MembershipPaused->value,
+            NotificationType::MembershipResumed->value,
+            NotificationType::PaymentDue->value,
+            NotificationType::CustomDue->value,
         ], true);
     }
 }

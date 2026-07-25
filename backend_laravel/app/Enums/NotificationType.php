@@ -5,6 +5,8 @@ namespace App\Enums;
 enum NotificationType: string
 {
     case MembershipExpiry = 'membership_expiry';
+    case MembershipPaused = 'membership_paused';
+    case MembershipResumed = 'membership_resumed';
     case PaymentDue = 'payment_due';
     case CustomDue = 'custom_due';
     case GymAnnouncement = 'gym_announcement';

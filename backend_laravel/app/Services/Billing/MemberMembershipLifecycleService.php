@@ -3,22 +3,30 @@
 namespace App\Services\Billing;
 
 use App\Enums\MembershipStatus;
+use App\Enums\NotificationType;
+use App\Enums\ReminderType;
 use App\Models\MemberMembership;
 use App\Models\MemberProfile;
+use App\Models\Payment;
+use App\Models\ScheduledReminder;
 use App\Models\User;
+use App\Services\Notification\NotificationService;
+use App\Services\Notification\TransactionalEmailService;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class MemberMembershipLifecycleService
 {
     public function __construct(
         private readonly MembershipEnrollmentService $membershipEnrollmentService,
-    ) {
-    }
+        private readonly NotificationService $notificationService,
+        private readonly TransactionalEmailService $transactionalEmailService,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $input
-     * @return array{membership: MemberMembership, initial_payment: \App\Models\Payment|null}
+     * @return array{membership: MemberMembership, initial_payment: Payment|null}
      */
     public function renew(MemberMembership $membership, User $actor, array $input): array
     {
@@ -60,6 +68,8 @@ class MemberMembershipLifecycleService
         $membership->save();
 
         $this->syncMemberProfileFromMembership($membership->fresh(['member.memberProfile']));
+        $this->cancelAttendanceInactivityReminders($membership);
+        $this->notifyMemberOfPause($membership);
 
         return $membership;
     }
@@ -97,6 +107,7 @@ class MemberMembershipLifecycleService
         $membership->save();
 
         $this->syncMemberProfileFromMembership($membership->fresh(['member.memberProfile']));
+        $this->notifyMemberOfResume($membership, $pausedDays);
 
         return $membership;
     }
@@ -175,5 +186,100 @@ class MemberMembershipLifecycleService
             'membership_status' => $current->status,
             'membership_expires_on' => $current->expiry_date,
         ])->save();
+    }
+
+    private function cancelAttendanceInactivityReminders(MemberMembership $membership): void
+    {
+        ScheduledReminder::query()
+            ->where('user_id', $membership->member_id)
+            ->where('gym_id', $membership->gym_id)
+            ->where('branch_id', $membership->branch_id)
+            ->whereNull('member_membership_id')
+            ->where('type', ReminderType::AttendanceInactivity->value)
+            ->where('status', 'pending')
+            ->update(['status' => 'cancelled']);
+    }
+
+    private function notifyMemberOfPause(MemberMembership $membership): void
+    {
+        $membership->loadMissing(['member', 'membershipPlan', 'gym']);
+        $member = $membership->member;
+
+        if (! $member instanceof User) {
+            return;
+        }
+
+        $gymName = $membership->gym?->name ?? config('app.name');
+        $planName = $membership->membershipPlan?->name;
+
+        DB::afterCommit(function () use ($membership, $member, $gymName, $planName): void {
+            $this->notificationService->create(
+                user: $member,
+                type: NotificationType::MembershipPaused->value,
+                title: 'Membership paused',
+                body: 'Your membership at '.$gymName.' is paused. Its expiry and due dates will extend when it is resumed.',
+                gymId: $membership->gym_id,
+                branchId: $membership->branch_id,
+                membershipId: $membership->id,
+                data: ['paused_at' => $membership->paused_at?->toDateString()],
+            );
+
+            $this->transactionalEmailService->send(
+                $member,
+                'Membership paused — '.config('app.name'),
+                'Your membership at '.$gymName.' has been paused.',
+                array_filter([
+                    $planName ? 'Plan: '.$planName : null,
+                    $membership->paused_at ? 'Paused from: '.$membership->paused_at->format('d M Y') : null,
+                    'Your expiry and due dates will extend by the paused days when the membership is resumed.',
+                ]),
+                $membership->gym_id,
+                'membership_pause',
+            );
+        });
+    }
+
+    private function notifyMemberOfResume(MemberMembership $membership, int $pausedDays): void
+    {
+        $membership->loadMissing(['member', 'membershipPlan', 'gym']);
+        $member = $membership->member;
+
+        if (! $member instanceof User) {
+            return;
+        }
+
+        $gymName = $membership->gym?->name ?? config('app.name');
+        $planName = $membership->membershipPlan?->name;
+
+        DB::afterCommit(function () use ($membership, $member, $gymName, $planName, $pausedDays): void {
+            $this->notificationService->create(
+                user: $member,
+                type: NotificationType::MembershipResumed->value,
+                title: 'Membership resumed',
+                body: 'Your membership at '.$gymName.' is active again. Its dates were extended by '.$pausedDays.' paused day'.($pausedDays === 1 ? '' : 's').'.',
+                gymId: $membership->gym_id,
+                branchId: $membership->branch_id,
+                membershipId: $membership->id,
+                data: [
+                    'paused_days' => $pausedDays,
+                    'expiry_date' => $membership->expiry_date?->toDateString(),
+                    'due_date' => $membership->due_date?->toDateString(),
+                ],
+            );
+
+            $this->transactionalEmailService->send(
+                $member,
+                'Membership resumed — '.config('app.name'),
+                'Your membership at '.$gymName.' is active again.',
+                array_filter([
+                    $planName ? 'Plan: '.$planName : null,
+                    'Paused days added: '.$pausedDays,
+                    $membership->expiry_date ? 'New expiry date: '.$membership->expiry_date->format('d M Y') : null,
+                    $membership->due_date ? 'New due date: '.$membership->due_date->format('d M Y') : null,
+                ]),
+                $membership->gym_id,
+                'membership_resume',
+            );
+        });
     }
 }

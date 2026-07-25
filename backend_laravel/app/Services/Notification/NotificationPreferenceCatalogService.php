@@ -81,6 +81,8 @@ class NotificationPreferenceCatalogService
                 $this->item(NotificationType::PaymentCollectionSummary->value, 'Billing', 'Payment collection summary', 'Placeholder for end-of-day payment collection summaries.', false, true),
             ],
             default => [
+                $this->item(NotificationType::MembershipPaused->value, 'Membership', 'Membership status updates', 'Know immediately when your gym pauses your membership.', true),
+                $this->item(NotificationType::MembershipResumed->value, 'Membership', 'Membership resume updates', 'Know when your membership resumes and its dates are extended.', true),
                 $this->item(NotificationType::WorkoutReminder->value, 'Workouts', 'Workout reminders', 'Get reminded to start and complete planned workouts.'),
                 $this->item(NotificationType::PaymentDue->value, 'Billing', 'Payment reminders', 'Receive payment due alerts for your membership.', true),
                 $this->item(NotificationType::TrainerMessage->value, 'Messages', 'Trainer messages', 'Stay updated when your assigned trainer sends a message.'),

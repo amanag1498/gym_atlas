@@ -2,13 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Enums\ReminderType;
 use App\Enums\RoleName;
 use App\Models\Branch;
 use App\Models\Gym;
 use App\Models\MemberMembership;
 use App\Models\MemberProfile;
 use App\Models\MembershipPlan;
+use App\Models\ScheduledReminder;
 use App\Models\User;
+use App\Services\Notification\ReminderService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -139,9 +142,28 @@ class MembershipLifecycleFeatureTest extends TestCase
 
         $this->loginGymUser($owner);
 
+        $attendanceReminder = ScheduledReminder::query()->create([
+            'user_id' => $member->id,
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_membership_id' => null,
+            'type' => ReminderType::AttendanceInactivity->value,
+            'title' => 'Attendance Inactivity Reminder',
+            'body' => 'We have not seen you at the gym recently.',
+            'scheduled_for' => now(),
+            'status' => 'pending',
+        ]);
+
         $this->post(route('web.gym.memberships.freeze', ['gym' => $gym->id, 'branch' => $branch->id, 'membership' => $membership->id]))
             ->assertRedirect();
         $this->assertSame('frozen', $membership->fresh()->status);
+        $this->assertSame('cancelled', $attendanceReminder->fresh()->status);
+        app(ReminderService::class)->scheduleAttendanceInactivityReminders($gym->id, $branch->id);
+        $this->assertDatabaseMissing('scheduled_reminders', [
+            'user_id' => $member->id,
+            'type' => ReminderType::AttendanceInactivity->value,
+            'status' => 'pending',
+        ]);
 
         $originalExpiry = $membership->expiry_date?->toDateString();
 

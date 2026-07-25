@@ -11,16 +11,15 @@ use App\Models\MemberProfile;
 use App\Models\ScheduledReminder;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class ReminderService
 {
     public function __construct(
         private readonly NotificationService $notificationService,
         private readonly TransactionalEmailService $transactionalEmailService,
-    ) {
-    }
+    ) {}
 
     public function syncMembershipReminders(MemberMembership $membership): void
     {
@@ -79,6 +78,10 @@ class ReminderService
             ->when($gymId, fn (Builder $query) => $query->where('gym_id', $gymId))
             ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId))
             ->where('is_active', true)
+            ->where(function (Builder $query): void {
+                $query->whereNull('membership_status')
+                    ->orWhere('membership_status', '!=', 'frozen');
+            })
             ->get();
 
         $lastAttendanceByMember = AttendanceLog::query()
