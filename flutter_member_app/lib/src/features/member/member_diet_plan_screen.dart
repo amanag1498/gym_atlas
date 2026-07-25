@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/loading_state.dart';
+import '../../../core/widgets/premium_card.dart';
 import 'member_repository.dart';
 
 class MemberDietPlanScreen extends StatefulWidget {
@@ -84,6 +85,11 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
               ? _completedMealIds.remove(mealId)
               : _completedMealIds.add(mealId),
         );
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not update this meal. Try again.'),
+          ),
+        );
       }
     }
   }
@@ -140,9 +146,23 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                       ],
                     ),
                     const SizedBox(height: AppSpacing.lg),
-                    Text(
-                      'Today\'s meals',
-                      style: Theme.of(context).textTheme.titleLarge,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Today\'s meals',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                        Text(
+                          '${_completedMealIds.length}/${meals.length} done',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppColors.success,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     ...meals.map((meal) {
@@ -156,8 +176,9 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                                     Map<String, dynamic>.from(item as Map),
                               )
                               .toList();
-                      return Card(
-                        child: Padding(
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: PremiumCard(
                           padding: const EdgeInsets.all(AppSpacing.md),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -222,8 +243,11 @@ class _Hero extends StatelessWidget {
   const _Hero({required this.plan});
   final Map<String, dynamic> plan;
   @override
-  Widget build(BuildContext context) => Card(
-    color: AppColors.primary,
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: AppColors.primary,
+      borderRadius: BorderRadius.circular(20),
+    ),
     child: Padding(
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
@@ -260,9 +284,10 @@ class _Macro extends StatelessWidget {
   final Color color;
   @override
   Widget build(BuildContext context) => Expanded(
-    child: Card(
+    child: PremiumCard(
+      padding: const EdgeInsets.all(AppSpacing.sm),
       child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sm),
+        padding: EdgeInsets.zero,
         child: Column(
           children: [
             Text(

@@ -17,6 +17,7 @@ import 'trainer_member_detail_screen.dart';
 import 'trainer_onboarding_flow.dart';
 import 'trainer_profile_screen.dart';
 import 'trainer_repository.dart';
+import 'trainer_diet_plan_screen.dart';
 import 'trainer_settings_screen.dart';
 import 'trainer_tasks_screen.dart';
 
@@ -353,6 +354,21 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
 
     return AppGradientScaffold(
       title: _pageTitle(_index, user.name),
+      actions: [
+        IconButton(
+          tooltip: 'Diet plans',
+          onPressed: () => Navigator.of(context).push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => TrainerDietPlanScreen(
+                repository: _repository,
+                members: _members,
+                contextData: _contextData,
+              ),
+            ),
+          ),
+          icon: const Icon(Icons.restaurant_menu_rounded),
+        ),
+      ],
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 240),
         transitionBuilder: (child, animation) {
