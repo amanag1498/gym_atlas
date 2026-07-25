@@ -19,6 +19,7 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _plans = const [];
+  int? _selectedPlanId;
   final Set<int> _completedMealIds = <int>{};
 
   @override
@@ -37,6 +38,9 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
       _plans = (response['data'] as List<dynamic>? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map))
           .toList();
+      _selectedPlanId ??= (_plans.isNotEmpty
+          ? (_plans.first['id'] as num?)?.toInt()
+          : null);
       _completedMealIds
         ..clear()
         ..addAll(
@@ -51,9 +55,21 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
   }
 
   Map<String, dynamic> _activePlan() => _plans.firstWhere(
-    (plan) => plan['status']?.toString() == 'active',
-    orElse: () => _plans.isEmpty ? <String, dynamic>{} : _plans.first,
+    (plan) => (plan['id'] as num?)?.toInt() == _selectedPlanId,
+    orElse: () => _plans.firstWhere(
+      (plan) => plan['status']?.toString() == 'active',
+      orElse: () => _plans.isEmpty ? <String, dynamic>{} : _plans.first,
+    ),
   );
+
+  Future<void> _deletePersonalPlan(Map<String, dynamic> plan) async {
+    final id = (plan['id'] as num?)?.toInt();
+    if (id == null) return;
+    await widget.repository.deleteDietPlan(id);
+    _selectedPlanId = null;
+    await _load();
+  }
+
   List<Map<String, dynamic>> _meals(Map<String, dynamic> plan) =>
       (plan['meals'] as List<dynamic>? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map))
@@ -318,7 +334,42 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                       icon: Icons.restaurant_menu_rounded,
                     )
                   else ...[
+                    if (_plans.length > 1) ...[
+                      DropdownButtonFormField<int>(
+                        key: ValueKey((plan['id'] as num?)?.toInt()),
+                        initialValue: (plan['id'] as num?)?.toInt(),
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Viewing plan',
+                        ),
+                        items: _plans
+                            .map(
+                              (item) => DropdownMenuItem(
+                                value: (item['id'] as num?)?.toInt(),
+                                child: Text(
+                                  item['name']?.toString() ?? 'Diet plan',
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) =>
+                            setState(() => _selectedPlanId = value),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
                     _Hero(plan: plan),
+                    if (plan['is_member_owned'] == true)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: () => _deletePersonalPlan(plan),
+                          icon: const Icon(
+                            Icons.delete_outline_rounded,
+                            color: AppColors.error,
+                          ),
+                          label: const Text('Delete personal plan'),
+                        ),
+                      ),
                     const SizedBox(height: AppSpacing.lg),
                     if (_hasGuidance(plan)) ...[
                       _Guidance(plan: plan),
