@@ -8,6 +8,7 @@ use App\Http\Requests\Diet\UpdateDietPlanRequest;
 use App\Http\Resources\Diet\DietPlanResource;
 use App\Models\DietPlan;
 use App\Models\MemberProfile;
+use App\Services\Audit\AuditLogService;
 use App\Services\Authorization\ScopeResolver;
 use App\Services\Diet\DietPlanService;
 use Illuminate\Http\Request;
@@ -15,7 +16,7 @@ use Illuminate\Validation\ValidationException;
 
 class DietPlanController extends Controller
 {
-    public function __construct(private readonly ScopeResolver $scopeResolver, private readonly DietPlanService $dietPlanService) {}
+    public function __construct(private readonly ScopeResolver $scopeResolver, private readonly DietPlanService $dietPlanService, private readonly AuditLogService $auditLogService) {}
 
     public function index(Request $request)
     {
@@ -41,7 +42,12 @@ class DietPlanController extends Controller
             $this->assertMember($memberId, $data['gym_id'], $data['branch_id'] ?? null);
         }
 
-        return $this->success(DietPlanResource::collection($this->dietPlanService->create($request->user(), $data)), 'Diet plan assigned successfully.', 201);
+        $plans = $this->dietPlanService->create($request->user(), $data);
+        foreach ($plans as $plan) {
+            $this->auditLogService->log(event: 'diet_plan.created', action: 'create', request: $request, subject: $plan, gym: $plan->gym, branch: $plan->branch, newValues: $plan->toArray());
+        }
+
+        return $this->success(DietPlanResource::collection($plans), 'Diet plan assigned successfully.', 201);
     }
 
     public function show(Request $request, DietPlan $dietPlan)
@@ -55,12 +61,17 @@ class DietPlanController extends Controller
     {
         $this->assertScope($request, $dietPlan->gym_id, $dietPlan->branch_id);
 
-        return $this->success(DietPlanResource::make($this->dietPlanService->update($dietPlan, $request->user(), $request->validated())), 'Diet plan updated successfully.');
+        $oldValues = $dietPlan->load('meals.items')->toArray();
+        $plan = $this->dietPlanService->update($dietPlan, $request->user(), $request->validated());
+        $this->auditLogService->log(event: 'diet_plan.updated', action: 'update', request: $request, subject: $plan, gym: $plan->gym, branch: $plan->branch, oldValues: $oldValues, newValues: $plan->toArray());
+
+        return $this->success(DietPlanResource::make($plan), 'Diet plan updated successfully.');
     }
 
     public function destroy(Request $request, DietPlan $dietPlan)
     {
         $this->assertScope($request, $dietPlan->gym_id, $dietPlan->branch_id);
+        $this->auditLogService->log(event: 'diet_plan.deleted', action: 'delete', request: $request, subject: $dietPlan, gym: $dietPlan->gym, branch: $dietPlan->branch, oldValues: $dietPlan->load('meals.items')->toArray());
         $dietPlan->delete();
 
         return $this->success(null, 'Diet plan deleted successfully.');
