@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\Member\MemberStepController;
 use App\Http\Controllers\Api\Member\MemberTrainerController;
 use App\Http\Controllers\Api\Member\ProgressController as MemberProgressController;
 use App\Http\Controllers\Api\Member\WorkoutController as MemberWorkoutController;
+use App\Http\Controllers\Api\Member\DietPlanController as MemberDietPlanController;
 use App\Http\Controllers\Api\PlatformAdmin\ExerciseController as PlatformExerciseController;
 use App\Http\Controllers\Api\PlatformAdmin\AnnouncementController as PlatformAnnouncementController;
 use App\Http\Controllers\Api\PlatformAdmin\AuditLogController as PlatformAuditLogController;
@@ -62,6 +63,7 @@ use App\Http\Controllers\Api\Trainer\TrainerGymInvitationController;
 use App\Http\Controllers\Api\Trainer\TrainerProfileController;
 use App\Http\Controllers\Api\Trainer\TrialRequestController as TrainerTrialRequestController;
 use App\Http\Controllers\Api\Trainer\WorkoutPlanController as TrainerWorkoutPlanController;
+use App\Http\Controllers\Api\Trainer\DietPlanController as TrainerDietPlanController;
 use App\Http\Controllers\Api\Trainer\WorkoutTemplateController as TrainerWorkoutTemplateController;
 use Illuminate\Support\Facades\Route;
 
@@ -562,6 +564,11 @@ Route::prefix('trainer')
             ->middleware('permission:workout_plan.manage');
         Route::delete('workout-plans/{workoutPlan}', [TrainerWorkoutPlanController::class, 'destroy'])
             ->middleware('permission:workout_plan.manage');
+        Route::get('diet-plans', [TrainerDietPlanController::class, 'index'])->middleware('permission:workout_plan.view|workout_plan.manage');
+        Route::post('diet-plans', [TrainerDietPlanController::class, 'store'])->middleware('permission:workout_plan.manage');
+        Route::get('diet-plans/{dietPlan}', [TrainerDietPlanController::class, 'show'])->middleware('permission:workout_plan.view|workout_plan.manage');
+        Route::put('diet-plans/{dietPlan}', [TrainerDietPlanController::class, 'update'])->middleware('permission:workout_plan.manage');
+        Route::delete('diet-plans/{dietPlan}', [TrainerDietPlanController::class, 'destroy'])->middleware('permission:workout_plan.manage');
         Route::get('notifications', [TrainerNotificationController::class, 'index'])
             ->middleware('permission:trainer.view');
         Route::post('notifications/{notification}/read', [TrainerNotificationController::class, 'markRead'])
@@ -620,6 +627,9 @@ Route::prefix('member')
         Route::get('attendance/history', [MemberAttendanceController::class, 'history']);
         Route::get('workout-plans', [MemberWorkoutController::class, 'plans'])
             ->middleware('permission:workout_plan.view');
+        Route::get('diet-plans', [MemberDietPlanController::class, 'index']);
+        Route::get('diet-plans/{dietPlan}', [MemberDietPlanController::class, 'show']);
+        Route::post('diet-plans/{dietPlan}/meals/{meal}/log', [MemberDietPlanController::class, 'logMeal']);
         Route::post('workout-plans', [MemberWorkoutController::class, 'storePlan'])
             ->middleware('permission:workout_plan.manage|workout_session.manage');
         Route::get('workout-plans/{workoutPlan}', [MemberWorkoutController::class, 'showPlan'])
