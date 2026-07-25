@@ -229,14 +229,30 @@ class MembershipLifecycleFeatureTest extends TestCase
         $this->actingAs($owner, 'sanctum')
             ->postJson('/api/gym/memberships/'.$membership->id.'/freeze', [], $headers)
             ->assertOk()
-            ->assertJsonPath('data.status', 'frozen');
+            ->assertJsonPath('data.status', 'frozen')
+            ->assertJsonPath('data.paused_at', now()->toDateString());
+
+        $originalExpiry = $membership->fresh()->expiry_date?->toDateString();
+        $originalDueDate = $membership->fresh()->due_date?->toDateString();
+        $this->travel(4)->days();
+
+        $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/gym/memberships/'.$membership->id.'/reactivate', [], $headers)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active')
+            ->assertJsonPath('data.total_paused_days', 4);
+
+        $membership->refresh();
+        $this->assertNull($membership->paused_at);
+        $this->assertSame(now()->parse($originalExpiry)->addDays(4)->toDateString(), $membership->expiry_date?->toDateString());
+        $this->assertSame(now()->parse($originalDueDate)->addDays(4)->toDateString(), $membership->due_date?->toDateString());
 
         $this->actingAs($owner, 'sanctum')
             ->postJson('/api/gym/memberships/'.$membership->id.'/extend', [
                 'extra_days' => 5,
             ], $headers)
             ->assertOk()
-            ->assertJsonPath('data.status', 'frozen');
+            ->assertJsonPath('data.status', 'active');
 
         $this->actingAs($owner, 'sanctum')
             ->postJson('/api/gym/memberships/'.$membership->id.'/cancel', [], $headers)

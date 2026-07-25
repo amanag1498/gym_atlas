@@ -358,6 +358,17 @@ class MemberMembershipController extends Controller
         );
     }
 
+    public function reactivate(UpdateMembershipLifecycleRequest $request, MemberMembership $memberMembership)
+    {
+        return $this->updateLifecycle(
+            request: $request,
+            memberMembership: $memberMembership,
+            event: 'membership.reactivated',
+            message: 'Membership resumed and expiry extended successfully.',
+            callback: fn () => $this->membershipLifecycleService->reactivate($memberMembership),
+        );
+    }
+
     public function extend(ExtendMembershipRequest $request, MemberMembership $memberMembership)
     {
         return $this->updateLifecycle(

@@ -438,27 +438,29 @@
                                             @csrf
                                             <div>
                                                 <p class="text-sm font-semibold text-slate-950 dark:text-white">Reactivate membership</p>
-                                                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Use when a paused member is resuming the current cycle.</p>
+                                                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Resuming automatically adds every paused calendar day to the expiry and due dates.</p>
                                             </div>
-                                            <x-form-input name="due_date" label="Due Date" type="date" :value="optional($membership->due_date)->format('Y-m-d')" />
+                                            <div class="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+                                                Paused since {{ optional($membership->paused_at)->format('d M Y') ?: 'the recorded pause date is unavailable' }}.
+                                            </div>
                                             <div>
                                                 <label class="panel-label">Reason</label>
                                                 <textarea name="notes" class="panel-textarea" placeholder="Why this membership is being reactivated"></textarea>
                                             </div>
-                                            <x-action-button type="submit">Reactivate Membership</x-action-button>
+                                            <x-action-button type="submit">Resume & Extend Membership</x-action-button>
                                         </form>
                                     @elseif (! $isCancelled)
                                         <form method="POST" action="{{ route('web.gym.memberships.freeze', ['membership' => $membership->id] + request()->query()) }}" class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/70">
                                             @csrf
                                             <div>
                                                 <p class="text-sm font-semibold text-slate-950 dark:text-white">Pause current cycle</p>
-                                                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Use when the member is temporarily holding the current membership.</p>
+                                                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Check-ins and reminders pause now. Resuming later extends expiry by the paused days.</p>
                                             </div>
                                             <div>
                                                 <label class="panel-label">Reason</label>
                                                 <textarea name="notes" class="panel-textarea" placeholder="Why this membership is being frozen"></textarea>
                                             </div>
-                                            <x-action-button type="submit" variant="secondary">Freeze Membership</x-action-button>
+                                            <x-action-button type="submit" variant="secondary">Pause Membership</x-action-button>
                                         </form>
                                     @endif
 

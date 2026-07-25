@@ -32,6 +32,9 @@ class MemberMembership extends Model
         'start_date',
         'expiry_date',
         'status',
+        'paused_at',
+        'total_paused_days',
+        'last_resumed_at',
         'default_plan_price',
         'default_joining_fee',
         'custom_fee_enabled',
@@ -56,6 +59,8 @@ class MemberMembership extends Model
         return [
             'start_date' => 'date',
             'expiry_date' => 'date',
+            'paused_at' => 'date',
+            'last_resumed_at' => 'date',
             'default_plan_price' => 'decimal:2',
             'default_joining_fee' => 'decimal:2',
             'custom_fee_enabled' => 'boolean',

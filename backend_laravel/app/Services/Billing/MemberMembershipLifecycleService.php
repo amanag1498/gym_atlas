@@ -7,6 +7,7 @@ use App\Models\MemberMembership;
 use App\Models\MemberProfile;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Validation\ValidationException;
 
 class MemberMembershipLifecycleService
 {
@@ -48,7 +49,14 @@ class MemberMembershipLifecycleService
 
     public function freeze(MemberMembership $membership): MemberMembership
     {
+        if ($membership->status !== MembershipStatus::Active->value) {
+            throw ValidationException::withMessages([
+                'membership' => ['Only an active membership can be paused.'],
+            ]);
+        }
+
         $membership->status = MembershipStatus::Frozen->value;
+        $membership->paused_at = now()->startOfDay();
         $membership->save();
 
         $this->syncMemberProfileFromMembership($membership->fresh(['member.memberProfile']));
@@ -58,7 +66,29 @@ class MemberMembershipLifecycleService
 
     public function reactivate(MemberMembership $membership, ?string $dueDate = null): MemberMembership
     {
+        if ($membership->status !== MembershipStatus::Frozen->value) {
+            throw ValidationException::withMessages([
+                'membership' => ['Only a paused membership can be resumed.'],
+            ]);
+        }
+
+        $resumedAt = now()->startOfDay();
+        $pausedDays = $membership->paused_at
+            ? $membership->paused_at->diffInDays($resumedAt)
+            : 0;
+
         $membership->status = MembershipStatus::Active->value;
+        $membership->total_paused_days = (int) $membership->total_paused_days + $pausedDays;
+        $membership->last_resumed_at = $resumedAt;
+
+        if ($pausedDays > 0) {
+            $membership->expiry_date = $membership->expiry_date->copy()->addDays($pausedDays);
+            if ($membership->due_date) {
+                $membership->due_date = $membership->due_date->copy()->addDays($pausedDays);
+            }
+        }
+
+        $membership->paused_at = null;
 
         if ($dueDate !== null) {
             $membership->due_date = $dueDate;

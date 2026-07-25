@@ -406,6 +406,8 @@ Route::prefix('gym')
             ->middleware('permission:membership.manage');
         Route::post('member-memberships/{memberMembership}/freeze', [MemberMembershipController::class, 'freeze'])
             ->middleware('permission:membership.manage');
+        Route::post('member-memberships/{memberMembership}/reactivate', [MemberMembershipController::class, 'reactivate'])
+            ->middleware('permission:membership.manage');
         Route::post('member-memberships/{memberMembership}/extend', [MemberMembershipController::class, 'extend'])
             ->middleware('permission:membership.manage');
         Route::post('member-memberships/{memberMembership}/cancel', [MemberMembershipController::class, 'cancel'])
@@ -420,6 +422,8 @@ Route::prefix('gym')
         Route::post('memberships/{memberMembership}/renew', [MemberMembershipController::class, 'renew'])
             ->middleware('permission:membership.manage');
         Route::post('memberships/{memberMembership}/freeze', [MemberMembershipController::class, 'freeze'])
+            ->middleware('permission:membership.manage');
+        Route::post('memberships/{memberMembership}/reactivate', [MemberMembershipController::class, 'reactivate'])
             ->middleware('permission:membership.manage');
         Route::post('memberships/{memberMembership}/extend', [MemberMembershipController::class, 'extend'])
             ->middleware('permission:membership.manage');

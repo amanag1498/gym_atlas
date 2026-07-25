@@ -84,7 +84,10 @@ class _MemberMembershipScreenState extends State<MemberMembershipScreen> {
 
     final gymName = _stringValue(currentGym['name'], fallback: 'Current gym');
     final branchName = _stringValue(branch['name'], fallback: 'Branch pending');
-    final status = _titleCase(membership?['status']?.toString() ?? 'inactive');
+    final isPaused = membership?['status']?.toString() == 'frozen';
+    final status = isPaused
+        ? 'Paused'
+        : _titleCase(membership?['status']?.toString() ?? 'inactive');
     final paymentStatus = _titleCase(
       membership?['payment_status']?.toString() ?? 'pending',
     );
@@ -130,10 +133,32 @@ class _MemberMembershipScreenState extends State<MemberMembershipScreen> {
                         gymName: gymName,
                         branchName: branchName,
                         status: status,
-                        onQr: widget.onShowQr,
+                        onQr: isPaused ? null : widget.onShowQr,
                       ),
                     ),
                     const SizedBox(height: 15),
+                    if (isPaused) ...<Widget>[
+                      _FitAnimatedSection(
+                        delay: const Duration(milliseconds: 45),
+                        child: _FitGroup(
+                          title: 'Membership paused',
+                          children: <Widget>[
+                            _FitValueRow(
+                              icon: Icons.pause_circle_outline_rounded,
+                              title: 'Paused since',
+                              value: _formatDate(membership['paused_at']),
+                            ),
+                            _FitValueRow(
+                              icon: Icons.calendar_month_rounded,
+                              title: 'Extension on resume',
+                              value:
+                                  '${membership['current_paused_days'] ?? 0} day(s) will be added to your expiry',
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                    ],
                     _FitAnimatedSection(
                       delay: const Duration(milliseconds: 70),
                       child: Row(
@@ -170,8 +195,10 @@ class _MemberMembershipScreenState extends State<MemberMembershipScreen> {
                           _FitRow(
                             icon: Icons.qr_code_2_rounded,
                             title: 'QR Check-in Pass',
-                            subtitle: branchName,
-                            onPressed: widget.onShowQr,
+                            subtitle: isPaused
+                                ? 'Unavailable while membership is paused'
+                                : branchName,
+                            onPressed: isPaused ? null : widget.onShowQr,
                           ),
                           _FitRow(
                             icon: Icons.fact_check_outlined,

@@ -449,7 +449,7 @@ class MemberMembershipController extends Controller
 
         $this->reminderService->syncMembershipReminders($membership->fresh());
 
-        return back()->with('status', 'Membership frozen successfully.');
+        return back()->with('status', 'Membership paused successfully. Its expiry will be extended when it is resumed.');
     }
 
     public function extend(ExtendMembershipRequest $request, MemberMembership $membership): RedirectResponse
@@ -485,7 +485,6 @@ class MemberMembershipController extends Controller
         $oldValues = $membership->toArray();
         $membership = $this->membershipLifecycleService->reactivate(
             $membership,
-            $request->validated('due_date')
         );
 
         $this->auditLogService->log(
@@ -502,7 +501,7 @@ class MemberMembershipController extends Controller
 
         $this->reminderService->syncMembershipReminders($membership->fresh());
 
-        return back()->with('status', 'Membership reactivated successfully.');
+        return back()->with('status', 'Membership resumed successfully. Expiry and due dates were extended by the paused days.');
     }
 
     public function cancel(UpdateMembershipLifecycleRequest $request, MemberMembership $membership): RedirectResponse
