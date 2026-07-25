@@ -19,6 +19,7 @@
                 @if ($canManageDietPlans)
                     <form method="POST" action="{{ route('web.gym.diet-plans.store', request()->only(['gym', 'branch'])) }}" class="mt-6 space-y-4">
                         @csrf
+                        <x-form-select name="diet_template_id" label="Start from global template (optional)"><option value="">Build a custom plan</option>@foreach($templates as $template)<option value="{{ $template->id }}">{{ $template->name }}</option>@endforeach</x-form-select>
                         <x-form-select name="member_id" label="Member" required>
                             <option value="">Select member</option>
                             @foreach ($members as $profile)

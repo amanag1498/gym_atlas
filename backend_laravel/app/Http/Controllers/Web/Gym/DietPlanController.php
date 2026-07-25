@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Web\Gym;
 use App\Enums\PermissionName;
 use App\Http\Controllers\Controller;
 use App\Models\DietPlan;
+use App\Models\DietPlanTemplate;
 use App\Models\MemberProfile;
 use App\Services\Audit\AuditLogService;
 use App\Services\Diet\DietPlanService;
+use App\Services\Diet\DietPlanTemplateService;
 use App\Services\Web\GymWebPanelService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,6 +21,7 @@ class DietPlanController extends Controller
     public function __construct(
         private readonly GymWebPanelService $gymWebPanelService,
         private readonly DietPlanService $dietPlanService,
+        private readonly DietPlanTemplateService $dietPlanTemplateService,
         private readonly AuditLogService $auditLogService,
     ) {}
 
@@ -52,6 +55,7 @@ class DietPlanController extends Controller
             'branch' => $branch,
             'plans' => $plans,
             'members' => $members,
+            'templates' => DietPlanTemplate::query()->where('status', 'active')->orderBy('name')->get(),
             'canManageDietPlans' => $this->gymWebPanelService->canPermission($request, PermissionName::MembersManage->value, $gym, $branch?->id),
         ]);
     }
@@ -68,6 +72,7 @@ class DietPlanController extends Controller
         })->values()->all()]);
 
         $data = $request->validate([
+            'diet_template_id' => ['nullable', 'integer', 'exists:diet_plan_templates,id'],
             'member_id' => ['required', 'integer'],
             'name' => ['required', 'string', 'max:255'],
             'goal' => ['nullable', 'string', 'max:255'],
@@ -98,6 +103,9 @@ class DietPlanController extends Controller
             'meals.*.items.*.fats_g' => ['nullable', 'numeric', 'min:0'],
             'meals.*.items.*.notes' => ['nullable', 'string', 'max:1000'],
         ]);
+        if (! empty($data['diet_template_id'])) {
+            $data = array_merge($data, $this->dietPlanTemplateService->planPayload(DietPlanTemplate::query()->findOrFail($data['diet_template_id'])));
+        }
 
         $memberExists = MemberProfile::query()
             ->where('gym_id', $gym->id)
