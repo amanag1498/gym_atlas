@@ -29,7 +29,11 @@ class DietPlanController extends Controller
         $profile = $this->trainerScopeService->resolveTrainerProfile($request);
         foreach ($request->validated('member_ids') as $id) {
             $this->trainerScopeService->resolveAssignedMember($profile, User::query()->findOrFail($id));
-        } $plans = $this->dietPlanService->create($request->user(), $request->validated());
+        }
+        $data = $request->validated();
+        $data['gym_id'] = $profile->gym_id;
+        $data['branch_id'] = $profile->branch_id;
+        $plans = $this->dietPlanService->create($request->user(), $data);
 
         return $this->success(DietPlanResource::collection($plans), 'Diet plan assigned successfully.', 201);
     }

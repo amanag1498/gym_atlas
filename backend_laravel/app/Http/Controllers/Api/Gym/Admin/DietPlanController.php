@@ -21,7 +21,14 @@ class DietPlanController extends Controller
     {
         $gymId = $request->integer('gym_id') ?: $request->header('X-Gym-Id');
         $this->assertScope($request, (int) $gymId, $request->integer('branch_id') ?: $request->header('X-Branch-Id'));
-        $paginator = DietPlan::query()->with(['member', 'trainer', 'meals.items'])->where('gym_id', $gymId)->when($request->filled('member_id'), fn ($q) => $q->where('member_id', $request->integer('member_id')))->latest()->paginate($request->integer('per_page', 15));
+        $branchId = $request->integer('branch_id') ?: $request->header('X-Branch-Id');
+        $paginator = DietPlan::query()
+            ->with(['member', 'trainer', 'meals.items'])
+            ->where('gym_id', $gymId)
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->when($request->filled('member_id'), fn ($q) => $q->where('member_id', $request->integer('member_id')))
+            ->latest()
+            ->paginate($request->integer('per_page', 15));
 
         return $this->paginated($paginator, DietPlanResource::collection($paginator->getCollection()), 'Diet plans fetched successfully.');
     }
