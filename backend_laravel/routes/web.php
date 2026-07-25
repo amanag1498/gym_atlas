@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Web\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Web\Admin\DietPlanController as AdminDietPlanController;
+use App\Http\Controllers\Web\Admin\DietPlanTemplateController as AdminDietPlanTemplateController;
 use App\Http\Controllers\Web\Admin\GymPlatformSubscriptionController as AdminGymPlatformSubscriptionController;
 use App\Http\Controllers\Web\Admin\GymController as AdminGymController;
 use App\Http\Controllers\Web\Admin\GymOwnerController as AdminGymOwnerController;
@@ -254,6 +255,11 @@ Route::prefix('admin')
         Route::get('/dashboard', AdminDashboardController::class)->name('dashboard');
         Route::get('/diet-plans', [AdminDietPlanController::class, 'index'])->name('diet-plans.index');
         Route::post('/diet-plans/{dietPlan}/status', [AdminDietPlanController::class, 'updateStatus'])->name('diet-plans.status');
+        Route::get('/diet-templates', [AdminDietPlanTemplateController::class, 'index'])->name('diet-templates.index');
+        Route::get('/diet-templates/create', [AdminDietPlanTemplateController::class, 'create'])->name('diet-templates.create');
+        Route::post('/diet-templates', [AdminDietPlanTemplateController::class, 'store'])->name('diet-templates.store');
+        Route::get('/diet-templates/{dietTemplate}/edit', [AdminDietPlanTemplateController::class, 'edit'])->name('diet-templates.edit');
+        Route::put('/diet-templates/{dietTemplate}', [AdminDietPlanTemplateController::class, 'update'])->name('diet-templates.update');
 
         Route::get('/gyms', [AdminGymController::class, 'index'])->name('gyms.index');
         Route::get('/gyms/create', [AdminGymController::class, 'create'])->name('gyms.create');

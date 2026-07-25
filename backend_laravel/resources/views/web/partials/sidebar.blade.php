@@ -48,6 +48,7 @@
                     ['label' => 'Exercise Book', 'icon' => 'ti-clipboard-list', 'route' => 'web.admin.exercises.index', 'active' => ['web.admin.exercises.*']],
                     ['label' => 'Workout Books', 'icon' => 'ti-book', 'route' => 'web.admin.workout-books.index', 'active' => ['web.admin.workout-books.*']],
                     ['label' => 'Diet Plans', 'icon' => 'ti-apple', 'route' => 'web.admin.diet-plans.index', 'active' => ['web.admin.diet-plans.*']],
+                    ['label' => 'Diet Templates', 'icon' => 'ti-notebook', 'route' => 'web.admin.diet-templates.index', 'active' => ['web.admin.diet-templates.*']],
                     ['label' => 'Banners', 'icon' => 'ti-photo', 'route' => 'web.admin.banners.index', 'active' => ['web.admin.banners.*']],
                     ['label' => 'Announcements', 'icon' => 'ti-speakerphone', 'route' => 'web.admin.announcements.index', 'active' => ['web.admin.announcements.*']],
                     ['label' => 'Notifications', 'icon' => 'ti-bell', 'route' => 'web.admin.notifications.index', 'active' => ['web.admin.notifications.*']],
