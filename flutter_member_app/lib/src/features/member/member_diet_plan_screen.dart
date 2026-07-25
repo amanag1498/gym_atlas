@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:gym_flutter_core/diet_plan_form_codec.dart';
+import 'package:gym_flutter_core/diet_plan_meals_editor.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -42,10 +42,9 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
           .toList();
       try {
         final templatesResponse = await widget.repository.fetchDietTemplates();
-        _templates =
-            (templatesResponse['data'] as List<dynamic>? ?? const [])
-                .map((item) => Map<String, dynamic>.from(item as Map))
-                .toList();
+        _templates = (templatesResponse['data'] as List<dynamic>? ?? const [])
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .toList();
       } catch (_) {
         _templates = const [];
       }
@@ -84,101 +83,51 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
   Future<void> _editPersonalPlan(Map<String, dynamic> plan) async {
     final planId = (plan['id'] as num?)?.toInt();
     if (planId == null || plan['is_member_owned'] != true) return;
-    final name = TextEditingController(text: plan['name']?.toString() ?? '');
-    final meals = _meals(plan);
-    final foodLines = meals
-        .map(
-          (meal) => TextEditingController(
-            text: DietPlanFormCodec.itemsToLines(
-              meal['items'] as List<dynamic>?,
-            ),
-          ),
-        )
-        .toList();
-    try {
-      final changed = await showModalBottomSheet<bool>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        backgroundColor: Colors.transparent,
-        builder: (context) => Padding(
-          padding: EdgeInsets.only(
-            left: AppSpacing.lg,
-            right: AppSpacing.lg,
-            bottom: MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
-          ),
-          child: PremiumCard(
-            child: SingleChildScrollView(
+    final formKey = GlobalKey<FormState>();
+    var editedDetails = Map<String, dynamic>.from(plan);
+    var editedMeals = _meals(plan);
+    final changed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          left: AppSpacing.lg,
+          right: AppSpacing.lg,
+          bottom: MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
+        ),
+        child: PremiumCard(
+          child: SingleChildScrollView(
+            child: Form(
+              key: formKey,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Edit personal plan foods',
+                    'Edit personal plan',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  TextField(
-                    controller: name,
-                    decoration: const InputDecoration(labelText: 'Plan name'),
+                  DietPlanDetailsEditor(
+                    initialPlan: editedDetails,
+                    onChanged: (value) => editedDetails = value,
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  ...meals.asMap().entries.map(
-                    (entry) => Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                      child: TextField(
-                        controller: foodLines[entry.key],
-                        minLines: 3,
-                        maxLines: 8,
-                        decoration: InputDecoration(
-                          labelText:
-                              '${entry.value['name'] ?? 'Meal'} products',
-                          helperText:
-                              'name | quantity | kcal | protein | carbs | fats | notes',
-                          alignLabelWithHint: true,
-                        ),
-                      ),
-                    ),
+                  DietPlanMealsEditor(
+                    initialMeals: editedMeals,
+                    onChanged: (value) => editedMeals = value,
                   ),
+                  const SizedBox(height: AppSpacing.md),
                   GradientButton(
                     label: 'Save changes',
                     expanded: true,
                     onPressed: () async {
-                      if (name.text.trim().isEmpty) return;
+                      if (!formKey.currentState!.validate()) return;
                       try {
                         await widget.repository.updateDietPlan(planId, {
-                          'name': name.text.trim(),
-                          'goal': plan['goal'],
-                          'daily_calorie_target': plan['daily_calorie_target'],
-                          'protein_target_g': plan['protein_target_g'],
-                          'carbs_target_g': plan['carbs_target_g'],
-                          'fats_target_g': plan['fats_target_g'],
-                          'dietary_preferences': plan['dietary_preferences'],
-                          'allergies_and_restrictions':
-                              plan['allergies_and_restrictions'],
-                          'notes': plan['notes'],
-                          'status': plan['status'],
-                          'starts_on': plan['starts_on'],
-                          'ends_on': plan['ends_on'],
-                          'meals': meals.asMap().entries.map((entry) {
-                            final meal = entry.value;
-                            final rawTime = meal['scheduled_time']?.toString();
-                            return {
-                              'name': meal['name'],
-                              'meal_type': meal['meal_type'],
-                              'scheduled_time':
-                                  rawTime != null && rawTime.length >= 5
-                                  ? rawTime.substring(0, 5)
-                                  : rawTime,
-                              'calories': meal['calories'],
-                              'protein_g': meal['protein_g'],
-                              'carbs_g': meal['carbs_g'],
-                              'fats_g': meal['fats_g'],
-                              'notes': meal['notes'],
-                              'items': DietPlanFormCodec.linesToItems(
-                                foodLines[entry.key].text,
-                              ),
-                            };
-                          }).toList(),
+                          ...editedDetails,
+                          'meals': editedMeals,
                         });
                         if (context.mounted) {
                           Navigator.of(context).pop(true);
@@ -197,14 +146,9 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
             ),
           ),
         ),
-      );
-      if (changed == true) await _load();
-    } finally {
-      name.dispose();
-      for (final controller in foodLines) {
-        controller.dispose();
-      }
-    }
+      ),
+    );
+    if (changed == true) await _load();
   }
 
   List<Map<String, dynamic>> _meals(Map<String, dynamic> plan) =>
@@ -250,12 +194,8 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
   Future<void> _openCreatePlanSheet() async {
     final formKey = GlobalKey<FormState>();
     final name = TextEditingController();
-    final goal = TextEditingController();
-    final calories = TextEditingController();
-    final protein = TextEditingController();
-    final carbs = TextEditingController();
-    final fats = TextEditingController();
-    final mealNames = ['Breakfast', 'Lunch', 'Dinner'];
+    var draftDetails = <String, dynamic>{'status': 'active'};
+    var draftMeals = _defaultMeals();
     int? templateId;
     var saving = false;
     try {
@@ -320,82 +260,27 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
-                      const SizedBox(height: AppSpacing.sm),
-                      TextFormField(
-                        controller: name,
-                        decoration: const InputDecoration(
-                          labelText: 'Plan name',
+                      const SizedBox(height: AppSpacing.md),
+                      if (templateId == null) ...[
+                        DietPlanDetailsEditor(
+                          initialPlan: draftDetails,
+                          onChanged: (value) => draftDetails = value,
                         ),
-                        validator: (value) =>
-                            templateId == null &&
-                                (value == null || value.trim().isEmpty)
-                            ? 'Plan name is required'
-                            : null,
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      TextFormField(
-                        controller: goal,
-                        decoration: const InputDecoration(labelText: 'Goal'),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: calories,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Calories',
-                              ),
-                            ),
+                        const SizedBox(height: AppSpacing.lg),
+                        DietPlanMealsEditor(
+                          initialMeals: draftMeals,
+                          onChanged: (value) => draftMeals = value,
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                      ] else ...[
+                        TextFormField(
+                          controller: name,
+                          decoration: const InputDecoration(
+                            labelText: 'Custom plan name (optional)',
                           ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child: TextFormField(
-                              controller: protein,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Protein g',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: carbs,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Carbs g',
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child: TextFormField(
-                              controller: fats,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Fats g',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      Text(
-                        'Meal slots',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Breakfast, lunch and dinner will be added. You can use the plan immediately.',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                      ],
                       GradientButton(
                         label: saving ? 'Creating...' : 'Create diet plan',
                         expanded: true,
@@ -413,34 +298,8 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                                     );
                                   } else {
                                     await widget.repository.createDietPlan({
-                                      'name': name.text.trim(),
-                                      'goal': goal.text.trim(),
-                                      'daily_calorie_target': int.tryParse(
-                                        calories.text.trim(),
-                                      ),
-                                      'protein_target_g': double.tryParse(
-                                        protein.text.trim(),
-                                      ),
-                                      'carbs_target_g': double.tryParse(
-                                        carbs.text.trim(),
-                                      ),
-                                      'fats_target_g': double.tryParse(
-                                        fats.text.trim(),
-                                      ),
-                                      'meals': mealNames
-                                          .asMap()
-                                          .entries
-                                          .map(
-                                            (entry) => {
-                                              'name': entry.value,
-                                              'meal_type': [
-                                                'breakfast',
-                                                'lunch',
-                                                'dinner',
-                                              ][entry.key],
-                                            },
-                                          )
-                                          .toList(),
+                                      ...draftDetails,
+                                      'meals': draftMeals,
                                     });
                                   }
                                   if (context.mounted) {
@@ -470,13 +329,14 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
       if (created == true) await _load();
     } finally {
       name.dispose();
-      goal.dispose();
-      calories.dispose();
-      protein.dispose();
-      carbs.dispose();
-      fats.dispose();
     }
   }
+
+  List<Map<String, dynamic>> _defaultMeals() => const [
+    {'name': 'Breakfast', 'meal_type': 'breakfast', 'items': []},
+    {'name': 'Lunch', 'meal_type': 'lunch', 'items': []},
+    {'name': 'Dinner', 'meal_type': 'dinner', 'items': []},
+  ].map((meal) => Map<String, dynamic>.from(meal)).toList();
 
   @override
   Widget build(BuildContext context) {

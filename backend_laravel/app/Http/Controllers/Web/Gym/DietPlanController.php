@@ -28,7 +28,7 @@ class DietPlanController extends Controller
     public function index(Request $request): View
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
-        $this->gymWebPanelService->assertPermission($request, PermissionName::MembersView->value, $gym);
+        $this->gymWebPanelService->assertPermission($request, PermissionName::DietPlansView->value, $gym);
         $branch = $this->gymWebPanelService->resolveBranch($request, $gym);
 
         $plans = DietPlan::query()
@@ -56,7 +56,7 @@ class DietPlanController extends Controller
             'plans' => $plans,
             'members' => $members,
             'templates' => DietPlanTemplate::query()->where('status', 'active')->orderBy('name')->get(),
-            'canManageDietPlans' => $this->gymWebPanelService->canPermission($request, PermissionName::MembersManage->value, $gym, $branch?->id),
+            'canManageDietPlans' => $this->gymWebPanelService->canPermission($request, PermissionName::DietPlansManage->value, $gym, $branch?->id),
         ]);
     }
 
@@ -64,33 +64,21 @@ class DietPlanController extends Controller
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
         $branch = $this->gymWebPanelService->resolveBranch($request, $gym);
-        $this->gymWebPanelService->assertPermission($request, PermissionName::MembersManage->value, $gym, $branch?->id);
+        $this->gymWebPanelService->assertPermission($request, PermissionName::DietPlansManage->value, $gym, $branch?->id);
 
         if ($request->filled('diet_template_id')) {
+            $customName = $request->string('name')->trim()->toString();
             $template = DietPlanTemplate::query()
                 ->where('status', 'active')
                 ->findOrFail($request->integer('diet_template_id'));
 
             $request->merge($this->dietPlanTemplateService->planPayload($template));
+            if ($customName !== '') {
+                $request->merge(['name' => $customName]);
+            }
         }
 
-        $request->merge([
-            'meals' => collect($request->input('meals', []))
-                ->filter(fn ($meal) => is_array($meal))
-                ->map(function (array $meal): array {
-                    $meal['items'] = collect($meal['items'] ?? [])
-                        ->filter(
-                            fn ($item): bool => is_array($item)
-                                && filled($item['name'] ?? null)
-                        )
-                        ->values()
-                        ->all();
-
-                    return $meal;
-                })
-                ->values()
-                ->all(),
-        ]);
+        $this->normalizeMeals($request);
 
         $data = $request->validate([
             'diet_template_id' => [
@@ -99,35 +87,7 @@ class DietPlanController extends Controller
                 Rule::exists('diet_plan_templates', 'id')->where('status', 'active'),
             ],
             'member_id' => ['required', 'integer'],
-            'name' => ['required', 'string', 'max:255'],
-            'goal' => ['nullable', 'string', 'max:255'],
-            'daily_calorie_target' => ['nullable', 'integer', 'min:0', 'max:20000'],
-            'protein_target_g' => ['nullable', 'numeric', 'min:0', 'max:2000'],
-            'carbs_target_g' => ['nullable', 'numeric', 'min:0', 'max:2000'],
-            'fats_target_g' => ['nullable', 'numeric', 'min:0', 'max:2000'],
-            'dietary_preferences' => ['nullable', 'string', 'max:4000'],
-            'allergies_and_restrictions' => ['nullable', 'string', 'max:4000'],
-            'notes' => ['nullable', 'string', 'max:6000'],
-            'starts_on' => ['nullable', 'date'],
-            'ends_on' => ['nullable', 'date', 'after_or_equal:starts_on'],
-            'meals' => ['required', 'array', 'min:1', 'max:12'],
-            'meals.*.name' => ['required', 'string', 'max:255'],
-            'meals.*.meal_type' => ['nullable', 'string', 'max:80'],
-            'meals.*.scheduled_time' => ['nullable', 'date_format:H:i'],
-            'meals.*.calories' => ['nullable', 'integer', 'min:0'],
-            'meals.*.protein_g' => ['nullable', 'numeric', 'min:0'],
-            'meals.*.carbs_g' => ['nullable', 'numeric', 'min:0'],
-            'meals.*.fats_g' => ['nullable', 'numeric', 'min:0'],
-            'meals.*.notes' => ['nullable', 'string', 'max:2000'],
-            'meals.*.items' => ['nullable', 'array', 'max:30'],
-            'meals.*.items.*.name' => ['required_with:meals.*.items', 'string', 'max:255'],
-            'meals.*.items.*.quantity' => ['nullable', 'string', 'max:120'],
-            'meals.*.items.*.calories' => ['nullable', 'integer', 'min:0'],
-            'meals.*.items.*.protein_g' => ['nullable', 'numeric', 'min:0'],
-            'meals.*.items.*.carbs_g' => ['nullable', 'numeric', 'min:0'],
-            'meals.*.items.*.fats_g' => ['nullable', 'numeric', 'min:0'],
-            'meals.*.items.*.notes' => ['nullable', 'string', 'max:1000'],
-        ]);
+        ] + $this->planRules());
 
         $memberExists = MemberProfile::query()
             ->where('gym_id', $gym->id)
@@ -149,16 +109,139 @@ class DietPlanController extends Controller
             ->with('status', 'Diet plan assigned successfully.');
     }
 
+    public function edit(Request $request, DietPlan $dietPlan): View
+    {
+        $gym = $this->gymWebPanelService->resolveGym($request);
+        abort_unless((int) $dietPlan->gym_id === (int) $gym->id, 404);
+        $this->gymWebPanelService->assertPermission(
+            $request,
+            PermissionName::DietPlansManage->value,
+            $gym,
+            $dietPlan->branch_id,
+        );
+
+        return view('web.gym.diet-plans.edit', [
+            'pageTitle' => 'Edit Diet Plan',
+            'breadcrumbs' => ['Gym', 'Diet Plans', $dietPlan->name],
+            'gym' => $gym,
+            'branch' => $dietPlan->branch,
+            'plan' => $dietPlan->load(['member', 'meals.items']),
+        ]);
+    }
+
+    public function update(Request $request, DietPlan $dietPlan): RedirectResponse
+    {
+        $gym = $this->gymWebPanelService->resolveGym($request);
+        abort_unless((int) $dietPlan->gym_id === (int) $gym->id, 404);
+        $this->gymWebPanelService->assertPermission(
+            $request,
+            PermissionName::DietPlansManage->value,
+            $gym,
+            $dietPlan->branch_id,
+        );
+        $this->normalizeMeals($request);
+
+        $oldValues = $dietPlan->load('meals.items')->toArray();
+        $plan = $this->dietPlanService->update(
+            $dietPlan,
+            $request->user(),
+            $request->validate($this->planRules() + [
+                'status' => ['required', Rule::in(['active', 'inactive'])],
+            ]),
+        );
+
+        $this->auditLogService->log(
+            event: 'web.gym.diet_plan.updated',
+            action: 'update',
+            request: $request,
+            subject: $plan,
+            gym: $gym,
+            branch: $plan->branch,
+            oldValues: $oldValues,
+            newValues: $plan->toArray(),
+        );
+
+        return redirect()
+            ->route(
+                'web.gym.diet-plans.index',
+                array_filter([
+                    'gym' => $gym->id,
+                    'branch' => $dietPlan->branch_id,
+                ])
+            )
+            ->with('status', 'Diet plan updated successfully.');
+    }
+
     public function updateStatus(Request $request, DietPlan $dietPlan): RedirectResponse
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
         abort_unless($dietPlan->gym_id === $gym->id, 404);
-        $this->gymWebPanelService->assertPermission($request, PermissionName::MembersManage->value, $gym, $dietPlan->branch_id);
+        $this->gymWebPanelService->assertPermission($request, PermissionName::DietPlansManage->value, $gym, $dietPlan->branch_id);
         $status = $request->validate(['status' => ['required', Rule::in(['active', 'inactive'])]])['status'];
         $oldValues = $dietPlan->only(['status']);
         $dietPlan->update(['status' => $status]);
         $this->auditLogService->log(event: 'web.gym.diet_plan.status_updated', action: 'update', request: $request, subject: $dietPlan, gym: $gym, branch: $dietPlan->branch, oldValues: $oldValues, newValues: $dietPlan->only(['status']));
 
         return back()->with('status', 'Diet plan status updated.');
+    }
+
+    private function normalizeMeals(Request $request): void
+    {
+        $request->merge([
+            'meals' => collect($request->input('meals', []))
+                ->filter(fn ($meal) => is_array($meal))
+                ->map(function (array $meal): array {
+                    $meal['items'] = collect($meal['items'] ?? [])
+                        ->filter(
+                            fn ($item): bool => is_array($item)
+                                && filled($item['name'] ?? null)
+                        )
+                        ->values()
+                        ->all();
+
+                    return $meal;
+                })
+                ->values()
+                ->all(),
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function planRules(): array
+    {
+        return [
+            'name' => ['required', 'string', 'max:255'],
+            'goal' => ['nullable', 'string', 'max:255'],
+            'daily_calorie_target' => ['nullable', 'integer', 'min:0', 'max:20000'],
+            'protein_target_g' => ['nullable', 'numeric', 'min:0', 'max:2000'],
+            'carbs_target_g' => ['nullable', 'numeric', 'min:0', 'max:2000'],
+            'fats_target_g' => ['nullable', 'numeric', 'min:0', 'max:2000'],
+            'dietary_preferences' => ['nullable', 'string', 'max:4000'],
+            'allergies_and_restrictions' => ['nullable', 'string', 'max:4000'],
+            'notes' => ['nullable', 'string', 'max:6000'],
+            'starts_on' => ['nullable', 'date'],
+            'ends_on' => ['nullable', 'date', 'after_or_equal:starts_on'],
+            'meals' => ['required', 'array', 'min:1', 'max:12'],
+            'meals.*.id' => ['nullable', 'integer'],
+            'meals.*.name' => ['required', 'string', 'max:255'],
+            'meals.*.meal_type' => ['nullable', 'string', 'max:80'],
+            'meals.*.scheduled_time' => ['nullable', 'date_format:H:i'],
+            'meals.*.calories' => ['nullable', 'integer', 'min:0'],
+            'meals.*.protein_g' => ['nullable', 'numeric', 'min:0'],
+            'meals.*.carbs_g' => ['nullable', 'numeric', 'min:0'],
+            'meals.*.fats_g' => ['nullable', 'numeric', 'min:0'],
+            'meals.*.notes' => ['nullable', 'string', 'max:2000'],
+            'meals.*.items' => ['nullable', 'array', 'max:30'],
+            'meals.*.items.*.id' => ['nullable', 'integer'],
+            'meals.*.items.*.name' => ['required', 'string', 'max:255'],
+            'meals.*.items.*.quantity' => ['nullable', 'string', 'max:120'],
+            'meals.*.items.*.calories' => ['nullable', 'integer', 'min:0'],
+            'meals.*.items.*.protein_g' => ['nullable', 'numeric', 'min:0'],
+            'meals.*.items.*.carbs_g' => ['nullable', 'numeric', 'min:0'],
+            'meals.*.items.*.fats_g' => ['nullable', 'numeric', 'min:0'],
+            'meals.*.items.*.notes' => ['nullable', 'string', 'max:1000'],
+        ];
     }
 }

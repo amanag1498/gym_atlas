@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Enums\RoleName;
 use App\Models\Branch;
+use App\Models\DietMealLog;
+use App\Models\DietPlan;
 use App\Models\DietPlanTemplate;
 use App\Models\Gym;
 use App\Models\MemberProfile;
@@ -70,6 +72,76 @@ class DietTemplateAssignmentTest extends TestCase
             'Banana',
             $template->meals[0]['items'][1]['name'],
         );
+    }
+
+    public function test_platform_admin_app_api_can_create_and_edit_global_diet_templates(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        $admin = User::factory()->create([
+            'active_role' => RoleName::PlatformAdmin->value,
+        ]);
+        $admin->assignRole(RoleName::PlatformAdmin->value);
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/platform-admin/diet-templates', [
+                'name' => 'Admin App Nutrition',
+                'goal' => 'Wellness',
+                'status' => 'active',
+                'meals' => [[
+                    'name' => 'Breakfast',
+                    'items' => [[
+                        'name' => 'Idli',
+                        'quantity' => '3 pieces',
+                        'calories' => 180,
+                    ]],
+                ]],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.meals.0.items.0.name', 'Idli')
+            ->assertJsonPath('data.status', 'active');
+
+        $templateId = $response->json('data.id');
+
+        $this->actingAs($admin, 'sanctum')
+            ->putJson("/api/platform-admin/diet-templates/{$templateId}", [
+                'name' => 'Admin App Nutrition Updated',
+                'goal' => 'Wellness',
+                'status' => 'inactive',
+                'meals' => [[
+                    'name' => 'Breakfast',
+                    'items' => [[
+                        'name' => 'Idli and sambar',
+                        'quantity' => '1 plate',
+                        'calories' => 260,
+                    ]],
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Admin App Nutrition Updated')
+            ->assertJsonPath('data.status', 'inactive');
+    }
+
+    public function test_gym_admin_app_api_can_assign_a_global_template_in_scope(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch, , $member, $owner] = $this->context();
+        $template = $this->template();
+
+        $this->actingAs($owner, 'sanctum')
+            ->getJson("/api/gym/diet-templates?gym_id={$gym->id}&branch_id={$branch->id}")
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $template->id);
+
+        $this->actingAs($owner, 'sanctum')
+            ->postJson("/api/gym/diet-templates/{$template->id}/assign", [
+                'gym_id' => $gym->id,
+                'branch_id' => $branch->id,
+                'member_ids' => [$member->id],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.0.gym_id', $gym->id)
+            ->assertJsonPath('data.0.branch_id', $branch->id)
+            ->assertJsonCount(2, 'data.0.meals.0.items');
     }
 
     public function test_trainer_clones_global_template_only_to_assigned_member(): void
@@ -139,9 +211,175 @@ class DietTemplateAssignmentTest extends TestCase
             ->assertUnprocessable();
     }
 
+    public function test_member_created_products_persist_and_plan_edits_keep_meal_progress(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [, , , $member] = $this->context();
+
+        $response = $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/diet-plans', [
+                'name' => 'Member Complete Plan',
+                'goal' => 'Energy',
+                'meals' => [[
+                    'name' => 'Breakfast',
+                    'meal_type' => 'breakfast',
+                    'items' => [[
+                        'name' => 'Poha',
+                        'quantity' => '1 bowl',
+                        'calories' => 280,
+                        'protein_g' => 7,
+                        'carbs_g' => 52,
+                        'fats_g' => 6,
+                    ]],
+                ], [
+                    'name' => 'Dinner',
+                    'meal_type' => 'dinner',
+                    'items' => [[
+                        'name' => 'Khichdi',
+                        'quantity' => '1 bowl',
+                        'calories' => 360,
+                    ]],
+                ]],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.protein_target_g', null)
+            ->assertJsonPath('data.meals.0.items.0.name', 'Poha');
+
+        $planId = $response->json('data.id');
+        $mealId = $response->json('data.meals.0.id');
+        $dinnerMealId = $response->json('data.meals.1.id');
+        $pohaItemId = $response->json('data.meals.0.items.0.id');
+        $khichdiItemId = $response->json('data.meals.1.items.0.id');
+
+        $this->actingAs($member, 'sanctum')
+            ->postJson("/api/member/diet-plans/{$planId}/meals/{$mealId}/log")
+            ->assertOk();
+
+        $this->actingAs($member, 'sanctum')
+            ->putJson("/api/member/diet-plans/{$planId}", [
+                'name' => 'Member Complete Plan Updated',
+                'goal' => 'Energy',
+                'status' => 'active',
+                'meals' => [[
+                    'id' => $dinnerMealId,
+                    'name' => 'Dinner',
+                    'meal_type' => 'dinner',
+                    'items' => [[
+                        'id' => $khichdiItemId,
+                        'name' => 'Khichdi',
+                        'quantity' => '1 bowl',
+                        'calories' => 360,
+                    ]],
+                ], [
+                    'id' => $mealId,
+                    'name' => 'Breakfast',
+                    'meal_type' => 'breakfast',
+                    'items' => [
+                        [
+                            'id' => $pohaItemId,
+                            'name' => 'Poha',
+                            'quantity' => '1 large bowl',
+                            'calories' => 340,
+                        ],
+                        [
+                            'name' => 'Curd',
+                            'quantity' => '100g',
+                            'calories' => 80,
+                        ],
+                    ],
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.meals.0.id', $dinnerMealId)
+            ->assertJsonPath('data.meals.1.id', $mealId)
+            ->assertJsonCount(2, 'data.meals.1.items');
+
+        $this->assertDatabaseHas('diet_meal_logs', [
+            'diet_plan_meal_id' => $mealId,
+            'member_id' => $member->id,
+        ]);
+        $this->assertSame(
+            1,
+            DietMealLog::query()
+                ->where('diet_plan_meal_id', $mealId)
+                ->count(),
+        );
+    }
+
+    public function test_gym_admin_can_edit_all_assigned_plan_fields_and_products(): void
+    {
+        $this->withoutVite();
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch, , $member, $owner] = $this->context();
+        $plan = DietPlan::query()->create([
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_id' => $member->id,
+            'created_by_user_id' => $owner->id,
+            'name' => 'Gym Plan',
+            'status' => 'active',
+        ]);
+        $meal = $plan->meals()->create([
+            'name' => 'Lunch',
+            'meal_type' => 'lunch',
+            'sort_order' => 0,
+        ]);
+        $meal->items()->create([
+            'name' => 'Rice',
+            'quantity' => '1 cup',
+            'sort_order' => 0,
+        ]);
+
+        $routeParameters = [
+            'dietPlan' => $plan,
+            'gym' => $gym->id,
+            'branch' => $branch->id,
+        ];
+
+        $this->actingAs($owner)
+            ->get(route('web.gym.diet-plans.edit', $routeParameters))
+            ->assertOk()
+            ->assertSee('Add food/product')
+            ->assertSee('Rice');
+
+        $this->actingAs($owner)
+            ->put(route('web.gym.diet-plans.update', $routeParameters), [
+                'name' => 'Gym Plan Updated',
+                'goal' => 'Lean muscle',
+                'daily_calorie_target' => 2500,
+                'protein_target_g' => 170,
+                'status' => 'active',
+                'meals' => [[
+                    'name' => 'Lunch',
+                    'meal_type' => 'lunch',
+                    'items' => [[
+                        'name' => 'Brown rice',
+                        'quantity' => '1.5 cups',
+                        'calories' => 320,
+                    ]],
+                ]],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('diet_plans', [
+            'id' => $plan->id,
+            'name' => 'Gym Plan Updated',
+            'goal' => 'Lean muscle',
+            'daily_calorie_target' => 2500,
+        ]);
+        $this->assertDatabaseHas('diet_plan_meal_items', [
+            'diet_plan_meal_id' => $meal->id,
+            'name' => 'Brown rice',
+            'quantity' => '1.5 cups',
+        ]);
+    }
+
     private function context(): array
     {
-        $owner = User::factory()->create();
+        $owner = User::factory()->create([
+            'active_role' => RoleName::GymOwner->value,
+        ]);
+        $owner->assignRole(RoleName::GymOwner->value);
         $gym = Gym::query()->create(['owner_user_id' => $owner->id, 'name' => 'Diet Scope Gym', 'slug' => 'diet-scope-gym', 'timezone' => 'Asia/Kolkata', 'status' => 'active', 'is_active' => true]);
         $branch = Branch::query()->create(['gym_id' => $gym->id, 'name' => 'Main', 'slug' => 'main', 'timezone' => 'Asia/Kolkata', 'status' => 'active', 'is_active' => true]);
         $trainer = User::factory()->create(['active_role' => RoleName::Trainer->value]);
@@ -153,7 +391,7 @@ class DietTemplateAssignmentTest extends TestCase
         $member->assignRole(RoleName::Member->value);
         MemberProfile::query()->create(['user_id' => $member->id, 'gym_id' => $gym->id, 'branch_id' => $branch->id, 'assigned_trainer_user_id' => $trainer->id, 'membership_status' => 'active', 'is_active' => true]);
 
-        return [$gym, $branch, $trainer, $member];
+        return [$gym, $branch, $trainer, $member, $owner];
     }
 
     private function template(): DietPlanTemplate

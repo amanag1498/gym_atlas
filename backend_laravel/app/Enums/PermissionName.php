@@ -45,6 +45,8 @@ enum PermissionName: string
     case WorkoutTemplatesManage = 'workout_template.manage';
     case WorkoutPlansView = 'workout_plan.view';
     case WorkoutPlansManage = 'workout_plan.manage';
+    case DietPlansView = 'diet_plan.view';
+    case DietPlansManage = 'diet_plan.manage';
     case WorkoutSessionsView = 'workout_session.view';
     case WorkoutSessionsManage = 'workout_session.manage';
     case ProgressView = 'progress.view';

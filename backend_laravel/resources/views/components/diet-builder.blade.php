@@ -23,6 +23,7 @@
     <div class="space-y-4" data-meals>
         @foreach ($mealRows as $mealIndex => $meal)
             <div class="space-y-3 rounded-2xl border border-slate-200 p-4 dark:border-slate-800" data-meal>
+                @if (isset($meal['id']))<input type="hidden" name="meals[{{ $mealIndex }}][id]" value="{{ $meal['id'] }}">@endif
                 <div class="flex items-center justify-between gap-3">
                     <p class="font-medium text-slate-950 dark:text-white" data-meal-title>Meal {{ $mealIndex + 1 }}</p>
                     <button type="button" class="text-sm font-medium text-rose-600" data-remove-meal>Remove meal</button>
@@ -41,6 +42,7 @@
                 <div class="space-y-3" data-items>
                     @foreach (collect($meal['items'] ?? [])->values() as $itemIndex => $item)
                         <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/70" data-item>
+                            @if (isset($item['id']))<input type="hidden" name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][id]" value="{{ $item['id'] }}">@endif
                             <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
                                 <input name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][name]" class="panel-input" placeholder="Food/product" value="{{ $item['name'] ?? '' }}">
                                 <input name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][quantity]" class="panel-input" placeholder="Quantity" value="{{ $item['quantity'] ?? '' }}">

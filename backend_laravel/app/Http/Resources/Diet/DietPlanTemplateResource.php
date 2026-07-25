@@ -14,13 +14,19 @@ class DietPlanTemplateResource extends JsonResource
             'name' => $this->name,
             'goal' => $this->goal,
             'daily_calorie_target' => $this->daily_calorie_target,
-            'protein_target_g' => (float) $this->protein_target_g,
-            'carbs_target_g' => (float) $this->carbs_target_g,
-            'fats_target_g' => (float) $this->fats_target_g,
+            'protein_target_g' => $this->decimalOrNull($this->protein_target_g),
+            'carbs_target_g' => $this->decimalOrNull($this->carbs_target_g),
+            'fats_target_g' => $this->decimalOrNull($this->fats_target_g),
             'dietary_preferences' => $this->dietary_preferences,
             'allergies_and_restrictions' => $this->allergies_and_restrictions,
             'notes' => $this->notes,
             'meals' => collect($this->meals ?? [])->values(),
+            'status' => $this->status,
         ];
+    }
+
+    private function decimalOrNull(mixed $value): ?float
+    {
+        return $value === null ? null : (float) $value;
     }
 }

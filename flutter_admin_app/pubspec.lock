@@ -336,6 +336,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.12.4+4"
+  gym_flutter_core:
+    dependency: "direct main"
+    description:
+      path: "../gym_flutter_core"
+      relative: true
+    source: path
+    version: "1.0.0"
   http:
     dependency: transitive
     description:

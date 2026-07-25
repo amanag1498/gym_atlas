@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:gym_flutter_core/diet_plan_form_codec.dart';
+import 'package:gym_flutter_core/diet_plan_meals_editor.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -28,20 +28,17 @@ class TrainerDietPlanScreen extends StatefulWidget {
 class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _goalController = TextEditingController();
-  final _calorieController = TextEditingController();
-  final _proteinController = TextEditingController();
-  final _carbsController = TextEditingController();
-  final _fatsController = TextEditingController();
-  final _mealControllers = List.generate(3, (_) => TextEditingController());
 
   bool _loading = true;
   bool _saving = false;
+  int _mealEditorRevision = 0;
   String? _error;
   int? _memberId;
   int? _templateId;
   List<Map<String, dynamic>> _plans = const [];
   List<Map<String, dynamic>> _templates = const [];
+  Map<String, dynamic> _draftDetails = {'status': 'active'};
+  List<Map<String, dynamic>> _draftMeals = _defaultMeals();
 
   @override
   void initState() {
@@ -49,23 +46,12 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
     if (widget.members.isNotEmpty) {
       _memberId = (widget.members.first['member_id'] as num?)?.toInt();
     }
-    _mealControllers[0].text = 'Breakfast';
-    _mealControllers[1].text = 'Lunch';
-    _mealControllers[2].text = 'Dinner';
     _load();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _goalController.dispose();
-    _calorieController.dispose();
-    _proteinController.dispose();
-    _carbsController.dispose();
-    _fatsController.dispose();
-    for (final controller in _mealControllers) {
-      controller.dispose();
-    }
     super.dispose();
   }
 
@@ -81,10 +67,9 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
           .toList();
       try {
         final templatesResponse = await widget.repository.fetchDietTemplates();
-        _templates =
-            (templatesResponse['data'] as List<dynamic>? ?? const [])
-                .map((item) => Map<String, dynamic>.from(item as Map))
-                .toList();
+        _templates = (templatesResponse['data'] as List<dynamic>? ?? const [])
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .toList();
       } catch (_) {
         _templates = const [];
       }
@@ -92,14 +77,6 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
       _error = error.toString();
     }
     if (mounted) setState(() => _loading = false);
-  }
-
-  int? _integer(String value) => int.tryParse(value.trim());
-  double? _decimal(String value) => double.tryParse(value.trim());
-  String? _time(dynamic value) {
-    final text = value?.toString();
-    if (text == null || text.isEmpty) return null;
-    return text.length >= 5 ? text.substring(0, 5) : text;
   }
 
   Future<void> _save() async {
@@ -126,32 +103,17 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
           'gym_id': gymId,
           'branch_id': (profile['branch_id'] as num?)?.toInt(),
           'member_ids': [_memberId],
-          'name': _nameController.text.trim(),
-          'goal': _goalController.text.trim(),
-          'daily_calorie_target': _integer(_calorieController.text),
-          'protein_target_g': _decimal(_proteinController.text),
-          'carbs_target_g': _decimal(_carbsController.text),
-          'fats_target_g': _decimal(_fatsController.text),
-          'meals': _mealControllers
-              .asMap()
-              .entries
-              .where((entry) => entry.value.text.trim().isNotEmpty)
-              .map(
-                (entry) => {
-                  'name': entry.value.text.trim(),
-                  'meal_type': ['breakfast', 'lunch', 'dinner'][entry.key],
-                  'items': <Map<String, dynamic>>[],
-                },
-              )
-              .toList(),
+          ..._draftDetails,
+          'meals': _draftMeals,
         });
       }
       _nameController.clear();
-      _goalController.clear();
-      _calorieController.clear();
-      _proteinController.clear();
-      _carbsController.clear();
-      _fatsController.clear();
+      setState(() {
+        _templateId = null;
+        _draftDetails = {'status': 'active'};
+        _draftMeals = _defaultMeals();
+        _mealEditorRevision++;
+      });
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(
@@ -192,36 +154,28 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
   Future<void> _edit(Map<String, dynamic> plan) async {
     final planId = (plan['id'] as num?)?.toInt();
     if (planId == null) return;
-    final name = TextEditingController(text: plan['name']?.toString() ?? '');
-    final goal = TextEditingController(text: plan['goal']?.toString() ?? '');
-    final meals = (plan['meals'] as List<dynamic>? ?? const [])
+    final formKey = GlobalKey<FormState>();
+    var editedDetails = Map<String, dynamic>.from(plan);
+    var editedMeals = (plan['meals'] as List<dynamic>? ?? const [])
         .map((item) => Map<String, dynamic>.from(item as Map))
         .toList();
-    final foodLines = meals
-        .map(
-          (meal) => TextEditingController(
-            text: DietPlanFormCodec.itemsToLines(
-              meal['items'] as List<dynamic>?,
-            ),
-          ),
-        )
-        .toList();
     var saving = false;
-    try {
-      final changed = await showModalBottomSheet<bool>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        backgroundColor: Colors.transparent,
-        builder: (sheetContext) => StatefulBuilder(
-          builder: (context, setSheetState) => Padding(
-            padding: EdgeInsets.only(
-              left: AppSpacing.lg,
-              right: AppSpacing.lg,
-              bottom: MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
-            ),
-            child: PremiumCard(
-              child: SingleChildScrollView(
+    final changed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.only(
+            left: AppSpacing.lg,
+            right: AppSpacing.lg,
+            bottom: MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
+          ),
+          child: PremiumCard(
+            child: SingleChildScrollView(
+              child: Form(
+                key: formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -230,85 +184,29 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    TextField(
-                      controller: name,
-                      decoration: const InputDecoration(labelText: 'Plan name'),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    TextField(
-                      controller: goal,
-                      decoration: const InputDecoration(labelText: 'Goal'),
+                    DietPlanDetailsEditor(
+                      initialPlan: editedDetails,
+                      includeStatus: true,
+                      onChanged: (value) => editedDetails = value,
                     ),
                     const SizedBox(height: AppSpacing.lg),
-                    ...meals.asMap().entries.map(
-                      (entry) => Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              entry.value['name']?.toString() ?? 'Meal',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 4),
-                            TextField(
-                              controller: foodLines[entry.key],
-                              minLines: 3,
-                              maxLines: 8,
-                              decoration: const InputDecoration(
-                                labelText: 'Food products',
-                                helperText:
-                                    'One per line: name | quantity | kcal | protein | carbs | fats | notes',
-                                alignLabelWithHint: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                    DietPlanMealsEditor(
+                      initialMeals: editedMeals,
+                      onChanged: (value) => editedMeals = value,
                     ),
+                    const SizedBox(height: AppSpacing.md),
                     GradientButton(
                       label: saving ? 'Saving...' : 'Save changes',
                       expanded: true,
                       onPressed: saving
                           ? null
                           : () async {
-                              if (name.text.trim().isEmpty) return;
+                              if (!formKey.currentState!.validate()) return;
                               setSheetState(() => saving = true);
                               try {
                                 await widget.repository.updateDietPlan(planId, {
-                                  'name': name.text.trim(),
-                                  'goal': goal.text.trim(),
-                                  'daily_calorie_target':
-                                      plan['daily_calorie_target'],
-                                  'protein_target_g': plan['protein_target_g'],
-                                  'carbs_target_g': plan['carbs_target_g'],
-                                  'fats_target_g': plan['fats_target_g'],
-                                  'dietary_preferences':
-                                      plan['dietary_preferences'],
-                                  'allergies_and_restrictions':
-                                      plan['allergies_and_restrictions'],
-                                  'notes': plan['notes'],
-                                  'status': plan['status'],
-                                  'starts_on': plan['starts_on'],
-                                  'ends_on': plan['ends_on'],
-                                  'meals': meals.asMap().entries.map((entry) {
-                                    final meal = entry.value;
-                                    return {
-                                      'name': meal['name'],
-                                      'meal_type': meal['meal_type'],
-                                      'scheduled_time': _time(
-                                        meal['scheduled_time'],
-                                      ),
-                                      'calories': meal['calories'],
-                                      'protein_g': meal['protein_g'],
-                                      'carbs_g': meal['carbs_g'],
-                                      'fats_g': meal['fats_g'],
-                                      'notes': meal['notes'],
-                                      'items': DietPlanFormCodec.linesToItems(
-                                        foodLines[entry.key].text,
-                                      ),
-                                    };
-                                  }).toList(),
+                                  ...editedDetails,
+                                  'meals': editedMeals,
                                 });
                                 if (context.mounted) {
                                   Navigator.of(context).pop(true);
@@ -329,15 +227,9 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
             ),
           ),
         ),
-      );
-      if (changed == true) await _load();
-    } finally {
-      name.dispose();
-      goal.dispose();
-      for (final controller in foodLines) {
-        controller.dispose();
-      }
-    }
+      ),
+    );
+    if (changed == true) await _load();
   }
 
   @override
@@ -443,37 +335,28 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
               ),
             ],
             const SizedBox(height: AppSpacing.md),
-            TextFormField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Plan name',
-                hintText: 'Lean muscle nutrition',
+            if (_templateId == null) ...[
+              DietPlanDetailsEditor(
+                key: ValueKey('details-$_mealEditorRevision'),
+                initialPlan: _draftDetails,
+                onChanged: (value) => _draftDetails = value,
               ),
-              validator: (value) =>
-                  _templateId == null && (value == null || value.trim().isEmpty)
-                  ? 'Plan name is required'
-                  : null,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextFormField(
-              controller: _goalController,
-              decoration: const InputDecoration(labelText: 'Goal'),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            _targetFields(),
-            const SizedBox(height: AppSpacing.lg),
-            Text('Meal slots', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: AppSpacing.sm),
-            ..._mealControllers.map(
-              (controller) => Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: TextFormField(
-                  controller: controller,
-                  decoration: const InputDecoration(labelText: 'Meal name'),
+              const SizedBox(height: AppSpacing.lg),
+              DietPlanMealsEditor(
+                key: ValueKey('meals-$_mealEditorRevision'),
+                initialMeals: _draftMeals,
+                onChanged: (value) => _draftMeals = value,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ] else ...[
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Custom plan name (optional)',
                 ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
+              const SizedBox(height: AppSpacing.md),
+            ],
             GradientButton(
               label: _saving ? 'Assigning...' : 'Assign diet plan',
               icon: Icons.restaurant_menu_rounded,
@@ -483,35 +366,6 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _targetFields() {
-    Widget field(TextEditingController controller, String label) => Expanded(
-      child: TextFormField(
-        controller: controller,
-        keyboardType: TextInputType.number,
-        decoration: InputDecoration(labelText: label),
-      ),
-    );
-    return Column(
-      children: [
-        Row(
-          children: [
-            field(_calorieController, 'Calories'),
-            const SizedBox(width: AppSpacing.sm),
-            field(_proteinController, 'Protein g'),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Row(
-          children: [
-            field(_carbsController, 'Carbs g'),
-            const SizedBox(width: AppSpacing.sm),
-            field(_fatsController, 'Fats g'),
-          ],
-        ),
-      ],
     );
   }
 
@@ -562,3 +416,9 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
     );
   }
 }
+
+List<Map<String, dynamic>> _defaultMeals() => const [
+  {'name': 'Breakfast', 'meal_type': 'breakfast', 'items': []},
+  {'name': 'Lunch', 'meal_type': 'lunch', 'items': []},
+  {'name': 'Dinner', 'meal_type': 'dinner', 'items': []},
+].map((meal) => Map<String, dynamic>.from(meal)).toList();

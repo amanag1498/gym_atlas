@@ -1,20 +1,20 @@
 <?php
 
+use App\Http\Controllers\Web\Admin\AnnouncementController as AdminAnnouncementController;
+use App\Http\Controllers\Web\Admin\AuditLogController as AdminAuditLogController;
+use App\Http\Controllers\Web\Admin\CatalogController as AdminCatalogController;
 use App\Http\Controllers\Web\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Web\Admin\DietPlanController as AdminDietPlanController;
 use App\Http\Controllers\Web\Admin\DietPlanTemplateController as AdminDietPlanTemplateController;
-use App\Http\Controllers\Web\Admin\GymPlatformSubscriptionController as AdminGymPlatformSubscriptionController;
+use App\Http\Controllers\Web\Admin\EnquiryController as AdminEnquiryController;
 use App\Http\Controllers\Web\Admin\GymController as AdminGymController;
 use App\Http\Controllers\Web\Admin\GymOwnerController as AdminGymOwnerController;
+use App\Http\Controllers\Web\Admin\GymPlatformSubscriptionController as AdminGymPlatformSubscriptionController;
 use App\Http\Controllers\Web\Admin\ListingController as AdminListingController;
 use App\Http\Controllers\Web\Admin\PlatformSubscriptionPlanController as AdminPlatformSubscriptionPlanController;
 use App\Http\Controllers\Web\Admin\ReportController as AdminReportController;
-use App\Http\Controllers\Web\Admin\AuditLogController as AdminAuditLogController;
 use App\Http\Controllers\Web\Admin\SettingController as AdminSettingController;
 use App\Http\Controllers\Web\Admin\UserController as AdminUserController;
-use App\Http\Controllers\Web\Admin\CatalogController as AdminCatalogController;
-use App\Http\Controllers\Web\Admin\EnquiryController as AdminEnquiryController;
-use App\Http\Controllers\Web\Admin\AnnouncementController as AdminAnnouncementController;
 use App\Http\Controllers\Web\Admin\WorkoutBookController as AdminWorkoutBookController;
 use App\Http\Controllers\Web\Auth\PanelAuthController;
 use App\Http\Controllers\Web\Gym\AnnouncementController as WebGymAnnouncementController;
@@ -35,11 +35,13 @@ use App\Http\Controllers\Web\Gym\SettingController as WebGymSettingController;
 use App\Http\Controllers\Web\Gym\StaffController as WebGymStaffController;
 use App\Http\Controllers\Web\Gym\TrainerController as WebGymTrainerController;
 use App\Http\Controllers\Web\Gym\TrialRequestController as WebGymTrialRequestController;
+use App\Http\Controllers\Web\MemberEmailInvitationController;
+use App\Http\Controllers\Web\TrainerEmailInvitationController;
 use App\Http\Requests\Web\Public\StoreContactSubmissionRequest;
 use App\Http\Requests\Web\Public\StoreGymTrialRequest;
 use App\Models\ContactSubmission;
-use App\Models\Gym;
 use App\Models\Facility;
+use App\Models\Gym;
 use App\Models\MemberProfile;
 use App\Models\TrainerProfile;
 use App\Models\TrialRequest;
@@ -47,10 +49,8 @@ use App\Services\Discovery\GymDiscoveryService;
 use App\Services\Platform\PlatformSettingService;
 use App\Services\Trials\TrialRequestService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Web\MemberEmailInvitationController;
-use App\Http\Controllers\Web\TrainerEmailInvitationController;
+use Illuminate\Support\Facades\Schema;
 
 Route::get('/', function (GymDiscoveryService $discoveryService) {
     if (! Schema::hasTable('gyms')) {
@@ -254,6 +254,7 @@ Route::prefix('admin')
     ->group(function (): void {
         Route::get('/dashboard', AdminDashboardController::class)->name('dashboard');
         Route::get('/diet-plans', [AdminDietPlanController::class, 'index'])->name('diet-plans.index');
+        Route::get('/diet-plans/{dietPlan}', [AdminDietPlanController::class, 'show'])->name('diet-plans.show');
         Route::post('/diet-plans/{dietPlan}/status', [AdminDietPlanController::class, 'updateStatus'])->name('diet-plans.status');
         Route::get('/diet-templates', [AdminDietPlanTemplateController::class, 'index'])->name('diet-templates.index');
         Route::get('/diet-templates/create', [AdminDietPlanTemplateController::class, 'create'])->name('diet-templates.create');
@@ -443,6 +444,8 @@ Route::prefix('gym')
         Route::post('/members/{member}/assign-trainer', [WebGymMemberController::class, 'assignTrainer'])->name('members.assign-trainer');
         Route::get('/diet-plans', [WebGymDietPlanController::class, 'index'])->name('diet-plans.index');
         Route::post('/diet-plans', [WebGymDietPlanController::class, 'store'])->name('diet-plans.store');
+        Route::get('/diet-plans/{dietPlan}/edit', [WebGymDietPlanController::class, 'edit'])->name('diet-plans.edit');
+        Route::put('/diet-plans/{dietPlan}', [WebGymDietPlanController::class, 'update'])->name('diet-plans.update');
         Route::post('/diet-plans/{dietPlan}/status', [WebGymDietPlanController::class, 'updateStatus'])->name('diet-plans.status');
         Route::get('/members/{member}/assign-membership', [WebGymMemberMembershipController::class, 'assignForm'])->name('members.assign-membership');
         Route::post('/members/{member}/assign-membership', [WebGymMemberMembershipController::class, 'assign'])->name('members.assign-membership.store');

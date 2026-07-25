@@ -1,15 +1,15 @@
 <?php
 
-use App\Http\Controllers\Api\Gym\Admin\AttendanceController;
 use App\Http\Controllers\Api\Chat\TrainerMemberChatController;
+use App\Http\Controllers\Api\Gym\Admin\AttendanceController;
 use App\Http\Controllers\Api\Gym\Admin\AuditLogController as GymAuditLogController;
 use App\Http\Controllers\Api\Gym\Admin\BranchController as GymBranchController;
 use App\Http\Controllers\Api\Gym\Admin\DashboardController as GymDashboardController;
 use App\Http\Controllers\Api\Gym\Admin\DietPlanController as GymDietPlanController;
 use App\Http\Controllers\Api\Gym\Admin\GymProfileController;
 use App\Http\Controllers\Api\Gym\Admin\MemberController as GymMemberController;
-use App\Http\Controllers\Api\Gym\Admin\SettingController as GymSettingController;
 use App\Http\Controllers\Api\Gym\Admin\ReportController as GymReportController;
+use App\Http\Controllers\Api\Gym\Admin\SettingController as GymSettingController;
 use App\Http\Controllers\Api\Gym\Admin\StaffController as GymStaffController;
 use App\Http\Controllers\Api\Gym\Admin\TrainerController as GymTrainerController;
 use App\Http\Controllers\Api\Gym\Admin\TrialRequestController as GymTrialRequestController;
@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\Gym\Communication\AnnouncementController as GymAnno
 use App\Http\Controllers\Api\Gym\Communication\ReminderController as GymReminderController;
 use App\Http\Controllers\Api\Gym\GymContextController;
 use App\Http\Controllers\Api\Member\AttendanceController as MemberAttendanceController;
+use App\Http\Controllers\Api\Member\DietPlanController as MemberDietPlanController;
 use App\Http\Controllers\Api\Member\FavoriteGymController;
 use App\Http\Controllers\Api\Member\MemberContextController;
 use App\Http\Controllers\Api\Member\MemberGymInvitationController;
@@ -30,13 +31,14 @@ use App\Http\Controllers\Api\Member\MemberProfileController;
 use App\Http\Controllers\Api\Member\MemberStepController;
 use App\Http\Controllers\Api\Member\MemberTrainerController;
 use App\Http\Controllers\Api\Member\ProgressController as MemberProgressController;
+use App\Http\Controllers\Api\Member\TrialRequestController;
 use App\Http\Controllers\Api\Member\WorkoutController as MemberWorkoutController;
-use App\Http\Controllers\Api\Member\DietPlanController as MemberDietPlanController;
-use App\Http\Controllers\Api\PlatformAdmin\ExerciseController as PlatformExerciseController;
 use App\Http\Controllers\Api\PlatformAdmin\AnnouncementController as PlatformAnnouncementController;
 use App\Http\Controllers\Api\PlatformAdmin\AuditLogController as PlatformAuditLogController;
 use App\Http\Controllers\Api\PlatformAdmin\CatalogController;
 use App\Http\Controllers\Api\PlatformAdmin\DashboardController as PlatformDashboardController;
+use App\Http\Controllers\Api\PlatformAdmin\DietPlanTemplateController as PlatformDietPlanTemplateController;
+use App\Http\Controllers\Api\PlatformAdmin\ExerciseController as PlatformExerciseController;
 use App\Http\Controllers\Api\PlatformAdmin\GymController as PlatformGymController;
 use App\Http\Controllers\Api\PlatformAdmin\GymOwnerController as PlatformGymOwnerController;
 use App\Http\Controllers\Api\PlatformAdmin\ListingController as PlatformListingController;
@@ -52,19 +54,19 @@ use App\Http\Controllers\Api\Public\NotificationController as PublicNotification
 use App\Http\Controllers\Api\Public\PublicContextController;
 use App\Http\Controllers\Api\Public\TrialRequestController as PublicTrialRequestController;
 use App\Http\Controllers\Api\Realtime\RealtimeContextController;
-use App\Http\Controllers\Api\Trainer\AssignedMemberController as TrainerAssignedMemberController;
 use App\Http\Controllers\Api\Trainer\AnnouncementController as TrainerAnnouncementController;
+use App\Http\Controllers\Api\Trainer\AssignedMemberController as TrainerAssignedMemberController;
+use App\Http\Controllers\Api\Trainer\DietPlanController as TrainerDietPlanController;
 use App\Http\Controllers\Api\Trainer\ExerciseController as TrainerExerciseController;
 use App\Http\Controllers\Api\Trainer\TaskController as TrainerTaskController;
-use App\Http\Controllers\Api\Trainer\TrainerMemberNoteController;
 use App\Http\Controllers\Api\Trainer\TrainerContextController;
-use App\Http\Controllers\Api\Trainer\TrainerNotificationController;
-use App\Http\Controllers\Api\Trainer\TrainerMemberInvitationController;
 use App\Http\Controllers\Api\Trainer\TrainerGymInvitationController;
+use App\Http\Controllers\Api\Trainer\TrainerMemberInvitationController;
+use App\Http\Controllers\Api\Trainer\TrainerMemberNoteController;
+use App\Http\Controllers\Api\Trainer\TrainerNotificationController;
 use App\Http\Controllers\Api\Trainer\TrainerProfileController;
 use App\Http\Controllers\Api\Trainer\TrialRequestController as TrainerTrialRequestController;
 use App\Http\Controllers\Api\Trainer\WorkoutPlanController as TrainerWorkoutPlanController;
-use App\Http\Controllers\Api\Trainer\DietPlanController as TrainerDietPlanController;
 use App\Http\Controllers\Api\Trainer\WorkoutTemplateController as TrainerWorkoutTemplateController;
 use Illuminate\Support\Facades\Route;
 
@@ -216,6 +218,14 @@ Route::prefix('platform-admin')
             ->middleware('permission:workout_template.manage');
         Route::delete('workout-books/{workoutBook}', [PlatformWorkoutBookController::class, 'destroy'])
             ->middleware('permission:workout_template.manage');
+        Route::get('diet-templates', [PlatformDietPlanTemplateController::class, 'index'])
+            ->middleware('permission:diet_plan.view|diet_plan.manage');
+        Route::post('diet-templates', [PlatformDietPlanTemplateController::class, 'store'])
+            ->middleware('permission:diet_plan.manage');
+        Route::get('diet-templates/{dietPlanTemplate}', [PlatformDietPlanTemplateController::class, 'show'])
+            ->middleware('permission:diet_plan.view|diet_plan.manage');
+        Route::put('diet-templates/{dietPlanTemplate}', [PlatformDietPlanTemplateController::class, 'update'])
+            ->middleware('permission:diet_plan.manage');
         Route::post('users/{user}/activate', [PlatformUserController::class, 'activate'])
             ->middleware('permission:platform.users.view');
         Route::post('users/{user}/deactivate', [PlatformUserController::class, 'deactivate'])
@@ -296,11 +306,13 @@ Route::prefix('gym')
     ->group(function (): void {
         Route::get('dashboard', GymDashboardController::class)
             ->middleware('permission:gym.dashboard.view');
-        Route::get('diet-plans', [GymDietPlanController::class, 'index'])->middleware('permission:member.view');
-        Route::post('diet-plans', [GymDietPlanController::class, 'store'])->middleware('permission:member.manage');
-        Route::get('diet-plans/{dietPlan}', [GymDietPlanController::class, 'show'])->middleware('permission:member.view');
-        Route::put('diet-plans/{dietPlan}', [GymDietPlanController::class, 'update'])->middleware('permission:member.manage');
-        Route::delete('diet-plans/{dietPlan}', [GymDietPlanController::class, 'destroy'])->middleware('permission:member.manage');
+        Route::get('diet-plans', [GymDietPlanController::class, 'index'])->middleware('permission:diet_plan.view|diet_plan.manage');
+        Route::post('diet-plans', [GymDietPlanController::class, 'store'])->middleware('permission:diet_plan.manage');
+        Route::get('diet-templates', [GymDietPlanController::class, 'templates'])->middleware('permission:diet_plan.view|diet_plan.manage');
+        Route::post('diet-templates/{dietPlanTemplate}/assign', [GymDietPlanController::class, 'assignTemplate'])->middleware('permission:diet_plan.manage');
+        Route::get('diet-plans/{dietPlan}', [GymDietPlanController::class, 'show'])->middleware('permission:diet_plan.view|diet_plan.manage');
+        Route::put('diet-plans/{dietPlan}', [GymDietPlanController::class, 'update'])->middleware('permission:diet_plan.manage');
+        Route::delete('diet-plans/{dietPlan}', [GymDietPlanController::class, 'destroy'])->middleware('permission:diet_plan.manage');
         Route::get('context', GymContextController::class);
         Route::get('profile', [GymProfileController::class, 'show'])
             ->middleware('permission:gym.view');
@@ -570,13 +582,13 @@ Route::prefix('trainer')
             ->middleware('permission:workout_plan.manage');
         Route::delete('workout-plans/{workoutPlan}', [TrainerWorkoutPlanController::class, 'destroy'])
             ->middleware('permission:workout_plan.manage');
-        Route::get('diet-plans', [TrainerDietPlanController::class, 'index'])->middleware('permission:workout_plan.view|workout_plan.manage');
-        Route::post('diet-plans', [TrainerDietPlanController::class, 'store'])->middleware('permission:workout_plan.manage');
-        Route::get('diet-templates', [TrainerDietPlanController::class, 'templates'])->middleware('permission:workout_plan.view|workout_plan.manage');
-        Route::post('diet-templates/{dietPlanTemplate}/assign', [TrainerDietPlanController::class, 'assignTemplate'])->middleware('permission:workout_plan.manage');
-        Route::get('diet-plans/{dietPlan}', [TrainerDietPlanController::class, 'show'])->middleware('permission:workout_plan.view|workout_plan.manage');
-        Route::put('diet-plans/{dietPlan}', [TrainerDietPlanController::class, 'update'])->middleware('permission:workout_plan.manage');
-        Route::delete('diet-plans/{dietPlan}', [TrainerDietPlanController::class, 'destroy'])->middleware('permission:workout_plan.manage');
+        Route::get('diet-plans', [TrainerDietPlanController::class, 'index'])->middleware('permission:diet_plan.view|diet_plan.manage');
+        Route::post('diet-plans', [TrainerDietPlanController::class, 'store'])->middleware('permission:diet_plan.manage');
+        Route::get('diet-templates', [TrainerDietPlanController::class, 'templates'])->middleware('permission:diet_plan.view|diet_plan.manage');
+        Route::post('diet-templates/{dietPlanTemplate}/assign', [TrainerDietPlanController::class, 'assignTemplate'])->middleware('permission:diet_plan.manage');
+        Route::get('diet-plans/{dietPlan}', [TrainerDietPlanController::class, 'show'])->middleware('permission:diet_plan.view|diet_plan.manage');
+        Route::put('diet-plans/{dietPlan}', [TrainerDietPlanController::class, 'update'])->middleware('permission:diet_plan.manage');
+        Route::delete('diet-plans/{dietPlan}', [TrainerDietPlanController::class, 'destroy'])->middleware('permission:diet_plan.manage');
         Route::get('notifications', [TrainerNotificationController::class, 'index'])
             ->middleware('permission:trainer.view');
         Route::post('notifications/{notification}/read', [TrainerNotificationController::class, 'markRead'])
@@ -603,7 +615,7 @@ Route::prefix('member')
         'permission:member.view',
     ])
     ->group(function (): void {
-        Route::post('trial-requests', [\App\Http\Controllers\Api\Member\TrialRequestController::class, 'store']);
+        Route::post('trial-requests', [TrialRequestController::class, 'store']);
         Route::get('gym-invitations', [MemberGymInvitationController::class, 'index']);
         Route::post('gym-invitations/{invitation}/accept', [MemberGymInvitationController::class, 'accept']);
         Route::post('gym-invitations/{invitation}/reject', [MemberGymInvitationController::class, 'reject']);

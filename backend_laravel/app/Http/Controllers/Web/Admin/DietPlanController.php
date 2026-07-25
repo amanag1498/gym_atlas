@@ -17,7 +17,7 @@ class DietPlanController extends Controller
 
     public function index(Request $request): View
     {
-        $query = DietPlan::query()->with(['gym', 'branch', 'member', 'trainer', 'meals']);
+        $query = DietPlan::query()->with(['gym', 'branch', 'member', 'trainer', 'creator', 'meals']);
         if ($request->filled('search')) {
             $search = '%'.$request->string('search')->trim().'%';
             $query->where(fn ($nested) => $nested->where('name', 'like', $search)
@@ -33,6 +33,22 @@ class DietPlanController extends Controller
             'gyms' => Gym::query()->orderBy('name')->get(['id', 'name']),
             'activeCount' => DietPlan::query()->where('status', 'active')->count(),
             'personalCount' => DietPlan::query()->whereNull('trainer_id')->count(),
+        ]);
+    }
+
+    public function show(DietPlan $dietPlan): View
+    {
+        return view('web.admin.diet-plans.show', [
+            'pageTitle' => $dietPlan->name,
+            'breadcrumbs' => ['Platform', 'Diet Plans', $dietPlan->name],
+            'plan' => $dietPlan->load([
+                'gym',
+                'branch',
+                'member',
+                'trainer',
+                'creator',
+                'meals.items',
+            ]),
         ]);
     }
 

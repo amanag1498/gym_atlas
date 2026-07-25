@@ -227,6 +227,113 @@ class AdminRepository {
   Future<void> deletePlatformWorkoutBook(int id) =>
       _apiClient.delete('/platform-admin/workout-books/$id');
 
+  Future<List<Map<String, dynamic>>> fetchPlatformDietTemplates() async {
+    final response = await fetchCollection(
+      '/platform-admin/diet-templates',
+      perPage: 100,
+    );
+    return response.items;
+  }
+
+  Future<Map<String, dynamic>> createPlatformDietTemplate(
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _apiClient.post(
+      '/platform-admin/diet-templates',
+      data: payload,
+    );
+    return Map<String, dynamic>.from(response['data'] as Map? ?? const {});
+  }
+
+  Future<Map<String, dynamic>> updatePlatformDietTemplate(
+    int id,
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _apiClient.put(
+      '/platform-admin/diet-templates/$id',
+      data: payload,
+    );
+    return Map<String, dynamic>.from(response['data'] as Map? ?? const {});
+  }
+
+  Future<List<Map<String, dynamic>>> fetchGymDietPlans({
+    required int gymId,
+    int? branchId,
+  }) async {
+    final response = await fetchCollection(
+      '/gym/diet-plans',
+      perPage: 100,
+      queryParameters: {
+        'gym_id': gymId,
+        if (branchId != null) 'branch_id': branchId,
+      },
+    );
+    return response.items;
+  }
+
+  Future<List<Map<String, dynamic>>> fetchGymDietTemplates({
+    required int gymId,
+    int? branchId,
+  }) async {
+    final response = await _apiClient.get(
+      '/gym/diet-templates',
+      queryParameters: {
+        'gym_id': gymId,
+        if (branchId != null) 'branch_id': branchId,
+      },
+    );
+    return (response['data'] as List<dynamic>? ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchGymDietMembers({
+    required int gymId,
+    int? branchId,
+  }) async {
+    final response = await fetchCollection(
+      '/gym/members',
+      perPage: 100,
+      queryParameters: {
+        'gym_id': gymId,
+        if (branchId != null) 'branch_id': branchId,
+      },
+    );
+    return response.items;
+  }
+
+  Future<Map<String, dynamic>> createGymDietPlan(
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _apiClient.post('/gym/diet-plans', data: payload);
+    return Map<String, dynamic>.from(response['data'] as Map? ?? const {});
+  }
+
+  Future<Map<String, dynamic>> assignGymDietTemplate(
+    int templateId,
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _apiClient.post(
+      '/gym/diet-templates/$templateId/assign',
+      data: payload,
+    );
+    return Map<String, dynamic>.from(response['data'] as Map? ?? const {});
+  }
+
+  Future<Map<String, dynamic>> updateGymDietPlan(
+    int planId,
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _apiClient.put(
+      '/gym/diet-plans/$planId',
+      data: payload,
+    );
+    return Map<String, dynamic>.from(response['data'] as Map? ?? const {});
+  }
+
+  Future<void> deleteGymDietPlan(int planId) =>
+      _apiClient.delete('/gym/diet-plans/$planId');
+
   Future<Map<String, dynamic>> fetchPlatformReport(
     String reportKey, {
     Map<String, dynamic>? queryParameters,

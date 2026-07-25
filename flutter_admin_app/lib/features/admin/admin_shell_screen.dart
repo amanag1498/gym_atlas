@@ -12,6 +12,7 @@ import '../../core/models/session_models.dart';
 import '../../core/widgets/common_widgets.dart';
 import '../auth/session_controller.dart';
 import 'admin_repository.dart';
+import 'diet_plans_workspace.dart';
 import 'notification_preferences_sheet.dart';
 import 'platform_workout_books_screen.dart';
 
@@ -170,6 +171,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
           Icons.menu_book_rounded,
           endpoint: '/platform-admin/workout-books',
         ),
+        _AdminDestination('Diet Templates', Icons.restaurant_menu_rounded),
         _AdminDestination(
           'Listings',
           Icons.view_carousel_rounded,
@@ -230,6 +232,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
         endpoint: '/gym/members',
         formType: _AdminFormType.member,
       ),
+      _AdminDestination('Diet Plans', Icons.restaurant_menu_rounded),
       _AdminDestination(
         'Membership Plans',
         Icons.workspace_premium_rounded,
@@ -328,6 +331,8 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
         return user.hasAnyPermission(['trainer.manage', 'manage_trainers']);
       case 'Members':
         return user.hasAnyPermission(['member.manage', 'manage_members']);
+      case 'Diet Plans':
+        return user.hasAnyPermission(['diet_plan.view', 'diet_plan.manage']);
       case 'Membership Plans':
       case 'Memberships':
         return user.hasAnyPermission(['membership.manage']);
@@ -469,6 +474,15 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                   : selected.title == 'Workout Books' &&
                         user.activeRole == 'platform_admin'
                   ? PlatformWorkoutBooksWorkspace(
+                      key: ValueKey(selected.title),
+                      appUser: user,
+                      repository: _repository,
+                    )
+                  : (selected.title == 'Diet Templates' &&
+                            user.activeRole == 'platform_admin') ||
+                        (selected.title == 'Diet Plans' &&
+                            user.activeRole != 'platform_admin')
+                  ? DietPlansWorkspace(
                       key: ValueKey(selected.title),
                       appUser: user,
                       repository: _repository,

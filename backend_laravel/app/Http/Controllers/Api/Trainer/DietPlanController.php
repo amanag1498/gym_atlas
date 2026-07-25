@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\Trainer;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Diet\StoreDietPlanRequest;
+use App\Http\Requests\Diet\StoreTrainerDietPlanRequest;
 use App\Http\Requests\Diet\UpdateDietPlanRequest;
 use App\Http\Resources\Diet\DietPlanResource;
 use App\Http\Resources\Diet\DietPlanTemplateResource;
@@ -34,7 +34,7 @@ class DietPlanController extends Controller
         return $this->paginated($paginator, DietPlanResource::collection($paginator->getCollection()), 'Diet plans fetched successfully.');
     }
 
-    public function store(StoreDietPlanRequest $request)
+    public function store(StoreTrainerDietPlanRequest $request)
     {
         $profile = $this->trainerScopeService->resolveTrainerProfile($request);
         foreach ($request->validated('member_ids') as $id) {
