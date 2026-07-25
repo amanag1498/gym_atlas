@@ -12,6 +12,7 @@
                 :search-url="route('web.gym.trainers.search.eligible-users', request()->query())"
                 :initial-item="$initialExistingUser ?? null"
                 placeholder="Search users by name, email, or phone"
+                empty-label="Optional. Leave empty to create a new trainer user."
             />
             <div id="existing_user_hint" class="mt-3 hidden rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200">
                 Existing user selected. Account details are reused; only gym, branch, and coaching profile details are updated here.

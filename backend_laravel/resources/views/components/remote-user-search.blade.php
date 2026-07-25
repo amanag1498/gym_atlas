@@ -19,6 +19,7 @@
     data-remote-user-search
     data-search-url="{{ $searchUrl }}"
     data-branch-source="{{ $branchSource }}"
+    data-empty-label="{{ $emptyLabel }}"
     class="relative"
 >
     <label for="{{ $fieldId }}_search" class="panel-label">{{ $label }}</label>
@@ -48,7 +49,7 @@
         role="listbox"
     ></div>
     <p data-remote-user-help class="mt-2 text-xs text-slate-500 dark:text-slate-400">
-        {{ $selectedId ? 'User selected. Clear to search again.' : 'Enter at least 2 characters to search.' }}
+        {{ $selectedId ? 'User selected. Clear to search again.' : ($emptyLabel ?: 'Enter at least 2 characters to search.') }}
     </p>
     @error($name)
         <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
@@ -71,6 +72,7 @@
                     const results = root.querySelector('[data-remote-user-results]');
                     const clear = root.querySelector('[data-remote-user-clear]');
                     const help = root.querySelector('[data-remote-user-help]');
+                    const emptyLabel = root.dataset.emptyLabel || 'Enter at least 2 characters to search.';
                     let timer;
                     let controller;
 
@@ -85,7 +87,7 @@
                         clear.classList.toggle('hidden', !item?.id);
                         help.textContent = item?.id
                             ? (item.description || 'User selected. Clear to search again.')
-                            : 'Enter at least 2 characters to search.';
+                            : emptyLabel;
                         closeResults();
                         root.dispatchEvent(new CustomEvent(
                             item?.id ? 'remote-user-selected' : 'remote-user-cleared',

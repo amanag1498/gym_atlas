@@ -22,6 +22,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -45,29 +47,8 @@ class AttendanceController extends Controller
         $branchIds = $this->gymWebPanelService->selectedBranchIds($request, $gym);
         $query = $this->buildAttendanceQuery($request, $gym, $branchIds);
         $summaryQuery = clone $query;
-        $allScopeQuery = AttendanceLog::query()
-            ->with(['member', 'checkedInByUser', 'branch'])
-            ->where('gym_id', $gym->id)
-            ->whereIn('branch_id', $branchIds);
-        $allScopeLogs = (clone $allScopeQuery)->get();
-        $dailyTrend = collect(range(6, 0))->map(function (int $offset) use ($allScopeLogs): array {
-            $day = now()->copy()->subDays($offset);
-            $count = $allScopeLogs->filter(fn (AttendanceLog $log) => optional($log->checked_in_at)?->isSameDay($day))->count();
-
-            return [
-                'label' => $day->format('D'),
-                'date' => $day->format('d M'),
-                'count' => $count,
-            ];
-        });
-        $hourlyHeatmap = collect(range(5, 22))->map(function (int $hour) use ($allScopeLogs): array {
-            $count = $allScopeLogs->filter(fn (AttendanceLog $log) => (int) optional($log->checked_in_at)->format('G') === $hour)->count();
-
-            return [
-                'label' => str_pad((string) $hour, 2, '0', STR_PAD_LEFT).':00',
-                'count' => $count,
-            ];
-        })->filter(fn (array $slot) => $slot['count'] > 0)->values();
+        $dailyTrend = $this->dailyTrend($gym->id, $branchIds);
+        $hourlyHeatmap = $this->hourlyHeatmap($gym->id, $branchIds);
         $peakHour = $hourlyHeatmap->sortByDesc('count')->first();
         $correctionRequests = AttendanceCorrectionRequest::query()
             ->with(['attendanceLog', 'member', 'requestedByUser', 'reviewedByUser', 'branch'])
@@ -127,7 +108,7 @@ class AttendanceController extends Controller
                 'manual_logs' => (clone $summaryQuery)->where('check_in_method', 'manual')->count(),
                 'biometric_logs' => (clone $summaryQuery)->where('check_in_method', 'biometric')->count(),
                 'unique_members' => (clone $summaryQuery)->distinct('member_id')->count('member_id'),
-                'avg_daily_logs' => round($allScopeLogs->count() / max(1, $dailyTrend->filter(fn (array $day) => $day['count'] > 0)->count()), 1),
+                'avg_daily_logs' => round($dailyTrend->sum('count') / max(1, $dailyTrend->where('count', '>', 0)->count()), 1),
                 'pending_corrections' => $pendingCorrectionsCount,
             ],
             'methodBreakdown' => (clone $summaryQuery)
@@ -457,8 +438,11 @@ class AttendanceController extends Controller
     private function attendanceMembersQuery($gym, array $branchIds)
     {
         return User::query()
-            ->with('memberProfile.branch')
-            ->whereHas('memberProfile', fn ($builder) => $builder
+            ->with(['memberProfiles' => fn ($builder) => $builder
+                ->with('branch')
+                ->where('gym_id', $gym->id)
+                ->whereIn('branch_id', $branchIds)])
+            ->whereHas('memberProfiles', fn ($builder) => $builder
                 ->where('gym_id', $gym->id)
                 ->whereIn('branch_id', $branchIds));
     }
@@ -468,8 +452,9 @@ class AttendanceController extends Controller
      */
     private function attendanceMemberSearchItem(User $member): array
     {
+        $profile = $member->memberProfiles->first();
         $description = $member->email;
-        $branchName = $member->memberProfile?->branch?->name;
+        $branchName = $profile?->branch?->name;
 
         if ($branchName) {
             $description .= ' • '.$branchName;
@@ -480,7 +465,60 @@ class AttendanceController extends Controller
             'label' => $member->name,
             'description' => $description,
             'avatar' => $member->avatar,
-            'branch_id' => $member->memberProfile?->branch_id,
+            'branch_id' => $profile?->branch_id,
         ];
+    }
+
+    /**
+     * @param  list<int>  $branchIds
+     * @return Collection<int, array{label: string, date: string, count: int}>
+     */
+    private function dailyTrend(int $gymId, array $branchIds): Collection
+    {
+        $start = now()->startOfDay()->subDays(6);
+        $counts = AttendanceLog::query()
+            ->where('gym_id', $gymId)
+            ->whereIn('branch_id', $branchIds)
+            ->where('checked_in_at', '>=', $start)
+            ->selectRaw('DATE(checked_in_at) as attendance_date, COUNT(*) as total')
+            ->groupBy('attendance_date')
+            ->pluck('total', 'attendance_date');
+
+        return collect(range(6, 0))->map(function (int $offset) use ($counts): array {
+            $day = now()->startOfDay()->subDays($offset);
+
+            return [
+                'label' => $day->format('D'),
+                'date' => $day->format('d M'),
+                'count' => (int) ($counts[$day->toDateString()] ?? 0),
+            ];
+        });
+    }
+
+    /**
+     * @param  list<int>  $branchIds
+     * @return Collection<int, array{label: string, count: int}>
+     */
+    private function hourlyHeatmap(int $gymId, array $branchIds): Collection
+    {
+        $hourExpression = DB::connection()->getDriverName() === 'sqlite'
+            ? "CAST(strftime('%H', checked_in_at) AS INTEGER)"
+            : 'HOUR(checked_in_at)';
+
+        $counts = AttendanceLog::query()
+            ->where('gym_id', $gymId)
+            ->whereIn('branch_id', $branchIds)
+            ->where('checked_in_at', '>=', now()->subDays(30))
+            ->selectRaw($hourExpression.' as attendance_hour, COUNT(*) as total')
+            ->groupBy('attendance_hour')
+            ->pluck('total', 'attendance_hour');
+
+        return collect(range(5, 22))
+            ->map(fn (int $hour): array => [
+                'label' => str_pad((string) $hour, 2, '0', STR_PAD_LEFT).':00',
+                'count' => (int) ($counts[$hour] ?? 0),
+            ])
+            ->where('count', '>', 0)
+            ->values();
     }
 }

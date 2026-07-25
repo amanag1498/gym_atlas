@@ -12,6 +12,7 @@
                 :search-url="route('web.gym.members.search.eligible-users', request()->query())"
                 :initial-item="$initialExistingUser ?? null"
                 placeholder="Search existing users by name, email, or phone"
+                empty-label="Optional. Leave empty to create a new member user."
             />
             <div id="existing_user_hint" class="mt-3 hidden rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
                 Existing user selected. This will send a pending gym invitation; the user must accept before becoming a member of this gym.
