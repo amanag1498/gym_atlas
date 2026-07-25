@@ -31,6 +31,7 @@ class StorePlatformGymWebRequest extends StorePlatformGymRequest
             'show_pricing' => $this->boolean('show_pricing'),
             'trial_available' => $this->boolean('trial_available'),
             'contact_visible' => $this->boolean('contact_visible'),
+            'operational_access_enabled' => $this->boolean('operational_access_enabled', true),
             'create_default_branch' => $this->boolean('create_default_branch'),
             'branch_same_as_gym' => $this->boolean('branch_same_as_gym'),
             'assign_platform_subscription' => $this->boolean('assign_platform_subscription'),

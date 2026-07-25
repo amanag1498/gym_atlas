@@ -143,6 +143,45 @@ class PlatformGymManagementTest extends TestCase
         ]);
     }
 
+    public function test_platform_admin_can_create_a_public_listing_only_gym_without_an_owner_or_operational_access(): void
+    {
+        $admin = User::factory()->create([
+            'email' => 'platform-listing-admin@example.com',
+            'password' => 'secret123',
+            'is_active' => true,
+        ]);
+        $admin->assignRole(RoleName::PlatformAdmin->value);
+
+        $this->post('/admin/login', [
+            'email' => 'platform-listing-admin@example.com',
+            'password' => 'secret123',
+        ])->assertRedirect(route('web.admin.dashboard'));
+
+        $this->post(route('web.admin.gyms.store'), [
+            'name' => 'Discovery Only Gym',
+            'city' => 'Pune',
+            'status' => 'active',
+            'public_listing_enabled' => '1',
+            'show_pricing' => '1',
+            'trial_available' => '1',
+            'contact_visible' => '1',
+            'operational_access_enabled' => '0',
+        ])->assertRedirect();
+
+        $gym = Gym::query()->where('slug', 'discovery-only-gym')->firstOrFail();
+
+        $this->assertNull($gym->owner_user_id);
+        $this->assertFalse($gym->operational_access_enabled);
+        $this->assertTrue($gym->public_listing_enabled);
+        $this->assertSame('approved', $gym->public_listing_approval_status);
+        $this->assertFalse($gym->trial_available);
+        $this->assertDatabaseMissing('branches', ['gym_id' => $gym->id]);
+
+        $this->get(route('public.gyms.show', $gym->slug))
+            ->assertOk()
+            ->assertSee('Discovery Only Gym');
+    }
+
     public function test_platform_admin_can_update_gym_from_web_panel_with_existing_owner(): void
     {
         $admin = User::factory()->create([

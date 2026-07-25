@@ -20,7 +20,7 @@ class UpdatePlatformGymRequest extends FormRequest
     {
         return [
             'owner_user_id' => [
-                'required',
+                'nullable',
                 'integer',
                 Rule::exists('users', 'id')->where(fn ($query) => $query->where('is_active', true)),
             ],
@@ -46,6 +46,7 @@ class UpdatePlatformGymRequest extends FormRequest
             'trial_available' => ['sometimes', 'boolean'],
             'contact_visible' => ['sometimes', 'boolean'],
             'status' => ['required', Rule::in(['pending', 'active', 'rejected', 'inactive', 'suspended'])],
+            'operational_access_enabled' => ['sometimes', 'boolean'],
             'rejected_reason' => ['nullable', 'string', 'max:2000'],
             'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'cover_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:6144'],
@@ -58,6 +59,12 @@ class UpdatePlatformGymRequest extends FormRequest
 
     public function withValidator(Validator $validator): void
     {
-        $validator->after(fn (Validator $validator) => $this->validateOperatingHoursFields($validator, ['timings']));
+        $validator->after(function (Validator $validator): void {
+            $this->validateOperatingHoursFields($validator, ['timings']);
+
+            if ($this->boolean('operational_access_enabled', true) && ! $this->filled('owner_user_id')) {
+                $validator->errors()->add('owner_user_id', 'An owner is required when operational access is enabled.');
+            }
+        });
     }
 }

@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Media\GymImageService;
 use App\Support\Scheduling\OperatingHours;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -24,17 +25,19 @@ class PlatformGymManagementService
         private readonly AuditLogService $auditLogService,
         private readonly PlatformSubscriptionLedgerService $platformSubscriptionLedgerService,
         private readonly GymImageService $gymImageService,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<string, mixed>  $data
-     * @return array{gym: Gym, owner: User, branch: Branch|null, temporary_password: string|null}
+     * @return array{gym: Gym, owner: User|null, branch: Branch|null, temporary_password: string|null}
      */
     public function create(Request $request, array $data): array
     {
         return DB::transaction(function () use ($request, $data): array {
-            [$owner, $temporaryPassword] = $this->resolveOwnerForCreate($data);
+            $operationalAccessEnabled = $this->operationalAccessEnabled($data, true);
+            [$owner, $temporaryPassword] = $operationalAccessEnabled
+                ? $this->resolveOwnerForCreate($data)
+                : [null, null];
 
             $payload = $this->buildGymPayload(
                 request: $request,
@@ -48,7 +51,7 @@ class PlatformGymManagementService
             $gym->facilities()->sync($data['facility_ids'] ?? []);
             $this->gymImageService->syncGymMediaRecords($gym);
 
-            $branch = $this->shouldCreateDefaultBranch($data)
+            $branch = $operationalAccessEnabled && $this->shouldCreateDefaultBranch($data)
                 ? $this->createDefaultBranch($gym, $data)
                 : null;
 
@@ -56,9 +59,10 @@ class PlatformGymManagementService
                 $branch->facilities()->sync($data['facility_ids']);
             }
 
-            $this->syncPlatformSubscription($gym, $data, (int) $request->user()->id);
-
-            $this->syncOwnerMembership($owner, $gym, $branch);
+            if ($operationalAccessEnabled) {
+                $this->syncPlatformSubscription($gym, $data, (int) $request->user()->id);
+                $this->syncOwnerMembership($owner, $gym, $branch);
+            }
 
             $gym = $gym->fresh([
                 'owner',
@@ -77,8 +81,9 @@ class PlatformGymManagementService
                 oldValues: null,
                 newValues: $gym->toArray(),
                 context: [
-                    'owner_user_id' => $owner->id,
+                    'owner_user_id' => $owner?->id,
                     'default_branch_id' => $branch?->id,
+                    'operational_access_enabled' => $operationalAccessEnabled,
                 ],
             );
 
@@ -93,13 +98,14 @@ class PlatformGymManagementService
 
     /**
      * @param  array<string, mixed>  $data
-     * @return array{gym: Gym, owner: User, branch: Branch|null, temporary_password: string|null}
+     * @return array{gym: Gym, owner: User|null, branch: Branch|null, temporary_password: string|null}
      */
     public function update(Request $request, Gym $gym, array $data): array
     {
         return DB::transaction(function () use ($request, $gym, $data): array {
             $oldValues = $gym->load(['owner', 'facilities', 'branches.facilities'])->toArray();
-            $owner = $this->resolveOwnerForUpdate($data, $gym);
+            $operationalAccessEnabled = $this->operationalAccessEnabled($data, (bool) $gym->operational_access_enabled);
+            $owner = $operationalAccessEnabled ? $this->resolveOwnerForUpdate($data, $gym) : null;
 
             $payload = $this->buildGymPayload(
                 request: $request,
@@ -118,9 +124,12 @@ class PlatformGymManagementService
                 $primaryBranch->facilities()->syncWithoutDetaching($data['facility_ids']);
             }
 
-            $this->syncPlatformSubscription($gym, $data, (int) $request->user()->id);
-
-            $this->syncOwnerMembership($owner, $gym->fresh(), $primaryBranch);
+            if ($operationalAccessEnabled) {
+                $this->syncPlatformSubscription($gym, $data, (int) $request->user()->id);
+                $this->syncOwnerMembership($owner, $gym->fresh(), $primaryBranch);
+            } else {
+                $this->disableOperationalAccess($gym);
+            }
 
             $gym = $gym->fresh([
                 'owner',
@@ -139,7 +148,8 @@ class PlatformGymManagementService
                 oldValues: $oldValues,
                 newValues: $gym->toArray(),
                 context: [
-                    'owner_user_id' => $owner->id,
+                    'owner_user_id' => $owner?->id,
+                    'operational_access_enabled' => $operationalAccessEnabled,
                 ],
             );
 
@@ -270,11 +280,12 @@ class PlatformGymManagementService
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
-    private function buildGymPayload(Request $request, array $data, ?Gym $currentGym, User $owner, int $actorId): array
+    private function buildGymPayload(Request $request, array $data, ?Gym $currentGym, ?User $owner, int $actorId): array
     {
         $currentGym?->loadMissing('gymPhotos');
         $name = trim((string) $data['name']);
         $status = (string) $data['status'];
+        $operationalAccessEnabled = $this->operationalAccessEnabled($data, (bool) ($currentGym?->operational_access_enabled ?? true));
         $approvalStatus = $this->resolveApprovalStatus($status, $currentGym?->approval_status);
         $isActive = $status === 'active';
         $slug = $this->resolveSlug($name, $currentGym);
@@ -326,7 +337,7 @@ class PlatformGymManagementService
             ->all();
 
         $payload = [
-            'owner_user_id' => $owner->id,
+            'owner_user_id' => $owner?->id,
             'name' => $name,
             'slug' => $slug,
             'description' => Arr::get($data, 'description'),
@@ -355,10 +366,12 @@ class PlatformGymManagementService
             'public_listing_enabled' => Arr::get($data, 'public_listing_enabled', false),
             'show_pricing' => Arr::get($data, 'show_pricing', true),
             'pricing_visible' => Arr::get($data, 'show_pricing', true),
-            'trial_available' => Arr::get($data, 'trial_available', false),
+            'trial_available' => $operationalAccessEnabled && Arr::get($data, 'trial_available', false),
             'contact_visible' => Arr::get($data, 'contact_visible', true),
             'status' => $status,
             'is_active' => $isActive,
+            'operational_access_enabled' => $operationalAccessEnabled,
+            'gym_onboarding_completed' => $operationalAccessEnabled ? $currentGym?->gym_onboarding_completed : false,
             'approval_status' => $approvalStatus,
             'approval_notes' => $approvalStatus === 'rejected'
                 ? (Arr::get($data, 'rejected_reason') ?: ($currentGym?->approval_notes))
@@ -454,6 +467,7 @@ class PlatformGymManagementService
         if ($subscription) {
             $subscription->update($payload);
             $this->platformSubscriptionLedgerService->issueInitialInvoice($subscription->fresh(['plan', 'invoices']), $actorId);
+
             return;
         }
 
@@ -511,7 +525,7 @@ class PlatformGymManagementService
     }
 
     /**
-     * @param  class-string<\Illuminate\Database\Eloquent\Model>  $modelClass
+     * @param  class-string<Model>  $modelClass
      */
     private function makeUniqueSlug(string $modelClass, string $name, ?int $ignoreId = null): string
     {
@@ -561,5 +575,24 @@ class PlatformGymManagementService
                 ]);
             }
         }
+    }
+
+    private function disableOperationalAccess(Gym $gym): void
+    {
+        $branchIds = $gym->branches()->pluck('id');
+
+        if ($branchIds->isNotEmpty()) {
+            DB::table('branch_user')->whereIn('branch_id', $branchIds)->delete();
+        }
+
+        $gym->users()->detach();
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function operationalAccessEnabled(array $data, bool $default): bool
+    {
+        return filter_var(Arr::get($data, 'operational_access_enabled', $default), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? $default;
     }
 }

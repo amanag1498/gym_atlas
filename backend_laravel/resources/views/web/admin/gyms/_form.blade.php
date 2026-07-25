@@ -6,6 +6,7 @@
         ->all();
     $selectedOwnerId = old('owner_user_id', $gym->owner_user_id);
     $gymStatus = old('status', $gym->status ?? 'pending');
+    $operationalAccessEnabled = old('operational_access_enabled', $gym->operational_access_enabled ?? true);
     $gymTimingsValue = old('timings_json')
         ? json_decode((string) old('timings_json'), true)
         : OperatingHours::normalize($gym->timings ?? [], $gym->weekly_off ?? []);
@@ -58,6 +59,14 @@
                         <label for="description" class="panel-label">Description</label>
                         <textarea id="description" name="description" rows="4" class="panel-textarea" placeholder="Short brand, facility, and audience summary">{{ old('description', $gym->description) }}</textarea>
                     </div>
+
+                    <label class="flex items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/70">
+                        <span class="min-w-0">
+                            <span class="block text-sm font-medium text-slate-900 dark:text-slate-100">Enable gym operations and admin access</span>
+                            <span class="block text-[11px] leading-5 text-slate-500 dark:text-slate-400">Turn this off for a listing-only gym. It will appear publicly when listed, but no owner, staff, dashboard, billing, member, or trainer access is created.</span>
+                        </span>
+                        <input class="form-check-input" type="checkbox" name="operational_access_enabled" value="1" @checked($operationalAccessEnabled)>
+                    </label>
 
                     <div class="grid gap-4 md:grid-cols-2">
                         <x-form-input name="address" label="Address" :value="old('address', $gym->address ?: $gym->address_line)" placeholder="Street address" />

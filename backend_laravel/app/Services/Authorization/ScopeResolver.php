@@ -18,7 +18,9 @@ class ScopeResolver
             return Gym::query();
         }
 
-        $query = Gym::query()->distinct();
+        $query = Gym::query()
+            ->where('operational_access_enabled', true)
+            ->distinct();
 
         if ($user->active_role === RoleName::GymOwner->value) {
             return $query->where('owner_user_id', $user->id);
@@ -37,13 +39,14 @@ class ScopeResolver
 
         if ($user->active_role === RoleName::GymOwner->value) {
             return Branch::query()->whereHas('gym', function (Builder $builder) use ($user): void {
-                $builder->where('owner_user_id', $user->id);
+                $builder->where('owner_user_id', $user->id)
+                    ->where('operational_access_enabled', true);
             });
         }
 
         return Branch::query()->whereHas('users', function (Builder $builder) use ($user): void {
             $builder->where('users.id', $user->id);
-        });
+        })->whereHas('gym', fn (Builder $builder) => $builder->where('operational_access_enabled', true));
     }
 
     public function canAccessGym(User $user, int|string|Gym $gym): bool

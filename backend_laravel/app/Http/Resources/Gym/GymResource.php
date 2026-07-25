@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Gym;
 
+use App\Http\Resources\User\UserResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -51,6 +52,7 @@ class GymResource extends JsonResource
             'weekly_off' => $this->weekly_off ?? [],
             'status' => $this->status,
             'is_active' => $this->is_active,
+            'operational_access_enabled' => (bool) $this->operational_access_enabled,
             'is_featured' => (bool) $this->is_featured,
             'is_promoted' => (bool) $this->is_promoted,
             'approval_status' => $this->approval_status,
@@ -71,7 +73,7 @@ class GymResource extends JsonResource
             'facilities' => FacilityResource::collection($this->whenLoaded('facilities')),
             'city_record' => CityResource::make($this->whenLoaded('cityRecord')),
             'branches' => BranchResource::collection($this->whenLoaded('branches')),
-            'owner' => \App\Http\Resources\User\UserResource::make($this->whenLoaded('owner')),
+            'owner' => UserResource::make($this->whenLoaded('owner')),
             'branches_count' => $this->whenCounted('branches'),
             'trainer_profiles_count' => $this->whenCounted('trainerProfiles'),
             'member_profiles_count' => $this->whenCounted('memberProfiles'),

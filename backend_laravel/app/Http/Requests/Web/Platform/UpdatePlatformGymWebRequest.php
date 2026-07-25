@@ -25,6 +25,7 @@ class UpdatePlatformGymWebRequest extends UpdatePlatformGymRequest
             'show_pricing' => $this->boolean('show_pricing'),
             'trial_available' => $this->boolean('trial_available'),
             'contact_visible' => $this->boolean('contact_visible'),
+            'operational_access_enabled' => $this->boolean('operational_access_enabled', true),
             'assign_platform_subscription' => $this->boolean('assign_platform_subscription'),
             'platform_subscription_auto_renew' => $this->boolean('platform_subscription_auto_renew'),
             'platform_subscription_included_services' => $this->normalizeSubscriptionList($this->input('platform_subscription_included_services_text')),

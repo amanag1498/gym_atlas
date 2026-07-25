@@ -24,8 +24,8 @@ class StorePlatformGymRequest extends FormRequest
                 'integer',
                 Rule::exists('users', 'id')->where(fn ($query) => $query->where('is_active', true)),
             ],
-            'owner_name' => ['required_without:owner_user_id', 'nullable', 'string', 'max:160'],
-            'owner_email' => ['required_without:owner_user_id', 'nullable', 'email:rfc', 'max:190', 'unique:users,email'],
+            'owner_name' => ['nullable', 'string', 'max:160'],
+            'owner_email' => ['nullable', 'email:rfc', 'max:190', 'unique:users,email'],
             'name' => ['required', 'string', 'max:160'],
             'description' => ['nullable', 'string', 'max:5000'],
             'address' => ['nullable', 'string', 'max:255'],
@@ -48,6 +48,7 @@ class StorePlatformGymRequest extends FormRequest
             'trial_available' => ['sometimes', 'boolean'],
             'contact_visible' => ['sometimes', 'boolean'],
             'status' => ['required', Rule::in(['pending', 'active'])],
+            'operational_access_enabled' => ['sometimes', 'boolean'],
             'create_default_branch' => ['sometimes', 'boolean'],
             'branch_same_as_gym' => ['sometimes', 'boolean'],
             'branch_name' => ['nullable', 'string', 'max:160'],
@@ -71,6 +72,20 @@ class StorePlatformGymRequest extends FormRequest
 
     public function withValidator(Validator $validator): void
     {
-        $validator->after(fn (Validator $validator) => $this->validateOperatingHoursFields($validator, ['timings', 'branch_timings']));
+        $validator->after(function (Validator $validator): void {
+            $this->validateOperatingHoursFields($validator, ['timings', 'branch_timings']);
+
+            if (! $this->boolean('operational_access_enabled', true)) {
+                return;
+            }
+
+            if (! $this->filled('owner_user_id') && ! $this->filled('owner_name')) {
+                $validator->errors()->add('owner_name', 'Provide an existing owner or create a new owner account.');
+            }
+
+            if (! $this->filled('owner_user_id') && ! $this->filled('owner_email')) {
+                $validator->errors()->add('owner_email', 'Provide an existing owner or an email for the new owner account.');
+            }
+        });
     }
 }
