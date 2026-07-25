@@ -1194,8 +1194,10 @@
         }
 
         body.panel-sidebar-mobile-open #app-sidebar {
-            translate: 0 !important;
-            transform: translateX(0) !important;
+            --tw-translate-x: 0px !important;
+            --tw-translate-y: 0px !important;
+            translate: var(--tw-translate-x) var(--tw-translate-y) !important;
+            transform: none !important;
             pointer-events: auto;
             visibility: visible;
         }
