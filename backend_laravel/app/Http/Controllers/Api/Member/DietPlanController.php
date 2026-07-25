@@ -4,14 +4,23 @@ namespace App\Http\Controllers\Api\Member;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Diet\DietPlanResource;
+use App\Http\Requests\Diet\StoreMemberDietPlanRequest;
+use App\Http\Requests\Diet\UpdateDietPlanRequest;
 use App\Models\DietMealLog;
 use App\Models\DietPlan;
 use App\Models\DietPlanMeal;
+use App\Services\Audit\AuditLogService;
+use App\Services\Diet\DietPlanService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class DietPlanController extends Controller
 {
+    public function __construct(
+        private readonly DietPlanService $dietPlanService,
+        private readonly AuditLogService $auditLogService,
+    ) {}
+
     public function index(Request $request)
     {
         $plans = DietPlan::query()
@@ -38,6 +47,45 @@ class DietPlanController extends Controller
         ])));
     }
 
+    public function store(StoreMemberDietPlanRequest $request)
+    {
+        $profile = $request->user()->memberProfile;
+        if (! $profile?->gym_id) {
+            throw ValidationException::withMessages(['diet_plan' => ['Join a gym before creating a personal diet plan.']]);
+        }
+
+        $plans = $this->dietPlanService->create($request->user(), $request->validated() + [
+            'gym_id' => $profile->gym_id,
+            'branch_id' => $profile->branch_id,
+            'member_ids' => [$request->user()->id],
+            'status' => $request->validated('status', 'active'),
+        ]);
+        $plan = $plans[0];
+        $this->auditLogService->log(event: 'member.diet_plan.created', action: 'create', request: $request, subject: $plan, gym: $plan->gym, branch: $plan->branch, newValues: $plan->toArray());
+
+        return $this->success(DietPlanResource::make($plan), 'Personal diet plan created successfully.', 201);
+    }
+
+    public function update(UpdateDietPlanRequest $request, DietPlan $dietPlan)
+    {
+        $this->assertMemberManagedPlan($request, $dietPlan);
+        $oldValues = $dietPlan->load('meals.items')->toArray();
+        $plan = $this->dietPlanService->update($dietPlan, $request->user(), $request->validated());
+        $this->auditLogService->log(event: 'member.diet_plan.updated', action: 'update', request: $request, subject: $plan, gym: $plan->gym, branch: $plan->branch, oldValues: $oldValues, newValues: $plan->toArray());
+
+        return $this->success(DietPlanResource::make($plan), 'Personal diet plan updated successfully.');
+    }
+
+    public function destroy(Request $request, DietPlan $dietPlan)
+    {
+        $this->assertMemberManagedPlan($request, $dietPlan);
+        $oldValues = $dietPlan->load('meals.items')->toArray();
+        $this->auditLogService->log(event: 'member.diet_plan.deleted', action: 'delete', request: $request, subject: $dietPlan, gym: $dietPlan->gym, branch: $dietPlan->branch, oldValues: $oldValues);
+        $dietPlan->delete();
+
+        return $this->success(null, 'Personal diet plan deleted successfully.');
+    }
+
     public function logMeal(Request $request, DietPlan $dietPlan, DietPlanMeal $meal)
     {
         $this->assertOwner($request, $dietPlan);
@@ -55,6 +103,14 @@ class DietPlanController extends Controller
     {
         if ((int) $plan->member_id !== (int) $request->user()->id) {
             throw ValidationException::withMessages(['diet_plan_id' => ['You do not have access to this diet plan.']]);
+        }
+    }
+
+    private function assertMemberManagedPlan(Request $request, DietPlan $plan): void
+    {
+        $this->assertOwner($request, $plan);
+        if ((int) $plan->created_by_user_id !== (int) $request->user()->id || $plan->trainer_id !== null) {
+            throw ValidationException::withMessages(['diet_plan_id' => ['Only your personal diet plans can be changed.']]);
         }
     }
 

@@ -94,6 +94,196 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
     }
   }
 
+  Future<void> _openCreatePlanSheet() async {
+    final formKey = GlobalKey<FormState>();
+    final name = TextEditingController();
+    final goal = TextEditingController();
+    final calories = TextEditingController();
+    final protein = TextEditingController();
+    final carbs = TextEditingController();
+    final fats = TextEditingController();
+    final mealNames = ['Breakfast', 'Lunch', 'Dinner'];
+    var saving = false;
+    try {
+      final created = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) => StatefulBuilder(
+          builder: (context, setSheetState) => Padding(
+            padding: EdgeInsets.only(
+              left: AppSpacing.lg,
+              right: AppSpacing.lg,
+              bottom: MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
+            ),
+            child: PremiumCard(
+              child: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Create personal diet plan',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'This is private to you. Trainer and gym-assigned plans remain unchanged.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      TextFormField(
+                        controller: name,
+                        decoration: const InputDecoration(
+                          labelText: 'Plan name',
+                        ),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                            ? 'Plan name is required'
+                            : null,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      TextFormField(
+                        controller: goal,
+                        decoration: const InputDecoration(labelText: 'Goal'),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: calories,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Calories',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: TextFormField(
+                              controller: protein,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Protein g',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: carbs,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Carbs g',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: TextFormField(
+                              controller: fats,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Fats g',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Text(
+                        'Meal slots',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Breakfast, lunch and dinner will be added. You can use the plan immediately.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      GradientButton(
+                        label: saving ? 'Creating...' : 'Create diet plan',
+                        expanded: true,
+                        icon: Icons.add_rounded,
+                        onPressed: saving
+                            ? null
+                            : () async {
+                                if (!formKey.currentState!.validate()) return;
+                                setSheetState(() => saving = true);
+                                try {
+                                  await widget.repository.createDietPlan({
+                                    'name': name.text.trim(),
+                                    'goal': goal.text.trim(),
+                                    'daily_calorie_target': int.tryParse(
+                                      calories.text.trim(),
+                                    ),
+                                    'protein_target_g': double.tryParse(
+                                      protein.text.trim(),
+                                    ),
+                                    'carbs_target_g': double.tryParse(
+                                      carbs.text.trim(),
+                                    ),
+                                    'fats_target_g': double.tryParse(
+                                      fats.text.trim(),
+                                    ),
+                                    'meals': mealNames
+                                        .asMap()
+                                        .entries
+                                        .map(
+                                          (entry) => {
+                                            'name': entry.value,
+                                            'meal_type': [
+                                              'breakfast',
+                                              'lunch',
+                                              'dinner',
+                                            ][entry.key],
+                                          },
+                                        )
+                                        .toList(),
+                                  });
+                                  if (context.mounted) {
+                                    Navigator.of(context).pop(true);
+                                  }
+                                } catch (error) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(error.toString())),
+                                    );
+                                  }
+                                } finally {
+                                  if (context.mounted) {
+                                    setSheetState(() => saving = false);
+                                  }
+                                }
+                              },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      if (created == true) await _load();
+    } finally {
+      name.dispose();
+      goal.dispose();
+      calories.dispose();
+      protein.dispose();
+      carbs.dispose();
+      fats.dispose();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final plan = _activePlan();
@@ -101,6 +291,11 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
     return AppGradientScaffold(
       title: 'Diet Plan',
       actions: [
+        IconButton(
+          tooltip: 'Create personal diet plan',
+          onPressed: _loading ? null : _openCreatePlanSheet,
+          icon: const Icon(Icons.add_rounded),
+        ),
         IconButton(
           onPressed: _loading ? null : _load,
           icon: const Icon(Icons.refresh_rounded),
@@ -116,9 +311,10 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 children: [
                   if (plan.isEmpty)
-                    const EmptyStateView(
-                      title: 'No diet plan assigned',
-                      message: 'Your trainer has not assigned a diet plan yet.',
+                    EmptyStateView(
+                      title: 'No diet plan yet',
+                      message:
+                          'Create your own plan or wait for one from your trainer.',
                       icon: Icons.restaurant_menu_rounded,
                     )
                   else ...[

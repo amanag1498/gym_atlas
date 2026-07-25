@@ -634,7 +634,10 @@ Route::prefix('member')
         Route::get('workout-plans', [MemberWorkoutController::class, 'plans'])
             ->middleware('permission:workout_plan.view');
         Route::get('diet-plans', [MemberDietPlanController::class, 'index']);
+        Route::post('diet-plans', [MemberDietPlanController::class, 'store']);
         Route::get('diet-plans/{dietPlan}', [MemberDietPlanController::class, 'show']);
+        Route::put('diet-plans/{dietPlan}', [MemberDietPlanController::class, 'update']);
+        Route::delete('diet-plans/{dietPlan}', [MemberDietPlanController::class, 'destroy']);
         Route::post('diet-plans/{dietPlan}/meals/{meal}/log', [MemberDietPlanController::class, 'logMeal']);
         Route::post('workout-plans', [MemberWorkoutController::class, 'storePlan'])
             ->middleware('permission:workout_plan.manage|workout_session.manage');

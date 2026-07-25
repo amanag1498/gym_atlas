@@ -25,7 +25,16 @@ class MemberRepository {
       _client.get('/member/workout-plans');
   Future<Map<String, dynamic>> fetchWorkoutPlan(int workoutPlanId) async =>
       _client.get('/member/workout-plans/$workoutPlanId');
-  Future<Map<String, dynamic>> fetchDietPlans() => _client.get('/member/diet-plans');
+  Future<Map<String, dynamic>> fetchDietPlans() =>
+      _client.get('/member/diet-plans');
+  Future<Map<String, dynamic>> createDietPlan(Map<String, dynamic> payload) =>
+      _client.post('/member/diet-plans', data: payload);
+  Future<Map<String, dynamic>> updateDietPlan(
+    int planId,
+    Map<String, dynamic> payload,
+  ) => _client.put('/member/diet-plans/$planId', data: payload);
+  Future<Map<String, dynamic>> deleteDietPlan(int planId) =>
+      _client.delete('/member/diet-plans/$planId');
   Future<Map<String, dynamic>> updateDietMealLog(
     int planId,
     int mealId, {
@@ -33,7 +42,10 @@ class MemberRepository {
     String? loggedFor,
   }) => _client.post(
     '/member/diet-plans/$planId/meals/$mealId/log',
-    data: {'completed': completed, if (loggedFor != null) 'logged_for': loggedFor},
+    data: {
+      'completed': completed,
+      if (loggedFor != null) 'logged_for': loggedFor,
+    },
   );
   Future<Map<String, dynamic>> fetchWorkoutBooks({
     Map<String, dynamic>? queryParameters,
