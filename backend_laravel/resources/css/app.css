@@ -1184,6 +1184,11 @@
     }
 
     @media (max-width: 1279px) {
+        .panel-shell #app-sidebar {
+            pointer-events: none;
+            visibility: hidden;
+        }
+
         body.panel-sidebar-mobile-open {
             overflow: hidden;
         }
@@ -1191,6 +1196,8 @@
         body.panel-sidebar-mobile-open #app-sidebar {
             translate: 0 !important;
             transform: translateX(0) !important;
+            pointer-events: auto;
+            visibility: visible;
         }
 
         body.panel-sidebar-mobile-open #mobile-sidebar-backdrop {

@@ -97,13 +97,13 @@
         ];
 @endphp
 
-<aside id="app-sidebar" class="fixed left-0 top-0 z-[60] flex h-screen w-[290px] -translate-x-full flex-col border-r border-gray-200 bg-white px-5 transition-all duration-300 ease-in-out dark:border-gray-800 dark:bg-gray-900 xl:translate-x-0">
+<aside id="app-sidebar" role="dialog" aria-modal="true" aria-label="Panel navigation" class="fixed left-0 top-0 z-[60] flex h-screen w-[290px] -translate-x-full flex-col border-r border-gray-200 bg-white px-5 transition-all duration-300 ease-in-out dark:border-gray-800 dark:bg-gray-900 xl:translate-x-0">
     <div id="app-sidebar-brand" class="flex items-center justify-between pb-7 pt-8">
         <a href="{{ $homeRoute }}">
             <x-layout.brand-mark :title="$panel === 'admin' ? 'Gym Atlas' : config('app.name')" :subtitle="$panel === 'admin' ? 'Platform Admin' : 'Gym Workspace'" />
         </a>
 
-        <button type="button" id="sidebar-close-mobile" onclick="document.body.classList.remove('panel-sidebar-mobile-open')" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 dark:border-gray-800 dark:text-gray-400 xl:hidden">
+        <button type="button" id="sidebar-close-mobile" data-mobile-sidebar-close aria-label="Close navigation" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 dark:border-gray-800 dark:text-gray-400 xl:hidden">
             <i class="ti ti-x text-xl"></i>
         </button>
     </div>

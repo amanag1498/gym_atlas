@@ -28,7 +28,7 @@
             <span class="public-brand-mark mr-2"></span>ATLAS
         </a>
 
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#ftco-nav" aria-controls="ftco-nav" aria-expanded="false" aria-label="Toggle navigation">
+        <button class="navbar-toggler" type="button" data-public-nav-toggle aria-controls="ftco-nav" aria-expanded="false" aria-label="Toggle navigation">
             <span class="oi oi-menu"></span> Menu
         </button>
 
@@ -38,7 +38,7 @@
             @endforeach
         </div>
 
-        <div class="collapse navbar-collapse" id="ftco-nav">
+        <div class="collapse navbar-collapse" id="ftco-nav" data-public-nav-menu>
             <ul class="navbar-nav ml-auto">
                 @foreach ($links as $link)
                     <li class="nav-item {{ $current === $link['route'] ? 'active' : '' }}">

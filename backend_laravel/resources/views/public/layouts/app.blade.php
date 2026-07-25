@@ -516,6 +516,10 @@
                 border-top: 1px solid rgba(255, 255, 255, 0.10);
             }
 
+            .ftco-navbar-light .navbar-collapse.show {
+                display: block !important;
+            }
+
             .public-nav-actions-desktop {
                 display: none;
             }

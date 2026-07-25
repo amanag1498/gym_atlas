@@ -24,6 +24,14 @@ const closeMobileSidebar = () => {
 
 const openMobileSidebar = () => {
     document.body.classList.add('panel-sidebar-mobile-open');
+    document.getElementById('sidebar-toggle-mobile')?.setAttribute('aria-expanded', 'true');
+};
+
+const syncMobileSidebarState = () => {
+    document.getElementById('sidebar-toggle-mobile')?.setAttribute(
+        'aria-expanded',
+        document.body.classList.contains('panel-sidebar-mobile-open') ? 'true' : 'false',
+    );
 };
 
 const initializePanelChrome = () => {
@@ -60,21 +68,58 @@ const initializePanelChrome = () => {
 
     document.getElementById('sidebar-close-mobile')?.addEventListener('click', () => {
         closeMobileSidebar();
+        syncMobileSidebarState();
     });
 
     document.getElementById('mobile-sidebar-backdrop')?.addEventListener('click', () => {
         closeMobileSidebar();
+        syncMobileSidebarState();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeMobileSidebar();
+            syncMobileSidebarState();
+        }
     });
 
     window.addEventListener('resize', () => {
         if (window.innerWidth < 1280) {
             closeMobileSidebar();
+            syncMobileSidebarState();
             return;
         }
 
         const persistedCollapsed = localStorage.getItem(sidebarStorageKey) === 'true';
         applySidebarState(persistedCollapsed);
     });
+
+    const publicNavToggle = document.querySelector('[data-public-nav-toggle]');
+    const publicNavMenu = document.querySelector('[data-public-nav-menu]');
+
+    publicNavToggle?.addEventListener('click', (event) => {
+        event.preventDefault();
+        const isOpen = publicNavMenu?.classList.toggle('show') ?? false;
+        publicNavToggle.setAttribute('aria-expanded', String(isOpen));
+    });
+
+    publicNavMenu?.querySelectorAll('a').forEach((link) => {
+        link.addEventListener('click', () => {
+            if (window.innerWidth < 992) {
+                publicNavMenu.classList.remove('show');
+                publicNavToggle?.setAttribute('aria-expanded', 'false');
+            }
+        });
+    });
+
+    window.addEventListener('resize', () => {
+        if (window.innerWidth >= 992) {
+            publicNavMenu?.classList.remove('show');
+            publicNavToggle?.setAttribute('aria-expanded', 'false');
+        }
+    });
+
+    syncMobileSidebarState();
 };
 
 const initializeConfirmationModal = () => {
