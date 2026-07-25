@@ -27,10 +27,13 @@ class WorkoutPlanController extends Controller
     public function index(Request $request)
     {
         $trainer = $request->user();
+        $profile = $this->trainerScopeService->resolveTrainerProfile($request);
 
         $paginator = WorkoutPlan::query()
             ->with(['member', 'trainer', 'template', 'days.exercises.exercise'])
             ->where('trainer_id', $trainer->id)
+            ->where('gym_id', $profile->gym_id)
+            ->when($profile->branch_id, fn ($query) => $query->where('branch_id', $profile->branch_id))
             ->when($request->filled('member_id'), fn ($query) => $query->where('member_id', $request->integer('member_id')))
             ->orderByDesc('id')
             ->paginate((int) $request->integer('per_page', 15));

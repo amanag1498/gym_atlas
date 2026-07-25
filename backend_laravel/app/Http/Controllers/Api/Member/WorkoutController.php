@@ -188,8 +188,14 @@ class WorkoutController extends Controller
 
     public function plans(Request $request)
     {
+        $profile = $request->user()->memberProfile;
+        if (! $profile?->gym_id) {
+            return $this->success([], 'No active gym space is available.');
+        }
         $paginator = $request->user()->workoutPlansAsMember()
             ->with(['trainer', 'creator', 'template.workoutBook', 'sourceWorkoutBook', 'days.exercises.exercise'])
+            ->where('gym_id', $profile->gym_id)
+            ->when($profile->branch_id, fn ($query) => $query->where(fn ($scope) => $scope->whereNull('branch_id')->orWhere('branch_id', $profile->branch_id)))
             ->orderByDesc('id')
             ->paginate((int) $request->integer('per_page', 15));
 

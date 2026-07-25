@@ -20,7 +20,8 @@ class DietPlanController extends Controller
 
     public function index(Request $request)
     {
-        $paginator = DietPlan::query()->with(['member', 'trainer', 'meals.items'])->where('trainer_id', $request->user()->id)->latest()->paginate($request->integer('per_page', 15));
+        $profile = $this->trainerScopeService->resolveTrainerProfile($request);
+        $paginator = DietPlan::query()->with(['member', 'trainer', 'meals.items'])->where('trainer_id', $request->user()->id)->where('gym_id', $profile->gym_id)->when($profile->branch_id, fn ($query) => $query->where('branch_id', $profile->branch_id))->latest()->paginate($request->integer('per_page', 15));
 
         return $this->paginated($paginator, DietPlanResource::collection($paginator->getCollection()), 'Diet plans fetched successfully.');
     }
@@ -71,7 +72,8 @@ class DietPlanController extends Controller
 
     private function assertAccess(Request $request, DietPlan $plan): void
     {
-        if ((int) $plan->trainer_id !== (int) $request->user()->id) {
+        $profile = $this->trainerScopeService->resolveTrainerProfile($request);
+        if ((int) $plan->trainer_id !== (int) $request->user()->id || (int) $plan->gym_id !== (int) $profile->gym_id || ($profile->branch_id && (int) $plan->branch_id !== (int) $profile->branch_id)) {
             throw ValidationException::withMessages(['diet_plan_id' => ['You do not have access to this diet plan.']]);
         }
     }

@@ -96,7 +96,9 @@ class WorkoutAccessService
         }
 
         if ($actor->active_role === RoleName::Trainer->value) {
-            if ((int) $plan->trainer_id !== (int) $actor->id) {
+            $actor->loadMissing('managedTrainerProfile');
+            $profile = $actor->managedTrainerProfile;
+            if ((int) $plan->trainer_id !== (int) $actor->id || ! $profile || (int) $plan->gym_id !== (int) $profile->gym_id || ($profile->branch_id && (int) $plan->branch_id !== (int) $profile->branch_id)) {
                 throw ValidationException::withMessages([
                     'workout_plan_id' => ['You do not have access to this workout plan.'],
                 ]);
