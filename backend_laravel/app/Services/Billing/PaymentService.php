@@ -13,6 +13,7 @@ use App\Models\PaymentReceipt;
 use App\Models\User;
 use App\Services\Gym\GymLedgerService;
 use App\Services\Notification\ReminderService;
+use App\Services\Notification\TransactionalEmailService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -22,6 +23,7 @@ class PaymentService
         private readonly MembershipPricingService $membershipPricingService,
         private readonly ReminderService $reminderService,
         private readonly GymLedgerService $gymLedgerService,
+        private readonly TransactionalEmailService $transactionalEmailService,
     ) {
     }
 
@@ -75,6 +77,18 @@ class PaymentService
 
             $freshPayment = $payment->fresh(['receipt', 'member', 'membership.membershipPlan', 'branch']);
             $this->gymLedgerService->syncPaymentEntry($freshPayment);
+            DB::afterCommit(fn () => $this->transactionalEmailService->send(
+                $freshPayment->member,
+                'Payment received — '.config('app.name'),
+                'We have recorded your payment successfully.',
+                array_filter([
+                    'Amount: '.number_format((float) $freshPayment->amount, 2),
+                    'Receipt: '.($freshPayment->receipt_number ?? $freshPayment->receipt?->receipt_number),
+                    $freshPayment->membership?->membershipPlan?->name ? 'Plan: '.$freshPayment->membership->membershipPlan->name : null,
+                ]),
+                $freshPayment->gym_id,
+                'payment_receipt',
+            ));
 
             return $freshPayment;
         });

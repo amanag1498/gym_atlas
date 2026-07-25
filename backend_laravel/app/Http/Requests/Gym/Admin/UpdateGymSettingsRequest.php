@@ -17,6 +17,7 @@ class UpdateGymSettingsRequest extends FormRequest
             'gym_id' => ['sometimes', 'integer', 'exists:gyms,id'],
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'attendance_duplicate_checkin_rule' => ['required', 'boolean'],
+            'transactional_email_enabled' => ['sometimes', 'boolean'],
             'billing_settings_placeholder' => ['nullable', 'string', 'max:5000'],
             'staff_permission_defaults' => ['nullable', 'array'],
             'staff_permission_defaults.*' => ['string', 'in:view_billing,collect_payment,edit_custom_fee,manage_attendance,manage_members,manage_trainers,send_announcements,view_reports,manage_staff'],

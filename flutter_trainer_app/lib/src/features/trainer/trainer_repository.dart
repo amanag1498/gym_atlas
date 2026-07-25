@@ -158,10 +158,10 @@ class TrainerRepository {
       );
   Future<Map<String, dynamic>> fetchNotifications() async {
     try {
-      return await _client.get('/trainer/notifications');
+      return await _client.get('/notifications');
     } on DioException catch (error) {
       if (error.response?.statusCode == 404) {
-        return _client.get('/notifications');
+        return _client.get('/trainer/notifications');
       }
       rethrow;
     }
@@ -335,10 +335,10 @@ class TrainerRepository {
       _client.delete('/trainer/workout-plans/$planId');
   Future<Map<String, dynamic>> markNotificationRead(int notificationId) async {
     try {
-      return await _client.post('/trainer/notifications/$notificationId/read');
+      return await _client.post('/notifications/$notificationId/read');
     } on DioException catch (error) {
       if (error.response?.statusCode == 404) {
-        return _client.post('/notifications/$notificationId/read');
+        return _client.post('/trainer/notifications/$notificationId/read');
       }
       rethrow;
     }

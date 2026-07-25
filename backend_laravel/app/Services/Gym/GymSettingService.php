@@ -65,6 +65,7 @@ class GymSettingService
             'attendance_duplicate_checkin_rule' => (bool) $gym->prevent_duplicate_same_day_checkins,
             'billing_settings_placeholder' => null,
             'staff_permission_defaults' => [],
+            'transactional_email_enabled' => true,
         ];
     }
 }

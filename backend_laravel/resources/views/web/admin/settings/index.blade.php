@@ -68,6 +68,11 @@
                         @error('default_commission_percentage') <div class="mt-2 text-sm text-rose-600">{{ $message }}</div> @enderror
                     </div>
 
+                    <label class="md:col-span-2 xl:col-span-6 panel-card-muted flex items-start justify-between gap-4 px-4 py-4">
+                        <span><span class="block font-semibold text-slate-950">Enable transactional email globally</span><span class="mt-1 block text-sm text-slate-500">Master switch for invitations, trial updates, receipts, and automated reminders. Gym-level switches can further disable delivery.</span></span>
+                        <span><input type="hidden" name="transactional_email_enabled" value="0"><input type="checkbox" name="transactional_email_enabled" value="1" class="mt-1 h-5 w-5 rounded border-slate-300 text-teal-600" @checked(old('transactional_email_enabled', $settings['transactional_email_enabled'] ?? true))></span>
+                    </label>
+
                     <div class="md:col-span-2 xl:col-span-2">
                         <label class="panel-label" for="promoted_listing_price">Promoted Listing Price</label>
                         <input id="promoted_listing_price" name="promoted_listing_price" value="{{ old('promoted_listing_price', $settings['promoted_listing_price'] ?? '') }}" class="panel-input">
@@ -88,6 +93,10 @@
             </x-premium-card>
 
             <div class="space-y-6">
+                <x-premium-card class="p-5">
+                    <h3 class="panel-section-title">Recent email delivery</h3>
+                    <div class="mt-4 space-y-2 text-sm">@forelse($recentEmailDeliveries as $delivery)<div class="panel-card-muted px-3 py-2"><div class="font-semibold text-slate-950">{{ $delivery->subject }}</div><div class="text-slate-500">{{ $delivery->recipient_email }} · {{ $delivery->gym?->name ?? 'Platform' }} · {{ $delivery->status }}</div></div>@empty<div class="text-slate-500">No transactional email has been recorded yet.</div>@endforelse</div>
+                </x-premium-card>
                 <x-premium-card class="p-5">
                     <h3 class="panel-section-title">Support preview</h3>
                     <div class="mt-4 space-y-3">

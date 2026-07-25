@@ -13,6 +13,7 @@ use App\Services\Users\ManagedUserService;
 use App\Services\Audit\AuditLogService;
 use App\Services\Authorization\ScopeResolver;
 use App\Services\Notification\NotificationService;
+use App\Services\Notification\TransactionalEmailService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -28,6 +29,7 @@ class TrialRequestService
         private readonly NotificationService $notificationService,
         private readonly AuditLogService $auditLogService,
         private readonly ManagedUserService $managedUserService,
+        private readonly TransactionalEmailService $transactionalEmailService,
     ) {
     }
 
@@ -72,7 +74,7 @@ class TrialRequestService
 
         return DB::transaction(function () use ($data, $actor, $request, $gym, $branch): TrialRequest {
             $requestType = in_array(($data['request_type'] ?? 'trial'), ['trial', 'contact'], true)
-                ? $data['request_type']
+                ? ($data['request_type'] ?? 'trial')
                 : 'trial';
 
             $trialRequest = TrialRequest::query()->create([
@@ -100,6 +102,19 @@ class TrialRequestService
                     branchId: $branch?->id,
                     data: ['trial_request_id' => $trialRequest->id],
                 );
+                DB::afterCommit(fn () => $this->transactionalEmailService->send(
+                    $gym->owner,
+                    'New trial request — '.$gym->name,
+                    'A new '.$requestType.' request needs your attention.',
+                    array_filter([
+                        'Name: '.$trialRequest->name,
+                        $trialRequest->phone ? 'Phone: '.$trialRequest->phone : null,
+                        $trialRequest->email ? 'Email: '.$trialRequest->email : null,
+                        'Preferred date: '.Carbon::parse($trialRequest->preferred_date)->format('d M Y'),
+                    ]),
+                    $gym->id,
+                    'trial_request_owner_alert',
+                ));
             }
 
             if ($actor) {
@@ -113,6 +128,19 @@ class TrialRequestService
                     data: ['trial_request_id' => $trialRequest->id],
                 );
             }
+
+            DB::afterCommit(fn () => $this->transactionalEmailService->sendTo(
+                $trialRequest->email,
+                'Trial request received — '.$gym->name,
+                'We have received your '.$requestType.' request.',
+                array_filter([
+                    'Gym: '.$gym->name,
+                    $branch ? 'Branch: '.$branch->name : null,
+                    'Preferred date: '.Carbon::parse($trialRequest->preferred_date)->format('d M Y'),
+                ]),
+                $gym->id,
+                'trial_request_confirmation',
+            ));
 
             $this->auditLogService->log(
                 event: 'trial_request.created',
@@ -255,6 +283,17 @@ class TrialRequestService
                         'status' => $trialRequest->status,
                     ],
                 );
+            }
+
+            if (array_key_exists('status', $data)) {
+                DB::afterCommit(fn () => $this->transactionalEmailService->sendTo(
+                    $trialRequest->email,
+                    'Trial request update — '.$trialRequest->gym->name,
+                    'Your trial request is now '.str_replace('_', ' ', $trialRequest->status).'.',
+                    ['Gym: '.$trialRequest->gym->name],
+                    $trialRequest->gym_id,
+                    'trial_request_status_update',
+                ));
             }
 
             if (! empty($data['assigned_trainer_id']) && $trialRequest->assignedTrainer) {

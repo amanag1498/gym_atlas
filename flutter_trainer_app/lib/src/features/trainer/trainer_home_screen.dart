@@ -132,8 +132,31 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     });
 
     try {
+      final contextResponse = await _repository.fetchContext();
+      final contextData = _map(contextResponse['data']);
+      final hasTrainerProfile = _map(contextData['trainer_profile']).isNotEmpty;
+
+      if (!hasTrainerProfile) {
+        final notificationsResponse = await _repository.fetchNotifications();
+        if (!mounted) {
+          return;
+        }
+        _contextData = _normalizeTrainerContext(contextData);
+        _notifications = _mapList(notificationsResponse['data']);
+        _members = const [];
+        _todayClients = const [];
+        _followUps = const [];
+        _templates = const [];
+        _plans = const [];
+        _trialRequests = const [];
+        _exercises = const [];
+        _chatConversations = const [];
+        _tasks = const {};
+        _chatError = null;
+        return;
+      }
+
       final results = await Future.wait([
-        _repository.fetchContext(),
         _repository.fetchAssignedMembers(),
         _repository.fetchTodayClients(),
         _repository.fetchWorkoutTemplates(),
@@ -174,14 +197,14 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       if (!mounted) {
         return;
       }
-      _contextData = _normalizeTrainerContext(_map(results[0]['data']));
-      _members = _mapList(results[1]['data']);
-      _todayClients = _mapList(results[2]['data']);
-      _templates = _mapList(results[3]['data']);
-      _plans = _mapList(results[4]['data']);
-      _notifications = _mapList(results[5]['data']);
-      _exercises = _mapList(results[6]['data']);
-      _trialRequests = _mapList(results[7]['data']);
+      _contextData = _normalizeTrainerContext(contextData);
+      _members = _mapList(results[0]['data']);
+      _todayClients = _mapList(results[1]['data']);
+      _templates = _mapList(results[2]['data']);
+      _plans = _mapList(results[3]['data']);
+      _notifications = _mapList(results[4]['data']);
+      _exercises = _mapList(results[5]['data']);
+      _trialRequests = _mapList(results[6]['data']);
       _tasks = tasks;
       _followUps = followUps;
       _chatConversations = chatConversations;
@@ -235,6 +258,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     );
     final onboardingCompleted =
         (contextUser['trainer_onboarding_completed'] as bool?) ?? false;
+    final hasTrainerProfile = _map(_contextData['trainer_profile']).isNotEmpty;
 
     final pages = <Widget>[
       _DashboardPage(
@@ -357,6 +381,30 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                 message: _error!,
                 onRetry: _load,
               )
+            : !hasTrainerProfile
+            ? KeyedSubtree(
+                key: const ValueKey('trainer-gym-invitation'),
+                child: _NotificationPage(
+                  notifications: _notifications,
+                  trialRequests: const [],
+                  members: const [],
+                  onRefresh: _load,
+                  onMarkRead: (notificationId) async {
+                    await _repository.markNotificationRead(notificationId);
+                    await _load();
+                  },
+                  onMarkAllRead: () async {
+                    await _repository.markAllNotificationsRead();
+                    await _load();
+                  },
+                  onUpdateTrial: (_, __) async {},
+                  onCreateAnnouncement: (_) async {},
+                  onRespondGymInvitation: (id, decision) async {
+                    await _repository.respondToGymInvitation(id, decision);
+                    await _load();
+                  },
+                ),
+              )
             : !onboardingCompleted
             ? KeyedSubtree(
                 key: const ValueKey('trainer-onboarding'),
@@ -376,7 +424,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                 child: pages[_index],
               ),
       ),
-      bottomNavigationBar: onboardingCompleted
+      bottomNavigationBar: onboardingCompleted && hasTrainerProfile
           ? _TrainerBottomNav(
               currentIndex: _index,
               onSelect: (value) => setState(() => _index = value),

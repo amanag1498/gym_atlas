@@ -18,6 +18,7 @@ class ReminderService
 {
     public function __construct(
         private readonly NotificationService $notificationService,
+        private readonly TransactionalEmailService $transactionalEmailService,
     ) {
     }
 
@@ -149,6 +150,18 @@ class ReminderService
                 'status' => 'sent',
                 'sent_at' => now(),
             ])->save();
+
+            $this->transactionalEmailService->send(
+                $reminder->user,
+                $reminder->title,
+                $reminder->body,
+                array_filter([
+                    $reminder->payload['due_amount'] ?? null ? 'Due amount: '.number_format((float) $reminder->payload['due_amount'], 2) : null,
+                    $reminder->payload['due_date'] ?? null ? 'Due date: '.$reminder->payload['due_date'] : null,
+                    $reminder->payload['expiry_date'] ?? null ? 'Expiry date: '.$reminder->payload['expiry_date'] : null,
+                ]),
+                $reminder->gym_id,
+            );
 
             $processed->push([
                 'reminder' => $reminder,

@@ -58,6 +58,7 @@ class PlatformSettingService
             'featured_listing_price' => null,
             'app_banners_placeholder' => null,
             'feature_flags_placeholder' => null,
+            'transactional_email_enabled' => true,
         ];
     }
 }

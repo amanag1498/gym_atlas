@@ -11,9 +11,9 @@ use App\Services\Billing\BillingAccessService;
 use App\Services\Billing\MemberMembershipLifecycleService;
 use App\Services\Billing\MembershipEnrollmentService;
 use App\Services\Notification\ReminderService;
+use App\Services\Notification\TransactionalEmailService;
 use App\Services\Users\ManagedUserService;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -26,6 +26,7 @@ class MemberEmailInvitationService
         private readonly MemberMembershipLifecycleService $membershipLifecycleService,
         private readonly BillingAccessService $billingAccessService,
         private readonly ReminderService $reminderService,
+        private readonly TransactionalEmailService $transactionalEmailService,
     ) {}
 
     /** @param array<string, mixed> $payload */
@@ -34,6 +35,9 @@ class MemberEmailInvitationService
         $email = strtolower(trim((string) $payload['email']));
         if (User::query()->where('email', $email)->exists()) {
             throw ValidationException::withMessages(['email' => ['This email already belongs to an app account. Select that account so it can approve in the app.']]);
+        }
+        if (! $this->transactionalEmailService->isEnabled($gym->id)) {
+            throw ValidationException::withMessages(['email' => ['Transactional email is disabled for this gym. Enable it in Gym Settings before sending an enrollment invitation.']]);
         }
 
         MemberEmailInvitation::query()->where('gym_id', $gym->id)->where('invited_email', $email)->where('status', 'pending')->update(['status' => 'superseded']);
@@ -45,7 +49,13 @@ class MemberEmailInvitationService
         ]);
         $invitation->load('gym');
         $reviewUrl = URL::temporarySignedRoute('member-email-invitations.review', $invitation->expires_at, ['invitation' => $invitation->id, 'token' => $invitation->token]);
-        Mail::to($invitation->invited_email)->send(new MemberEnrollmentInvitationMail($invitation, $reviewUrl));
+        $this->transactionalEmailService->sendMailableTo(
+            $invitation->invited_email,
+            new MemberEnrollmentInvitationMail($invitation, $reviewUrl),
+            'Approve your gym enrollment for '.$invitation->gym->name,
+            $gym->id,
+            'member_enrollment_invitation',
+        );
 
         return $invitation;
     }
@@ -66,6 +76,14 @@ class MemberEmailInvitationService
                 $this->reminderService->syncMembershipReminders($membership->fresh(['membershipPlan']));
             }
             $invitation->forceFill(['status' => 'accepted', 'responded_at' => now()])->save();
+            DB::afterCommit(fn () => $this->transactionalEmailService->send(
+                $user,
+                'Gym enrollment confirmed — '.$invitation->gym->name,
+                'Your enrollment has been approved. Welcome to '.$invitation->gym->name.'.',
+                array_filter([$invitation->branch ? 'Branch: '.$invitation->branch->name : null]),
+                $invitation->gym_id,
+                'enrollment_confirmation',
+            ));
             return $invitation;
         });
     }

@@ -42,6 +42,11 @@
                             >
                         </label>
 
+                        <label for="transactional_email_enabled" class="panel-card-muted flex cursor-pointer items-start justify-between gap-4 px-4 py-4">
+                            <div><div class="font-semibold text-slate-950">Send transactional email to members</div><p class="mt-1 text-sm text-slate-500">Controls invitations, trial updates, payment receipts, and scheduled membership reminders for this gym.</p></div>
+                            <span><input type="hidden" name="transactional_email_enabled" value="0"><input id="transactional_email_enabled" type="checkbox" name="transactional_email_enabled" value="1" class="mt-1 h-5 w-5 rounded border-slate-300 text-teal-600" @checked(old('transactional_email_enabled', $settings['transactional_email_enabled'] ?? true))></span>
+                        </label>
+
                         <div>
                             <label class="panel-label">Staff permission defaults</label>
                             <div class="grid gap-3 md:grid-cols-2">
@@ -95,6 +100,12 @@
             </div>
 
             <div class="space-y-6">
+                <x-premium-card class="p-5">
+                    <h3 class="panel-section-title">Recent email delivery</h3>
+                    <p class="panel-section-copy">Delivery history for this gym. Failed sends include their error in the server log.</p>
+                    <div class="mt-4 space-y-2 text-sm">@forelse($recentEmailDeliveries as $delivery)<div class="panel-card-muted px-3 py-2"><div class="font-semibold text-slate-950">{{ $delivery->subject }}</div><div class="text-slate-500">{{ $delivery->recipient_email }} · {{ $delivery->status }} · {{ $delivery->created_at?->diffForHumans() }}</div></div>@empty<div class="text-slate-500">No transactional email has been recorded yet.</div>@endforelse</div>
+                </x-premium-card>
+
                 <x-premium-card class="p-5">
                     <h3 class="panel-section-title">Billing Operations Notes</h3>
                     <p class="panel-section-copy">Store internal collection rules, settlement instructions, and branch-specific payment process notes.</p>

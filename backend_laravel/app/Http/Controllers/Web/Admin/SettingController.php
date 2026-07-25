@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Web\Platform\UpdatePlatformSettingsRequest;
 use App\Models\PlatformSetting;
+use App\Models\EmailDelivery;
 use App\Services\Audit\AuditLogService;
 use App\Services\Platform\PlatformSettingService;
 use Illuminate\Http\RedirectResponse;
@@ -25,6 +26,7 @@ class SettingController extends Controller
             'breadcrumbs' => ['Platform', 'Settings'],
             'settings' => $this->platformSettingService->all(),
             'settingsCount' => PlatformSetting::query()->count(),
+            'recentEmailDeliveries' => EmailDelivery::query()->with('gym')->latest()->take(12)->get(),
         ]);
     }
 

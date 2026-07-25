@@ -7,6 +7,7 @@ use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Web\Gym\UpdateGymSettingsRequest;
 use App\Models\NotificationPreference;
+use App\Models\EmailDelivery;
 use App\Services\Audit\AuditLogService;
 use App\Services\Gym\GymSettingService;
 use App\Services\Notification\NotificationPreferenceCatalogService;
@@ -41,6 +42,7 @@ class SettingController extends Controller
             'settings' => $this->gymSettingService->all($gym),
             'notificationPreferences' => $this->notificationPreferenceCatalogService->forUser($request->user()),
             'staffPermissionOptions' => $this->staffPermissionOptions(),
+            'recentEmailDeliveries' => EmailDelivery::query()->where('gym_id', $gym->id)->latest()->take(12)->get(),
         ]);
     }
 
