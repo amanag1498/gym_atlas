@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -43,5 +44,14 @@ class DietPlan extends Model
     public function meals(): HasMany
     {
         return $this->hasMany(DietPlanMeal::class)->orderBy('sort_order');
+    }
+
+    public function scopeAvailableOn(Builder $query, mixed $date = null): Builder
+    {
+        $date ??= today()->toDateString();
+
+        return $query->where('status', 'active')
+            ->where(fn (Builder $builder) => $builder->whereNull('starts_on')->orWhereDate('starts_on', '<=', $date))
+            ->where(fn (Builder $builder) => $builder->whereNull('ends_on')->orWhereDate('ends_on', '>=', $date));
     }
 }
