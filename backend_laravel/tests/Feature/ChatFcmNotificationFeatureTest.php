@@ -380,6 +380,60 @@ class ChatFcmNotificationFeatureTest extends TestCase
         Http::assertSentCount(0);
     }
 
+    public function test_chat_terms_reporting_and_blocking_are_enforced(): void
+    {
+        [$trainer, $member] = $this->assignedTrainerPair();
+
+        $trainer->forceFill(['accepted_chat_terms_at' => null])->save();
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/chat/messages', [
+                'recipient_id' => $member->id,
+                'message' => 'Not accepted yet.',
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/chat/safety/terms')
+            ->assertOk()
+            ->assertJsonPath('data.terms_accepted', true);
+
+        $this->actingAs($member, 'sanctum')
+            ->postJson('/api/chat/safety/report', [
+                'reported_user_id' => $trainer->id,
+                'reason' => 'safety_concern',
+                'details' => 'Please review this conversation.',
+            ])
+            ->assertCreated();
+        $this->assertDatabaseHas('chat_safety_actions', [
+            'actor_id' => $member->id,
+            'target_id' => $trainer->id,
+            'type' => 'report',
+            'reason' => 'safety_concern',
+        ]);
+
+        $this->actingAs($member, 'sanctum')
+            ->postJson('/api/chat/safety/block', [
+                'blocked_user_id' => $trainer->id,
+            ])
+            ->assertOk();
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/chat/messages', [
+                'recipient_id' => $member->id,
+                'message' => 'Blocked message.',
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($member, 'sanctum')
+            ->deleteJson("/api/chat/safety/block/{$trainer->id}")
+            ->assertOk();
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/chat/messages', [
+                'recipient_id' => $member->id,
+                'message' => 'Messaging restored.',
+            ])
+            ->assertCreated();
+    }
+
     private function enableFcm(): void
     {
         config()->set('services.firebase.project_id', 'gym-atlas-test');

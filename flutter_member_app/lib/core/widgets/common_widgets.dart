@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
 import '../theme/app_spacing.dart';
+import '../../src/core/config.dart';
 import 'animated_page_wrapper.dart';
 import 'empty_state.dart';
 import 'error_state.dart';
@@ -32,11 +33,7 @@ String? _resolveNetworkUrl(String? imageUrl) {
     return raw;
   }
 
-  const apiBaseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://127.0.0.1:8000/api',
-  );
-  final apiUri = Uri.parse(apiBaseUrl);
+  final apiUri = Uri.parse(MemberConfig.apiBaseUrl);
   final normalizedPath = raw.startsWith('/') ? raw : '/$raw';
 
   return Uri(

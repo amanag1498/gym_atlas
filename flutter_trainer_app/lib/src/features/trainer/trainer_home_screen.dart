@@ -24,12 +24,16 @@ import 'trainer_tasks_screen.dart';
 class TrainerHomeScreen extends StatefulWidget {
   const TrainerHomeScreen({
     super.key,
+    this.initialIndex = 0,
     this.initialChatMemberId,
     this.chatLaunchVersion = 0,
+    this.storePreviewData,
   });
 
+  final int initialIndex;
   final int? initialChatMemberId;
   final int chatLaunchVersion;
+  final Map<String, dynamic>? storePreviewData;
 
   @override
   State<TrainerHomeScreen> createState() => _TrainerHomeScreenState();
@@ -39,7 +43,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
   late TrainerRepository _repository;
   final TrainerSocketService _socketService = TrainerSocketService();
   io.Socket? _socket;
-  int _index = 0;
+  late int _index;
   bool _loading = true;
   String? _error;
   Map<String, dynamic> _contextData = const {};
@@ -60,9 +64,30 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
   @override
   void initState() {
     super.initState();
+    _index = widget.initialIndex;
     final session = context.read<TrainerSessionController>();
     _repository = TrainerRepository(session.client);
-    scheduleMicrotask(_bootstrap);
+    final previewData = widget.storePreviewData;
+    if (previewData == null) {
+      scheduleMicrotask(_bootstrap);
+    } else {
+      _applyStorePreviewData(previewData);
+    }
+  }
+
+  void _applyStorePreviewData(Map<String, dynamic> previewData) {
+    _contextData = _map(previewData['context']);
+    _tasks = _map(previewData['tasks']);
+    _members = _mapList(previewData['members']);
+    _todayClients = _mapList(previewData['today_clients']);
+    _followUps = _mapList(previewData['follow_ups']);
+    _templates = _mapList(previewData['templates']);
+    _plans = _mapList(previewData['plans']);
+    _notifications = _mapList(previewData['notifications']);
+    _trialRequests = _mapList(previewData['trial_requests']);
+    _exercises = _mapList(previewData['exercises']);
+    _chatConversations = _mapList(previewData['chat_conversations']);
+    _loading = false;
   }
 
   @override
@@ -7753,6 +7778,10 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
   bool _loadingOlder = false;
   bool _hasOlderMessages = false;
   bool _sending = false;
+  bool _termsAccepted = false;
+  bool _blockedByMe = false;
+  bool _blockedMe = false;
+  bool _safetyBusy = false;
   String? _error;
   int? _nextBeforeId;
   dynamic _chatMessageHandler;
@@ -7833,6 +7862,10 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
       final response = await widget.repository.fetchChatMessages(
         widget.memberId,
       );
+      final safetyResponse = await widget.repository.fetchChatSafety(
+        widget.memberId,
+      );
+      final safety = _map(safetyResponse['data']);
       final messages =
           _mapList(response['data'])
               .map(_normalizeThreadMessage)
@@ -7847,6 +7880,9 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
             ..clear()
             ..addAll(messages);
           _applyCursorMeta(response['meta']);
+          _termsAccepted = safety['terms_accepted'] == true;
+          _blockedByMe = safety['blocked_by_me'] == true;
+          _blockedMe = safety['blocked_me'] == true;
         });
       }
       unawaited(widget.repository.markChatRead(widget.memberId));
@@ -7904,7 +7940,11 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
 
   Future<void> _send() async {
     final body = _controller.text.trim();
-    if (body.isEmpty || _sending) {
+    if (body.isEmpty ||
+        _sending ||
+        !_termsAccepted ||
+        _blockedByMe ||
+        _blockedMe) {
       return;
     }
     final clientMessageId =
@@ -7954,6 +7994,105 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
       if (mounted) {
         setState(() => _sending = false);
       }
+    }
+  }
+
+  Future<void> _acceptTerms() async {
+    if (_safetyBusy) return;
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Chat terms'),
+        content: const Text(
+          'Use chat only for respectful fitness coaching. Harassment, threats, '
+          'sexual or exploitative content, spam, impersonation, unlawful '
+          'content, and privacy violations are prohibited. Reports may be '
+          'reviewed and accounts may be restricted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('I agree'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted) return;
+    setState(() => _safetyBusy = true);
+    try {
+      await widget.repository.acceptChatTerms();
+      if (mounted) setState(() => _termsAccepted = true);
+    } catch (exception) {
+      if (mounted) setState(() => _error = exception.toString());
+    } finally {
+      if (mounted) setState(() => _safetyBusy = false);
+    }
+  }
+
+  Future<void> _reportConversation() async {
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Report this conversation'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(dialogContext, 'harassment'),
+            child: const Text('Harassment or bullying'),
+          ),
+          SimpleDialogOption(
+            onPressed: () =>
+                Navigator.pop(dialogContext, 'inappropriate_content'),
+            child: const Text('Inappropriate content'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(dialogContext, 'spam'),
+            child: const Text('Spam'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(dialogContext, 'safety_concern'),
+            child: const Text('Safety concern'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(dialogContext, 'other'),
+            child: const Text('Other'),
+          ),
+        ],
+      ),
+    );
+    if (reason == null || !mounted) return;
+    setState(() => _safetyBusy = true);
+    try {
+      await widget.repository.reportChatUser(widget.memberId, reason: reason);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Report submitted for review.')),
+        );
+      }
+    } catch (exception) {
+      if (mounted) setState(() => _error = exception.toString());
+    } finally {
+      if (mounted) setState(() => _safetyBusy = false);
+    }
+  }
+
+  Future<void> _toggleBlock() async {
+    if (_safetyBusy) return;
+    setState(() => _safetyBusy = true);
+    try {
+      if (_blockedByMe) {
+        await widget.repository.unblockChatUser(widget.memberId);
+      } else {
+        await widget.repository.blockChatUser(widget.memberId);
+      }
+      if (mounted) setState(() => _blockedByMe = !_blockedByMe);
+    } catch (exception) {
+      if (mounted) setState(() => _error = exception.toString());
+    } finally {
+      if (mounted) setState(() => _safetyBusy = false);
     }
   }
 
@@ -8053,6 +8192,15 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
               ),
             ),
           ),
+          _TrainerChatSafetyBar(
+            termsAccepted: _termsAccepted,
+            blockedByMe: _blockedByMe,
+            blockedMe: _blockedMe,
+            busy: _safetyBusy,
+            onAcceptTerms: _acceptTerms,
+            onReport: _reportConversation,
+            onToggleBlock: _toggleBlock,
+          ),
           if (_error != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
@@ -8117,47 +8265,116 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
                     },
                   ),
           ),
-          SafeArea(
-            top: false,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.94),
-                border: const Border(top: BorderSide(color: AppColors.stroke)),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      minLines: 1,
-                      maxLines: 4,
-                      enabled: !_sending,
-                      decoration: const InputDecoration(
-                        hintText: 'Message this member',
-                        prefixIcon: Icon(Icons.lock_outline_rounded),
+          if (_termsAccepted && !_blockedByMe && !_blockedMe)
+            SafeArea(
+              top: false,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.94),
+                  border: const Border(
+                    top: BorderSide(color: AppColors.stroke),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        minLines: 1,
+                        maxLines: 4,
+                        enabled: !_sending,
+                        decoration: const InputDecoration(
+                          hintText: 'Message this member',
+                          prefixIcon: Icon(Icons.lock_outline_rounded),
+                        ),
+                        onSubmitted: (_) => _send(),
                       ),
-                      onSubmitted: (_) => _send(),
+                    ),
+                    const SizedBox(width: 12),
+                    FilledButton(
+                      onPressed: _sending ? null : _send,
+                      style: FilledButton.styleFrom(
+                        shape: const CircleBorder(),
+                        padding: const EdgeInsets.all(16),
+                      ),
+                      child: Icon(
+                        _sending
+                            ? Icons.hourglass_top_rounded
+                            : Icons.send_rounded,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrainerChatSafetyBar extends StatelessWidget {
+  const _TrainerChatSafetyBar({
+    required this.termsAccepted,
+    required this.blockedByMe,
+    required this.blockedMe,
+    required this.busy,
+    required this.onAcceptTerms,
+    required this.onReport,
+    required this.onToggleBlock,
+  });
+
+  final bool termsAccepted;
+  final bool blockedByMe;
+  final bool blockedMe;
+  final bool busy;
+  final VoidCallback onAcceptTerms;
+  final VoidCallback onReport;
+  final VoidCallback onToggleBlock;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
+      child: PremiumCard(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: !termsAccepted
+            ? Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Accept the Terms and respectful-use rules before messaging.',
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  FilledButton(
-                    onPressed: _sending ? null : _send,
-                    style: FilledButton.styleFrom(
-                      shape: const CircleBorder(),
-                      padding: const EdgeInsets.all(16),
+                  TextButton(
+                    onPressed: busy ? null : onAcceptTerms,
+                    child: const Text('Accept'),
+                  ),
+                ],
+              )
+            : Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      blockedByMe
+                          ? 'You blocked this member.'
+                          : blockedMe
+                          ? 'Messaging is unavailable.'
+                          : 'Private coaching chat',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
-                    child: Icon(
-                      _sending
-                          ? Icons.hourglass_top_rounded
-                          : Icons.send_rounded,
-                    ),
+                  ),
+                  TextButton(
+                    onPressed: busy ? null : onReport,
+                    child: const Text('Report'),
+                  ),
+                  TextButton(
+                    onPressed: busy ? null : onToggleBlock,
+                    child: Text(blockedByMe ? 'Unblock' : 'Block'),
                   ),
                 ],
               ),
-            ),
-          ),
-        ],
       ),
     );
   }

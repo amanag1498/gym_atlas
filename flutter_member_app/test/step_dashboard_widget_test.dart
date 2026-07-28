@@ -4,9 +4,7 @@ import 'package:flutter_member_app/src/features/member/widgets/step_dashboard_wi
 
 void main() {
   Widget buildHarness(Widget child) {
-    return MaterialApp(
-      home: Scaffold(body: child),
-    );
+    return MaterialApp(home: Scaffold(body: child));
   }
 
   testWidgets('renders granted step metrics', (tester) async {
@@ -32,10 +30,10 @@ void main() {
 
     expect(find.text("Today's Steps"), findsOneWidget);
     expect(find.text('8,420'), findsOneWidget);
-    expect(find.text('Goal 10,000 steps'), findsOneWidget);
+    expect(find.text('84% of 10,000'), findsOneWidget);
     expect(find.text('6.4 km'), findsOneWidget);
     expect(find.text('332'), findsOneWidget);
-    expect(find.text('5 days'), findsOneWidget);
+    expect(find.text('5 d'), findsOneWidget);
   });
 
   testWidgets('renders permission CTA when access is denied', (tester) async {
@@ -51,7 +49,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Step permission is currently denied'), findsOneWidget);
+    expect(find.text('Step access is denied'), findsOneWidget);
     expect(find.text('Allow Steps Access'), findsOneWidget);
   });
 }

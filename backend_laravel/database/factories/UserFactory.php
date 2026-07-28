@@ -33,6 +33,7 @@ class UserFactory extends Factory
             'avatar' => fake()->imageUrl(256, 256),
             'auth_provider' => 'google',
             'last_login_at' => now(),
+            'accepted_chat_terms_at' => now(),
             'remember_token' => Str::random(10),
         ];
     }

@@ -25,7 +25,7 @@ dependencies:
   intl: ^0.20.2
   socket_io_client: ^3.1.2
   cached_network_image: ^3.4.1
-  google_fonts: ^6.3.2
+  url_launcher: ^6.3.2
   gym_flutter_core:
     path: ../gym_flutter_core
 
@@ -36,3 +36,14 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: Outfit
+      fonts:
+        - asset: assets/fonts/Outfit-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Outfit-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Outfit-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Outfit-Bold.ttf
+          weight: 700

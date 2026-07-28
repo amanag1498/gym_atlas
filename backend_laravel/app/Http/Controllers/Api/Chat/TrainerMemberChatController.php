@@ -9,6 +9,7 @@ use App\Http\Resources\Chat\ChatConversationResource;
 use App\Http\Resources\Chat\ChatMessageResource;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
+use App\Models\ChatSafetyAction;
 use App\Models\MemberProfile;
 use App\Models\Notification;
 use App\Models\TrainerProfile;
@@ -132,6 +133,7 @@ class TrainerMemberChatController extends Controller
         [$trainerId, $memberId] = $this->resolvePair($request, (int) $validated['recipient_id']);
         $senderId = $request->user()->id;
         $recipientId = (int) $validated['recipient_id'];
+        $this->assertChatSafetyAllowsSend($request->user(), $recipientId);
 
         $created = false;
         $message = DB::transaction(function () use ($trainerId, $memberId, $senderId, $recipientId, $validated, &$created): ChatMessage {
@@ -183,6 +185,93 @@ class TrainerMemberChatController extends Controller
         }
 
         return $this->success(ChatMessageResource::make($message), 'Message sent successfully.', 201);
+    }
+
+    public function safetyStatus(Request $request)
+    {
+        $validated = $request->validate([
+            'other_user_id' => ['required', 'integer', 'exists:users,id'],
+        ]);
+        $otherUserId = (int) $validated['other_user_id'];
+        $this->resolvePair($request, $otherUserId);
+        $userId = (int) $request->user()->id;
+
+        return $this->success([
+            'terms_accepted' => $request->user()->accepted_chat_terms_at !== null,
+            'blocked_by_me' => $this->activeBlockExists($userId, $otherUserId),
+            'blocked_me' => $this->activeBlockExists($otherUserId, $userId),
+        ], 'Chat safety status fetched successfully.');
+    }
+
+    public function acceptSafetyTerms(Request $request)
+    {
+        $request->user()->forceFill(['accepted_chat_terms_at' => now()])->save();
+
+        return $this->success([
+            'terms_accepted' => true,
+        ], 'Chat terms accepted successfully.');
+    }
+
+    public function report(Request $request)
+    {
+        $validated = $request->validate([
+            'reported_user_id' => ['required', 'integer', 'exists:users,id'],
+            'message_id' => ['nullable', 'integer', 'exists:chat_messages,id'],
+            'reason' => ['required', 'string', 'in:harassment,inappropriate_content,spam,safety_concern,other'],
+            'details' => ['nullable', 'string', 'max:1000'],
+        ]);
+        $targetId = (int) $validated['reported_user_id'];
+        [$trainerId, $memberId] = $this->resolvePair($request, $targetId);
+
+        if (isset($validated['message_id'])) {
+            ChatMessage::query()
+                ->whereKey((int) $validated['message_id'])
+                ->where('trainer_id', $trainerId)
+                ->where('member_id', $memberId)
+                ->firstOrFail();
+        }
+
+        $report = ChatSafetyAction::query()->create([
+            'actor_id' => $request->user()->id,
+            'target_id' => $targetId,
+            'type' => 'report',
+            'chat_message_id' => $validated['message_id'] ?? null,
+            'reason' => $validated['reason'],
+            'details' => $validated['details'] ?? null,
+        ]);
+
+        return $this->success(['report_id' => $report->id], 'Report submitted successfully.', 201);
+    }
+
+    public function block(Request $request)
+    {
+        $validated = $request->validate([
+            'blocked_user_id' => ['required', 'integer', 'exists:users,id'],
+        ]);
+        $targetId = (int) $validated['blocked_user_id'];
+        $this->resolvePair($request, $targetId);
+
+        ChatSafetyAction::query()->updateOrCreate([
+            'actor_id' => $request->user()->id,
+            'target_id' => $targetId,
+            'type' => 'block',
+        ], [
+            'resolved_at' => null,
+        ]);
+
+        return $this->success(['blocked' => true], 'User blocked successfully.');
+    }
+
+    public function unblock(Request $request, User $user)
+    {
+        $this->resolvePair($request, (int) $user->id);
+        ChatSafetyAction::query()
+            ->where('actor_id', $request->user()->id)
+            ->where('target_id', $user->id)
+            ->where('type', 'block')
+            ->update(['resolved_at' => now()]);
+
+        return $this->success(['blocked' => false], 'User unblocked successfully.');
     }
 
     public function markRead(Request $request)
@@ -256,6 +345,8 @@ class TrainerMemberChatController extends Controller
             (int) $validated['sender_id'],
             (int) $validated['recipient_id'],
         );
+        $sender = User::query()->findOrFail((int) $validated['sender_id']);
+        $this->assertChatSafetyAllowsSend($sender, (int) $validated['recipient_id']);
         $validated['room'] = $canonicalRoom;
 
         $created = false;
@@ -547,6 +638,31 @@ class TrainerMemberChatController extends Controller
         }
 
         abort(403, 'This role cannot access trainer-member chat.');
+    }
+
+    private function assertChatSafetyAllowsSend(User $sender, int $recipientId): void
+    {
+        abort_if(
+            $sender->accepted_chat_terms_at === null,
+            403,
+            'Accept the chat terms before sending messages.'
+        );
+        abort_if(
+            $this->activeBlockExists((int) $sender->id, $recipientId)
+                || $this->activeBlockExists($recipientId, (int) $sender->id),
+            403,
+            'Messaging is unavailable because this conversation is blocked.'
+        );
+    }
+
+    private function activeBlockExists(int $actorId, int $targetId): bool
+    {
+        return ChatSafetyAction::query()
+            ->where('actor_id', $actorId)
+            ->where('target_id', $targetId)
+            ->where('type', 'block')
+            ->whereNull('resolved_at')
+            ->exists();
     }
 
     private function room(int $trainerId, int $memberId): string

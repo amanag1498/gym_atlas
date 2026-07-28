@@ -150,7 +150,7 @@ class _MemberAppState extends State<MemberApp> {
       ],
       child: MaterialApp.router(
         debugShowCheckedModeBanner: false,
-        title: 'Connected Gym Member',
+        title: 'Atlas Member',
         routerConfig: router,
         theme: AppTheme.build(),
       ),

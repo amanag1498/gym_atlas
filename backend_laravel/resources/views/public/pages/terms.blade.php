@@ -30,6 +30,9 @@
                             <p class="mb-0">Gyms are responsible for the accuracy of the information they choose to publish publicly, including pricing visibility, facility details, contact visibility, and trial availability.</p>
                             <p class="mb-0">Submitting a contact or trial request does not guarantee acceptance, conversion, or immediate onboarding; those decisions stay with the relevant gym and its operations team.</p>
                             <p class="mb-0">Use of the platform should stay lawful, accurate, and non-abusive across public discovery, contact forms, and authenticated fitness workflows.</p>
+                            <p class="mb-0"><strong>Messaging and user content.</strong> Member-trainer chat is for legitimate fitness coaching. Users must not send harassment, threats, hate speech, sexual or exploitative material, spam, impersonation, unlawful content, dangerous instructions, or content that violates another person's privacy or intellectual-property rights.</p>
+                            <p class="mb-0">Before sending chat content, users must accept these rules in the app. Users can report a conversation and block the other participant from the chat screen. Atlas may review reports, restrict messaging, retain evidence needed for safety, suspend accounts, and cooperate with lawful requests. Knowingly false or abusive reports are prohibited.</p>
+                            <p class="mb-0">Blocking stops new messages between the participants until the person who initiated the block removes it. Reported content is reviewed by authorized Atlas or gym personnel and appropriate action should be taken promptly.</p>
                             @if ($supportEmail)
                                 <p class="mb-0">Questions about these terms can be raised via <a href="mailto:{{ $supportEmail }}" class="atlas-link">{{ $supportEmail }}</a>.</p>
                             @endif

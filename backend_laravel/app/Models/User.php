@@ -33,6 +33,7 @@ class User extends Authenticatable
         'trainer_onboarding_completed',
         'trainer_onboarding_step',
         'last_login_at',
+        'accepted_chat_terms_at',
     ];
 
     protected $hidden = [
@@ -58,6 +59,7 @@ class User extends Authenticatable
             'trainer_onboarding_completed' => 'boolean',
             'trainer_onboarding_step' => 'integer',
             'last_login_at' => 'datetime',
+            'accepted_chat_terms_at' => 'datetime',
         ];
     }
 

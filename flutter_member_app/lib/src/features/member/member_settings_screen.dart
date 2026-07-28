@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -45,6 +46,9 @@ class MemberSettingsScreen extends StatelessWidget {
         ? '/privacy-policy'
         : '$webBase/privacy-policy';
     final termsUrl = webBase == null ? '/terms' : '$webBase/terms';
+    final deletionUrl = webBase == null
+        ? '/account-deletion?app=member'
+        : '$webBase/account-deletion?app=member';
     final user = session.user;
     final name = user?.name.trim().isNotEmpty == true ? user!.name : 'Member';
     final email = user?.email.trim().isNotEmpty == true
@@ -156,26 +160,28 @@ class MemberSettingsScreen extends StatelessWidget {
                     _SettingsRow(
                       icon: Icons.support_agent_rounded,
                       title: 'Contact Us',
-                      onPressed: () => _copyLink(
-                        context,
-                        contactUrl,
-                        'Contact page link copied.',
-                      ),
+                      onPressed: () =>
+                          _openLink(context, contactUrl, 'Contact page'),
                     ),
                     _SettingsRow(
                       icon: Icons.privacy_tip_outlined,
                       title: 'Privacy Policy',
-                      onPressed: () => _copyLink(
-                        context,
-                        privacyUrl,
-                        'Privacy policy link copied.',
-                      ),
+                      onPressed: () =>
+                          _openLink(context, privacyUrl, 'Privacy policy'),
                     ),
                     _SettingsRow(
                       icon: Icons.gavel_rounded,
                       title: 'Terms',
-                      onPressed: () =>
-                          _copyLink(context, termsUrl, 'Terms link copied.'),
+                      onPressed: () => _openLink(context, termsUrl, 'Terms'),
+                    ),
+                    _SettingsRow(
+                      icon: Icons.person_remove_outlined,
+                      title: 'Delete Account',
+                      onPressed: () => _openLink(
+                        context,
+                        deletionUrl,
+                        'Account deletion page',
+                      ),
                     ),
                   ],
                 ),
@@ -208,18 +214,26 @@ class MemberSettingsScreen extends StatelessWidget {
     }
   }
 
-  Future<void> _copyLink(
+  Future<void> _openLink(
     BuildContext context,
     String value,
-    String message,
+    String label,
   ) async {
+    final uri = Uri.tryParse(value);
+    final opened =
+        uri != null &&
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (opened || !context.mounted) {
+      return;
+    }
+
     await Clipboard.setData(ClipboardData(text: value));
     if (!context.mounted) {
       return;
     }
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ).showSnackBar(SnackBar(content: Text('$label link copied.')));
   }
 }
 

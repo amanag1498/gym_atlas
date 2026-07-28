@@ -40,9 +40,14 @@ Map<String, dynamic> _recordMap(dynamic value) {
 }
 
 class MemberHomeScreen extends StatefulWidget {
-  const MemberHomeScreen({super.key, this.initialIndex = 0});
+  const MemberHomeScreen({
+    super.key,
+    this.initialIndex = 0,
+    this.storePreviewData,
+  });
 
   final int initialIndex;
+  final Map<String, dynamic>? storePreviewData;
 
   @override
   State<MemberHomeScreen> createState() => _MemberHomeScreenState();
@@ -90,7 +95,41 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
     super.initState();
     _index = widget.initialIndex;
     WidgetsBinding.instance.addObserver(this);
-    scheduleMicrotask(_bootstrap);
+    final previewData = widget.storePreviewData;
+    if (previewData == null) {
+      scheduleMicrotask(_bootstrap);
+    } else {
+      _applyStorePreviewData(previewData);
+    }
+  }
+
+  void _applyStorePreviewData(Map<String, dynamic> previewData) {
+    List<Map<String, dynamic>> records(String key) {
+      return (previewData[key] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+
+    _contextData = Map<String, dynamic>.from(
+      previewData['context'] as Map? ?? const {},
+    );
+    _attendance = records('attendance');
+    _plans = records('plans');
+    _history = records('history');
+    _progressSummary = Map<String, dynamic>.from(
+      previewData['progress_summary'] as Map? ?? const {},
+    );
+    _logbookSummary = Map<String, dynamic>.from(
+      previewData['logbook_summary'] as Map? ?? const {},
+    );
+    _notifications = records('notifications');
+    _qrData = Map<String, dynamic>.from(
+      previewData['qr_data'] as Map? ?? const {},
+    );
+    _publicGyms = records('public_gyms');
+    _stepPermissionStatus = 'granted';
+    _loading = false;
   }
 
   @override
@@ -215,7 +254,9 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.resumed && _index == 0) {
+    if (widget.storePreviewData == null &&
+        state == AppLifecycleState.resumed &&
+        _index == 0) {
       unawaited(_handleDashboardFocus());
     }
   }
@@ -445,7 +486,11 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
     );
   }
 
-  Future<void> _openDietPlanScreen() => Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (context) => MemberDietPlanScreen(repository: _memberRepository)));
+  Future<void> _openDietPlanScreen() => Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      builder: (context) => MemberDietPlanScreen(repository: _memberRepository),
+    ),
+  );
 
   Future<void> _openWorkoutBookScreen() async {
     await Navigator.of(context).push<void>(
@@ -600,7 +645,10 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
               .length,
           onPressed: _openNotificationsScreen,
         ),
-        IconButton(onPressed: _openDietPlanScreen, icon: const Icon(Icons.restaurant_menu_rounded)),
+        IconButton(
+          onPressed: _openDietPlanScreen,
+          icon: const Icon(Icons.restaurant_menu_rounded),
+        ),
         IconButton(
           onPressed: _openSettingsScreen,
           icon: const Icon(Icons.settings_outlined),
@@ -2691,7 +2739,7 @@ class _DashboardActionFeaturedCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 18),
                     Text(
                       data.label,
                       maxLines: 2,

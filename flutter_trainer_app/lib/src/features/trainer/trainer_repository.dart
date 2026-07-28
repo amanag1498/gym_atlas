@@ -216,6 +216,35 @@ class TrainerRepository {
   Future<Map<String, dynamic>> markChatRead(int recipientId) =>
       _client.post('/chat/read', data: {'recipient_id': recipientId});
 
+  Future<Map<String, dynamic>> fetchChatSafety(int otherUserId) => _client.get(
+    '/chat/safety',
+    queryParameters: {'other_user_id': otherUserId},
+  );
+
+  Future<Map<String, dynamic>> acceptChatTerms() =>
+      _client.post('/chat/safety/terms');
+
+  Future<Map<String, dynamic>> reportChatUser(
+    int userId, {
+    required String reason,
+    String? details,
+    int? messageId,
+  }) => _client.post(
+    '/chat/safety/report',
+    data: {
+      'reported_user_id': userId,
+      'reason': reason,
+      if (details != null && details.isNotEmpty) 'details': details,
+      if (messageId != null) 'message_id': messageId,
+    },
+  );
+
+  Future<Map<String, dynamic>> blockChatUser(int userId) =>
+      _client.post('/chat/safety/block', data: {'blocked_user_id': userId});
+
+  Future<Map<String, dynamic>> unblockChatUser(int userId) =>
+      _client.delete('/chat/safety/block/$userId');
+
   Future<List<Map<String, dynamic>>> fetchNotificationPreferences() async {
     try {
       final response = await _client.get('/notification-preferences');

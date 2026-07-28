@@ -25,7 +25,6 @@ dependencies:
   geolocator: ^14.0.2
   url_launcher: ^6.3.2
   cached_network_image: ^3.4.1
-  google_fonts: ^6.3.2
   timelines_plus: ^2.0.0
   image_picker: ^1.1.2
   gym_flutter_core:
@@ -39,6 +38,16 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   fonts:
+    - family: Outfit
+      fonts:
+        - asset: assets/fonts/Outfit-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Outfit-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Outfit-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Outfit-Bold.ttf
+          weight: 700
     - family: TablerIcons
       fonts:
         - asset: ../backend_laravel/public/tailadmin/fonts/tabler/tabler-icons.ttf

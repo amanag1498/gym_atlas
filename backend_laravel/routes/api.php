@@ -108,6 +108,11 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('chat/messages', [TrainerMemberChatController::class, 'index']);
     Route::post('chat/messages', [TrainerMemberChatController::class, 'store'])->middleware('throttle:30,1');
     Route::post('chat/read', [TrainerMemberChatController::class, 'markRead'])->middleware('throttle:120,1');
+    Route::get('chat/safety', [TrainerMemberChatController::class, 'safetyStatus']);
+    Route::post('chat/safety/terms', [TrainerMemberChatController::class, 'acceptSafetyTerms']);
+    Route::post('chat/safety/report', [TrainerMemberChatController::class, 'report'])->middleware('throttle:10,1');
+    Route::post('chat/safety/block', [TrainerMemberChatController::class, 'block']);
+    Route::delete('chat/safety/block/{user}', [TrainerMemberChatController::class, 'unblock']);
 });
 
 Route::prefix('internal')

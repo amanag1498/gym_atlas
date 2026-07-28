@@ -88,7 +88,7 @@ class _TrainerAppState extends State<TrainerApp> {
       value: _sessionController,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'Connected Gym Trainer',
+        title: 'Atlas Trainer',
         theme: AppTheme.build(),
         home: Consumer<TrainerSessionController>(
           builder: (context, session, _) {

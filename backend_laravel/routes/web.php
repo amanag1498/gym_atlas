@@ -206,6 +206,7 @@ Route::post('/contact', function (StoreContactSubmissionRequest $request) {
     $redirectTo = (string) ($validated['redirect_to'] ?? '');
     $allowedRedirects = [
         route('public.contact', ['inquiry_type' => $validated['inquiry_type']]),
+        route('public.account-deletion'),
         route('public.for-gyms').'#lead-form',
         route('public.for-trainers').'#trainer-access',
     ];
@@ -224,6 +225,17 @@ Route::get('/privacy-policy', function (PlatformSettingService $platformSettingS
         'settings' => $platformSettingService->all(),
     ]);
 })->name('public.privacy-policy');
+
+Route::get('/account-deletion', function (Request $request, PlatformSettingService $platformSettingService) {
+    $appType = in_array($request->query('app'), ['member', 'trainer'], true)
+        ? (string) $request->query('app')
+        : 'account';
+
+    return view('public.pages.account-deletion', [
+        'appType' => $appType,
+        'settings' => $platformSettingService->all(),
+    ]);
+})->name('public.account-deletion');
 
 Route::get('/terms', function (PlatformSettingService $platformSettingService) {
     return view('public.pages.terms', [
