@@ -125,12 +125,32 @@
                 </div>
                 <div>
                     <label for="amount_paid" class="panel-label">Initial Payment</label>
-                    <input id="amount_paid" name="amount_paid" value="{{ old('amount_paid', 0) }}" class="panel-input">
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">For existing users, collect payment after they accept the invitation.</p>
+                    <input id="amount_paid" name="amount_paid" type="number" min="0" step="0.01" value="{{ old('amount_paid', 0) }}" class="panel-input">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Recorded in Payments when the member accepts enrollment.</p>
                 </div>
                 <div>
                     <label for="expiry_date" class="panel-label">Custom Expiry Date</label>
                     <input id="expiry_date" type="date" name="expiry_date" value="{{ old('expiry_date') }}" class="panel-input">
+                </div>
+                <div>
+                    <label for="initial_payment_mode" class="panel-label">Initial Payment Mode</label>
+                    <select id="initial_payment_mode" name="initial_payment_mode" class="panel-select">
+                        @foreach (['cash' => 'Cash', 'upi' => 'UPI', 'card' => 'Card', 'bank' => 'Bank'] as $value => $label)
+                            <option value="{{ $value }}" @selected(old('initial_payment_mode', 'cash') === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label for="paid_at" class="panel-label">Payment Date</label>
+                    <input id="paid_at" type="datetime-local" name="paid_at" value="{{ old('paid_at', now()->format('Y-m-d\TH:i')) }}" class="panel-input">
+                </div>
+                <div>
+                    <label for="external_reference" class="panel-label">Payment Reference</label>
+                    <input id="external_reference" name="external_reference" value="{{ old('external_reference') }}" class="panel-input" placeholder="UPI, bank, or receipt reference">
+                </div>
+                <div>
+                    <label for="payment_notes" class="panel-label">Payment Notes</label>
+                    <input id="payment_notes" name="payment_notes" value="{{ old('payment_notes') }}" class="panel-input" placeholder="Optional collection note">
                 </div>
 
                 <div class="md:col-span-2 rounded-2xl border border-white/80 bg-white/70 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/60">

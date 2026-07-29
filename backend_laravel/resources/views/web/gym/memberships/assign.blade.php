@@ -11,8 +11,8 @@
     <div class="space-y-6">
         <div class="grid gap-4 lg:grid-cols-4">
             <x-stat-card label="Member" :value="$member->name" :hint="$hasExistingMembership ? 'Prepare the next cycle or switch plan safely' : 'Assign membership in current gym scope'" tone="sky" />
-            <x-stat-card label="Current Gym" :value="$member->memberProfile?->gym?->name ?? 'Independent'" hint="Backend-controlled gym context" tone="emerald" />
-            <x-stat-card label="Branch" :value="$member->memberProfile?->branch?->name ?? 'Gym-wide'" hint="Billing and attendance scope" tone="violet" />
+            <x-stat-card label="Current Gym" :value="$memberProfile->gym?->name ?? 'Independent'" hint="Backend-controlled gym context" tone="emerald" />
+            <x-stat-card label="Branch" :value="$memberProfile->branch?->name ?? 'Gym-wide'" hint="Billing and attendance scope" tone="violet" />
             <x-stat-card :label="$hasExistingMembership ? 'Current Plan' : 'Plans'" :value="$hasExistingMembership ? ($latestMembership->membershipPlan?->name ?? 'Membership') : $plans->count()" :hint="$hasExistingMembership ? 'Latest active or most recent membership' : 'Available membership plans'" tone="amber" />
         </div>
 
@@ -24,11 +24,11 @@
                 <div class="mt-5 space-y-3">
                     <div class="panel-card-muted px-4 py-3">
                         <p class="text-xs uppercase tracking-[0.16em] text-slate-500">Assigned Trainer</p>
-                        <p class="mt-1 font-medium text-white">{{ $member->memberProfile?->trainer?->user?->name ?? 'No trainer assigned' }}</p>
+                        <p class="mt-1 font-medium text-white">{{ $memberProfile->assignedTrainer?->name ?? 'No trainer assigned' }}</p>
                     </div>
                     <div class="panel-card-muted px-4 py-3">
                         <p class="text-xs uppercase tracking-[0.16em] text-slate-500">Fitness Goal</p>
-                        <p class="mt-1 font-medium text-white">{{ $member->memberProfile?->fitness_goal ?? 'Not set' }}</p>
+                        <p class="mt-1 font-medium text-white">{{ $memberProfile->fitness_goal ?? 'Not set' }}</p>
                     </div>
                     <div class="panel-card-muted px-4 py-3">
                         <p class="text-xs uppercase tracking-[0.16em] text-slate-500">Membership flow</p>
@@ -88,10 +88,10 @@
                     </div>
                 @endif
 
-                <form action="{{ route('web.gym.members.assign-membership.store', $member) }}" method="POST" class="mt-6 grid gap-4 md:grid-cols-2">
+                <form action="{{ route('web.gym.members.assign-membership.store', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}" method="POST" class="mt-6 grid gap-4 md:grid-cols-2">
             @csrf
-            <input type="hidden" name="gym_id" value="{{ $member->memberProfile?->gym_id }}">
-            <input type="hidden" name="branch_id" value="{{ $member->memberProfile?->branch_id }}">
+            <input type="hidden" name="gym_id" value="{{ $memberProfile->gym_id }}">
+            <input type="hidden" name="branch_id" value="{{ $memberProfile->branch_id }}">
             <input type="hidden" name="member_id" value="{{ $member->id }}">
             <div class="md:col-span-2">
                 <label class="panel-label">Membership Plan</label>

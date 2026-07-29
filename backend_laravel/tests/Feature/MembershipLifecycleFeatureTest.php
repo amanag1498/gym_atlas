@@ -69,7 +69,11 @@ class MembershipLifecycleFeatureTest extends TestCase
             'start_date' => $startDate,
             'amount_paid' => 500,
             'due_date' => $startDate,
-        ])->assertRedirect(route('web.gym.members.custom-fee', ['member' => $member->id]));
+        ])->assertRedirect(route('web.gym.members.custom-fee', [
+            'member' => $member->id,
+            'gym' => $gym->id,
+            'branch' => $branch->id,
+        ]));
 
         $membership = MemberMembership::query()->latest('id')->firstOrFail();
 

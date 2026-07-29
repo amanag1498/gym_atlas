@@ -14,6 +14,7 @@ use App\Http\Requests\Web\Gym\StorePaymentWebRequest;
 use App\Models\ActivityLog;
 use App\Models\GymLedgerEntry;
 use App\Models\MemberMembership;
+use App\Models\MemberProfile;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\Audit\AuditLogService;
@@ -57,13 +58,16 @@ class PaymentController extends Controller
     public function memberPayments(Request $request, User $member): View|StreamedResponse
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
-        $member->load('memberProfile');
-        abort_unless($member->memberProfile?->gym_id === $gym->id, 404);
+        $memberProfile = MemberProfile::query()
+            ->where('user_id', $member->id)
+            ->where('gym_id', $gym->id)
+            ->firstOrFail();
+        $member->setRelation('memberProfile', $memberProfile);
         $this->gymWebPanelService->assertAnyPermission($request, [
             PermissionName::PaymentsView->value,
             PermissionName::MembershipsView->value,
-        ], $gym, $member->memberProfile?->branch_id);
-        $this->assertBillingViewAccess($request, $gym->id, $member->memberProfile?->branch_id);
+        ], $gym, $memberProfile->branch_id);
+        $this->assertBillingViewAccess($request, $gym->id, $memberProfile->branch_id);
 
         return $this->renderListing($request, 'member', 'Member Payment History', $member);
     }
@@ -160,7 +164,9 @@ class PaymentController extends Controller
             newValues: $payment->toArray(),
         );
 
-        return redirect()->route('web.gym.payments.index')->with('status', 'Payment recorded successfully.');
+        return redirect()
+            ->route('web.gym.payments.index', $request->only(['gym', 'branch']))
+            ->with('status', 'Payment recorded successfully.');
     }
 
     public function markPaid(MarkMembershipPaymentStatusRequest $request, MemberMembership $memberMembership): RedirectResponse

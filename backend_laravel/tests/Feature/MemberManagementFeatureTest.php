@@ -5,12 +5,14 @@ namespace Tests\Feature;
 use App\Enums\RoleName;
 use App\Models\Branch;
 use App\Models\Gym;
+use App\Models\MemberEmailInvitation;
 use App\Models\MemberGymInvitation;
 use App\Models\MemberMembership;
 use App\Models\MemberProfile;
 use App\Models\MembershipPlan;
 use App\Models\TrainerProfile;
 use App\Models\User;
+use App\Services\Members\MemberEmailInvitationService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -29,7 +31,7 @@ class MemberManagementFeatureTest extends TestCase
         $this->seed(PermissionSeeder::class);
     }
 
-    public function test_gym_owner_can_create_member_with_new_user(): void
+    public function test_gym_owner_can_invite_and_enroll_a_new_member_after_approval(): void
     {
         Storage::fake('public');
 
@@ -93,6 +95,12 @@ class MemberManagementFeatureTest extends TestCase
             'custom_joining_fee' => 300,
             'custom_fee_reason' => 'Launch offer',
         ])->assertRedirect();
+
+        $invitation = MemberEmailInvitation::query()
+            ->where('gym_id', $gym->id)
+            ->where('invited_email', 'riya-member@example.com')
+            ->firstOrFail();
+        app(MemberEmailInvitationService::class)->accept($invitation);
 
         $member = User::query()->where('email', 'riya-member@example.com')->firstOrFail();
         $this->assertTrue($member->hasRole(RoleName::Member->value));

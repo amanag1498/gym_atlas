@@ -56,7 +56,7 @@
                     <x-status-badge label="Billing" tone="info" />
                 </div>
 
-                <form action="{{ route('web.gym.payments.store') }}" method="POST" class="mt-6 grid gap-4 md:grid-cols-2">
+                <form action="{{ route('web.gym.payments.store', request()->only(['gym', 'branch'])) }}" method="POST" class="mt-6 grid gap-4 md:grid-cols-2">
                     @csrf
                     <div class="md:col-span-2">
                         <label for="member_membership_id" class="panel-label">Membership</label>

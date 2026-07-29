@@ -52,7 +52,7 @@
                         </div>
 
                         <form
-                            action="{{ route('web.gym.members.custom-fee.update', $member) }}"
+                            action="{{ route('web.gym.members.custom-fee.update', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}"
                             method="POST"
                             class="mt-6 grid gap-4 md:grid-cols-2"
                             id="custom-fee-form-{{ $selectedMembership->id }}"

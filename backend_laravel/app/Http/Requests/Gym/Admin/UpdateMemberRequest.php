@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Gym\Admin;
 
+use App\Models\MemberProfile;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -15,6 +16,10 @@ class UpdateMemberRequest extends FormRequest
     public function rules(): array
     {
         $memberId = $this->route('member')?->id ?? $this->route('member');
+        $memberProfileId = MemberProfile::query()
+            ->where('user_id', $memberId)
+            ->when($this->integer('gym'), fn ($query, int $gymId) => $query->where('gym_id', $gymId))
+            ->value('id');
 
         return [
             'name' => ['sometimes', 'string', 'max:160'],
@@ -34,7 +39,7 @@ class UpdateMemberRequest extends FormRequest
             'injury_notes' => ['nullable', 'string', 'max:5000'],
             'emergency_contact_name' => ['nullable', 'string', 'max:160'],
             'emergency_contact_phone' => ['nullable', 'string', 'max:40'],
-            'biometric_identifier' => ['nullable', 'string', 'max:255', Rule::unique('member_profiles', 'biometric_identifier')->ignore($this->route('member')?->memberProfile?->id)],
+            'biometric_identifier' => ['nullable', 'string', 'max:255', Rule::unique('member_profiles', 'biometric_identifier')->ignore($memberProfileId)],
             'biometric_enabled' => ['sometimes', 'boolean'],
             'status' => ['nullable', Rule::in(['active', 'inactive', 'expired'])],
             'membership_status' => ['nullable', 'string', 'max:80'],

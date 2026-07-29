@@ -26,8 +26,8 @@ use App\Services\Billing\MemberMembershipLifecycleService;
 use App\Services\Billing\MembershipEnrollmentService;
 use App\Services\Member\EngagementScoreService;
 use App\Services\Member\MemberAppService;
-use App\Services\Members\MemberGymInvitationService;
 use App\Services\Members\MemberEmailInvitationService;
+use App\Services\Members\MemberGymInvitationService;
 use App\Services\Notification\ReminderService;
 use App\Services\Users\ManagedUserService;
 use App\Services\Web\CsvStreamService;
@@ -108,6 +108,7 @@ class MemberController extends Controller
 
         if (! $existingUser) {
             $invitation = $this->memberEmailInvitationService->invite($request->user(), $gym, $payload);
+
             return back()->with('status', 'Enrollment approval email sent to '.$invitation->invited_email.'. The member will be created only after approval.');
         }
 
@@ -147,10 +148,14 @@ class MemberController extends Controller
         $timeline = $this->memberTimelineService->build($member, $gym->id, $branchIds);
         $this->engagementScoreService->enrichMemberProfiles([$memberProfile]);
 
+        $memberProfile->loadMissing(['branch', 'assignedTrainer']);
+        $member->setRelation('memberProfile', $memberProfile);
+        $member->load(['attendanceLogs', 'weightLogs', 'bodyMeasurements', 'progressPhotos']);
+
         return view('web.gym.members.show', [
             'pageTitle' => $member->name,
             'breadcrumbs' => ['Gym', 'Members', $member->name],
-            'member' => $member->load(['memberProfile.assignedTrainer', 'attendanceLogs', 'weightLogs', 'bodyMeasurements', 'progressPhotos']),
+            'member' => $member,
             'memberProfile' => $memberProfile,
             'attendanceHistory' => AttendanceLog::query()->where('member_id', $member->id)->where('gym_id', $gym->id)->latest('checked_in_at')->take(12)->get(),
             'paymentHistory' => Payment::query()
@@ -254,8 +259,15 @@ class MemberController extends Controller
 
         $payload = $this->normalizedPayload($request, $member, $memberProfile);
 
-        $oldValues = $member->load('memberProfile')->toArray();
+        $member->setRelation('memberProfile', $memberProfile);
+        $oldValues = $member->toArray();
         $user = $this->managedUserService->upsertMember($member, $gym, $payload);
+        $updatedProfile = MemberProfile::query()
+            ->with('branch')
+            ->where('user_id', $user->id)
+            ->where('gym_id', $gym->id)
+            ->firstOrFail();
+        $user->setRelation('memberProfile', $updatedProfile);
 
         $this->auditLogService->log(
             event: 'web.gym.member.updated',
@@ -263,9 +275,9 @@ class MemberController extends Controller
             request: $request,
             subject: $user,
             gym: $gym,
-            branch: $user->memberProfile?->branch,
+            branch: $updatedProfile->branch,
             oldValues: $oldValues,
-            newValues: $user->fresh(['memberProfile'])->toArray(),
+            newValues: $user->toArray(),
         );
 
         return back()->with('status', 'Member updated successfully.');
@@ -281,11 +293,13 @@ class MemberController extends Controller
         $memberProfile = MemberProfile::query()->where('user_id', $member->id)->where('gym_id', $gym->id)->firstOrFail();
         $this->assertMemberBranchScope($request, $gym, $memberProfile);
 
+        $member->setRelation('memberProfile', $memberProfile);
+
         return view('web.gym.members.edit', [
             'pageTitle' => 'Edit Member',
             'breadcrumbs' => ['Gym', 'Members', $member->name, 'Edit'],
             'gym' => $gym,
-            'member' => $member->load('memberProfile'),
+            'member' => $member,
             'memberProfile' => $memberProfile,
             'branches' => $this->gymWebPanelService->accessibleBranches($request, $gym),
             'trainers' => $this->trainers($request, $gym),
@@ -376,7 +390,8 @@ class MemberController extends Controller
         $trainerId = $request->validated('assigned_trainer_user_id');
         $this->assertBranchAndTrainerInScope($request, $gym, $profile->branch_id, $trainerId);
 
-        $oldValues = $member->load('memberProfile')->toArray();
+        $member->setRelation('memberProfile', $profile);
+        $oldValues = $member->toArray();
         $user = $this->managedUserService->upsertMember($member, $gym, [
             'name' => $member->name,
             'email' => $member->email,
@@ -536,7 +551,15 @@ class MemberController extends Controller
     private function memberQuery(Request $request, $gym)
     {
         $query = User::query()
-            ->with(['memberProfile.branch', 'memberProfile.assignedTrainer', 'memberMemberships' => fn ($builder) => $builder->currentFirst()->limit(1)])
+            ->with([
+                'memberProfile' => fn ($builder) => $builder
+                    ->where('gym_id', $gym->id)
+                    ->with(['branch', 'assignedTrainer']),
+                'memberMemberships' => fn ($builder) => $builder
+                    ->where('gym_id', $gym->id)
+                    ->currentFirst()
+                    ->limit(1),
+            ])
             ->whereHas('memberProfile', fn ($builder) => $builder->where('gym_id', $gym->id))
             ->latest('id');
 

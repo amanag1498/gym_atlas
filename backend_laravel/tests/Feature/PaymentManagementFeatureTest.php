@@ -58,7 +58,10 @@ class PaymentManagementFeatureTest extends TestCase
             'amount' => 500,
             'payment_mode' => 'cash',
             'payment_date' => now()->toDateTimeString(),
-        ])->assertRedirect(route('web.gym.payments.index'));
+        ])->assertRedirect(route('web.gym.payments.index', [
+            'gym' => $gym->id,
+            'branch' => $branch->id,
+        ]));
 
         $membership->refresh();
         $this->assertSame('partial', $membership->payment_status);
@@ -70,7 +73,10 @@ class PaymentManagementFeatureTest extends TestCase
             'amount' => 1400,
             'payment_mode' => 'upi',
             'payment_date' => now()->toDateTimeString(),
-        ])->assertRedirect(route('web.gym.payments.index'));
+        ])->assertRedirect(route('web.gym.payments.index', [
+            'gym' => $gym->id,
+            'branch' => $branch->id,
+        ]));
 
         $membership->refresh();
         $payment = Payment::query()->latest('id')->firstOrFail();

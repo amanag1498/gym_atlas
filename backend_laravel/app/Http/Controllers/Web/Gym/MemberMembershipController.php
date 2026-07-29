@@ -14,6 +14,7 @@ use App\Http\Requests\Billing\UpdateMembershipLifecycleRequest;
 use App\Models\ActivityLog;
 use App\Models\CustomFeeAuditLog;
 use App\Models\MemberMembership;
+use App\Models\MemberProfile;
 use App\Models\MembershipPlan;
 use App\Models\Payment;
 use App\Models\User;
@@ -45,8 +46,7 @@ class MemberMembershipController extends Controller
         private readonly ReminderService $reminderService,
         private readonly AuditLogService $auditLogService,
         private readonly AuditTimelineService $auditTimelineService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -264,9 +264,8 @@ class MemberMembershipController extends Controller
     public function assignForm(Request $request, User $member): View
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
-        $member->load('memberProfile');
-        abort_unless($member->memberProfile?->gym_id === $gym->id, 404);
-        $this->gymWebPanelService->assertPermission($request, PermissionName::MembershipsView->value, $gym, $member->memberProfile?->branch_id);
+        $memberProfile = $this->memberProfileForGym($member, $gym->id);
+        $this->gymWebPanelService->assertPermission($request, PermissionName::MembershipsView->value, $gym, $memberProfile->branch_id);
         $latestMembership = $member->memberMemberships()
             ->where('gym_id', $gym->id)
             ->currentFirst()
@@ -276,10 +275,11 @@ class MemberMembershipController extends Controller
             'pageTitle' => $latestMembership ? 'Change Membership Plan' : 'Assign Membership',
             'breadcrumbs' => ['Gym', 'Members', $member->name, $latestMembership ? 'Change Membership Plan' : 'Assign Membership'],
             'member' => $member,
+            'memberProfile' => $memberProfile,
             'plans' => MembershipPlan::query()
                 ->where('gym_id', $gym->id)
                 ->where('status', 'active')
-                ->when($member->memberProfile?->branch_id, fn ($query, $branchId) => $query->where(function ($builder) use ($branchId): void {
+                ->when($memberProfile->branch_id, fn ($query, $branchId) => $query->where(function ($builder) use ($branchId): void {
                     $builder->whereNull('branch_id')->orWhere('branch_id', $branchId);
                 }))
                 ->orderBy('name')
@@ -291,10 +291,8 @@ class MemberMembershipController extends Controller
     public function assign(StoreMemberMembershipRequest $request, User $member): RedirectResponse
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
-        $member->load('memberProfile');
-        abort_unless($member->memberProfile?->gym_id === $gym->id, 404);
-
-        $branchId = (int) ($member->memberProfile?->branch_id ?? $request->validated('branch_id'));
+        $memberProfile = $this->memberProfileForGym($member, $gym->id);
+        $branchId = (int) ($memberProfile->branch_id ?? $request->validated('branch_id'));
         $this->gymWebPanelService->assertAnyPermission($request, [
             PermissionName::MembershipsManage->value,
             PermissionName::MembersManage->value,
@@ -371,7 +369,7 @@ class MemberMembershipController extends Controller
         });
 
         return redirect()
-            ->route('web.gym.members.custom-fee', $member)
+            ->route('web.gym.members.custom-fee', ['member' => $member->id] + $request->only(['gym', 'branch']))
             ->with('status', 'Membership assigned successfully.');
     }
 
@@ -530,13 +528,12 @@ class MemberMembershipController extends Controller
     public function customFeeForm(Request $request, User $member): View
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
-        $member->load('memberProfile');
-        abort_unless($member->memberProfile?->gym_id === $gym->id, 404);
+        $memberProfile = $this->memberProfileForGym($member, $gym->id);
         $this->gymWebPanelService->assertAnyPermission($request, [
             PermissionName::MembershipsView->value,
             PermissionName::PaymentsView->value,
             PermissionName::EditCustomFee->value,
-        ], $gym, $member->memberProfile?->branch_id);
+        ], $gym, $memberProfile->branch_id);
 
         $canEditCustomFee = true;
 
@@ -545,7 +542,7 @@ class MemberMembershipController extends Controller
                 $request,
                 PermissionName::EditCustomFee->value,
                 $gym,
-                $member->memberProfile?->branch_id,
+                $memberProfile->branch_id,
             );
         } catch (HttpException) {
             $canEditCustomFee = false;
@@ -555,6 +552,7 @@ class MemberMembershipController extends Controller
             'pageTitle' => 'Custom Member Fee',
             'breadcrumbs' => ['Gym', 'Members', $member->name, 'Custom Fee'],
             'member' => $member,
+            'memberProfile' => $memberProfile,
             'canEditCustomFee' => $canEditCustomFee,
             'memberships' => $member->memberMemberships()
                 ->with(['membershipPlan', 'branch', 'customFeeAuditLogs.changer', 'payments'])
@@ -753,7 +751,7 @@ class MemberMembershipController extends Controller
                 ->route('web.gym.members.custom-fee', [
                     'member' => $memberMembership->member_id,
                     'member_membership_id' => $memberMembership->id,
-                ])
+                ] + $request->only(['gym', 'branch']))
                 ->with('status', 'Custom fee updated successfully.');
         }
 
@@ -763,8 +761,7 @@ class MemberMembershipController extends Controller
     private function resolveMemberCustomFeeMembership(Request $request, User $member): MemberMembership
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
-        $member->load('memberProfile');
-        abort_unless($member->memberProfile?->gym_id === $gym->id, 404);
+        $this->memberProfileForGym($member, $gym->id);
 
         $membershipId = $request->integer('member_membership_id');
 
@@ -782,6 +779,19 @@ class MemberMembershipController extends Controller
         abort_unless($membership !== null, 404);
 
         return $membership;
+    }
+
+    private function memberProfileForGym(User $member, int $gymId): MemberProfile
+    {
+        $profile = MemberProfile::query()
+            ->with(['gym', 'branch', 'assignedTrainer'])
+            ->where('user_id', $member->id)
+            ->where('gym_id', $gymId)
+            ->firstOrFail();
+
+        $member->setRelation('memberProfile', $profile);
+
+        return $profile;
     }
 
     private function customFeeMembershipQuery(Request $request, $gym): Builder

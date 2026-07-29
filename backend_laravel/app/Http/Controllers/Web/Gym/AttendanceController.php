@@ -11,6 +11,7 @@ use App\Http\Requests\Attendance\ReviewAttendanceCorrectionRequest;
 use App\Http\Requests\Attendance\StoreAttendanceCorrectionRequest;
 use App\Models\AttendanceCorrectionRequest;
 use App\Models\AttendanceLog;
+use App\Models\MemberProfile;
 use App\Models\User;
 use App\Services\Attendance\AttendanceCorrectionService;
 use App\Services\Attendance\AttendanceService;
@@ -139,9 +140,13 @@ class AttendanceController extends Controller
     public function memberHistory(Request $request, User $member): View|StreamedResponse
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
-        abort_unless($member->memberProfile?->gym_id === $gym->id, 404);
+        $memberProfile = MemberProfile::query()
+            ->where('user_id', $member->id)
+            ->where('gym_id', $gym->id)
+            ->firstOrFail();
+        $member->setRelation('memberProfile', $memberProfile);
         abort_unless(
-            in_array((int) $member->memberProfile?->branch_id, $this->gymWebPanelService->accessibleBranchIds($request, $gym), true),
+            in_array((int) $memberProfile->branch_id, $this->gymWebPanelService->accessibleBranchIds($request, $gym), true),
             404
         );
 

@@ -64,9 +64,9 @@
             </div>
 
             <div class="flex flex-wrap gap-3 px-5 py-4 lg:px-6">
-                <a href="{{ route('web.gym.members.edit', $member) }}" class="panel-btn-secondary">Edit / Trainer</a>
+                <a href="{{ route('web.gym.members.edit', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}" class="panel-btn-secondary">Edit / Trainer</a>
                 @if ($canManageMemberships)
-                    <a href="{{ route('web.gym.members.assign-membership', $member) }}" class="panel-btn-secondary">{{ $hasCurrentMembership ? 'Change Membership Plan' : 'Assign Membership' }}</a>
+                    <a href="{{ route('web.gym.members.assign-membership', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}" class="panel-btn-secondary">{{ $hasCurrentMembership ? 'Change Membership Plan' : 'Assign Membership' }}</a>
                     <a href="{{ route('web.gym.members.custom-fee', ['member' => $member->id, 'member_membership_id' => $currentMembership?->id] + request()->query()) }}" class="panel-btn-primary">Custom Fee</a>
                 @endif
                 @if ($canCollectPayments)
@@ -94,7 +94,7 @@
                             <h3 class="panel-section-title">Profile Snapshot</h3>
                             <p class="panel-section-copy">Only the operational details needed most often.</p>
                         </div>
-                        <a href="{{ route('web.gym.members.edit', $member) }}" class="panel-btn-secondary">Open Full Edit</a>
+                        <a href="{{ route('web.gym.members.edit', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}" class="panel-btn-secondary">Open Full Edit</a>
                     </div>
                     <div class="mt-5 grid gap-3 md:grid-cols-2">
                         <div class="panel-card-muted p-4">

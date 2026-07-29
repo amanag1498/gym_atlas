@@ -191,7 +191,7 @@
                                                     {{ strtoupper(substr($member->name, 0, 1)) }}
                                                 </div>
                                                 <div class="min-w-0">
-                                                    <a href="{{ route('web.gym.members.show', $member) }}" class="block truncate font-semibold text-slate-950 hover:text-brand-600 dark:text-white dark:hover:text-brand-300">{{ $member->name }}</a>
+                                                    <a href="{{ route('web.gym.members.show', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}" class="block truncate font-semibold text-slate-950 hover:text-brand-600 dark:text-white dark:hover:text-brand-300">{{ $member->name }}</a>
                                                     <p class="truncate text-xs text-slate-500 dark:text-slate-400">{{ $member->email }}</p>
                                                     @if (Schema::hasColumn('users', 'phone') && filled($member->phone))
                                                         <p class="truncate text-xs text-slate-500 dark:text-slate-400">{{ $member->phone }}</p>
@@ -250,8 +250,8 @@
                                         </td>
                                         <td>
                                             <div class="flex min-w-[24rem] flex-wrap gap-1.5">
-                                                <a href="{{ route('web.gym.members.show', $member) }}" class="panel-btn-primary !rounded-xl !px-3 !py-2 !text-xs">Profile</a>
-                                                <a href="{{ route('web.gym.members.edit', $member) }}" class="panel-btn-secondary !rounded-xl !px-3 !py-2 !text-xs">Edit / Trainer</a>
+                                                <a href="{{ route('web.gym.members.show', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}" class="panel-btn-primary !rounded-xl !px-3 !py-2 !text-xs">Profile</a>
+                                                <a href="{{ route('web.gym.members.edit', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}" class="panel-btn-secondary !rounded-xl !px-3 !py-2 !text-xs">Edit / Trainer</a>
                                                 <a href="{{ route('web.gym.payments.create', ['member_id' => $member->id] + request()->query()) }}" class="panel-btn-secondary !rounded-xl !px-3 !py-2 !text-xs">Payment</a>
                                                 <a href="{{ route('web.gym.attendance.manual', ['member_id' => $member->id] + request()->query()) }}" class="panel-btn-secondary !rounded-xl !px-3 !py-2 !text-xs">Attendance</a>
                                                 <form method="POST" action="{{ route('web.gym.members.remove-from-gym', ['member' => $member->id] + request()->query()) }}" data-confirm-submit data-confirm-title="Remove member from gym?" data-confirm-message="This will cancel active gym access and make the member independent. Payment, attendance, membership, and workout history stay available for audit." data-confirm-button="Remove From Gym">

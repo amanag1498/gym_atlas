@@ -80,7 +80,7 @@
                 </div>
             </div>
 
-            <form method="GET" action="{{ route('web.gym.memberships.index') }}" class="grid gap-3 px-4 py-4 md:grid-cols-2 xl:grid-cols-7">
+            <form method="GET" action="{{ route('web.gym.memberships.index', request()->only(['gym', 'branch'])) }}" class="grid gap-3 px-4 py-4 md:grid-cols-2 xl:grid-cols-7">
                 <input type="hidden" name="gym" value="{{ request('gym', $gym->id) }}">
                 @if (request()->filled('branch'))
                     <input type="hidden" name="branch" value="{{ request('branch') }}">
@@ -147,7 +147,7 @@
                                         <div class="min-w-[14rem]">
                                             <div class="font-semibold text-slate-950 dark:text-white">{{ $membership->member?->name ?? 'Member' }}</div>
                                             <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $membership->member?->email ?? 'No email' }}</div>
-                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $membership->member?->memberProfile?->branch?->name ?? 'Branch missing' }}</div>
+                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $membership->branch?->name ?? 'Branch missing' }}</div>
                                         </div>
                                     </td>
                                     <td>

@@ -408,7 +408,7 @@
                                         <td>
                                             <div class="flex justify-end gap-2">
                                                 @if ($canCollectPayments)
-                                                    <form action="{{ route('web.gym.payments.mark-paid', $membership) }}" method="POST" data-confirm-submit data-confirm-title="Mark membership paid?" data-confirm-message="This will record a paid state for the selected membership." data-confirm-button="Mark paid">
+                                                    <form action="{{ route('web.gym.payments.mark-paid', ['memberMembership' => $membership->id] + request()->only(['gym', 'branch'])) }}" method="POST" data-confirm-submit data-confirm-title="Mark membership paid?" data-confirm-message="This will record a paid state for the selected membership." data-confirm-button="Mark paid">
                                                         @csrf
                                                         <div data-confirm-payload>
                                                             <input type="hidden" name="payment_mode" value="cash">

@@ -13,8 +13,8 @@ use App\Models\Payment;
 use App\Models\TrainerProfile;
 use App\Models\TrialRequest;
 use App\Models\User;
-use App\Services\Authorization\ScopeResolver;
 use App\Services\Authorization\ScopedPermissionResolver;
+use App\Services\Authorization\ScopeResolver;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -499,7 +499,11 @@ class WebPanelTest extends TestCase
             'start_date' => now()->toDateString(),
             'due_date' => now()->toDateString(),
             'amount_paid' => 500,
-        ])->assertRedirect(route('web.gym.members.custom-fee', ['member' => $member]));
+        ])->assertRedirect(route('web.gym.members.custom-fee', [
+            'member' => $member,
+            'gym' => $gym->id,
+            'branch' => $branch->id,
+        ]));
 
         $membership = MemberMembership::query()->where('member_id', $member->id)->latest('id')->firstOrFail();
         $this->assertSame(3200.0, (float) $membership->final_payable_amount);
@@ -510,7 +514,10 @@ class WebPanelTest extends TestCase
             'member_membership_id' => $membership->id,
             'amount' => 700,
             'payment_mode' => 'cash',
-        ])->assertRedirect(route('web.gym.payments.index'));
+        ])->assertRedirect(route('web.gym.payments.index', [
+            'gym' => $gym->id,
+            'branch' => $branch->id,
+        ]));
 
         $membership->refresh();
         $this->assertSame(1200.0, (float) $membership->amount_paid);
@@ -522,7 +529,10 @@ class WebPanelTest extends TestCase
             'branch_id' => $branch->id,
             'member_id' => $member->id,
             'source_device' => 'web-test',
-        ])->assertRedirect(route('web.gym.attendance.index'));
+        ])->assertRedirect(route('web.gym.attendance.index', [
+            'gym' => $gym->id,
+            'branch' => $branch->id,
+        ]));
 
         $this->assertDatabaseCount('attendance_logs', 1);
 
@@ -959,6 +969,90 @@ class WebPanelTest extends TestCase
 
         $this->get(route('web.gym.dashboard', ['gym' => $gym->id, 'branch' => $branch->id]))
             ->assertRedirect('/gym/login');
+    }
+
+    public function test_member_pages_use_the_profile_for_the_selected_gym(): void
+    {
+        $owner = User::factory()->create([
+            'password' => 'secret123',
+            'is_active' => true,
+        ]);
+        $owner->assignRole(RoleName::GymOwner->value);
+
+        $otherGym = Gym::query()->create([
+            'owner_user_id' => $owner->id,
+            'name' => 'Other Member Gym',
+            'slug' => 'other-member-gym',
+            'approval_status' => 'approved',
+            'is_active' => true,
+        ]);
+        $otherBranch = Branch::query()->create([
+            'gym_id' => $otherGym->id,
+            'name' => 'Other Member Branch',
+            'slug' => 'other-member-branch',
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+        $selectedGym = Gym::query()->create([
+            'owner_user_id' => $owner->id,
+            'name' => 'Selected Member Gym',
+            'slug' => 'selected-member-gym',
+            'approval_status' => 'approved',
+            'is_active' => true,
+        ]);
+        $selectedBranch = Branch::query()->create([
+            'gym_id' => $selectedGym->id,
+            'name' => 'Selected Member Branch',
+            'slug' => 'selected-member-branch',
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+
+        $member = User::factory()->create([
+            'email' => 'multi-gym-member@example.com',
+            'is_active' => true,
+        ]);
+        $member->assignRole(RoleName::Member->value);
+        MemberProfile::query()->create([
+            'user_id' => $member->id,
+            'gym_id' => $otherGym->id,
+            'branch_id' => $otherBranch->id,
+            'fitness_goal' => 'Wrong gym goal',
+            'membership_status' => 'active',
+            'is_active' => true,
+        ]);
+        MemberProfile::query()->create([
+            'user_id' => $member->id,
+            'gym_id' => $selectedGym->id,
+            'branch_id' => $selectedBranch->id,
+            'fitness_goal' => 'Selected gym goal',
+            'membership_status' => 'active',
+            'is_active' => true,
+        ]);
+        $this->attachToGymAndBranches($member, $otherGym, [$otherBranch], []);
+        $this->attachToGymAndBranches($member, $selectedGym, [$selectedBranch], []);
+
+        $this->loginGymUser($owner);
+        $scope = ['gym' => $selectedGym->id, 'branch' => $selectedBranch->id];
+
+        $this->get(route('web.gym.members.index', $scope))
+            ->assertOk()
+            ->assertSee(route('web.gym.members.show', $scope + ['member' => $member->id]));
+        $this->get(route('web.gym.members.show', $scope + ['member' => $member->id]))
+            ->assertOk()
+            ->assertSee('Selected gym goal')
+            ->assertDontSee('Wrong gym goal');
+        $this->get(route('web.gym.members.edit', $scope + ['member' => $member->id]))
+            ->assertOk()
+            ->assertSee('Selected gym goal')
+            ->assertDontSee('Wrong gym goal');
+        $this->get(route('web.gym.members.assign-membership', $scope + ['member' => $member->id]))
+            ->assertOk()
+            ->assertSee('Selected Member Branch');
+        $this->get(route('web.gym.members.payments', $scope + ['member' => $member->id]))
+            ->assertOk();
+        $this->get(route('web.gym.members.attendance', $scope + ['member' => $member->id]))
+            ->assertOk();
     }
 
     private function createMemberFor(Gym $gym, Branch $branch, string $email): User
