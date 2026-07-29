@@ -4607,8 +4607,6 @@ class _MemberPageState extends State<_MemberPage> {
   final TextEditingController _searchController = TextEditingController();
   bool _dueOnly = false;
   bool _needsPlanOnly = false;
-  String _goalFilter = 'all';
-  String _statusFilter = 'all';
 
   @override
   void dispose() {
@@ -4619,27 +4617,6 @@ class _MemberPageState extends State<_MemberPage> {
   @override
   Widget build(BuildContext context) {
     final query = _searchController.text.trim().toLowerCase();
-    final goals =
-        widget.members
-            .map(
-              (assignment) =>
-                  _map(assignment['progress_summary'])['fitness_goal'],
-            )
-            .map((value) => value?.toString().trim() ?? '')
-            .where((value) => value.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
-    final statuses =
-        widget.members
-            .map(
-              (assignment) => _map(assignment['membership_summary'])['status'],
-            )
-            .map((value) => value?.toString().trim() ?? '')
-            .where((value) => value.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
     final filteredMembers = widget.members.where((assignment) {
       final member = _map(assignment['member']);
       final name = member['name']?.toString().toLowerCase() ?? '';
@@ -4648,7 +4625,6 @@ class _MemberPageState extends State<_MemberPage> {
           '';
       final goalLower = goal.toLowerCase();
       final membershipSummary = _map(assignment['membership_summary']);
-      final status = membershipSummary['status']?.toString() ?? '';
       final memberPlans = widget.plans.where(
         (plan) =>
             (plan['member_id'] as num?)?.toInt() ==
@@ -4669,14 +4645,6 @@ class _MemberPageState extends State<_MemberPage> {
         return false;
       }
 
-      if (_goalFilter != 'all' && goal != _goalFilter) {
-        return false;
-      }
-
-      if (_statusFilter != 'all' && status != _statusFilter) {
-        return false;
-      }
-
       return true;
     }).toList();
 
@@ -4686,18 +4654,21 @@ class _MemberPageState extends State<_MemberPage> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(18, 10, 18, 104),
           children: [
-            _MembersFitnessHeader(
-              totalCount: 0,
-              visibleCount: 0,
-              dueCount: 0,
-              needsPlanCount: 0,
-              onRefresh: widget.onRefresh,
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: widget.onAddMember,
-              icon: const Icon(Icons.person_add_alt_1_rounded),
-              label: const Text('Invite a member'),
+            _MembersPageHeader(totalCount: 0, onInvite: widget.onAddMember),
+            const SizedBox(height: 16),
+            _MembersSearchCard(
+              controller: _searchController,
+              query: query,
+              dueOnly: _dueOnly,
+              needsPlanOnly: _needsPlanOnly,
+              onQueryChanged: (_) => setState(() {}),
+              onClear: () {
+                _searchController.clear();
+                setState(() {});
+              },
+              onDueOnlyChanged: (value) => setState(() => _dueOnly = value),
+              onNeedsPlanChanged: (value) =>
+                  setState(() => _needsPlanOnly = value),
             ),
             const SizedBox(height: 16),
             PremiumCard(
@@ -4747,31 +4718,9 @@ class _MemberPageState extends State<_MemberPage> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(18, 10, 18, 104),
         children: [
-          _MembersFitnessHeader(
+          _MembersPageHeader(
             totalCount: widget.members.length,
-            visibleCount: filteredMembers.length,
-            dueCount: widget.members
-                .where(
-                  (item) =>
-                      _toDouble(
-                        _map(item['membership_summary'])['due_amount'],
-                      ) >
-                      0,
-                )
-                .length,
-            needsPlanCount: widget.members.where((assignment) {
-              final memberId = (assignment['member_id'] as num?)?.toInt();
-              return widget.plans.every(
-                (plan) => (plan['member_id'] as num?)?.toInt() != memberId,
-              );
-            }).length,
-            onRefresh: widget.onRefresh,
-          ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: widget.onAddMember,
-            icon: const Icon(Icons.person_add_alt_1_rounded),
-            label: const Text('Invite a member'),
+            onInvite: widget.onAddMember,
           ),
           const SizedBox(height: 16),
           _MembersSearchCard(
@@ -4779,10 +4728,6 @@ class _MemberPageState extends State<_MemberPage> {
             query: query,
             dueOnly: _dueOnly,
             needsPlanOnly: _needsPlanOnly,
-            goalFilter: _goalFilter == 'all' ? null : _goalFilter,
-            statusFilter: _statusFilter == 'all' ? null : _statusFilter,
-            goals: goals,
-            statuses: statuses,
             onQueryChanged: (_) => setState(() {}),
             onClear: () {
               _searchController.clear();
@@ -4791,10 +4736,6 @@ class _MemberPageState extends State<_MemberPage> {
             onDueOnlyChanged: (value) => setState(() => _dueOnly = value),
             onNeedsPlanChanged: (value) =>
                 setState(() => _needsPlanOnly = value),
-            onGoalChanged: (value) =>
-                setState(() => _goalFilter = value ?? 'all'),
-            onStatusChanged: (value) =>
-                setState(() => _statusFilter = value ?? 'all'),
           ),
           const SizedBox(height: 14),
           if (filteredMembers.isEmpty)
@@ -8767,112 +8708,128 @@ class _NotificationPage extends StatelessWidget {
   }
 
   Future<void> _openAnnouncementSheet(BuildContext context) async {
-    final titleController = TextEditingController();
-    final messageController = TextEditingController();
-    var selectedMemberId = (members.firstOrNull?['member_id'] as num?)?.toInt();
-    var saving = false;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 12,
+          bottom: MediaQuery.viewInsetsOf(sheetContext).bottom + 16,
+        ),
+        child: _TrainerSendUpdateSheetHost(
+          members: members,
+          onCreateAnnouncement: onCreateAnnouncement,
+        ),
+      ),
+    );
+  }
+}
 
-    try {
-      await showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        backgroundColor: Colors.transparent,
-        builder: (sheetContext) {
-          return StatefulBuilder(
-            builder: (context, setSheetState) {
-              Future<void> sendAnnouncement() async {
-                final selectedAssignment = members.firstWhere(
-                  (item) =>
-                      (item['member_id'] as num?)?.toInt() == selectedMemberId,
-                  orElse: () => const <String, dynamic>{},
-                );
-                final memberId = (selectedAssignment['member_id'] as num?)
-                    ?.toInt();
-                final title = titleController.text.trim();
-                final message = messageController.text.trim();
-                if (memberId == null || title.isEmpty || message.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Choose a member and enter a title/message.',
-                      ),
-                    ),
-                  );
-                  return;
-                }
+class _TrainerSendUpdateSheetHost extends StatefulWidget {
+  const _TrainerSendUpdateSheetHost({
+    required this.members,
+    required this.onCreateAnnouncement,
+  });
 
-                setSheetState(() => saving = true);
-                try {
-                  await onCreateAnnouncement({
-                    'gym_id': (selectedAssignment['gym_id'] as num?)?.toInt(),
-                    'branch_id': (selectedAssignment['branch_id'] as num?)
-                        ?.toInt(),
-                    'audience_type': 'selected_members',
-                    'member_ids': [memberId],
-                    'title': title,
-                    'message': message,
-                  });
-                  if (context.mounted) {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Member update sent.')),
-                    );
-                  }
-                } catch (exception) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(exception.toString())),
-                    );
-                  }
-                } finally {
-                  if (context.mounted) {
-                    setSheetState(() => saving = false);
-                  }
-                }
-              }
+  final List<Map<String, dynamic>> members;
+  final Future<void> Function(Map<String, dynamic>) onCreateAnnouncement;
 
-              final selectedAssignment = members.firstWhere(
-                (item) =>
-                    (item['member_id'] as num?)?.toInt() == selectedMemberId,
-                orElse: () => const <String, dynamic>{},
-              );
-              final selectedMember = _map(selectedAssignment['member']);
-              final selectedGoal =
-                  _map(
-                    selectedAssignment['progress_summary'],
-                  )['fitness_goal']?.toString() ??
-                  'Assigned coaching member';
+  @override
+  State<_TrainerSendUpdateSheetHost> createState() =>
+      _TrainerSendUpdateSheetHostState();
+}
 
-              return Padding(
-                padding: EdgeInsets.only(
-                  left: 16,
-                  right: 16,
-                  top: 12,
-                  bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-                ),
-                child: _TrainerSendUpdateSheet(
-                  selectedMemberName:
-                      selectedMember['name']?.toString() ?? 'Assigned member',
-                  selectedMemberSubtitle: selectedGoal,
-                  titleController: titleController,
-                  messageController: messageController,
-                  selectedMemberId: selectedMemberId,
-                  members: members,
-                  saving: saving,
-                  onMemberChanged: (value) =>
-                      setSheetState(() => selectedMemberId = value),
-                  onSend: sendAnnouncement,
-                ),
-              );
-            },
-          );
-        },
+class _TrainerSendUpdateSheetHostState
+    extends State<_TrainerSendUpdateSheetHost> {
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _messageController = TextEditingController();
+  int? _selectedMemberId;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedMemberId = (widget.members.firstOrNull?['member_id'] as num?)
+        ?.toInt();
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final selectedAssignment = widget.members.firstWhere(
+      (item) => (item['member_id'] as num?)?.toInt() == _selectedMemberId,
+      orElse: () => const <String, dynamic>{},
+    );
+    final memberId = (selectedAssignment['member_id'] as num?)?.toInt();
+    final title = _titleController.text.trim();
+    final message = _messageController.text.trim();
+    if (memberId == null || title.isEmpty || message.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Choose a member and enter a title/message.'),
+        ),
       );
-    } finally {
-      titleController.dispose();
-      messageController.dispose();
+      return;
     }
+
+    setState(() => _saving = true);
+    try {
+      await widget.onCreateAnnouncement({
+        'gym_id': (selectedAssignment['gym_id'] as num?)?.toInt(),
+        'branch_id': (selectedAssignment['branch_id'] as num?)?.toInt(),
+        'audience_type': 'selected_members',
+        'member_ids': [memberId],
+        'title': title,
+        'message': message,
+      });
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop();
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedAssignment = widget.members.firstWhere(
+      (item) => (item['member_id'] as num?)?.toInt() == _selectedMemberId,
+      orElse: () => const <String, dynamic>{},
+    );
+    final selectedMember = _map(selectedAssignment['member']);
+    final selectedGoal =
+        _map(
+          selectedAssignment['progress_summary'],
+        )['fitness_goal']?.toString() ??
+        'Assigned coaching member';
+
+    return _TrainerSendUpdateSheet(
+      selectedMemberName:
+          selectedMember['name']?.toString() ?? 'Assigned member',
+      selectedMemberSubtitle: selectedGoal,
+      titleController: _titleController,
+      messageController: _messageController,
+      selectedMemberId: _selectedMemberId,
+      members: widget.members,
+      saving: _saving,
+      onMemberChanged: (value) => setState(() => _selectedMemberId = value),
+      onSend: _send,
+    );
   }
 }
 
@@ -9477,139 +9434,51 @@ class _TrainerNotificationRow extends StatelessWidget {
   }
 }
 
-class _MembersFitnessHeader extends StatelessWidget {
-  const _MembersFitnessHeader({
-    required this.totalCount,
-    required this.visibleCount,
-    required this.dueCount,
-    required this.needsPlanCount,
-    required this.onRefresh,
-  });
+class _MembersPageHeader extends StatelessWidget {
+  const _MembersPageHeader({required this.totalCount, required this.onInvite});
 
   final int totalCount;
-  final int visibleCount;
-  final int dueCount;
-  final int needsPlanCount;
-  final Future<void> Function() onRefresh;
+  final Future<void> Function() onInvite;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.white.withValues(alpha: 0.98), AppColors.surfaceSoft],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.75)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.shadow.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'COACHING ROSTER',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.9,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Assigned members',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.7,
-                          ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      '$totalCount members in your coaching roster',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              InkWell(
-                onTap: () {
-                  onRefresh();
-                },
-                borderRadius: BorderRadius.circular(18),
-                child: Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.92),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: AppColors.stroke.withValues(alpha: 0.5),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.shadow.withValues(alpha: 0.10),
-                        blurRadius: 14,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.refresh_rounded,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Assigned members',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.7,
+                    height: 1.02,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 6),
+                Text(
+                  '$totalCount ${totalCount == 1 ? 'member' : 'members'} in your roster',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: _MembersHeaderMetric(
-                  label: 'Visible',
-                  value: '$visibleCount',
-                  icon: Icons.groups_2_rounded,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _MembersHeaderMetric(
-                  label: 'Need plan',
-                  value: '$needsPlanCount',
-                  icon: Icons.playlist_add_check_rounded,
-                  color: AppColors.primaryBright,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _MembersHeaderMetric(
-                  label: 'Dues',
-                  value: '$dueCount',
-                  icon: Icons.payments_rounded,
-                  color: AppColors.accentPurple,
-                ),
-              ),
-            ],
+          const SizedBox(width: 12),
+          _SquareIconButton(
+            icon: Icons.person_add_alt_1_rounded,
+            onTap: onInvite,
           ),
         ],
       ),
@@ -9617,50 +9486,38 @@ class _MembersFitnessHeader extends StatelessWidget {
   }
 }
 
-class _MembersHeaderMetric extends StatelessWidget {
-  const _MembersHeaderMetric({
+class _MemberMetaChip extends StatelessWidget {
+  const _MemberMetaChip({
     required this.label,
-    required this.value,
     required this.icon,
-    required this.color,
+    this.emphasized = false,
   });
 
   final String label;
-  final String value;
   final IconData icon;
-  final Color color;
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
+    final color = emphasized
+        ? AppColors.primaryBright
+        : AppColors.textSecondary;
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withValues(alpha: 0.12)),
+        color: color.withValues(alpha: emphasized ? 0.09 : 0.05),
+        borderRadius: BorderRadius.circular(999),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(height: 10),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 2),
+          Icon(icon, color: color, size: 14),
+          const SizedBox(width: 6),
           Text(
             label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w700,
+              color: emphasized ? AppColors.textPrimary : color,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ],
@@ -9675,15 +9532,9 @@ class _MembersSearchCard extends StatelessWidget {
     required this.query,
     required this.dueOnly,
     required this.needsPlanOnly,
-    required this.goalFilter,
-    required this.statusFilter,
-    required this.goals,
-    required this.statuses,
     required this.onQueryChanged,
     required this.onDueOnlyChanged,
     required this.onNeedsPlanChanged,
-    required this.onGoalChanged,
-    required this.onStatusChanged,
     required this.onClear,
   });
 
@@ -9691,29 +9542,23 @@ class _MembersSearchCard extends StatelessWidget {
   final String query;
   final bool dueOnly;
   final bool needsPlanOnly;
-  final String? goalFilter;
-  final String? statusFilter;
-  final List<String> goals;
-  final List<String> statuses;
   final ValueChanged<String> onQueryChanged;
   final ValueChanged<bool> onDueOnlyChanged;
   final ValueChanged<bool> onNeedsPlanChanged;
-  final ValueChanged<String?> onGoalChanged;
-  final ValueChanged<String?> onStatusChanged;
   final VoidCallback onClear;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.75)),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.9)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.shadow.withValues(alpha: 0.08),
-            blurRadius: 14,
+            color: AppColors.shadow.withValues(alpha: 0.04),
+            blurRadius: 12,
             offset: const Offset(0, 8),
           ),
         ],
@@ -9745,7 +9590,7 @@ class _MembersSearchCard extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -9765,74 +9610,6 @@ class _MembersSearchCard extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 12),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxWidth < 360;
-              final filters = [
-                DropdownButtonFormField<String?>(
-                  initialValue: goalFilter,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Goal',
-                    prefixIcon: Icon(Icons.flag_rounded),
-                  ),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text('All goals'),
-                    ),
-                    ...goals.map(
-                      (goal) => DropdownMenuItem<String?>(
-                        value: goal,
-                        child: Text(goal),
-                      ),
-                    ),
-                  ],
-                  onChanged: onGoalChanged,
-                ),
-                DropdownButtonFormField<String?>(
-                  initialValue: statusFilter,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Status',
-                    prefixIcon: Icon(Icons.verified_rounded),
-                  ),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text('All statuses'),
-                    ),
-                    ...statuses.map(
-                      (status) => DropdownMenuItem<String?>(
-                        value: status,
-                        child: Text(_titleCase(status)),
-                      ),
-                    ),
-                  ],
-                  onChanged: onStatusChanged,
-                ),
-              ];
-
-              if (compact) {
-                return Column(
-                  children: [
-                    filters.first,
-                    const SizedBox(height: 10),
-                    filters.last,
-                  ],
-                );
-              }
-
-              return Row(
-                children: [
-                  Expanded(child: filters.first),
-                  const SizedBox(width: 10),
-                  Expanded(child: filters.last),
-                ],
-              );
-            },
           ),
         ],
       ),
@@ -9865,294 +9642,164 @@ class _FitnessMemberRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final member = _map(assignment['member']);
     final progressSummary = _map(assignment['progress_summary']);
-    final attendanceSummary = _map(assignment['attendance_summary']);
     final membershipSummary = _map(assignment['membership_summary']);
-    final engagement = _map(assignment['engagement_score']);
     final memberId = (assignment['member_id'] as num?)?.toInt();
     final memberPlans = plans
         .where((plan) => (plan['member_id'] as num?)?.toInt() == memberId)
         .toList();
-    final latestProgressUpdate = progressSummary['latest_note']?.toString();
     final avatar = member['avatar']?.toString() ?? '';
     final name = member['name']?.toString() ?? 'Member';
-    final email = member['email']?.toString() ?? 'Assigned client';
     final goal = progressSummary['fitness_goal']?.toString() ?? 'No goal set';
-    final dueAmount = _toDouble(membershipSummary['due_amount']);
     final completionLabel = memberPlans.isEmpty
-        ? 'Needs plan'
-        : '${memberPlans.length} plan${memberPlans.length == 1 ? '' : 's'}';
+        ? 'Workout needed'
+        : '${memberPlans.length} workout${memberPlans.length == 1 ? '' : 's'}';
 
-    return InkWell(
-      onTap: onOpen,
-      borderRadius: BorderRadius.circular(28),
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.92),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: AppColors.stroke.withValues(alpha: 0.75)),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.shadow.withValues(alpha: 0.08),
-              blurRadius: 16,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.primary.withValues(alpha: 0.10),
-                    border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.18),
-                    ),
-                  ),
-                  child: CircleAvatar(
-                    backgroundColor: Colors.white,
-                    backgroundImage: avatar.isNotEmpty
-                        ? NetworkImage(avatar)
-                        : null,
-                    child: avatar.isEmpty
-                        ? const Icon(
-                            Icons.person_rounded,
-                            color: AppColors.primary,
-                          )
-                        : null,
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(22),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: AppColors.stroke),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.14),
                   ),
                 ),
-                const SizedBox(width: 13),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w900,
-                            ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        email,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 7,
-                        runSpacing: 7,
-                        children: [
-                          StatusBadge(
-                            label: goal,
-                            color: AppColors.primary,
-                            icon: Icons.flag_rounded,
-                          ),
-                          StatusBadge(
-                            label: _attendanceLabel(attendanceSummary),
-                            color: AppColors.primaryBright,
-                            icon: Icons.qr_code_scanner_rounded,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                child: CircleAvatar(
+                  backgroundColor: AppColors.surface,
+                  backgroundImage: avatar.isNotEmpty
+                      ? NetworkImage(avatar)
+                      : null,
+                  child: avatar.isEmpty
+                      ? const Icon(
+                          Icons.person_rounded,
+                          color: AppColors.primary,
+                        )
+                      : null,
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (dueAmount > 0)
-                      StatusBadge(
-                        label: 'Due ${_currency(dueAmount)}',
-                        color: AppColors.accentPurple,
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w900,
                       ),
-                    PopupMenuButton<String>(
-                      tooltip: 'More member actions',
-                      icon: const Icon(
-                        Icons.more_horiz_rounded,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      goal,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
                       ),
-                      onSelected: (value) {
-                        if (value == 'note') {
-                          onQuickNote();
-                        } else if (value == 'follow_up') {
-                          onAddFollowUp();
-                        }
-                      },
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(
-                          value: 'note',
-                          child: ListTile(
-                            dense: true,
-                            leading: Icon(Icons.edit_note_rounded),
-                            title: Text('Add note'),
-                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        _MemberMetaChip(
+                          label: completionLabel,
+                          icon: Icons.fitness_center_rounded,
+                          emphasized: memberPlans.isEmpty,
                         ),
-                        PopupMenuItem(
-                          value: 'follow_up',
-                          child: ListTile(
-                            dense: true,
-                            leading: Icon(Icons.event_available_rounded),
-                            title: Text('Add follow-up'),
+                        _MemberMetaChip(
+                          label: _titleCase(
+                            membershipSummary['status']?.toString() ?? 'active',
                           ),
+                          icon: Icons.verified_outlined,
                         ),
                       ],
                     ),
                   ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: _MemberRowMetric(
-                    label: 'Workout',
-                    value: completionLabel,
-                    icon: Icons.fitness_center_rounded,
-                    color: AppColors.primary,
-                  ),
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'Member actions',
+                icon: const Icon(
+                  Icons.more_vert_rounded,
+                  color: AppColors.textSecondary,
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _MemberRowMetric(
-                    label: 'Status',
-                    value: _titleCase(
-                      membershipSummary['status']?.toString() ?? 'active',
+                onSelected: (value) {
+                  switch (value) {
+                    case 'message':
+                      onSendMessage();
+                    case 'workout':
+                      memberPlans.isEmpty
+                          ? onQuickAssign()
+                          : onManageWorkouts();
+                    case 'note':
+                      onQuickNote();
+                    case 'follow_up':
+                      onAddFollowUp();
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'message',
+                    child: ListTile(
+                      dense: true,
+                      leading: Icon(Icons.chat_bubble_outline_rounded),
+                      title: Text('Message'),
                     ),
-                    icon: Icons.verified_rounded,
-                    color: AppColors.primaryBright,
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _MemberRowMetric(
-                    label: 'Score',
-                    value: engagement['score']?.toString() ?? '--',
-                    icon: Icons.insights_rounded,
-                    color: AppColors.accentPurple,
+                  PopupMenuItem(
+                    value: 'workout',
+                    child: ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.fitness_center_rounded),
+                      title: Text(
+                        memberPlans.isEmpty
+                            ? 'Assign workout'
+                            : 'Manage workouts',
+                      ),
+                    ),
                   ),
-                ),
-              ],
-            ),
-            if (latestProgressUpdate != null ||
-                engagement['summary']?.toString().isNotEmpty == true) ...[
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceStrong,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.stroke),
-                ),
-                child: Text(
-                  latestProgressUpdate ??
-                      engagement['summary']?.toString() ??
-                      'No progress note has been added yet.',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                    height: 1.35,
-                    fontWeight: FontWeight.w600,
+                  const PopupMenuItem(
+                    value: 'note',
+                    child: ListTile(
+                      dense: true,
+                      leading: Icon(Icons.edit_note_rounded),
+                      title: Text('Add note'),
+                    ),
                   ),
-                ),
+                  const PopupMenuItem(
+                    value: 'follow_up',
+                    child: ListTile(
+                      dense: true,
+                      leading: Icon(Icons.event_available_rounded),
+                      title: Text('Add follow-up'),
+                    ),
+                  ),
+                ],
               ),
             ],
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onSendMessage,
-                    icon: const Icon(Icons.chat_bubble_outline_rounded),
-                    label: const Text('Message'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: memberPlans.isEmpty
-                        ? onQuickAssign
-                        : onManageWorkouts,
-                    icon: const Icon(Icons.playlist_add_check_circle_outlined),
-                    label: Text(memberPlans.isEmpty ? 'Assign' : 'Manage'),
-                  ),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class _MemberRowMetric extends StatelessWidget {
-  const _MemberRowMetric({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.10)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 17),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -10424,10 +10071,6 @@ double _toDouble(dynamic value) {
   return double.tryParse(value?.toString() ?? '') ?? 0;
 }
 
-String _currency(dynamic value) {
-  return 'Rs ${_toDouble(value).toStringAsFixed(0)}';
-}
-
 String _titleCase(String value) {
   if (value.trim().isEmpty) {
     return '--';
@@ -10437,19 +10080,6 @@ String _titleCase(String value) {
       .where((part) => part.isNotEmpty)
       .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
       .join(' ');
-}
-
-String _attendanceLabel(Map<String, dynamic> attendanceSummary) {
-  final lastCheckIn = attendanceSummary['last_check_in_at'];
-  if (lastCheckIn == null) {
-    return 'No check-in';
-  }
-  final date = DateTime.tryParse(lastCheckIn.toString());
-  if (date == null) {
-    return 'Tracked';
-  }
-  final sameDay = DateTime.now().difference(date).inDays == 0;
-  return sameDay ? 'Today' : prettyDate(date.toIso8601String());
 }
 
 Color _notificationColor(BuildContext context, String? type) {

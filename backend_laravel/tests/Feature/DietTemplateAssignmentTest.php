@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\PermissionName;
 use App\Enums\RoleName;
 use App\Models\Branch;
 use App\Models\DietMealLog;
@@ -13,11 +14,45 @@ use App\Models\TrainerProfile;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class DietTemplateAssignmentTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_diet_permission_backfill_repairs_an_existing_trainer_role(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        $trainerRole = Role::findByName(RoleName::Trainer->value, 'sanctum');
+        $trainerRole->revokePermissionTo([
+            PermissionName::DietPlansView->value,
+            PermissionName::DietPlansManage->value,
+        ]);
+
+        $this->assertFalse(
+            $trainerRole->fresh()->hasPermissionTo(
+                PermissionName::DietPlansView->value,
+            ),
+        );
+
+        $migration = require database_path(
+            'migrations/2026_07_29_120000_grant_diet_plan_permissions_to_trainers.php',
+        );
+        $migration->up();
+
+        $repairedRole = $trainerRole->fresh();
+        $this->assertTrue(
+            $repairedRole->hasPermissionTo(
+                PermissionName::DietPlansView->value,
+            ),
+        );
+        $this->assertTrue(
+            $repairedRole->hasPermissionTo(
+                PermissionName::DietPlansManage->value,
+            ),
+        );
+    }
 
     public function test_platform_admin_can_build_a_global_template_with_repeatable_food_products(): void
     {

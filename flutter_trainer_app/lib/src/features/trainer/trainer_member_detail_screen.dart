@@ -70,8 +70,17 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
         widget.repository.fetchMemberPlans(memberId),
         widget.repository.fetchMemberNotes(memberId),
         widget.repository.fetchMemberWorkoutLogbook(memberId),
-        widget.repository.fetchDietPlans(memberId: memberId),
       ]);
+      List<Map<String, dynamic>> dietPlans = const [];
+      try {
+        final dietResponse = await widget.repository.fetchDietPlans(
+          memberId: memberId,
+        );
+        dietPlans = _mapList(dietResponse['data']);
+      } catch (_) {
+        // Diet permissions may lag during deployment. Member access and the
+        // rest of the coaching profile must remain available independently.
+      }
 
       final detail = _map(responses[0]['data']);
       final notes = _mapList(responses[4]['data']);
@@ -85,7 +94,7 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
         _notes = notes;
         _workoutHistory = _mapList(logbook['history']);
         _personalRecords = _mapList(logbook['personal_records']);
-        _dietPlans = _mapList(responses[6]['data']);
+        _dietPlans = dietPlans;
         _loading = false;
       });
     } catch (exception) {
@@ -115,148 +124,136 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
     final bodyMeasurements = _mapList(_progress['body_measurements']);
     final displayName = member['name']?.toString() ?? 'Assigned member detail';
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFFFFFFF),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        leading: Padding(
-          padding: const EdgeInsets.all(8),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: const Color(0xFFF7F8F8),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-              color: const Color(0xFF1D1617),
-              onPressed: () => Navigator.of(context).maybePop(),
+    return AppGradientScaffold(
+      title: displayName,
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 10, 18, 8),
+            child: _MemberDetailPageHeader(
+              name: displayName,
+              subtitle: member['email']?.toString() ?? 'Assigned member',
+              onBack: () => Navigator.of(context).maybePop(),
             ),
           ),
-        ),
-        title: const Text(
-          'Member Detail',
-          style: TextStyle(
-            color: Color(0xFF1D1617),
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
+          Expanded(
+            child: _loading
+                ? const LoadingStateView(label: 'Loading member detail...')
+                : _error != null
+                ? _buildError()
+                : RefreshIndicator(
+                    onRefresh: _load,
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(18, 8, 18, 32),
+                      children: [
+                        _FitMemberHero(
+                          name: displayName,
+                          email:
+                              member['email']?.toString() ?? 'Assigned member',
+                          avatarUrl: member['avatar']?.toString(),
+                          goal:
+                              progressSummary['fitness_goal']?.toString() ??
+                              memberProfile['fitness_goal']?.toString() ??
+                              'No fitness goal set',
+                          membershipStatus: _titleCase(
+                            membershipSummary['status']?.toString() ?? 'active',
+                          ),
+                          attendanceStatus: _attendanceLabel(attendanceSummary),
+                          workoutStatus: _workoutCompletionLabel(_plans),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _FitStatCell(
+                                title: memberProfile['height_cm'] != null
+                                    ? '${memberProfile['height_cm']}cm'
+                                    : '--',
+                                subtitle: 'Height',
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _FitStatCell(
+                                title: progressSummary['weight_kg'] != null
+                                    ? '${progressSummary['weight_kg']}kg'
+                                    : (memberProfile['weight_kg'] != null
+                                          ? '${memberProfile['weight_kg']}kg'
+                                          : '--'),
+                                subtitle: 'Weight',
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _FitStatCell(
+                                title: '${_attendance.length}',
+                                subtitle: 'Visits',
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        _FitActionPanel(
+                          onAssignWorkout: widget.onAssignWorkout,
+                          onAssignDiet: _assignDiet,
+                          onAddNote: widget.onAddNote,
+                          onFollowUp: widget.onFollowUp,
+                        ),
+                        const SizedBox(height: 18),
+                        _FitSectionCard(
+                          title: 'Overview',
+                          icon: Icons.person_outline_rounded,
+                          child: _OverviewTab(
+                            memberProfile: memberProfile,
+                            membershipSummary: membershipSummary,
+                            attendanceSummary: attendanceSummary,
+                            attendance: _attendance,
+                            progressSummary: progressSummary,
+                            planCount: _plans.length,
+                            dietPlanCount: _dietPlans.length,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        _FitSectionCard(
+                          title: 'Diet Plans',
+                          icon: Icons.restaurant_menu_rounded,
+                          child: _DietPlansTab(
+                            plans: _dietPlans,
+                            onAssign: _assignDiet,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        _FitSectionCard(
+                          title: 'Progress',
+                          icon: Icons.trending_up_rounded,
+                          child: _ProgressTab(
+                            progress: _progress,
+                            photos: photos,
+                            weightLogs: weightLogs,
+                            bodyMeasurements: bodyMeasurements,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        _FitSectionCard(
+                          title: 'Logbook',
+                          icon: Icons.fitness_center_rounded,
+                          child: _LogbookTab(
+                            history: _workoutHistory,
+                            personalRecords: _personalRecords,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        _FitSectionCard(
+                          title: 'Notes',
+                          icon: Icons.edit_note_rounded,
+                          child: _NotesTab(notes: _notes),
+                        ),
+                      ],
+                    ),
+                  ),
           ),
-        ),
+        ],
       ),
-      body: _loading
-          ? const LoadingStateView(label: 'Loading member detail...')
-          : _error != null
-          ? _buildError()
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(25, 15, 25, 30),
-                children: [
-                  _FitMemberHero(
-                    name: displayName,
-                    email: member['email']?.toString() ?? 'Assigned member',
-                    avatarUrl: member['avatar']?.toString(),
-                    goal:
-                        progressSummary['fitness_goal']?.toString() ??
-                        memberProfile['fitness_goal']?.toString() ??
-                        'No fitness goal set',
-                    membershipStatus: _titleCase(
-                      membershipSummary['status']?.toString() ?? 'active',
-                    ),
-                    attendanceStatus: _attendanceLabel(attendanceSummary),
-                    workoutStatus: _workoutCompletionLabel(_plans),
-                  ),
-                  const SizedBox(height: 15),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _FitStatCell(
-                          title: memberProfile['height_cm'] != null
-                              ? '${memberProfile['height_cm']}cm'
-                              : '--',
-                          subtitle: 'Height',
-                        ),
-                      ),
-                      const SizedBox(width: 15),
-                      Expanded(
-                        child: _FitStatCell(
-                          title: progressSummary['weight_kg'] != null
-                              ? '${progressSummary['weight_kg']}kg'
-                              : (memberProfile['weight_kg'] != null
-                                    ? '${memberProfile['weight_kg']}kg'
-                                    : '--'),
-                          subtitle: 'Weight',
-                        ),
-                      ),
-                      const SizedBox(width: 15),
-                      Expanded(
-                        child: _FitStatCell(
-                          title: '${_attendance.length}',
-                          subtitle: 'Visits',
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 25),
-                  _FitActionPanel(
-                    onAssignWorkout: widget.onAssignWorkout,
-                    onAssignDiet: _assignDiet,
-                    onAddNote: widget.onAddNote,
-                    onFollowUp: widget.onFollowUp,
-                  ),
-                  const SizedBox(height: 25),
-                  _FitSectionCard(
-                    title: 'Overview',
-                    icon: Icons.person_outline_rounded,
-                    child: _OverviewTab(
-                      memberProfile: memberProfile,
-                      membershipSummary: membershipSummary,
-                      attendanceSummary: attendanceSummary,
-                      attendance: _attendance,
-                      progressSummary: progressSummary,
-                      planCount: _plans.length,
-                      dietPlanCount: _dietPlans.length,
-                    ),
-                  ),
-                  const SizedBox(height: 25),
-                  _FitSectionCard(
-                    title: 'Diet Plans',
-                    icon: Icons.restaurant_menu_rounded,
-                    child: _DietPlansTab(
-                      plans: _dietPlans,
-                      onAssign: _assignDiet,
-                    ),
-                  ),
-                  const SizedBox(height: 25),
-                  _FitSectionCard(
-                    title: 'Progress',
-                    icon: Icons.trending_up_rounded,
-                    child: _ProgressTab(
-                      progress: _progress,
-                      photos: photos,
-                      weightLogs: weightLogs,
-                      bodyMeasurements: bodyMeasurements,
-                    ),
-                  ),
-                  const SizedBox(height: 25),
-                  _FitSectionCard(
-                    title: 'Logbook',
-                    icon: Icons.fitness_center_rounded,
-                    child: _LogbookTab(
-                      history: _workoutHistory,
-                      personalRecords: _personalRecords,
-                    ),
-                  ),
-                  const SizedBox(height: 25),
-                  _FitSectionCard(
-                    title: 'Notes',
-                    icon: Icons.edit_note_rounded,
-                    child: _NotesTab(notes: _notes),
-                  ),
-                ],
-              ),
-            ),
     );
   }
 
@@ -287,6 +284,94 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
   }
 }
 
+class _MemberDetailPageHeader extends StatelessWidget {
+  const _MemberDetailPageHeader({
+    required this.name,
+    required this.subtitle,
+    required this.onBack,
+  });
+
+  final String name;
+  final String subtitle;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _MemberHeaderIconButton(
+          icon: Icons.arrow_back_ios_new_rounded,
+          onTap: onBack,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.7,
+                  height: 1.02,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MemberHeaderIconButton extends StatelessWidget {
+  const _MemberHeaderIconButton({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.stroke),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.shadow.withValues(alpha: 0.05),
+                blurRadius: 14,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Icon(icon, color: AppColors.textPrimary, size: 19),
+        ),
+      ),
+    );
+  }
+}
+
 class _FitMemberHero extends StatelessWidget {
   const _FitMemberHero({
     required this.name,
@@ -313,16 +398,17 @@ class _FitMemberHero extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF92A3FD), Color(0xFF9DCEFF)],
+          colors: [AppColors.surface, AppColors.surfaceStrong],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: AppColors.stroke),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF92A3FD).withValues(alpha: 0.22),
-            blurRadius: 22,
-            offset: const Offset(0, 14),
+            color: AppColors.shadow.withValues(alpha: 0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -336,18 +422,21 @@ class _FitMemberHero extends StatelessWidget {
                 height: 64,
                 padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.22),
+                  color: AppColors.primaryBright.withValues(alpha: 0.10),
                   shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppColors.primaryBright.withValues(alpha: 0.18),
+                  ),
                 ),
                 child: CircleAvatar(
-                  backgroundColor: Colors.white,
+                  backgroundColor: AppColors.surface,
                   backgroundImage: avatar.isNotEmpty
                       ? NetworkImage(avatar)
                       : null,
                   child: avatar.isEmpty
                       ? const Icon(
                           Icons.person_rounded,
-                          color: Color(0xFF92A3FD),
+                          color: AppColors.primaryBright,
                         )
                       : null,
                 ),
@@ -358,12 +447,20 @@ class _FitMemberHero extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
+                      'MEMBER COACHING',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
                       name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: AppColors.textPrimary,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -372,9 +469,8 @@ class _FitMemberHero extends StatelessWidget {
                       email,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.78),
-                        fontSize: 12,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -388,19 +484,31 @@ class _FitMemberHero extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
+              color: AppColors.textSecondary.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(16),
             ),
-            child: Text(
-              goal,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-              ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.flag_outlined,
+                  color: AppColors.primary,
+                  size: 18,
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    goal,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
@@ -408,9 +516,19 @@ class _FitMemberHero extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _FitHeroChip(label: membershipStatus),
-              _FitHeroChip(label: attendanceStatus),
-              _FitHeroChip(label: workoutStatus),
+              _FitHeroChip(
+                label: membershipStatus,
+                icon: Icons.verified_outlined,
+                emphasized: true,
+              ),
+              _FitHeroChip(
+                label: attendanceStatus,
+                icon: Icons.schedule_rounded,
+              ),
+              _FitHeroChip(
+                label: workoutStatus,
+                icon: Icons.fitness_center_rounded,
+              ),
             ],
           ),
         ],
@@ -420,9 +538,15 @@ class _FitMemberHero extends StatelessWidget {
 }
 
 class _FitHeroChip extends StatelessWidget {
-  const _FitHeroChip({required this.label});
+  const _FitHeroChip({
+    required this.label,
+    required this.icon,
+    this.emphasized = false,
+  });
 
   final String label;
+  final IconData icon;
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
@@ -430,18 +554,40 @@ class _FitHeroChip extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: 170),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.22),
+        color: (emphasized ? AppColors.primaryBright : AppColors.textSecondary)
+            .withValues(alpha: emphasized ? 0.10 : 0.06),
         borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
+        border: Border.all(
+          color:
+              (emphasized ? AppColors.primaryBright : AppColors.textSecondary)
+                  .withValues(alpha: 0.14),
         ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 15,
+            color: emphasized
+                ? AppColors.primaryBright
+                : AppColors.textSecondary,
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: emphasized
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -456,11 +602,11 @@ class _FitStatCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)],
+        border: Border.all(color: AppColors.stroke),
       ),
       child: Column(
         children: [
@@ -468,9 +614,8 @@ class _FitStatCell extends StatelessWidget {
             title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Color(0xFF92A3FD),
-              fontSize: 14,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -479,7 +624,10 @@ class _FitStatCell extends StatelessWidget {
             subtitle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Color(0xFF786F72), fontSize: 12),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
@@ -502,36 +650,107 @@ class _FitActionPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _FitSectionShell(
-      title: 'Coach Actions',
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.stroke),
+      ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _FitActionRow(
-            icon: Icons.playlist_add_check_circle_outlined,
-            title: 'Assign workout',
-            subtitle: 'Create or assign the next training block.',
-            onTap: onAssignWorkout,
+          Text(
+            'Coach actions',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w900,
+            ),
           ),
-          _FitActionRow(
-            icon: Icons.restaurant_menu_rounded,
-            title: 'Assign diet plan',
-            subtitle: 'Build meals or assign a nutrition template.',
-            onTap: onAssignDiet,
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _CoachActionButton(
+                  icon: Icons.fitness_center_rounded,
+                  label: 'Workout',
+                  onTap: onAssignWorkout,
+                  primary: true,
+                  compact: true,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _CoachActionButton(
+                  icon: Icons.restaurant_menu_rounded,
+                  label: 'Diet',
+                  onTap: onAssignDiet,
+                  compact: true,
+                ),
+              ),
+            ],
           ),
-          _FitActionRow(
-            icon: Icons.edit_note_rounded,
-            title: 'Add trainer note',
-            subtitle: 'Record context, blockers, or form notes.',
-            onTap: onAddNote,
-          ),
-          _FitActionRow(
-            icon: Icons.alarm_add_rounded,
-            title: 'Schedule follow-up',
-            subtitle: 'Create a private reminder for this member.',
-            onTap: onFollowUp,
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _CoachActionButton(
+                  icon: Icons.edit_note_rounded,
+                  label: 'Add note',
+                  onTap: onAddNote,
+                  compact: true,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _CoachActionButton(
+                  icon: Icons.alarm_add_rounded,
+                  label: 'Follow-up',
+                  onTap: onFollowUp,
+                  compact: true,
+                ),
+              ),
+            ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CoachActionButton extends StatelessWidget {
+  const _CoachActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.primary = false,
+    this.compact = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool primary;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final button = primary
+        ? FilledButton.icon(
+            onPressed: onTap,
+            icon: Icon(icon),
+            label: Text(label),
+          )
+        : OutlinedButton.icon(
+            onPressed: onTap,
+            icon: Icon(icon),
+            label: Text(label),
+          );
+
+    return SizedBox(
+      width: double.infinity,
+      height: compact ? 46 : 50,
+      child: button,
     );
   }
 }
@@ -549,118 +768,34 @@ class _FitSectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _FitSectionShell(title: title, icon: icon, child: child);
-  }
-}
-
-class _FitSectionShell extends StatelessWidget {
-  const _FitSectionShell({required this.title, required this.child, this.icon});
-
-  final String title;
-  final Widget child;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              if (icon != null) ...[
-                Icon(icon, color: const Color(0xFF92A3FD), size: 20),
-                const SizedBox(width: 10),
-              ],
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    color: Color(0xFF1D1617),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: AppColors.stroke),
+        ),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+          leading: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: AppColors.primary, size: 19),
           ),
-          const SizedBox(height: 12),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _FitActionRow extends StatelessWidget {
-  const _FitActionRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF7F8F8),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: const Color(0xFF92A3FD), size: 20),
+          title: Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w900,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Color(0xFF1D1617),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF786F72),
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(
-              Icons.arrow_forward_ios_rounded,
-              color: Color(0xFFADA4A5),
-              size: 14,
-            ),
-          ],
+          ),
+          children: [Align(alignment: Alignment.centerLeft, child: child)],
         ),
       ),
     );
