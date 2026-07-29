@@ -22,6 +22,7 @@ class IndependentTrainerEnrollmentFeatureTest extends TestCase
     {
         parent::setUp();
 
+        $this->withoutVite();
         $this->seed(PermissionSeeder::class);
     }
 
@@ -172,6 +173,46 @@ class IndependentTrainerEnrollmentFeatureTest extends TestCase
             'event' => 'gym.trainer.invitation.rejected',
             'subject_id' => $invitation->id,
         ]);
+    }
+
+    public function test_accepted_gym_level_trainer_is_visible_in_owner_trainer_sections(): void
+    {
+        [$owner, $gym] = $this->makeGymOwnerScope();
+        $trainer = $this->makeIndependentTrainer('gym-level-trainer@example.com');
+
+        $response = $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/gym/trainers', [
+                'existing_user_id' => $trainer->id,
+                'specialization' => 'Functional Training',
+                'status' => 'active',
+            ], [
+                'X-Gym-Id' => (string) $gym->id,
+            ])
+            ->assertStatus(202);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/trainer-invitations/'.$response->json('data.invitation_id').'/respond', [
+                'decision' => 'accept',
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('trainer_profiles', [
+            'user_id' => $trainer->id,
+            'gym_id' => $gym->id,
+            'branch_id' => null,
+        ]);
+
+        $this->actingAs($owner, 'sanctum')
+            ->getJson('/api/gym/trainers', [
+                'X-Gym-Id' => (string) $gym->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $trainer->id);
+
+        $this->actingAs($owner)
+            ->get(route('web.gym.trainers.index', ['gym' => $gym->id]))
+            ->assertOk()
+            ->assertSee('gym-level-trainer@example.com');
     }
 
     /**

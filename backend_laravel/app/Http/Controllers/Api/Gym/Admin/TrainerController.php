@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Gym\Admin;
 
+use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Gym\Admin\AssignTrainerMembersRequest;
 use App\Http\Requests\Gym\Admin\StoreTrainerRequest;
@@ -33,15 +34,26 @@ class TrainerController extends Controller
     {
         $gym = $this->resolveGym($request);
         $branchIds = $this->accessibleBranchIds($request, $gym);
+        $includeGymLevelTrainers = in_array(
+            $request->user()->active_role,
+            [RoleName::PlatformAdmin->value, RoleName::GymOwner->value],
+            true,
+        );
 
         $query = User::query()
             ->with(['gyms', 'branches', 'roles', 'permissions', 'managedTrainerProfile.gym', 'managedTrainerProfile.branch', 'assignedMembers'])
             ->withCount([
                 'assignedMembers as assigned_members_count' => fn (Builder $builder) => $builder->where('gym_id', $gym->id),
             ])
-            ->whereHas('managedTrainerProfile', function (Builder $builder) use ($gym, $branchIds): void {
+            ->whereHas('managedTrainerProfile', function (Builder $builder) use ($gym, $branchIds, $includeGymLevelTrainers): void {
                 $builder->where('gym_id', $gym->id)
-                    ->whereIn('branch_id', $branchIds);
+                    ->where(function (Builder $branchQuery) use ($branchIds, $includeGymLevelTrainers): void {
+                        $branchQuery->whereIn('branch_id', $branchIds);
+
+                        if ($includeGymLevelTrainers) {
+                            $branchQuery->orWhereNull('branch_id');
+                        }
+                    });
             })
             ->latest('id');
 

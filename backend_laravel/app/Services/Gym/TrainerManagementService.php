@@ -38,7 +38,22 @@ class TrainerManagementService
         if ($branch) {
             $query->whereHas('managedTrainerProfile', fn (Builder $builder) => $builder->where('branch_id', $branch->id));
         } else {
-            $query->whereHas('managedTrainerProfile', fn (Builder $builder) => $builder->whereIn('branch_id', $gymWebPanelService->accessibleBranchIds($request, $gym)));
+            $branchIds = $gymWebPanelService->accessibleBranchIds($request, $gym);
+            $includeGymLevelTrainers = in_array(
+                $request->user()->active_role,
+                [RoleName::PlatformAdmin->value, RoleName::GymOwner->value],
+                true,
+            );
+
+            $query->whereHas('managedTrainerProfile', function (Builder $builder) use ($branchIds, $includeGymLevelTrainers): void {
+                $builder->where(function (Builder $branchQuery) use ($branchIds, $includeGymLevelTrainers): void {
+                    $branchQuery->whereIn('branch_id', $branchIds);
+
+                    if ($includeGymLevelTrainers) {
+                        $branchQuery->orWhereNull('branch_id');
+                    }
+                });
+            });
         }
 
         return $query;
