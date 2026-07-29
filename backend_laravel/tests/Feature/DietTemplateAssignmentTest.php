@@ -229,6 +229,88 @@ class DietTemplateAssignmentTest extends TestCase
             ->assertUnprocessable();
     }
 
+    public function test_trainer_can_manage_only_their_own_diet_library_templates(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch, $trainer] = $this->context();
+        $globalTemplate = $this->template();
+
+        $created = $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/trainer/diet-templates', [
+                'name' => 'Trainer Recovery Plan',
+                'goal' => 'Recovery',
+                'daily_calorie_target' => 2200,
+                'status' => 'active',
+                'meals' => [[
+                    'name' => 'Breakfast',
+                    'meal_type' => 'breakfast',
+                    'items' => [[
+                        'name' => 'Eggs',
+                        'quantity' => '4',
+                        'protein_g' => 24,
+                    ]],
+                ]],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.is_owned', true)
+            ->assertJsonPath('data.source', 'trainer');
+
+        $templateId = $created->json('data.id');
+
+        $this->actingAs($trainer, 'sanctum')
+            ->getJson('/api/trainer/diet-templates')
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => $globalTemplate->id,
+                'source' => 'atlas',
+            ])
+            ->assertJsonFragment([
+                'id' => $templateId,
+                'is_owned' => true,
+            ]);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->putJson("/api/trainer/diet-templates/{$templateId}", [
+                'name' => 'Trainer Recovery Plan Updated',
+                'goal' => 'Recovery',
+                'status' => 'active',
+                'meals' => [[
+                    'name' => 'Breakfast',
+                    'items' => [['name' => 'Eggs and toast']],
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Trainer Recovery Plan Updated');
+
+        $otherTrainer = User::factory()->create([
+            'active_role' => RoleName::Trainer->value,
+        ]);
+        $otherTrainer->assignRole(RoleName::Trainer->value);
+        $otherTrainer->gyms()->attach($gym);
+        $otherTrainer->branches()->attach($branch);
+        TrainerProfile::query()->create([
+            'user_id' => $otherTrainer->id,
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'specializations' => [],
+            'certifications' => [],
+            'languages' => [],
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($otherTrainer, 'sanctum')
+            ->deleteJson("/api/trainer/diet-templates/{$templateId}")
+            ->assertUnprocessable();
+
+        $this->actingAs($trainer, 'sanctum')
+            ->deleteJson("/api/trainer/diet-templates/{$templateId}")
+            ->assertOk();
+
+        $this->assertDatabaseMissing('diet_plan_templates', [
+            'id' => $templateId,
+        ]);
+    }
+
     public function test_trainer_can_build_edit_review_and_delete_an_assigned_members_diet_plan(): void
     {
         $this->seed(PermissionSeeder::class);

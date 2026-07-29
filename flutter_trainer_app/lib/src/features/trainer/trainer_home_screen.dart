@@ -474,7 +474,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       case 1:
         return 'Assigned Members';
       case 2:
-        return 'Workout Builder';
+        return 'Workout Planner';
       case 3:
         return 'Trainer Chat';
       case 4:
@@ -622,22 +622,18 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
           assignment: assignment,
           repository: _repository,
           onAssignWorkout: () => _openQuickAssignSheet(assignment),
-          onAssignDiet: () => _openDietBuilder(memberId: memberId),
-          onAddNote: () => _openQuickNoteSheet(assignment),
-          onFollowUp: () => _openQuickNoteSheet(assignment),
+          onAssignDiet: _openDietBuilder,
+          onMessage: () => _openChatWithMember(assignment),
+          onAddCoachingNote: () => _openQuickNoteSheet(assignment),
         ),
       ),
     );
   }
 
-  Future<void> _openDietBuilder({int? memberId}) async {
+  Future<void> _openDietBuilder() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => TrainerDietPlanScreen(
-          repository: _repository,
-          members: _members,
-          initialMemberId: memberId,
-        ),
+        builder: (_) => TrainerDietPlanScreen(repository: _repository),
       ),
     );
     if (mounted) {
@@ -664,13 +660,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     }
 
     final noteController = TextEditingController();
-    final followUpController = TextEditingController(
-      text: DateTime.now()
-          .add(const Duration(days: 1))
-          .toIso8601String()
-          .split('T')
-          .first,
-    );
+    final followUpController = TextEditingController();
     bool submitting = false;
 
     await showModalBottomSheet<void>(
@@ -690,8 +680,15 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Quick note',
+                'Coaching note',
                 style: Theme.of(modalContext).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Keep a private note and optionally schedule a follow-up.',
+                style: Theme.of(
+                  modalContext,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -699,14 +696,15 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                 minLines: 3,
                 maxLines: 5,
                 decoration: const InputDecoration(
-                  labelText: 'Note or follow-up',
+                  labelText: 'Private coaching note',
                 ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: followUpController,
                 decoration: const InputDecoration(
-                  labelText: 'Follow-up date (YYYY-MM-DD)',
+                  labelText: 'Follow-up date (optional)',
+                  hintText: 'YYYY-MM-DD',
                 ),
               ),
               const SizedBox(height: 16),
@@ -726,22 +724,24 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                           );
                           setModalState(() => submitting = true);
                           try {
+                            final followUpDate = followUpController.text.trim();
                             await _repository.createNote(memberId, {
                               'note': noteController.text.trim(),
                               'visibility': 'private_to_trainer',
-                              'follow_up_date': followUpController.text.trim(),
+                              if (followUpDate.isNotEmpty)
+                                'follow_up_date': followUpDate,
                             });
                             if (!mounted) {
                               return;
                             }
                             navigator.pop();
                             await _showSuccessCelebration(
-                              'Quick note saved',
+                              'Coaching note saved',
                               icon: Icons.check_circle_rounded,
                             );
                             rootMessenger.showSnackBar(
                               const SnackBar(
-                                content: Text('Quick note saved.'),
+                                content: Text('Coaching note saved.'),
                               ),
                             );
                             await _load();
@@ -757,7 +757,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                             }
                           }
                         },
-                  child: Text(submitting ? 'Saving...' : 'Save note'),
+                  child: Text(submitting ? 'Saving...' : 'Save coaching note'),
                 ),
               ),
             ],
@@ -4821,7 +4821,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   int? _selectedExerciseId;
   bool _savingPlan = false;
   bool _savingExercise = false;
-  int _workoutTabIndex = 0;
+  int _workoutTabIndex = 1;
   String _selectedDayKey = 'Mon';
   final Set<String> _selectedWeekDays = <String>{'Mon', 'Wed', 'Fri'};
   final Map<String, _WorkoutDayDraft> _dayDrafts = <String, _WorkoutDayDraft>{};
@@ -4919,6 +4919,20 @@ class __WorkoutPageState extends State<_WorkoutPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_workoutTabIndex == 2) {
+      return TrainerDietPlanScreen(
+        repository: widget.repository,
+        embedded: true,
+        plannerNavigation: _TrainerWorkoutTabs(
+          selectedIndex: _workoutTabIndex,
+          onChanged: (index) => setState(() => _workoutTabIndex = index),
+        ),
+      );
+    }
+    if (_workoutTabIndex == 0) {
+      return _buildWorkoutLibrary(context);
+    }
+
     final selectedMember = widget.members.firstWhere(
       (item) => (item['member_id'] as num?)?.toInt() == _selectedMemberId,
       orElse: () => widget.members.firstOrNull ?? const <String, dynamic>{},
@@ -4947,16 +4961,14 @@ class __WorkoutPageState extends State<_WorkoutPage> {
 
     return ListView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(25, 14, 25, 30),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 104),
       children: [
         _TrainerWorkoutHero(
-          planCount: widget.plans.length,
           templateCount: widget.templates.length,
           exerciseCount: widget.exercises.length,
-          memberCount: widget.members.length,
         ),
         const SizedBox(height: 22),
-        if (widget.members.isEmpty)
+        if (widget.members.isEmpty && widget.contextData.isEmpty)
           const EmptyStateView(
             title: 'No assigned members available',
             message:
@@ -5118,9 +5130,9 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                   const SizedBox(height: 18),
                 ] else ...[
                   _TrainerWorkoutSection(
-                    title: 'Create Library Workout',
+                    title: 'Workout details',
                     subtitle:
-                        'Build a reusable workout once. After saving, assign it to any member from the Assign Workout tab.',
+                        'Create a reusable program with a clear goal and weekly structure.',
                     icon: Icons.tune_rounded,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -5515,6 +5527,95 @@ class __WorkoutPageState extends State<_WorkoutPage> {
               ],
             ),
           ),
+      ],
+    );
+  }
+
+  Widget _buildWorkoutLibrary(BuildContext context) {
+    return ListView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 104),
+      children: [
+        _TrainerWorkoutHero(
+          templateCount: widget.templates.length,
+          exerciseCount: widget.exercises.length,
+        ),
+        const SizedBox(height: 16),
+        _TrainerWorkoutTabs(
+          selectedIndex: _workoutTabIndex,
+          onChanged: (index) => setState(() => _workoutTabIndex = index),
+        ),
+        const SizedBox(height: 16),
+        _TrainerWorkoutSection(
+          title: 'Workout library',
+          subtitle:
+              'Reusable programs created by you and programs available from Atlas.',
+          icon: Icons.library_books_rounded,
+          child: widget.templates.isEmpty
+              ? const EmptyStateView(
+                  title: 'Your library is empty',
+                  message:
+                      'Open Workouts and create your first reusable program.',
+                  icon: Icons.fitness_center_outlined,
+                )
+              : Column(
+                  children: widget.templates.map((template) {
+                    final days = _mapList(template['days']);
+                    final exerciseCount = days.fold<int>(
+                      0,
+                      (total, day) => total + _mapList(day['exercises']).length,
+                    );
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _TrainerWorkoutTile(
+                        title:
+                            template['name']?.toString() ?? 'Workout program',
+                        subtitle:
+                            '${template['goal']?.toString() ?? 'Flexible goal'} • ${days.length} days • $exerciseCount exercises',
+                        badge: template['is_public_catalog'] == true
+                            ? 'Atlas'
+                            : template['difficulty']?.toString(),
+                        icon: template['is_public_catalog'] == true
+                            ? Icons.public_rounded
+                            : Icons.fitness_center_rounded,
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ),
+        const SizedBox(height: 16),
+        _TrainerWorkoutSection(
+          title: 'Exercise library',
+          subtitle: 'Exercises available while building your workout programs.',
+          icon: Icons.sports_gymnastics_rounded,
+          child: widget.exercises.isEmpty
+              ? const EmptyStateView(
+                  title: 'No exercises yet',
+                  message:
+                      'Create an exercise from the Workouts builder to add it here.',
+                  icon: Icons.sports_gymnastics_outlined,
+                )
+              : Column(
+                  children: widget.exercises.take(20).map((exercise) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _TrainerWorkoutTile(
+                        title: exercise['name']?.toString() ?? 'Exercise',
+                        subtitle:
+                            [
+                                  _exerciseBodyPartLabel(exercise),
+                                  exercise['equipment']?.toString(),
+                                ]
+                                .whereType<String>()
+                                .where((item) => item.isNotEmpty)
+                                .join(' • '),
+                        badge: exercise['is_global'] == true ? 'Atlas' : null,
+                        icon: Icons.sports_gymnastics_rounded,
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ),
       ],
     );
   }
@@ -6535,9 +6636,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Workout saved to library. Select a member to assign.'),
-        ),
+        const SnackBar(content: Text('Workout saved to your library.')),
       );
       _resetBuilder();
       await widget.onRefresh();
@@ -6636,8 +6735,9 @@ class _SelectedExerciseBodyPart extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _TrainerWorkoutColor.field,
+        color: AppColors.surfaceSoft,
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.stroke),
       ),
       child: Row(
         children: [
@@ -6701,26 +6801,36 @@ class _TrainerWorkoutTabs extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
-        color: _TrainerWorkoutColor.field,
+        color: AppColors.surfaceSoft,
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.stroke),
       ),
       child: Row(
         children: [
           Expanded(
             child: _TrainerWorkoutTabButton(
-              label: 'Assign Workout',
-              icon: Icons.assignment_turned_in_rounded,
-              selected: selectedIndex == 0,
-              onTap: () => onChanged(0),
+              label: 'Workouts',
+              icon: Icons.fitness_center_rounded,
+              selected: selectedIndex == 1,
+              onTap: () => onChanged(1),
             ),
           ),
           const SizedBox(width: 6),
           Expanded(
             child: _TrainerWorkoutTabButton(
-              label: 'Workout Builder',
-              icon: Icons.construction_rounded,
-              selected: selectedIndex == 1,
-              onTap: () => onChanged(1),
+              label: 'Diet',
+              icon: Icons.restaurant_menu_rounded,
+              selected: selectedIndex == 2,
+              onTap: () => onChanged(2),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _TrainerWorkoutTabButton(
+              label: 'Library',
+              icon: Icons.library_books_rounded,
+              selected: selectedIndex == 0,
+              onTap: () => onChanged(0),
             ),
           ),
         ],
@@ -6751,17 +6861,8 @@ class _TrainerWorkoutTabButton extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.transparent,
+          color: selected ? AppColors.surface : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 16,
-                    offset: const Offset(0, 8),
-                  ),
-                ]
-              : null,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -6769,9 +6870,7 @@ class _TrainerWorkoutTabButton extends StatelessWidget {
             Icon(
               icon,
               size: 17,
-              color: selected
-                  ? _TrainerWorkoutColor.primaryEnd
-                  : _TrainerWorkoutColor.gray,
+              color: selected ? AppColors.primary : AppColors.textMuted,
             ),
             const SizedBox(width: 7),
             Flexible(
@@ -6781,8 +6880,8 @@ class _TrainerWorkoutTabButton extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: selected
-                      ? _TrainerWorkoutColor.black
-                      : _TrainerWorkoutColor.gray,
+                      ? AppColors.textPrimary
+                      : AppColors.textSecondary,
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
                 ),
@@ -6797,160 +6896,57 @@ class _TrainerWorkoutTabButton extends StatelessWidget {
 
 class _TrainerWorkoutHero extends StatelessWidget {
   const _TrainerWorkoutHero({
-    required this.planCount,
     required this.templateCount,
     required this.exerciseCount,
-    required this.memberCount,
   });
 
-  final int planCount;
   final int templateCount;
   final int exerciseCount;
-  final int memberCount;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       decoration: BoxDecoration(
-        gradient: _TrainerWorkoutColor.primaryGradient,
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: _TrainerWorkoutColor.primaryEnd.withValues(alpha: 0.28),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(18),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Workout studio',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.fitness_center_rounded,
-                  color: Colors.white,
+                const SizedBox(height: 3),
+                Text(
+                  '$templateCount programs • $exerciseCount exercises',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'Workout Builder',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: 5),
-                    Text(
-                      'Build, reuse, assign, and edit member workouts.',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        height: 1.35,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: _TrainerWorkoutHeroMetric(
-                  value: '$planCount',
-                  label: 'Plans',
-                  icon: Icons.view_week_rounded,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _TrainerWorkoutHeroMetric(
-                  value: '$templateCount',
-                  label: 'Library',
-                  icon: Icons.library_books_rounded,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _TrainerWorkoutHeroMetric(
-                  value: '$exerciseCount',
-                  label: 'Exercises',
-                  icon: Icons.sports_gymnastics_rounded,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _WorkoutTinyPill(
-            label: '$memberCount assigned members',
-            icon: Icons.groups_rounded,
-            inverted: true,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TrainerWorkoutHeroMetric extends StatelessWidget {
-  const _TrainerWorkoutHeroMetric({
-    required this.value,
-    required this.label,
-    required this.icon,
-  });
-
-  final String value;
-  final String label;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-      ),
-      child: Column(
-        children: <Widget>[
-          Icon(icon, color: Colors.white, size: 18),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
+              ],
             ),
           ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: AppColors.stroke),
+            ),
+            child: const Icon(
+              Icons.fitness_center_rounded,
+              color: AppColors.primary,
+              size: 21,
             ),
           ),
         ],
@@ -6975,18 +6971,11 @@ class _TrainerWorkoutSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _TrainerWorkoutColor.border),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 22,
-            offset: const Offset(0, 12),
-          ),
-        ],
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.stroke),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -6997,10 +6986,11 @@ class _TrainerWorkoutSection extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  gradient: _TrainerWorkoutColor.softGradient,
-                  borderRadius: BorderRadius.circular(16),
+                  color: AppColors.surfaceSoft,
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: AppColors.stroke),
                 ),
-                child: Icon(icon, color: _TrainerWorkoutColor.primaryEnd),
+                child: Icon(icon, color: AppColors.primary),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -7010,7 +7000,7 @@ class _TrainerWorkoutSection extends StatelessWidget {
                     Text(
                       title,
                       style: const TextStyle(
-                        color: _TrainerWorkoutColor.black,
+                        color: AppColors.textPrimary,
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
                       ),
@@ -7019,7 +7009,7 @@ class _TrainerWorkoutSection extends StatelessWidget {
                     Text(
                       subtitle,
                       style: const TextStyle(
-                        color: _TrainerWorkoutColor.gray,
+                        color: AppColors.textSecondary,
                         fontSize: 11,
                         height: 1.35,
                         fontWeight: FontWeight.w500,
@@ -7349,12 +7339,12 @@ InputDecoration _workoutInputDecoration(String label, {IconData? icon}) {
 }
 
 class _TrainerWorkoutColor {
-  static const Color black = Color(0xFF1D1617);
-  static const Color gray = Color(0xFF7B6F72);
-  static const Color field = Color(0xFFF7F8F8);
-  static const Color border = Color(0xFFEDEDED);
-  static const Color primaryStart = Color(0xFF9DCEFF);
-  static const Color primaryEnd = Color(0xFF92A3FD);
+  static const Color black = AppColors.textPrimary;
+  static const Color gray = AppColors.textSecondary;
+  static const Color field = AppColors.surfaceSoft;
+  static const Color border = AppColors.stroke;
+  static const Color primaryStart = AppColors.primaryBright;
+  static const Color primaryEnd = AppColors.primary;
 
   static const LinearGradient primaryGradient = LinearGradient(
     colors: <Color>[primaryStart, primaryEnd],
@@ -7369,7 +7359,7 @@ class _TrainerWorkoutColor {
   );
 }
 
-class _ChatPage extends StatelessWidget {
+class _ChatPage extends StatefulWidget {
   const _ChatPage({
     required this.members,
     required this.conversations,
@@ -7387,29 +7377,120 @@ class _ChatPage extends StatelessWidget {
   final Future<void> Function()? onRefresh;
 
   @override
+  State<_ChatPage> createState() => _ChatPageState();
+}
+
+class _ChatPageState extends State<_ChatPage> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final filteredMembers = widget.members.where((assignment) {
+      if (_query.isEmpty) {
+        return true;
+      }
+      final member = _map(assignment['member']);
+      final searchable = '${member['name'] ?? ''} ${member['email'] ?? ''}'
+          .toLowerCase();
+      return searchable.contains(_query);
+    }).toList();
     final inbox = _TrainerChatInboxList(
-      members: members,
+      members: filteredMembers,
       selectedMemberId: null,
       conversationForMember: _conversationForMember,
-      onSelectMember: onSelectMember,
+      onSelectMember: widget.onSelectMember,
+      emptyTitle: _query.isEmpty ? 'No members assigned' : 'No member found',
+      emptyMessage: _query.isEmpty
+          ? 'Assigned members will appear here when they are ready to chat.'
+          : 'Try another name or email address.',
     );
 
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
           child: Column(
             children: [
-              _TrainerTabHeader(
-                eyebrow: 'PRIVATE COACHING',
-                title: 'Messages',
-                subtitle: '${members.length} member conversations',
-                icon: Icons.forum_rounded,
-                onRefresh: onRefresh,
-                refreshing: loading,
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Messages',
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'Private coaching conversations',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (widget.onRefresh != null)
+                    _SquareIconButton(
+                      icon: widget.loading
+                          ? Icons.sync_rounded
+                          : Icons.refresh_rounded,
+                      onTap: widget.loading ? () {} : () => widget.onRefresh!(),
+                    ),
+                ],
               ),
-              if (error != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                height: 50,
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(17),
+                  border: Border.all(color: AppColors.stroke),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (value) =>
+                      setState(() => _query = value.trim().toLowerCase()),
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    hintText: 'Search members',
+                    prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      color: AppColors.textMuted,
+                    ),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear search',
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _query = '');
+                            },
+                            icon: const Icon(Icons.close_rounded, size: 19),
+                          ),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    filled: false,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+              if (widget.error != null) ...[
                 const SizedBox(height: 10),
                 Container(
                   width: double.infinity,
@@ -7422,7 +7503,7 @@ class _ChatPage extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    error!,
+                    widget.error!,
                     style: Theme.of(
                       context,
                     ).textTheme.bodySmall?.copyWith(color: AppColors.error),
@@ -7442,7 +7523,7 @@ class _ChatPage extends StatelessWidget {
       return const <String, dynamic>{};
     }
 
-    for (final conversation in conversations) {
+    for (final conversation in widget.conversations) {
       if (_intValue(conversation['member_id']) == memberId) {
         return conversation;
       }
@@ -7455,121 +7536,37 @@ class _ChatPage extends StatelessWidget {
   }
 }
 
-class _TrainerTabHeader extends StatelessWidget {
-  const _TrainerTabHeader({
-    required this.eyebrow,
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    this.onRefresh,
-    this.onSecondaryAction,
-    this.secondaryIcon,
-    this.refreshing = false,
-  });
-
-  final String eyebrow;
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Future<void> Function()? onRefresh;
-  final VoidCallback? onSecondaryAction;
-  final IconData? secondaryIcon;
-  final bool refreshing;
-
-  @override
-  Widget build(BuildContext context) {
-    return PremiumCard(
-      padding: const EdgeInsets.all(18),
-      child: Row(
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: AppColors.surfaceSoft,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.stroke),
-            ),
-            child: Icon(icon, color: AppColors.primaryBright, size: 23),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  eyebrow,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (onSecondaryAction != null && secondaryIcon != null)
-            _SquareIconButton(icon: secondaryIcon!, onTap: onSecondaryAction!),
-          if (onSecondaryAction != null &&
-              secondaryIcon != null &&
-              onRefresh != null)
-            const SizedBox(width: 8),
-          if (onRefresh != null)
-            _SquareIconButton(
-              icon: refreshing ? Icons.sync_rounded : Icons.refresh_rounded,
-              onTap: refreshing ? () {} : () => onRefresh!(),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 class _TrainerChatInboxList extends StatelessWidget {
   const _TrainerChatInboxList({
     required this.members,
     required this.selectedMemberId,
     required this.conversationForMember,
     required this.onSelectMember,
+    this.emptyTitle = 'No members assigned',
+    this.emptyMessage = 'Assigned members will appear here as chat boxes.',
   });
 
   final List<Map<String, dynamic>> members;
   final int? selectedMemberId;
   final Map<String, dynamic> Function(int? memberId) conversationForMember;
   final ValueChanged<int?> onSelectMember;
+  final String emptyTitle;
+  final String emptyMessage;
 
   @override
   Widget build(BuildContext context) {
     if (members.isEmpty) {
-      return const EmptyStateView(
-        title: 'No members assigned',
-        message: 'Assigned members will appear here as chat boxes.',
+      return EmptyStateView(
+        title: emptyTitle,
+        message: emptyMessage,
         icon: Icons.group_outlined,
       );
     }
 
-    final compact = selectedMemberId != null;
-
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(18, 2, 18, 104),
+      padding: const EdgeInsets.fromLTRB(18, 0, 18, 104),
       itemCount: members.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final assignment = members[index];
         final memberId = (assignment['member_id'] as num?)?.toInt();
@@ -7596,7 +7593,6 @@ class _TrainerChatInboxList extends StatelessWidget {
               ? 0
               : (_intValue(conversation['unread_count']) ?? 0),
           isSelected: isSelected,
-          compact: compact,
           onTap: memberId == null ? null : () => onSelectMember(memberId),
         );
       },
@@ -7612,7 +7608,6 @@ class _ChatInboxCard extends StatelessWidget {
     required this.unreadCount,
     required this.isSelected,
     required this.onTap,
-    this.compact = false,
     this.avatarUrl,
   });
 
@@ -7622,66 +7617,45 @@ class _ChatInboxCard extends StatelessWidget {
   final int unreadCount;
   final bool isSelected;
   final VoidCallback? onTap;
-  final bool compact;
   final String? avatarUrl;
 
   @override
   Widget build(BuildContext context) {
     return ConstrainedBox(
-      constraints: BoxConstraints(minHeight: compact ? 72 : 82),
+      constraints: const BoxConstraints(minHeight: 72),
       child: InkWell(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 12 : 16,
-            vertical: compact ? 8 : 14,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
           decoration: BoxDecoration(
-            color: isSelected
-                ? AppColors.surfaceSoft
-                : Colors.white.withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(24),
+            color: isSelected ? AppColors.surfaceSoft : AppColors.surface,
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: isSelected
                   ? AppColors.primary.withValues(alpha: 0.22)
-                  : AppColors.stroke.withValues(alpha: 0.75),
+                  : AppColors.stroke,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.shadow.withValues(alpha: 0.08),
-                blurRadius: 14,
-                offset: const Offset(0, 8),
-              ),
-            ],
           ),
           child: Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceSoft,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.stroke),
-                ),
-                child: CircleAvatar(
-                  radius: compact ? 21 : 25,
-                  backgroundColor: AppColors.surfaceStrong,
-                  backgroundImage:
-                      avatarUrl != null && avatarUrl!.trim().isNotEmpty
-                      ? NetworkImage(avatarUrl!)
-                      : null,
-                  child: avatarUrl == null || avatarUrl!.trim().isEmpty
-                      ? Text(
-                          name.trim().isEmpty ? 'M' : name.trim()[0],
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        )
-                      : null,
-                ),
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: AppColors.surfaceSoft,
+                backgroundImage:
+                    avatarUrl != null && avatarUrl!.trim().isNotEmpty
+                    ? NetworkImage(avatarUrl!)
+                    : null,
+                child: avatarUrl == null || avatarUrl!.trim().isEmpty
+                    ? Text(
+                        name.trim().isEmpty ? 'M' : name.trim()[0],
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -7699,10 +7673,10 @@ class _ChatInboxCard extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    SizedBox(height: compact ? 2 : 6),
+                    const SizedBox(height: 3),
                     Text(
                       preview,
-                      maxLines: compact ? 1 : 1,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: unreadCount > 0
@@ -7713,46 +7687,33 @@ class _ChatInboxCard extends StatelessWidget {
                             : FontWeight.w500,
                       ),
                     ),
-                    if (!compact) const SizedBox(height: 8),
-                    if (!compact)
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              time,
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(color: AppColors.textMuted),
-                            ),
-                          ),
-                          if (unreadCount > 0)
-                            _ChatUnreadBadge(unreadCount: unreadCount),
-                        ],
-                      ),
                   ],
                 ),
               ),
-              if (compact) ...[
-                const SizedBox(width: 8),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      time,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: AppColors.textMuted,
-                      ),
+              const SizedBox(width: 8),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    time,
+                    maxLines: 1,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: unreadCount > 0
+                          ? AppColors.primary
+                          : AppColors.textMuted,
+                      fontWeight: unreadCount > 0
+                          ? FontWeight.w800
+                          : FontWeight.w600,
                     ),
-                    if (unreadCount > 0) ...[
-                      const SizedBox(height: 4),
-                      _ChatUnreadBadge(unreadCount: unreadCount),
-                    ],
+                  ),
+                  if (unreadCount > 0) ...[
+                    const SizedBox(height: 5),
+                    _ChatUnreadBadge(unreadCount: unreadCount),
                   ],
-                ),
-              ],
+                ],
+              ),
             ],
           ),
         ),
@@ -7789,12 +7750,22 @@ class _ChatThreadHeader extends StatelessWidget {
   const _ChatThreadHeader({
     required this.member,
     required this.loading,
+    required this.busy,
+    required this.blockedByMe,
+    required this.onBack,
     required this.onRefresh,
+    required this.onReport,
+    required this.onToggleBlock,
   });
 
   final Map<String, dynamic> member;
   final bool loading;
+  final bool busy;
+  final bool blockedByMe;
+  final VoidCallback onBack;
   final Future<void> Function()? onRefresh;
+  final VoidCallback onReport;
+  final VoidCallback onToggleBlock;
 
   @override
   Widget build(BuildContext context) {
@@ -7802,50 +7773,117 @@ class _ChatThreadHeader extends StatelessWidget {
     final avatarUrl =
         member['avatar']?.toString() ?? member['profile_photo_url']?.toString();
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: AppColors.surfaceStrong,
-            backgroundImage: avatarUrl != null && avatarUrl.trim().isNotEmpty
-                ? NetworkImage(avatarUrl)
-                : null,
-            child: avatarUrl == null || avatarUrl.trim().isEmpty
-                ? Text(
-                    name.trim().isEmpty ? 'M' : name.trim()[0],
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  )
-                : null,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
+    return Row(
+      children: [
+        _SquareIconButton(icon: Icons.arrow_back_rounded, onTap: onBack),
+        const SizedBox(width: 11),
+        CircleAvatar(
+          radius: 22,
+          backgroundColor: AppColors.surface,
+          backgroundImage: avatarUrl != null && avatarUrl.trim().isNotEmpty
+              ? NetworkImage(avatarUrl)
+              : null,
+          child: avatarUrl == null || avatarUrl.trim().isEmpty
+              ? Text(
+                  name.trim().isEmpty ? 'M' : name.trim()[0],
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w900,
                   ),
+                )
+              : null,
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w900,
                 ),
-                Text(
-                  'Private member conversation',
-                  style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                blockedByMe ? 'Conversation blocked' : 'Private coaching chat',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: blockedByMe
+                      ? AppColors.error
+                      : AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          if (onRefresh != null)
-            IconButton(
-              onPressed: loading ? null : onRefresh,
-              icon: const Icon(Icons.refresh_rounded),
+        ),
+        if (onRefresh != null)
+          _SquareIconButton(
+            icon: loading ? Icons.sync_rounded : Icons.refresh_rounded,
+            onTap: loading ? () {} : () => onRefresh!(),
+          ),
+        const SizedBox(width: 7),
+        PopupMenuButton<String>(
+          enabled: !busy,
+          tooltip: 'Conversation options',
+          onSelected: (value) {
+            if (value == 'report') {
+              onReport();
+            } else if (value == 'block') {
+              onToggleBlock();
+            }
+          },
+          itemBuilder: (context) => [
+            const PopupMenuItem(
+              value: 'report',
+              child: Row(
+                children: [
+                  Icon(Icons.flag_outlined, size: 19),
+                  SizedBox(width: 10),
+                  Text('Report conversation'),
+                ],
+              ),
             ),
-        ],
-      ),
+            PopupMenuItem(
+              value: 'block',
+              child: Row(
+                children: [
+                  Icon(
+                    blockedByMe ? Icons.lock_open_rounded : Icons.block_rounded,
+                    size: 19,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(blockedByMe ? 'Unblock member' : 'Block member'),
+                ],
+              ),
+            ),
+          ],
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.stroke),
+            ),
+            child: busy
+                ? const Padding(
+                    padding: EdgeInsets.all(13),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(
+                    Icons.more_horiz_rounded,
+                    color: AppColors.textSecondary,
+                    size: 22,
+                  ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -8281,14 +8319,16 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
-            child: PremiumCard(
-              padding: EdgeInsets.zero,
-              child: _ChatThreadHeader(
-                member: widget.member,
-                loading: _loading,
-                onRefresh: _load,
-              ),
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 4),
+            child: _ChatThreadHeader(
+              member: widget.member,
+              loading: _loading,
+              busy: _safetyBusy,
+              blockedByMe: _blockedByMe,
+              onBack: () => Navigator.of(context).maybePop(),
+              onRefresh: _load,
+              onReport: _reportConversation,
+              onToggleBlock: _toggleBlock,
             ),
           ),
           _TrainerChatSafetyBar(
@@ -8297,7 +8337,6 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
             blockedMe: _blockedMe,
             busy: _safetyBusy,
             onAcceptTerms: _acceptTerms,
-            onReport: _reportConversation,
             onToggleBlock: _toggleBlock,
           ),
           if (_error != null)
@@ -8331,9 +8370,9 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
                     icon: Icons.chat_bubble_outline_rounded,
                   )
                 : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
+                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
                     itemCount: _messages.length + (_hasOlderMessages ? 1 : 0),
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
                       if (_hasOlderMessages) {
                         if (index == 0) {
@@ -8367,40 +8406,58 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
           if (_termsAccepted && !_blockedByMe && !_blockedMe)
             SafeArea(
               top: false,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.94),
-                  border: const Border(
-                    top: BorderSide(color: AppColors.stroke),
-                  ),
-                ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
                 child: Row(
                   children: [
                     Expanded(
-                      child: TextField(
-                        controller: _controller,
-                        minLines: 1,
-                        maxLines: 4,
-                        enabled: !_sending,
-                        decoration: const InputDecoration(
-                          hintText: 'Message this member',
-                          prefixIcon: Icon(Icons.lock_outline_rounded),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppColors.stroke),
                         ),
-                        onSubmitted: (_) => _send(),
+                        child: TextField(
+                          controller: _controller,
+                          minLines: 1,
+                          maxLines: 4,
+                          enabled: !_sending,
+                          textCapitalization: TextCapitalization.sentences,
+                          decoration: const InputDecoration(
+                            hintText: 'Write a message',
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            filled: false,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 13,
+                            ),
+                          ),
+                          onSubmitted: (_) => _send(),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    FilledButton(
-                      onPressed: _sending ? null : _send,
-                      style: FilledButton.styleFrom(
-                        shape: const CircleBorder(),
-                        padding: const EdgeInsets.all(16),
-                      ),
-                      child: Icon(
-                        _sending
-                            ? Icons.hourglass_top_rounded
-                            : Icons.send_rounded,
+                    const SizedBox(width: 9),
+                    Material(
+                      color: _sending
+                          ? AppColors.strokeStrong
+                          : AppColors.primary,
+                      borderRadius: BorderRadius.circular(18),
+                      child: InkWell(
+                        onTap: _sending ? null : _send,
+                        borderRadius: BorderRadius.circular(18),
+                        child: SizedBox(
+                          width: 50,
+                          height: 50,
+                          child: Icon(
+                            _sending
+                                ? Icons.hourglass_top_rounded
+                                : Icons.arrow_upward_rounded,
+                            color: Colors.white,
+                            size: 21,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -8420,7 +8477,6 @@ class _TrainerChatSafetyBar extends StatelessWidget {
     required this.blockedMe,
     required this.busy,
     required this.onAcceptTerms,
-    required this.onReport,
     required this.onToggleBlock,
   });
 
@@ -8429,51 +8485,63 @@ class _TrainerChatSafetyBar extends StatelessWidget {
   final bool blockedMe;
   final bool busy;
   final VoidCallback onAcceptTerms;
-  final VoidCallback onReport;
   final VoidCallback onToggleBlock;
 
   @override
   Widget build(BuildContext context) {
+    if (termsAccepted && !blockedByMe && !blockedMe) {
+      return const SizedBox.shrink();
+    }
+
+    final blocked = blockedByMe || blockedMe;
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
-      child: PremiumCard(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: !termsAccepted
-            ? Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Accept the Terms and respectful-use rules before messaging.',
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: busy ? null : onAcceptTerms,
-                    child: const Text('Accept'),
-                  ),
-                ],
-              )
-            : Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      blockedByMe
-                          ? 'You blocked this member.'
-                          : blockedMe
-                          ? 'Messaging is unavailable.'
-                          : 'Private coaching chat',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: busy ? null : onReport,
-                    child: const Text('Report'),
-                  ),
-                  TextButton(
-                    onPressed: busy ? null : onToggleBlock,
-                    child: Text(blockedByMe ? 'Unblock' : 'Block'),
-                  ),
-                ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: (blocked ? AppColors.error : AppColors.primary).withValues(
+            alpha: 0.07,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: (blocked ? AppColors.error : AppColors.primary).withValues(
+              alpha: 0.14,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              blocked ? Icons.block_rounded : Icons.shield_outlined,
+              size: 19,
+              color: blocked ? AppColors.error : AppColors.primary,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                !termsAccepted
+                    ? 'Accept respectful-use terms to start messaging.'
+                    : blockedByMe
+                    ? 'You blocked this conversation.'
+                    : 'Messaging is unavailable for this conversation.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
+            ),
+            if (!termsAccepted)
+              TextButton(
+                onPressed: busy ? null : onAcceptTerms,
+                child: const Text('Accept'),
+              )
+            else if (blockedByMe)
+              TextButton(
+                onPressed: busy ? null : onToggleBlock,
+                child: const Text('Unblock'),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -8491,10 +8559,13 @@ class _LoadOlderChatMessagesButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: OutlinedButton.icon(
+      child: TextButton.icon(
         onPressed: loading ? null : onPressed,
-        icon: Icon(loading ? Icons.sync_rounded : Icons.history_rounded),
-        label: Text(loading ? 'Loading older messages' : 'Load older messages'),
+        icon: Icon(
+          loading ? Icons.sync_rounded : Icons.history_rounded,
+          size: 18,
+        ),
+        label: Text(loading ? 'Loading messages' : 'Earlier messages'),
       ),
     );
   }
@@ -8518,26 +8589,21 @@ class _ChatBubble extends StatelessWidget {
     return Align(
       alignment: isOutgoing ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 310),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(context).width * 0.76,
+        ),
         child: Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.fromLTRB(14, 11, 14, 8),
           decoration: BoxDecoration(
-            gradient: isOutgoing
-                ? LinearGradient(
-                    colors: failed
-                        ? [AppColors.error, AppColors.error]
-                        : [AppColors.primaryBright, AppColors.primary],
-                  )
-                : null,
-            color: isOutgoing ? null : Colors.white.withValues(alpha: 0.94),
-            border: isOutgoing
-                ? null
-                : Border.all(color: AppColors.stroke.withValues(alpha: 0.8)),
+            color: isOutgoing
+                ? (failed ? AppColors.error : AppColors.primary)
+                : AppColors.surface,
+            border: isOutgoing ? null : Border.all(color: AppColors.stroke),
             borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(22),
-              topRight: const Radius.circular(22),
-              bottomLeft: Radius.circular(isOutgoing ? 22 : 6),
-              bottomRight: Radius.circular(isOutgoing ? 6 : 22),
+              topLeft: const Radius.circular(19),
+              topRight: const Radius.circular(19),
+              bottomLeft: Radius.circular(isOutgoing ? 19 : 5),
+              bottomRight: Radius.circular(isOutgoing ? 5 : 19),
             ),
           ),
           child: Column(
@@ -8548,14 +8614,22 @@ class _ChatBubble extends StatelessWidget {
                 body,
                 style: TextStyle(
                   color: isOutgoing ? Colors.white : AppColors.textPrimary,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w500,
+                  height: 1.35,
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                time,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: isOutgoing ? Colors.white70 : AppColors.textMuted,
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  time,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: isOutgoing
+                        ? Colors.white.withValues(alpha: 0.72)
+                        : AppColors.textMuted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -8602,16 +8676,47 @@ class _NotificationPage extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(18, 10, 18, 104),
         children: [
-          _TrainerTabHeader(
-            eyebrow: 'COACHING INBOX',
-            title: 'Notifications',
-            subtitle: '$unreadCount unread updates',
-            icon: Icons.notifications_none_rounded,
-            onRefresh: onRefresh,
-            onSecondaryAction: members.isEmpty
-                ? null
-                : () => _openAnnouncementSheet(context),
-            secondaryIcon: Icons.campaign_rounded,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Notifications',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.6,
+                          ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'Coaching updates, requests, and gym activity.',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (members.isNotEmpty) ...[
+                _SquareIconButton(
+                  icon: Icons.campaign_outlined,
+                  onTap: () => _openAnnouncementSheet(context),
+                ),
+                const SizedBox(width: 8),
+              ],
+              _SquareIconButton(
+                icon: Icons.refresh_rounded,
+                onTap: () => onRefresh(),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           _TrainerNotificationSummaryBand(
@@ -9090,21 +9195,35 @@ class _TrainerNotificationSummaryBand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PremiumCard(
+    return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.primaryBright, AppColors.primary],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 9),
+          ),
+        ],
+      ),
       child: Row(
         children: [
           Container(
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: AppColors.surfaceSoft,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.stroke),
+              color: Colors.white.withValues(alpha: 0.20),
+              shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.notifications_active_rounded,
-              color: AppColors.primaryBright,
+              color: Colors.white,
             ),
           ),
           const SizedBox(width: 12),
@@ -9117,7 +9236,7 @@ class _TrainerNotificationSummaryBand extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: AppColors.textPrimary,
+                    color: Colors.white,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -9127,7 +9246,7 @@ class _TrainerNotificationSummaryBand extends StatelessWidget {
                       ? '$totalCount total notifications'
                       : '$totalCount updates • $trialCount trial leads',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: Colors.white.withValues(alpha: 0.78),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -9135,10 +9254,10 @@ class _TrainerNotificationSummaryBand extends StatelessWidget {
             ),
           ),
           if (canMarkAllRead)
-            TextButton.icon(
+            TextButton(
               onPressed: onMarkAllRead,
-              icon: const Icon(Icons.done_all_rounded, size: 17),
-              label: const Text('Read all'),
+              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              child: const Text('Read all'),
             ),
         ],
       ),
@@ -9315,11 +9434,21 @@ class _TrainerNotificationRow extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: color.withValues(alpha: 0.14)),
+                gradient: LinearGradient(
+                  colors: [
+                    color.withValues(alpha: 0.88),
+                    color.withValues(alpha: 0.58),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
               ),
-              child: Icon(_notificationIcon(type), color: color, size: 20),
+              child: Icon(
+                _notificationIcon(type),
+                color: Colors.white,
+                size: 20,
+              ),
             ),
             const SizedBox(width: 15),
             Expanded(
@@ -9419,14 +9548,6 @@ class _TrainerNotificationRow extends StatelessWidget {
                 ],
               ),
             ),
-            if (isUnread) ...[
-              const SizedBox(width: 8),
-              IconButton(
-                onPressed: onMarkRead,
-                icon: const Icon(Icons.done_rounded),
-                color: AppColors.primary,
-              ),
-            ],
           ],
         ),
       ),

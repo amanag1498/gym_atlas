@@ -22,6 +22,10 @@ class DietPlanTemplateResource extends JsonResource
             'notes' => $this->notes,
             'meals' => collect($this->meals ?? [])->values(),
             'status' => $this->status,
+            'is_owned' => (int) $this->created_by_user_id === (int) $request->user()?->id,
+            'source' => (int) $this->created_by_user_id === (int) $request->user()?->id
+                ? 'trainer'
+                : 'atlas',
         ];
     }
 

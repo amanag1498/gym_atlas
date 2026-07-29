@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api\Trainer;
 
+use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Diet\SaveDietPlanTemplateRequest;
 use App\Http\Requests\Diet\StoreTrainerDietPlanRequest;
 use App\Http\Requests\Diet\UpdateDietPlanRequest;
 use App\Http\Resources\Diet\DietPlanResource;
@@ -70,7 +72,23 @@ class DietPlanController extends Controller
     {
         $this->trainerScopeService->resolveTrainerProfile($request);
         $templates = DietPlanTemplate::query()
-            ->where('status', 'active')
+            ->where(function ($query) use ($request): void {
+                $query
+                    ->where('created_by_user_id', $request->user()->id)
+                    ->orWhereNull('created_by_user_id')
+                    ->orWhereHas(
+                        'creator.roles',
+                        fn ($roles) => $roles->where(
+                            'name',
+                            RoleName::PlatformAdmin->value,
+                        ),
+                    );
+            })
+            ->where(function ($query) use ($request): void {
+                $query
+                    ->where('status', 'active')
+                    ->orWhere('created_by_user_id', $request->user()->id);
+            })
             ->orderBy('name')
             ->get();
 
@@ -78,6 +96,73 @@ class DietPlanController extends Controller
             DietPlanTemplateResource::collection($templates),
             'Global diet templates fetched successfully.',
         );
+    }
+
+    public function storeTemplate(SaveDietPlanTemplateRequest $request)
+    {
+        $this->trainerScopeService->resolveTrainerProfile($request);
+        $template = DietPlanTemplate::query()->create(
+            $request->validated()
+            + ['created_by_user_id' => $request->user()->id]
+        );
+
+        $this->auditLogService->log(
+            event: 'trainer.diet_template.created',
+            action: 'create',
+            request: $request,
+            subject: $template,
+            newValues: $template->toArray(),
+        );
+
+        return $this->success(
+            DietPlanTemplateResource::make($template),
+            'Diet template created successfully.',
+            201,
+        );
+    }
+
+    public function updateTemplate(
+        SaveDietPlanTemplateRequest $request,
+        DietPlanTemplate $dietPlanTemplate,
+    ) {
+        $this->trainerScopeService->resolveTrainerProfile($request);
+        $this->assertTemplateOwnership($request, $dietPlanTemplate);
+        $oldValues = $dietPlanTemplate->toArray();
+        $dietPlanTemplate->update($request->validated());
+
+        $this->auditLogService->log(
+            event: 'trainer.diet_template.updated',
+            action: 'update',
+            request: $request,
+            subject: $dietPlanTemplate,
+            oldValues: $oldValues,
+            newValues: $dietPlanTemplate->fresh()->toArray(),
+        );
+
+        return $this->success(
+            DietPlanTemplateResource::make($dietPlanTemplate->fresh()),
+            'Diet template updated successfully.',
+        );
+    }
+
+    public function destroyTemplate(
+        Request $request,
+        DietPlanTemplate $dietPlanTemplate,
+    ) {
+        $this->trainerScopeService->resolveTrainerProfile($request);
+        $this->assertTemplateOwnership($request, $dietPlanTemplate);
+        $oldValues = $dietPlanTemplate->toArray();
+        $dietPlanTemplate->delete();
+
+        $this->auditLogService->log(
+            event: 'trainer.diet_template.deleted',
+            action: 'delete',
+            request: $request,
+            subject: $dietPlanTemplate,
+            oldValues: $oldValues,
+        );
+
+        return $this->success(null, 'Diet template deleted successfully.');
     }
 
     public function assignTemplate(Request $request, DietPlanTemplate $dietPlanTemplate)
@@ -161,6 +246,17 @@ class DietPlanController extends Controller
         $profile = $this->trainerScopeService->resolveTrainerProfile($request);
         if ((int) $plan->trainer_id !== (int) $request->user()->id || (int) $plan->gym_id !== (int) $profile->gym_id || ($profile->branch_id && (int) $plan->branch_id !== (int) $profile->branch_id)) {
             throw ValidationException::withMessages(['diet_plan_id' => ['You do not have access to this diet plan.']]);
+        }
+    }
+
+    private function assertTemplateOwnership(
+        Request $request,
+        DietPlanTemplate $template,
+    ): void {
+        if ((int) $template->created_by_user_id !== (int) $request->user()->id) {
+            throw ValidationException::withMessages([
+                'diet_template_id' => ['You can only change your own diet templates.'],
+            ]);
         }
     }
 }

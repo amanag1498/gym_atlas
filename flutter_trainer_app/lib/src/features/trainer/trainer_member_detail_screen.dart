@@ -13,16 +13,16 @@ class TrainerMemberDetailScreen extends StatefulWidget {
     required this.repository,
     required this.onAssignWorkout,
     required this.onAssignDiet,
-    required this.onAddNote,
-    required this.onFollowUp,
+    required this.onMessage,
+    required this.onAddCoachingNote,
   });
 
   final Map<String, dynamic> assignment;
   final TrainerRepository repository;
   final VoidCallback onAssignWorkout;
   final Future<void> Function() onAssignDiet;
-  final VoidCallback onAddNote;
-  final VoidCallback onFollowUp;
+  final VoidCallback onMessage;
+  final VoidCallback onAddCoachingNote;
 
   @override
   State<TrainerMemberDetailScreen> createState() =>
@@ -196,8 +196,8 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
                         _FitActionPanel(
                           onAssignWorkout: widget.onAssignWorkout,
                           onAssignDiet: _assignDiet,
-                          onAddNote: widget.onAddNote,
-                          onFollowUp: widget.onFollowUp,
+                          onMessage: widget.onMessage,
+                          onAddCoachingNote: widget.onAddCoachingNote,
                         ),
                         const SizedBox(height: 18),
                         _FitSectionCard(
@@ -639,14 +639,14 @@ class _FitActionPanel extends StatelessWidget {
   const _FitActionPanel({
     required this.onAssignWorkout,
     required this.onAssignDiet,
-    required this.onAddNote,
-    required this.onFollowUp,
+    required this.onMessage,
+    required this.onAddCoachingNote,
   });
 
   final VoidCallback onAssignWorkout;
   final VoidCallback onAssignDiet;
-  final VoidCallback onAddNote;
-  final VoidCallback onFollowUp;
+  final VoidCallback onMessage;
+  final VoidCallback onAddCoachingNote;
 
   @override
   Widget build(BuildContext context) {
@@ -695,18 +695,18 @@ class _FitActionPanel extends StatelessWidget {
             children: [
               Expanded(
                 child: _CoachActionButton(
-                  icon: Icons.edit_note_rounded,
-                  label: 'Add note',
-                  onTap: onAddNote,
+                  icon: Icons.chat_bubble_outline_rounded,
+                  label: 'Message',
+                  onTap: onMessage,
                   compact: true,
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _CoachActionButton(
-                  icon: Icons.alarm_add_rounded,
-                  label: 'Follow-up',
-                  onTap: onFollowUp,
+                  icon: Icons.edit_calendar_outlined,
+                  label: 'Note / follow-up',
+                  onTap: onAddCoachingNote,
                   compact: true,
                 ),
               ),
@@ -735,22 +735,46 @@ class _CoachActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final button = primary
-        ? FilledButton.icon(
-            onPressed: onTap,
-            icon: Icon(icon),
-            label: Text(label),
-          )
-        : OutlinedButton.icon(
-            onPressed: onTap,
-            icon: Icon(icon),
-            label: Text(label),
-          );
-
     return SizedBox(
       width: double.infinity,
-      height: compact ? 46 : 50,
-      child: button,
+      height: compact ? 52 : 56,
+      child: Material(
+        color: primary ? AppColors.primary : AppColors.surfaceSoft,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: primary ? null : Border.all(color: AppColors.stroke),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 19,
+                  color: primary ? Colors.white : AppColors.primary,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: primary ? Colors.white : AppColors.textPrimary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -590,6 +590,9 @@ Route::prefix('trainer')
         Route::get('diet-plans', [TrainerDietPlanController::class, 'index'])->middleware('permission:diet_plan.view|diet_plan.manage');
         Route::post('diet-plans', [TrainerDietPlanController::class, 'store'])->middleware('permission:diet_plan.manage');
         Route::get('diet-templates', [TrainerDietPlanController::class, 'templates'])->middleware('permission:diet_plan.view|diet_plan.manage');
+        Route::post('diet-templates', [TrainerDietPlanController::class, 'storeTemplate'])->middleware('permission:diet_plan.manage');
+        Route::put('diet-templates/{dietPlanTemplate}', [TrainerDietPlanController::class, 'updateTemplate'])->middleware('permission:diet_plan.manage');
+        Route::delete('diet-templates/{dietPlanTemplate}', [TrainerDietPlanController::class, 'destroyTemplate'])->middleware('permission:diet_plan.manage');
         Route::post('diet-templates/{dietPlanTemplate}/assign', [TrainerDietPlanController::class, 'assignTemplate'])->middleware('permission:diet_plan.manage');
         Route::get('diet-plans/{dietPlan}', [TrainerDietPlanController::class, 'show'])->middleware('permission:diet_plan.view|diet_plan.manage');
         Route::put('diet-plans/{dietPlan}', [TrainerDietPlanController::class, 'update'])->middleware('permission:diet_plan.manage');
