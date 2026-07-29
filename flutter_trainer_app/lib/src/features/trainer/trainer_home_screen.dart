@@ -301,6 +301,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         onEditProfile: _openProfileEditSheet,
         onOpenMembers: () => setState(() => _index = 1),
         onOpenWorkouts: () => setState(() => _index = 2),
+        onOpenDiet: _openDietBuilder,
         onOpenChat: () => setState(() => _index = 3),
         onOpenNotifications: () => setState(() => _index = 4),
         onOpenSettings: _openSettingsScreen,
@@ -382,15 +383,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       actions: [
         IconButton(
           tooltip: 'Diet plans',
-          onPressed: () => Navigator.of(context).push<void>(
-            MaterialPageRoute<void>(
-              builder: (_) => TrainerDietPlanScreen(
-                repository: _repository,
-                members: _members,
-                contextData: _contextData,
-              ),
-            ),
-          ),
+          onPressed: _openDietBuilder,
           icon: const Icon(Icons.restaurant_menu_rounded),
         ),
       ],
@@ -629,11 +622,27 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
           assignment: assignment,
           repository: _repository,
           onAssignWorkout: () => _openQuickAssignSheet(assignment),
+          onAssignDiet: () => _openDietBuilder(memberId: memberId),
           onAddNote: () => _openQuickNoteSheet(assignment),
           onFollowUp: () => _openQuickNoteSheet(assignment),
         ),
       ),
     );
+  }
+
+  Future<void> _openDietBuilder({int? memberId}) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => TrainerDietPlanScreen(
+          repository: _repository,
+          members: _members,
+          initialMemberId: memberId,
+        ),
+      ),
+    );
+    if (mounted) {
+      await _load();
+    }
   }
 
   Future<void> _openTasksScreen() async {
@@ -1600,6 +1609,7 @@ class _DashboardPage extends StatelessWidget {
     required this.onEditProfile,
     required this.onOpenMembers,
     required this.onOpenWorkouts,
+    required this.onOpenDiet,
     required this.onOpenChat,
     required this.onOpenNotifications,
     required this.onOpenSettings,
@@ -1620,6 +1630,7 @@ class _DashboardPage extends StatelessWidget {
   final Future<void> Function() onEditProfile;
   final VoidCallback onOpenMembers;
   final VoidCallback onOpenWorkouts;
+  final VoidCallback onOpenDiet;
   final VoidCallback onOpenChat;
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenSettings;
@@ -1703,6 +1714,12 @@ class _DashboardPage extends StatelessWidget {
             subtitle: 'Open the workout builder and assign a plan.',
             icon: Icons.fitness_center_rounded,
             onTap: onOpenWorkouts,
+          ),
+          (
+            title: 'Diet Builder',
+            subtitle: 'Build nutrition plans or assign a diet template.',
+            icon: Icons.restaurant_menu_rounded,
+            onTap: onOpenDiet,
           ),
           (
             title: 'Add Note',
@@ -1878,6 +1895,14 @@ class _DashboardPage extends StatelessWidget {
                             onPressed: onOpenWorkouts,
                             icon: const Icon(Icons.fitness_center_rounded),
                             label: const Text('Create Workout Plan'),
+                          ),
+                        ),
+                        SizedBox(
+                          width: isMedium ? 200 : double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: onOpenDiet,
+                            icon: const Icon(Icons.restaurant_menu_rounded),
+                            label: const Text('Diet Builder'),
                           ),
                         ),
                         SizedBox(
@@ -2676,6 +2701,7 @@ class _DashboardPage extends StatelessWidget {
       onEditProfile: onEditProfile,
       onOpenMembers: onOpenMembers,
       onOpenWorkouts: onOpenWorkouts,
+      onOpenDiet: onOpenDiet,
       onOpenChat: onOpenChat,
       onOpenNotifications: onOpenNotifications,
       onOpenSettings: onOpenSettings,
@@ -2725,6 +2751,7 @@ class _TrainerFitnessDashboard extends StatelessWidget {
     required this.onEditProfile,
     required this.onOpenMembers,
     required this.onOpenWorkouts,
+    required this.onOpenDiet,
     required this.onOpenChat,
     required this.onOpenNotifications,
     required this.onOpenSettings,
@@ -2756,6 +2783,7 @@ class _TrainerFitnessDashboard extends StatelessWidget {
   final Future<void> Function() onEditProfile;
   final VoidCallback onOpenMembers;
   final VoidCallback onOpenWorkouts;
+  final VoidCallback onOpenDiet;
   final VoidCallback onOpenChat;
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenSettings;
@@ -2905,6 +2933,18 @@ class _TrainerFitnessDashboard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             RevealOnBuild(
+              delay: const Duration(milliseconds: 95),
+              child: _DashboardSection(
+                eyebrow: 'Plan tools',
+                title: 'Build the next client plan',
+                child: _TrainerPlanTools(
+                  onOpenWorkouts: onOpenWorkouts,
+                  onOpenDiet: onOpenDiet,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            RevealOnBuild(
               delay: const Duration(milliseconds: 110),
               child: LayoutBuilder(
                 builder: (context, constraints) {
@@ -3026,6 +3066,124 @@ class _TrainerFitnessDashboard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrainerPlanTools extends StatelessWidget {
+  const _TrainerPlanTools({
+    required this.onOpenWorkouts,
+    required this.onOpenDiet,
+  });
+
+  final VoidCallback onOpenWorkouts;
+  final VoidCallback onOpenDiet;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stacked = constraints.maxWidth < 520;
+        final workout = _TrainerPlanToolCard(
+          title: 'Workout Builder',
+          subtitle: 'Create sessions and assign a training plan.',
+          icon: Icons.fitness_center_rounded,
+          color: AppColors.primary,
+          onTap: onOpenWorkouts,
+        );
+        final diet = _TrainerPlanToolCard(
+          title: 'Diet Builder',
+          subtitle: 'Create meal plans or start from a template.',
+          icon: Icons.restaurant_menu_rounded,
+          color: AppColors.accentPurple,
+          onTap: onOpenDiet,
+        );
+
+        if (stacked) {
+          return Column(children: [workout, const SizedBox(height: 12), diet]);
+        }
+
+        return Row(
+          children: [
+            Expanded(child: workout),
+            const SizedBox(width: 12),
+            Expanded(child: diet),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _TrainerPlanToolCard extends StatelessWidget {
+  const _TrainerPlanToolCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color.withValues(alpha: 0.16)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(icon, color: color),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textMuted,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.arrow_forward_rounded, size: 20, color: color),
+            ],
+          ),
         ),
       ),
     );

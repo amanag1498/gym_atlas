@@ -12,6 +12,7 @@ class TrainerMemberDetailScreen extends StatefulWidget {
     required this.assignment,
     required this.repository,
     required this.onAssignWorkout,
+    required this.onAssignDiet,
     required this.onAddNote,
     required this.onFollowUp,
   });
@@ -19,6 +20,7 @@ class TrainerMemberDetailScreen extends StatefulWidget {
   final Map<String, dynamic> assignment;
   final TrainerRepository repository;
   final VoidCallback onAssignWorkout;
+  final Future<void> Function() onAssignDiet;
   final VoidCallback onAddNote;
   final VoidCallback onFollowUp;
 
@@ -34,6 +36,7 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
   Map<String, dynamic> _progress = const {};
   List<Map<String, dynamic>> _attendance = const [];
   List<Map<String, dynamic>> _plans = const [];
+  List<Map<String, dynamic>> _dietPlans = const [];
   List<Map<String, dynamic>> _notes = const [];
   List<Map<String, dynamic>> _workoutHistory = const [];
   List<Map<String, dynamic>> _personalRecords = const [];
@@ -67,6 +70,7 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
         widget.repository.fetchMemberPlans(memberId),
         widget.repository.fetchMemberNotes(memberId),
         widget.repository.fetchMemberWorkoutLogbook(memberId),
+        widget.repository.fetchDietPlans(memberId: memberId),
       ]);
 
       final detail = _map(responses[0]['data']);
@@ -81,6 +85,7 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
         _notes = notes;
         _workoutHistory = _mapList(logbook['history']);
         _personalRecords = _mapList(logbook['personal_records']);
+        _dietPlans = _mapList(responses[6]['data']);
         _loading = false;
       });
     } catch (exception) {
@@ -88,6 +93,13 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
         _loading = false;
         _error = exception.toString();
       });
+    }
+  }
+
+  Future<void> _assignDiet() async {
+    await widget.onAssignDiet();
+    if (mounted) {
+      await _load();
     }
   }
 
@@ -189,6 +201,7 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
                   const SizedBox(height: 25),
                   _FitActionPanel(
                     onAssignWorkout: widget.onAssignWorkout,
+                    onAssignDiet: _assignDiet,
                     onAddNote: widget.onAddNote,
                     onFollowUp: widget.onFollowUp,
                   ),
@@ -203,6 +216,16 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
                       attendance: _attendance,
                       progressSummary: progressSummary,
                       planCount: _plans.length,
+                      dietPlanCount: _dietPlans.length,
+                    ),
+                  ),
+                  const SizedBox(height: 25),
+                  _FitSectionCard(
+                    title: 'Diet Plans',
+                    icon: Icons.restaurant_menu_rounded,
+                    child: _DietPlansTab(
+                      plans: _dietPlans,
+                      onAssign: _assignDiet,
                     ),
                   ),
                   const SizedBox(height: 25),
@@ -467,11 +490,13 @@ class _FitStatCell extends StatelessWidget {
 class _FitActionPanel extends StatelessWidget {
   const _FitActionPanel({
     required this.onAssignWorkout,
+    required this.onAssignDiet,
     required this.onAddNote,
     required this.onFollowUp,
   });
 
   final VoidCallback onAssignWorkout;
+  final VoidCallback onAssignDiet;
   final VoidCallback onAddNote;
   final VoidCallback onFollowUp;
 
@@ -486,6 +511,12 @@ class _FitActionPanel extends StatelessWidget {
             title: 'Assign workout',
             subtitle: 'Create or assign the next training block.',
             onTap: onAssignWorkout,
+          ),
+          _FitActionRow(
+            icon: Icons.restaurant_menu_rounded,
+            title: 'Assign diet plan',
+            subtitle: 'Build meals or assign a nutrition template.',
+            onTap: onAssignDiet,
           ),
           _FitActionRow(
             icon: Icons.edit_note_rounded,
@@ -644,6 +675,7 @@ class _OverviewTab extends StatelessWidget {
     required this.attendance,
     required this.progressSummary,
     required this.planCount,
+    required this.dietPlanCount,
   });
 
   final Map<String, dynamic> memberProfile;
@@ -652,6 +684,7 @@ class _OverviewTab extends StatelessWidget {
   final List<Map<String, dynamic>> attendance;
   final Map<String, dynamic> progressSummary;
   final int planCount;
+  final int dietPlanCount;
 
   @override
   Widget build(BuildContext context) {
@@ -746,6 +779,7 @@ class _OverviewTab extends StatelessWidget {
                 value: _prettyDate(membershipSummary['expiry_date']),
               ),
               _InfoRow(label: 'Workout plans', value: '$planCount'),
+              _InfoRow(label: 'Diet plans', value: '$dietPlanCount'),
             ],
           ),
         ),
@@ -794,6 +828,187 @@ class _OverviewTab extends StatelessWidget {
                       ),
                     ),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DietPlansTab extends StatelessWidget {
+  const _DietPlansTab({required this.plans, required this.onAssign});
+
+  final List<Map<String, dynamic>> plans;
+  final VoidCallback onAssign;
+
+  @override
+  Widget build(BuildContext context) {
+    if (plans.isEmpty) {
+      return EmptyStateView(
+        title: 'No diet plan assigned',
+        message:
+            'Create a tailored meal plan or start from a nutrition template.',
+        icon: Icons.restaurant_menu_rounded,
+        action: SizedBox(
+          width: 220,
+          child: GradientButton(
+            label: 'Assign Diet Plan',
+            icon: Icons.add_rounded,
+            expanded: true,
+            onPressed: onAssign,
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        ...plans.map((plan) {
+          final meals = _mapList(plan['meals']);
+          final status = plan['status']?.toString() ?? 'active';
+          final isActive = status.toLowerCase() == 'active';
+          final macros = <String>[
+            if (plan['protein_target_g'] != null)
+              'P ${_numberLabel(plan['protein_target_g'])}g',
+            if (plan['carbs_target_g'] != null)
+              'C ${_numberLabel(plan['carbs_target_g'])}g',
+            if (plan['fats_target_g'] != null)
+              'F ${_numberLabel(plan['fats_target_g'])}g',
+          ].join(' • ');
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: PremiumCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: AppColors.accentPurple.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.restaurant_rounded,
+                          color: AppColors.accentPurple,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              plan['name']?.toString() ?? 'Diet plan',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              [
+                                if (plan['daily_calorie_target'] != null)
+                                  '${plan['daily_calorie_target']} kcal',
+                                '${meals.length} meals',
+                              ].join(' • '),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color:
+                              (isActive
+                                      ? AppColors.success
+                                      : AppColors.textMuted)
+                                  .withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          _titleCase(status),
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: isActive
+                                    ? AppColors.success
+                                    : AppColors.textMuted,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (macros.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(macros, style: Theme.of(context).textTheme.bodyMedium),
+                  ],
+                  const SizedBox(height: 8),
+                  Text(
+                    _dietSchedule(plan),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+                  ),
+                  if (meals.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    const Divider(height: 1),
+                    const SizedBox(height: 10),
+                    ...meals.take(4).map((meal) {
+                      final items = _mapList(meal['items']);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.schedule_rounded,
+                              size: 16,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                meal['name']?.toString() ??
+                                    _titleCase(
+                                      meal['meal_type']?.toString() ?? 'meal',
+                                    ),
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ),
+                            Text(
+                              '${items.length} items',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    if (meals.length > 4)
+                      Text(
+                        '+ ${meals.length - 4} more meals',
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        }),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: onAssign,
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Create or Assign Another Plan'),
           ),
         ),
       ],
@@ -1202,6 +1417,31 @@ String _prettyDateTime(dynamic value) {
     return raw;
   }
   return DateFormat('dd MMM yyyy, hh:mm a').format(parsed.toLocal());
+}
+
+String _numberLabel(dynamic value) {
+  final number = value is num ? value : num.tryParse(value?.toString() ?? '');
+  if (number == null) {
+    return '--';
+  }
+  return number == number.roundToDouble()
+      ? number.toInt().toString()
+      : number.toStringAsFixed(1);
+}
+
+String _dietSchedule(Map<String, dynamic> plan) {
+  final startsOn = _prettyDate(plan['starts_on']);
+  final endsOn = _prettyDate(plan['ends_on']);
+  if (startsOn == '--' && endsOn == '--') {
+    return 'No fixed schedule';
+  }
+  if (startsOn == '--') {
+    return 'Until $endsOn';
+  }
+  if (endsOn == '--') {
+    return 'Starts $startsOn';
+  }
+  return '$startsOn – $endsOn';
 }
 
 String _attendanceLabel(Map<String, dynamic> attendanceSummary) {

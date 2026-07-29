@@ -167,8 +167,19 @@ class DietTemplateAssignmentTest extends TestCase
             'name' => $template->name,
         ]);
 
+        $this->actingAs($trainer, 'sanctum')
+            ->getJson("/api/trainer/diet-plans?member_id={$member->id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.member_id', $member->id)
+            ->assertJsonPath('data.0.meals.0.items.0.name', 'Oats');
+
         $outsider = User::factory()->create(['active_role' => RoleName::Member->value]);
         $outsider->assignRole(RoleName::Member->value);
+        $this->actingAs($trainer, 'sanctum')
+            ->getJson("/api/trainer/diet-plans?member_id={$outsider->id}")
+            ->assertUnprocessable();
+
         $this->actingAs($trainer, 'sanctum')
             ->postJson("/api/trainer/diet-templates/{$template->id}/assign", [
                 'member_ids' => [$outsider->id],
@@ -181,6 +192,84 @@ class DietTemplateAssignmentTest extends TestCase
                 'member_ids' => [$member->id],
             ])
             ->assertUnprocessable();
+    }
+
+    public function test_trainer_can_build_edit_review_and_delete_an_assigned_members_diet_plan(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [, , $trainer, $member] = $this->context();
+
+        $response = $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/trainer/diet-plans', [
+                'member_ids' => [$member->id],
+                'name' => 'Member Fat Loss Plan',
+                'goal' => 'Fat loss',
+                'daily_calorie_target' => 1900,
+                'protein_target_g' => 140,
+                'starts_on' => '2026-08-01',
+                'ends_on' => '2026-08-31',
+                'meals' => [[
+                    'name' => 'Breakfast',
+                    'meal_type' => 'breakfast',
+                    'scheduled_time' => '08:30',
+                    'items' => [[
+                        'name' => 'Paneer bhurji',
+                        'quantity' => '200g',
+                        'calories' => 420,
+                        'protein_g' => 36,
+                    ]],
+                ]],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.0.member_id', $member->id)
+            ->assertJsonPath('data.0.trainer_id', $trainer->id)
+            ->assertJsonPath('data.0.meals.0.items.0.name', 'Paneer bhurji');
+
+        $planId = $response->json('data.0.id');
+        $mealId = $response->json('data.0.meals.0.id');
+        $itemId = $response->json('data.0.meals.0.items.0.id');
+
+        $this->actingAs($trainer, 'sanctum')
+            ->putJson("/api/trainer/diet-plans/{$planId}", [
+                'name' => 'Member Fat Loss Plan Updated',
+                'goal' => 'Fat loss and recovery',
+                'daily_calorie_target' => 2000,
+                'protein_target_g' => 150,
+                'status' => 'active',
+                'starts_on' => '2026-08-01',
+                'ends_on' => '2026-09-15',
+                'meals' => [[
+                    'id' => $mealId,
+                    'name' => 'Breakfast',
+                    'meal_type' => 'breakfast',
+                    'scheduled_time' => '09:00',
+                    'items' => [[
+                        'id' => $itemId,
+                        'name' => 'Paneer and vegetables',
+                        'quantity' => '1 plate',
+                        'calories' => 460,
+                        'protein_g' => 40,
+                    ]],
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Member Fat Loss Plan Updated')
+            ->assertJsonPath('data.daily_calorie_target', 2000)
+            ->assertJsonPath('data.meals.0.scheduled_time', '09:00')
+            ->assertJsonPath('data.meals.0.items.0.name', 'Paneer and vegetables');
+
+        $this->actingAs($trainer, 'sanctum')
+            ->getJson("/api/trainer/diet-plans?member_id={$member->id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $planId)
+            ->assertJsonPath('data.0.meals.0.items.0.protein_g', 40);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->deleteJson("/api/trainer/diet-plans/{$planId}")
+            ->assertOk();
+
+        $this->assertDatabaseMissing('diet_plans', ['id' => $planId]);
     }
 
     public function test_member_adopts_template_as_owner_scoped_personal_plan(): void

@@ -151,8 +151,13 @@ class TrainerRepository {
   );
   Future<Map<String, dynamic>> fetchWorkoutPlans() async =>
       _client.get('/trainer/workout-plans');
-  Future<Map<String, dynamic>> fetchDietPlans() =>
-      _client.get('/trainer/diet-plans');
+  Future<Map<String, dynamic>> fetchDietPlans({int? memberId}) => _client.get(
+    '/trainer/diet-plans',
+    queryParameters: {
+      'per_page': 100,
+      if (memberId != null) 'member_id': memberId,
+    },
+  );
   Future<Map<String, dynamic>> fetchDietTemplates() =>
       _client.get('/trainer/diet-templates');
   Future<Map<String, dynamic>> assignDietTemplate(

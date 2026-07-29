@@ -14,12 +14,12 @@ class TrainerDietPlanScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.members,
-    required this.contextData,
+    this.initialMemberId,
   });
 
   final TrainerRepository repository;
   final List<Map<String, dynamic>> members;
-  final Map<String, dynamic> contextData;
+  final int? initialMemberId;
 
   @override
   State<TrainerDietPlanScreen> createState() => _TrainerDietPlanScreenState();
@@ -28,6 +28,8 @@ class TrainerDietPlanScreen extends StatefulWidget {
 class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _startsOnController = TextEditingController();
+  final _endsOnController = TextEditingController();
 
   bool _loading = true;
   bool _saving = false;
@@ -43,7 +45,15 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.members.isNotEmpty) {
+    final hasInitialMember =
+        widget.initialMemberId != null &&
+        widget.members.any(
+          (item) =>
+              (item['member_id'] as num?)?.toInt() == widget.initialMemberId,
+        );
+    if (hasInitialMember) {
+      _memberId = widget.initialMemberId;
+    } else if (widget.members.isNotEmpty) {
       _memberId = (widget.members.first['member_id'] as num?)?.toInt();
     }
     _load();
@@ -52,6 +62,8 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _startsOnController.dispose();
+    _endsOnController.dispose();
     super.dispose();
   }
 
@@ -61,7 +73,9 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
       _error = null;
     });
     try {
-      final plansResponse = await widget.repository.fetchDietPlans();
+      final plansResponse = await widget.repository.fetchDietPlans(
+        memberId: widget.initialMemberId,
+      );
       _plans = (plansResponse['data'] as List<dynamic>? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map))
           .toList();
@@ -81,14 +95,6 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate() || _memberId == null) return;
-    final profile = Map<String, dynamic>.from(
-      widget.contextData['trainer_profile'] as Map? ?? const {},
-    );
-    final gymId = (profile['gym_id'] as num?)?.toInt();
-    if (gymId == null) {
-      setState(() => _error = 'Your gym assignment is unavailable.');
-      return;
-    }
 
     setState(() => _saving = true);
     try {
@@ -97,17 +103,21 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
           'member_ids': [_memberId],
           if (_nameController.text.trim().isNotEmpty)
             'name': _nameController.text.trim(),
+          if (_startsOnController.text.trim().isNotEmpty)
+            'starts_on': _startsOnController.text.trim(),
+          if (_endsOnController.text.trim().isNotEmpty)
+            'ends_on': _endsOnController.text.trim(),
         });
       } else {
         await widget.repository.createDietPlan({
-          'gym_id': gymId,
-          'branch_id': (profile['branch_id'] as num?)?.toInt(),
           'member_ids': [_memberId],
           ..._draftDetails,
           'meals': _draftMeals,
         });
       }
       _nameController.clear();
+      _startsOnController.clear();
+      _endsOnController.clear();
       setState(() {
         _templateId = null;
         _draftDetails = {'status': 'active'};
@@ -235,7 +245,7 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
   @override
   Widget build(BuildContext context) {
     return AppGradientScaffold(
-      title: 'Diet Plans',
+      title: 'Diet Builder',
       actions: [
         IconButton(
           tooltip: 'Refresh',
@@ -253,7 +263,9 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
                 _buildComposer(context),
                 const SizedBox(height: AppSpacing.xl),
                 Text(
-                  'Assigned plans',
+                  widget.initialMemberId == null
+                      ? 'Assigned plans'
+                      : 'Member diet plans',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -279,15 +291,24 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Create diet plan',
+              'Create and assign diet plan',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 6),
             Text(
-              'Assign daily targets and meal slots to one of your members.',
+              'Build nutrition targets, meal timings and food portions, or start from a global template.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: AppSpacing.lg),
+            if (widget.members.isEmpty) ...[
+              const EmptyStateView(
+                title: 'No assigned members',
+                message:
+                    'A gym owner must assign a member to you before you can create a diet plan.',
+                icon: Icons.group_off_outlined,
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
             DropdownButtonFormField<int>(
               initialValue: _memberId,
               isExpanded: true,
@@ -356,12 +377,41 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _startsOnController,
+                      keyboardType: TextInputType.datetime,
+                      decoration: const InputDecoration(
+                        labelText: 'Starts on',
+                        hintText: 'YYYY-MM-DD',
+                      ),
+                      validator: _dateValidator,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _endsOnController,
+                      keyboardType: TextInputType.datetime,
+                      decoration: const InputDecoration(
+                        labelText: 'Ends on',
+                        hintText: 'YYYY-MM-DD',
+                      ),
+                      validator: _dateValidator,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
             ],
             GradientButton(
               label: _saving ? 'Assigning...' : 'Assign diet plan',
               icon: Icons.restaurant_menu_rounded,
               expanded: true,
-              onPressed: _saving ? null : _save,
+              onPressed: _saving || widget.members.isEmpty ? null : _save,
             ),
           ],
         ),
@@ -374,44 +424,272 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
       plan['member'] as Map? ?? const {},
     );
     final mealCount = (plan['meals'] as List<dynamic>? ?? const []).length;
+    final status = plan['status']?.toString() ?? 'active';
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: PremiumCard(
-        child: Row(
-          children: [
-            const Icon(Icons.restaurant_rounded, color: AppColors.primary),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => _view(plan),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Text(
-                    plan['name']?.toString() ?? 'Diet plan',
-                    style: Theme.of(context).textTheme.titleMedium,
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.restaurant_rounded,
+                      color: AppColors.primary,
+                    ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${member['name'] ?? 'Member'} · ${plan['daily_calorie_target'] ?? '--'} kcal · $mealCount meals',
-                    style: Theme.of(context).textTheme.bodySmall,
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          plan['name']?.toString() ?? 'Diet plan',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          member['name']?.toString() ?? 'Assigned member',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _statusColor(status).withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      _titleCase(status),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: _statusColor(status),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
                 ],
               ),
-            ),
-            IconButton(
-              tooltip: 'Edit plan and foods',
-              onPressed: () => _edit(plan),
-              icon: const Icon(Icons.edit_outlined),
-            ),
-            IconButton(
-              tooltip: 'Delete plan',
-              onPressed: () => _delete(plan),
-              icon: const Icon(
-                Icons.delete_outline_rounded,
-                color: AppColors.error,
+              const SizedBox(height: AppSpacing.md),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _PlanMetric(
+                    icon: Icons.local_fire_department_outlined,
+                    label: '${plan['daily_calorie_target'] ?? '--'} kcal',
+                  ),
+                  _PlanMetric(
+                    icon: Icons.restaurant_menu_rounded,
+                    label: '$mealCount meals',
+                  ),
+                  _PlanMetric(
+                    icon: Icons.calendar_month_outlined,
+                    label: _scheduleLabel(plan),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Tap to review meals and foods',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Edit plan and foods',
+                    onPressed: () => _edit(plan),
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                  IconButton(
+                    tooltip: 'Delete plan',
+                    onPressed: () => _delete(plan),
+                    icon: const Icon(
+                      Icons.delete_outline_rounded,
+                      color: AppColors.error,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _view(Map<String, dynamic> plan) {
+    final meals = (plan['meals'] as List<dynamic>? ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+    final member = Map<String, dynamic>.from(
+      plan['member'] as Map? ?? const {},
+    );
+
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => DraggableScrollableSheet(
+        initialChildSize: 0.86,
+        minChildSize: 0.55,
+        maxChildSize: 0.96,
+        expand: false,
+        builder: (context, scrollController) => PremiumCard(
+          child: ListView(
+            controller: scrollController,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          plan['name']?.toString() ?? 'Diet plan',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          member['name']?.toString() ?? 'Assigned member',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _PlanMetric(
+                    icon: Icons.local_fire_department_outlined,
+                    label: '${plan['daily_calorie_target'] ?? '--'} kcal',
+                  ),
+                  _PlanMetric(
+                    icon: Icons.fitness_center_outlined,
+                    label: _macroLabel('P', plan['protein_target_g']),
+                  ),
+                  _PlanMetric(
+                    icon: Icons.grain_rounded,
+                    label: _macroLabel('C', plan['carbs_target_g']),
+                  ),
+                  _PlanMetric(
+                    icon: Icons.water_drop_outlined,
+                    label: _macroLabel('F', plan['fats_target_g']),
+                  ),
+                ],
+              ),
+              if (_hasText(plan['goal'])) ...[
+                const SizedBox(height: AppSpacing.md),
+                _PlanNote(label: 'Goal', value: plan['goal'].toString()),
+              ],
+              if (_hasText(plan['dietary_preferences'])) ...[
+                const SizedBox(height: AppSpacing.sm),
+                _PlanNote(
+                  label: 'Dietary preferences',
+                  value: plan['dietary_preferences'].toString(),
+                ),
+              ],
+              if (_hasText(plan['allergies_and_restrictions'])) ...[
+                const SizedBox(height: AppSpacing.sm),
+                _PlanNote(
+                  label: 'Allergies and restrictions',
+                  value: plan['allergies_and_restrictions'].toString(),
+                  warning: true,
+                ),
+              ],
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                'Meals and food portions',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              if (meals.isEmpty)
+                const Text('No meals have been added to this plan.')
+              else
+                ...meals.map(_buildMealSummary),
+              const SizedBox(height: AppSpacing.lg),
+              GradientButton(
+                label: 'Edit plan',
+                icon: Icons.edit_outlined,
+                expanded: true,
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _edit(plan);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMealSummary(Map<String, dynamic> meal) {
+    final items = (meal['items'] as List<dynamic>? ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: ExpansionTile(
+        title: Text(meal['name']?.toString() ?? 'Meal'),
+        subtitle: Text(
+          '${_mealTime(meal)} · ${items.length} food${items.length == 1 ? '' : 's'}',
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        children: [
+          if (items.isEmpty)
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('No food portions added.'),
+            )
+          else
+            ...items.map(
+              (item) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                leading: const Icon(Icons.circle, size: 8),
+                title: Text(item['name']?.toString() ?? 'Food'),
+                subtitle: Text(
+                  [
+                        item['quantity']?.toString(),
+                        item['calories'] == null
+                            ? null
+                            : '${item['calories']} kcal',
+                      ]
+                      .whereType<String>()
+                      .where((value) => value.isNotEmpty)
+                      .join(' · '),
+                ),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -422,3 +700,109 @@ List<Map<String, dynamic>> _defaultMeals() => const [
   {'name': 'Lunch', 'meal_type': 'lunch', 'items': []},
   {'name': 'Dinner', 'meal_type': 'dinner', 'items': []},
 ].map((meal) => Map<String, dynamic>.from(meal)).toList();
+
+String? _dateValidator(String? value) {
+  final text = value?.trim() ?? '';
+  if (text.isEmpty) return null;
+  return RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(text)
+      ? null
+      : 'Use YYYY-MM-DD';
+}
+
+bool _hasText(dynamic value) => value?.toString().trim().isNotEmpty == true;
+
+String _macroLabel(String label, dynamic value) => '$label ${value ?? '--'}g';
+
+String _scheduleLabel(Map<String, dynamic> plan) {
+  final starts = plan['starts_on']?.toString();
+  final ends = plan['ends_on']?.toString();
+  if (_hasText(starts) && _hasText(ends)) return '$starts → $ends';
+  if (_hasText(starts)) return 'From $starts';
+  return 'Ongoing';
+}
+
+String _mealTime(Map<String, dynamic> meal) {
+  final time = meal['scheduled_time']?.toString();
+  if (_hasText(time)) return time!.length >= 5 ? time.substring(0, 5) : time;
+  return _titleCase(meal['meal_type']?.toString() ?? 'Flexible');
+}
+
+String _titleCase(String value) => value
+    .replaceAll('_', ' ')
+    .split(' ')
+    .where((part) => part.isNotEmpty)
+    .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+    .join(' ');
+
+Color _statusColor(String status) =>
+    status.toLowerCase() == 'active' ? AppColors.success : AppColors.textMuted;
+
+class _PlanMetric extends StatelessWidget {
+  const _PlanMetric({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: AppColors.primary),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanNote extends StatelessWidget {
+  const _PlanNote({
+    required this.label,
+    required this.value,
+    this.warning = false,
+  });
+
+  final String label;
+  final String value;
+  final bool warning;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = warning ? AppColors.warning : AppColors.primary;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(value, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
+    );
+  }
+}

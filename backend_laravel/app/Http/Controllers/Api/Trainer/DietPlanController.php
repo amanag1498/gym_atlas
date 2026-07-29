@@ -29,7 +29,22 @@ class DietPlanController extends Controller
     public function index(Request $request)
     {
         $profile = $this->trainerScopeService->resolveTrainerProfile($request);
-        $paginator = DietPlan::query()->with(['member', 'trainer', 'meals.items'])->where('trainer_id', $request->user()->id)->where('gym_id', $profile->gym_id)->when($profile->branch_id, fn ($query) => $query->where('branch_id', $profile->branch_id))->latest()->paginate($request->integer('per_page', 15));
+        $memberId = $request->integer('member_id') ?: null;
+        if ($memberId) {
+            $this->trainerScopeService->resolveAssignedMember(
+                $profile,
+                User::query()->findOrFail($memberId),
+            );
+        }
+
+        $paginator = DietPlan::query()
+            ->with(['member', 'trainer', 'meals.items'])
+            ->where('trainer_id', $request->user()->id)
+            ->where('gym_id', $profile->gym_id)
+            ->when($profile->branch_id, fn ($query) => $query->where('branch_id', $profile->branch_id))
+            ->when($memberId, fn ($query, int $id) => $query->where('member_id', $id))
+            ->latest()
+            ->paginate(min(max($request->integer('per_page', 50), 1), 100));
 
         return $this->paginated($paginator, DietPlanResource::collection($paginator->getCollection()), 'Diet plans fetched successfully.');
     }
