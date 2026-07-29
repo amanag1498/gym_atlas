@@ -339,6 +339,34 @@ class IndependentMemberFeatureTest extends TestCase
         $this->assertDatabaseCount('fitness_goal_member_profile', 2);
     }
 
+    public function test_member_onboarding_normalizes_display_case_experience_level(): void
+    {
+        $this->seed(PermissionSeeder::class);
+
+        $member = User::factory()->create([
+            'active_role' => RoleName::Member->value,
+            'member_onboarding_step' => 3,
+            'member_onboarding_completed' => false,
+        ]);
+        $member->assignRole(RoleName::Member->value);
+
+        $this->actingAs($member, 'sanctum')
+            ->putJson('/api/member/profile', [
+                'experience_level' => 'Beginner',
+                'height_cm' => 173,
+                'weight_kg' => 80,
+                'member_onboarding_step' => 4,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.experience_level', 'beginner')
+            ->assertJsonPath('data.member_onboarding_step', 4);
+
+        $this->assertDatabaseHas('member_profiles', [
+            'user_id' => $member->id,
+            'experience_level' => 'beginner',
+        ]);
+    }
+
     public function test_member_profile_update_targets_current_gym_profile_when_user_has_independent_profile(): void
     {
         $this->seed(PermissionSeeder::class);

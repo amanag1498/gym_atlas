@@ -7,6 +7,18 @@ use Illuminate\Validation\Rule;
 
 class UpdateMemberAppProfileRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if ($this->filled('experience_level')) {
+            $this->merge([
+                'experience_level' => str($this->input('experience_level'))
+                    ->trim()
+                    ->lower()
+                    ->toString(),
+            ]);
+        }
+    }
+
     public function authorize(): bool
     {
         return $this->user() !== null;
