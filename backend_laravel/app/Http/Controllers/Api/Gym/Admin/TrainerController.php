@@ -13,8 +13,8 @@ use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Authorization\ScopeResolver;
 use App\Services\Gym\TrainerManagementService;
-use App\Services\Users\ManagedUserService;
 use App\Services\Members\TrainerEmailInvitationService;
+use App\Services\Users\ManagedUserService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,8 +27,7 @@ class TrainerController extends Controller
         private readonly AuditLogService $auditLogService,
         private readonly TrainerManagementService $trainerManagementService,
         private readonly TrainerEmailInvitationService $trainerEmailInvitationService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {
@@ -88,7 +87,15 @@ class TrainerController extends Controller
         $this->assertBranchWithinScope($request, $gym, $payload['branch_id'] ?? null);
 
         $invitation = $this->trainerEmailInvitationService->invite($request->user(), $gym, $payload);
-        return $this->success(['invitation_id' => $invitation->id, 'approval_channel' => 'email'], 'Trainer approval email sent. The trainer will be created after approval.', 202);
+        $approvalChannel = $invitation->invited_user_id ? 'in_app' : 'email';
+        $message = $approvalChannel === 'in_app'
+            ? 'Trainer approval request sent in the trainer app.'
+            : 'Trainer approval email sent. The trainer will be created after approval.';
+
+        return $this->success([
+            'invitation_id' => $invitation->id,
+            'approval_channel' => $approvalChannel,
+        ], $message, 202);
     }
 
     public function show(Request $request, User $trainer)

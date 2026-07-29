@@ -6,8 +6,10 @@ use App\Enums\RoleName;
 use App\Models\Branch;
 use App\Models\Gym;
 use App\Models\MemberProfile;
+use App\Models\TrainerEmailInvitation;
 use App\Models\TrainerProfile;
 use App\Models\User;
+use App\Services\Members\TrainerEmailInvitationService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -69,6 +71,12 @@ class TrainerManagementFeatureTest extends TestCase
             'status' => 'active',
             'bio' => 'Strength coach',
         ])->assertRedirect();
+
+        $invitation = TrainerEmailInvitation::query()
+            ->where('invited_email', 'coach-arjun@example.com')
+            ->firstOrFail();
+        $this->assertSame('pending', $invitation->status);
+        app(TrainerEmailInvitationService::class)->respond($invitation, true);
 
         $trainer = User::query()->where('email', 'coach-arjun@example.com')->firstOrFail();
         $this->assertTrue($trainer->hasRole(RoleName::Trainer->value));
@@ -149,6 +157,19 @@ class TrainerManagementFeatureTest extends TestCase
             'specialization' => 'Mobility',
             'status' => 'active',
         ])->assertRedirect();
+
+        $this->assertDatabaseMissing('trainer_profiles', [
+            'user_id' => $existingUser->id,
+            'gym_id' => $gym->id,
+        ]);
+        $invitation = TrainerEmailInvitation::query()
+            ->where('invited_user_id', $existingUser->id)
+            ->firstOrFail();
+        app(TrainerEmailInvitationService::class)->respondForUser(
+            $existingUser,
+            $invitation,
+            true,
+        );
 
         $existingUser->refresh();
         $this->assertTrue($existingUser->hasRole(RoleName::Trainer->value));
@@ -318,6 +339,15 @@ class TrainerManagementFeatureTest extends TestCase
             'is_active' => true,
         ]);
         $member = $this->makeUser(RoleName::Member->value, 'member-api-trainer@example.com');
+        $trainer = $this->makeUser(RoleName::Trainer->value, 'api-trainer@example.com');
+        TrainerProfile::query()->create([
+            'user_id' => $trainer->id,
+            'gym_id' => null,
+            'branch_id' => null,
+            'status' => 'active',
+            'is_active' => true,
+            'verification_status' => 'pending',
+        ]);
         MemberProfile::query()->create([
             'user_id' => $member->id,
             'gym_id' => $gym->id,
@@ -335,19 +365,25 @@ class TrainerManagementFeatureTest extends TestCase
 
         $createResponse = $this->actingAs($owner, 'sanctum')
             ->postJson('/api/gym/trainers', [
-                'name' => 'API Trainer',
-                'email' => 'api-trainer@example.com',
+                'existing_user_id' => $trainer->id,
                 'branch_id' => $branch->id,
                 'specialization' => 'Fat Loss',
                 'status' => 'active',
             ], $headers)
-            ->assertCreated()
-            ->assertJsonPath('success', true);
+            ->assertStatus(202)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.approval_channel', 'in_app');
 
-        $trainerId = (int) $createResponse->json('data.id');
+        $invitationId = (int) $createResponse->json('data.invitation_id');
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/trainer-invitations/'.$invitationId.'/respond', [
+                'decision' => 'accept',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'accepted');
 
         $this->actingAs($owner, 'sanctum')
-            ->postJson('/api/gym/trainers/'.$trainerId.'/assign-members', [
+            ->postJson('/api/gym/trainers/'.$trainer->id.'/assign-members', [
                 'member_ids' => [$member->id],
             ], $headers)
             ->assertOk()
@@ -355,11 +391,11 @@ class TrainerManagementFeatureTest extends TestCase
 
         $this->assertDatabaseHas('member_profiles', [
             'user_id' => $member->id,
-            'assigned_trainer_user_id' => $trainerId,
+            'assigned_trainer_user_id' => $trainer->id,
         ]);
 
         $this->actingAs($owner, 'sanctum')
-            ->postJson('/api/gym/trainers/'.$trainerId.'/deactivate', [], $headers)
+            ->postJson('/api/gym/trainers/'.$trainer->id.'/deactivate', [], $headers)
             ->assertOk()
             ->assertJsonPath('data.is_active', false);
     }

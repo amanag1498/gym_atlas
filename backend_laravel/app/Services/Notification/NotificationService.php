@@ -112,6 +112,7 @@ class NotificationService
             NotificationType::MembershipResumed->value,
             NotificationType::PaymentDue->value,
             NotificationType::CustomDue->value,
+            'trainer_gym_invitation',
         ], true);
     }
 }

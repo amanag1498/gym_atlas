@@ -18,8 +18,7 @@ class TrainerScopeService
 {
     public function __construct(
         private readonly ScopeResolver $scopeResolver,
-    ) {
-    }
+    ) {}
 
     public function resolveTrainerProfile(Request $request): TrainerProfile
     {
@@ -79,10 +78,7 @@ class TrainerScopeService
                 'attendanceLogs' => fn ($query) => $query->latest('checked_in_at'),
             ])
             ->where('assigned_trainer_user_id', $trainerProfile->user_id)
-            ->where(function (Builder $query) use ($trainerProfile): void {
-                $query->where('gym_id', $trainerProfile->gym_id)
-                    ->orWhere('type', 'trainer_gym_invitation');
-            })
+            ->where('gym_id', $trainerProfile->gym_id)
             ->when($trainerProfile->branch_id, fn ($query) => $query->where('branch_id', $trainerProfile->branch_id));
     }
 
@@ -128,10 +124,20 @@ class TrainerScopeService
         return Notification::query()
             ->with(['membership', 'branch'])
             ->where('user_id', $trainerProfile->user_id)
-            ->where('gym_id', $trainerProfile->gym_id)
-            ->when($trainerProfile->branch_id, fn ($query) => $query->where(function ($builder) use ($trainerProfile): void {
-                $builder->whereNull('branch_id')->orWhere('branch_id', $trainerProfile->branch_id);
-            }));
+            ->where(function (Builder $query) use ($trainerProfile): void {
+                $query->where('type', 'trainer_gym_invitation')
+                    ->orWhere(function (Builder $scopedQuery) use ($trainerProfile): void {
+                        $scopedQuery->where('gym_id', $trainerProfile->gym_id)
+                            ->when(
+                                $trainerProfile->branch_id,
+                                fn (Builder $branchQuery) => $branchQuery
+                                    ->where(function (Builder $builder) use ($trainerProfile): void {
+                                        $builder->whereNull('branch_id')
+                                            ->orWhere('branch_id', $trainerProfile->branch_id);
+                                    }),
+                            );
+                    });
+            });
     }
 
     public function attendanceQuery(TrainerProfile $trainerProfile, User $member): Builder

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Trainer;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Catalog\TrainerSpecializationResource;
 use App\Http\Resources\Gym\BranchResource;
+use App\Http\Resources\Gym\GymResource;
 use App\Http\Resources\User\TrainerProfileResource;
 use App\Http\Resources\User\UserResource;
 use App\Models\TrainerSpecialization;
@@ -23,6 +24,7 @@ class TrainerContextController extends Controller
             'managedTrainerProfile.assignedMembers',
         ]);
         $trainerPhotoUrl = $user->managedTrainerProfile?->profile_photo_url;
+        $assignedGym = $user->gyms->first();
 
         return $this->success([
             'user' => [
@@ -36,7 +38,9 @@ class TrainerContextController extends Controller
                 TrainerSpecialization::query()->active()->ordered()->get()
             ),
             'branches' => BranchResource::collection($user->branches),
-            'assigned_gym' => \App\Http\Resources\Gym\GymResource::make($user->gyms->first()),
+            'assigned_gym' => $assignedGym
+                ? GymResource::make($assignedGym)
+                : null,
         ]);
     }
 }

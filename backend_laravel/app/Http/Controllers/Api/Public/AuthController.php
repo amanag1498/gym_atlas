@@ -20,8 +20,7 @@ class AuthController extends Controller
         private readonly GoogleAuthService $googleAuthService,
         private readonly FirebaseAuthService $firebaseAuthService,
         private readonly ActiveRoleManager $activeRoleManager,
-    ) {
-    }
+    ) {}
 
     public function googleLogin(GoogleLoginRequest $request)
     {
@@ -41,6 +40,7 @@ class AuthController extends Controller
         $session = $this->firebaseAuthService->authenticate(
             idToken: $request->validated('id_token'),
             deviceName: $request->validated('device_name', 'flutter-app'),
+            appType: $request->validated('app_type'),
         );
 
         return $this->success(

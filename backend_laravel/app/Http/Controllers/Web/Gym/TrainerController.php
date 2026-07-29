@@ -15,8 +15,8 @@ use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Audit\AuditTimelineService;
 use App\Services\Gym\TrainerManagementService;
-use App\Services\Users\ManagedUserService;
 use App\Services\Members\TrainerEmailInvitationService;
+use App\Services\Users\ManagedUserService;
 use App\Services\Web\GymWebPanelService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -142,7 +142,11 @@ class TrainerController extends Controller
         $payload = $this->normalizedPayload($request);
 
         $invitation = $this->trainerEmailInvitationService->invite($request->user(), $gym, $payload);
-        return back()->with('status', 'Trainer approval email sent to '.$invitation->invited_email.'. The trainer will be created after approval.');
+        $message = $invitation->invited_user_id
+            ? 'Trainer approval request sent in the trainer app to '.$invitation->invited_email.'.'
+            : 'Trainer approval email sent to '.$invitation->invited_email.'. The trainer will be created after approval.';
+
+        return back()->with('status', $message);
     }
 
     public function show(Request $request, User $trainer): View

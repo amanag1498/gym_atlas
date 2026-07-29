@@ -5,6 +5,7 @@ namespace App\Services\Auth;
 use App\Enums\RoleName;
 use App\Exceptions\FirebaseTokenVerificationException;
 use App\Models\ActivityLog;
+use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Services\Authorization\ActiveRoleManager;
 use Illuminate\Support\Facades\DB;
@@ -16,15 +17,21 @@ class FirebaseAuthService
     public function __construct(
         private readonly FirebaseTokenVerifier $firebaseTokenVerifier,
         private readonly ActiveRoleManager $activeRoleManager,
-    ) {
-    }
+    ) {}
 
     /**
-     * @return array{token: string, user: \App\Models\User}
+     * @return array{token: string, user: User}
      */
-    public function authenticate(string $idToken, string $deviceName): array
-    {
-        $user = $this->resolveUser($idToken, 'auth.firebase.login');
+    public function authenticate(
+        string $idToken,
+        string $deviceName,
+        ?string $appType = null,
+    ): array {
+        $user = $this->resolveUser(
+            $idToken,
+            'auth.firebase.login',
+            appType: $appType,
+        );
 
         return [
             'token' => $user->createToken($deviceName)->plainTextToken,
@@ -37,8 +44,12 @@ class FirebaseAuthService
         return $this->resolveUser($idToken, 'auth.firebase.web.login', false);
     }
 
-    private function resolveUser(string $idToken, string $event, bool $allowAutoProvision = true): User
-    {
+    private function resolveUser(
+        string $idToken,
+        string $event,
+        bool $allowAutoProvision = true,
+        ?string $appType = null,
+    ): User {
         try {
             $payload = $this->firebaseTokenVerifier->verify($idToken);
         } catch (FirebaseTokenVerificationException $exception) {
@@ -47,7 +58,7 @@ class FirebaseAuthService
             ]);
         }
 
-        return DB::transaction(function () use ($payload, $event, $allowAutoProvision): User {
+        return DB::transaction(function () use ($payload, $event, $allowAutoProvision, $appType): User {
             $user = User::query()->firstWhere('firebase_uid', $payload['sub'])
                 ?? User::query()->firstWhere('email', $payload['email']);
 
@@ -58,7 +69,7 @@ class FirebaseAuthService
                     ]);
                 }
 
-                $user = new User();
+                $user = new User;
             }
 
             $user->fill([
@@ -79,7 +90,21 @@ class FirebaseAuthService
                 ]);
             }
 
-            if ($user->roles()->doesntExist()) {
+            if ($appType === RoleName::Trainer->value) {
+                $user->assignRole(RoleName::Trainer->value);
+
+                TrainerProfile::query()->firstOrCreate(
+                    ['user_id' => $user->id],
+                    [
+                        'gym_id' => null,
+                        'branch_id' => null,
+                        'profile_photo_url' => $user->avatar,
+                        'status' => 'active',
+                        'is_active' => true,
+                        'verification_status' => 'pending',
+                    ],
+                );
+            } elseif ($user->roles()->doesntExist()) {
                 $user->assignRole(RoleName::Member->value);
             }
 
@@ -96,6 +121,7 @@ class FirebaseAuthService
                 'subject_id' => $user->id,
                 'context' => [
                     'auth_provider' => 'firebase_google',
+                    'app_type' => $appType,
                 ],
                 'occurred_at' => now(),
             ]);
