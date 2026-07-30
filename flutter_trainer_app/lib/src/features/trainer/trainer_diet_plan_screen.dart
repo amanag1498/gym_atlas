@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import 'package:gym_flutter_core/diet_plan_meals_editor.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -53,7 +54,7 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
           .map((item) => Map<String, dynamic>.from(item as Map))
           .toList();
     } catch (error) {
-      _error = error.toString();
+      _error = _dietErrorMessage(error);
     }
     if (mounted) {
       setState(() => _loading = false);
@@ -98,7 +99,7 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = error.toString());
+        setState(() => _error = _dietErrorMessage(error));
       }
     } finally {
       if (mounted) {
@@ -205,7 +206,9 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
                             } catch (error) {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text(error.toString())),
+                                  SnackBar(
+                                    content: Text(_dietErrorMessage(error)),
+                                  ),
                                 );
                                 setSheetState(() => saving = false);
                               }
@@ -251,7 +254,7 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(error.toString())));
+        ).showSnackBar(SnackBar(content: Text(_dietErrorMessage(error))));
       }
     }
   }
@@ -896,11 +899,9 @@ class _DietMetric extends StatelessWidget {
   }
 }
 
-List<Map<String, dynamic>> _defaultMeals() => const [
-  {'name': 'Breakfast', 'meal_type': 'breakfast', 'items': []},
-  {'name': 'Lunch', 'meal_type': 'lunch', 'items': []},
-  {'name': 'Dinner', 'meal_type': 'dinner', 'items': []},
-].map((meal) => Map<String, dynamic>.from(meal)).toList();
+List<Map<String, dynamic>> _defaultMeals() => [
+  <String, dynamic>{'name': 'Meal 1', 'meal_type': 'meal_1', 'items': []},
+];
 
 List<Map<String, dynamic>> _mapList(dynamic value) {
   if (value is! List) {
@@ -910,4 +911,25 @@ List<Map<String, dynamic>> _mapList(dynamic value) {
       .whereType<Map>()
       .map((item) => Map<String, dynamic>.from(item))
       .toList();
+}
+
+String _dietErrorMessage(Object error) {
+  if (error is DioException) {
+    final body = error.response?.data;
+    if (body is Map) {
+      final errors = body['errors'];
+      if (errors is Map) {
+        final messages = errors.values
+            .expand((value) => value is List ? value : <dynamic>[value])
+            .map((value) => value.toString())
+            .where((value) => value.trim().isNotEmpty)
+            .toSet()
+            .toList();
+        if (messages.isNotEmpty) return messages.join('\n');
+      }
+      final message = body['message']?.toString();
+      if (message != null && message.trim().isNotEmpty) return message;
+    }
+  }
+  return 'Could not save the diet plan. Please review the meals and try again.';
 }

@@ -105,15 +105,52 @@ class OperatingHours
         }
 
         $schedule = self::normalize($timings);
-        $now = Carbon::now($timezone ?: config('app.timezone'));
+        $resolvedTimezone = $timezone ?: config('app.timezone');
+        $now = Carbon::now($resolvedTimezone);
         $dayName = strtolower($now->englishDayOfWeek);
 
-        foreach ($schedule[$dayName] ?? [] as $slot) {
-            $open = Carbon::createFromFormat('H:i', $slot['open'], $timezone ?: config('app.timezone'));
-            $close = Carbon::createFromFormat('H:i', $slot['close'], $timezone ?: config('app.timezone'));
+        if (self::isWithinSlots($now, $schedule[$dayName] ?? [], $resolvedTimezone)) {
+            return true;
+        }
 
-            if ($close->lessThanOrEqualTo($open)) {
+        $previousDay = strtolower($now->copy()->subDay()->englishDayOfWeek);
+
+        return self::isWithinSlots(
+            $now,
+            $schedule[$previousDay] ?? [],
+            $resolvedTimezone,
+            startsOnPreviousDay: true,
+        );
+    }
+
+    /**
+     * @param  list<array{open: string, close: string}>  $slots
+     */
+    private static function isWithinSlots(
+        Carbon $now,
+        array $slots,
+        string $timezone,
+        bool $startsOnPreviousDay = false,
+    ): bool {
+        foreach ($slots as $slot) {
+            $open = Carbon::createFromFormat('Y-m-d H:i', sprintf(
+                '%s %s',
+                $startsOnPreviousDay
+                    ? $now->copy()->subDay()->toDateString()
+                    : $now->toDateString(),
+                $slot['open'],
+            ), $timezone);
+            $close = Carbon::createFromFormat('Y-m-d H:i', sprintf(
+                '%s %s',
+                $open->toDateString(),
+                $slot['close'],
+            ), $timezone);
+            $overnight = $close->lessThanOrEqualTo($open);
+
+            if ($overnight) {
                 $close->addDay();
+            } elseif ($startsOnPreviousDay) {
+                continue;
             }
 
             if ($now->betweenIncluded($open, $close)) {
@@ -219,8 +256,8 @@ class OperatingHours
                     return null;
                 }
 
-                $open = isset($slot['open']) ? trim((string) $slot['open']) : null;
-                $close = isset($slot['close']) ? trim((string) $slot['close']) : null;
+                $open = self::normalizeTime($slot['open'] ?? null);
+                $close = self::normalizeTime($slot['close'] ?? null);
 
                 if (! self::isValidTime($open) || ! self::isValidTime($close) || $open === $close) {
                     return null;
@@ -239,10 +276,20 @@ class OperatingHours
 
     private static function isValidTime(?string $value): bool
     {
+        return self::normalizeTime($value) !== null;
+    }
+
+    private static function normalizeTime(mixed $value): ?string
+    {
         if (! is_string($value)) {
-            return false;
+            return null;
         }
 
-        return preg_match('/^\d{2}:\d{2}$/', $value) === 1;
+        $value = trim($value);
+        if (preg_match('/^(?<hour>[01]\d|2[0-3]):(?<minute>[0-5]\d)(?::[0-5]\d)?$/', $value, $matches) !== 1) {
+            return null;
+        }
+
+        return $matches['hour'].':'.$matches['minute'];
     }
 }

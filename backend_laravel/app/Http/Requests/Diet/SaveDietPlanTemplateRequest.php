@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Diet;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class SaveDietPlanTemplateRequest extends FormRequest
@@ -15,9 +16,16 @@ class SaveDietPlanTemplateRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
+            'status' => $this->input('status', 'active'),
             'meals' => collect($this->input('meals', []))
                 ->filter(fn ($meal) => is_array($meal))
-                ->map(function (array $meal): array {
+                ->values()
+                ->map(function (array $meal, int $index): array {
+                    $name = trim((string) ($meal['name'] ?? ''));
+                    $meal['name'] = $name !== '' ? $name : 'Meal '.($index + 1);
+                    $meal['meal_type'] = filled($meal['meal_type'] ?? null)
+                        ? trim((string) $meal['meal_type'])
+                        : Str::of($meal['name'])->slug('_')->limit(80, '')->toString();
                     $meal['items'] = collect($meal['items'] ?? [])
                         ->filter(
                             fn ($item) => is_array($item)

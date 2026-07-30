@@ -27,6 +27,9 @@ class FirebaseLoginTest extends TestCase
                     'name' => 'Firebase Member',
                     'picture' => 'https://example.com/firebase-member.png',
                     'email_verified' => true,
+                    'firebase' => [
+                        'sign_in_provider' => 'google.com',
+                    ],
                     'aud' => 'gym-atlas-test',
                     'iss' => 'https://securetoken.google.com/gym-atlas-test',
                     'exp' => now()->addHour()->timestamp,
@@ -68,6 +71,9 @@ class FirebaseLoginTest extends TestCase
                     'name' => 'Firebase Trainer',
                     'picture' => 'https://example.com/firebase-trainer.png',
                     'email_verified' => true,
+                    'firebase' => [
+                        'sign_in_provider' => 'google.com',
+                    ],
                     'aud' => 'gym-atlas-test',
                     'iss' => 'https://securetoken.google.com/gym-atlas-test',
                     'exp' => now()->addHour()->timestamp,
@@ -110,5 +116,50 @@ class FirebaseLoginTest extends TestCase
             ->assertJsonPath('data.trainer_profile.id', $profile->id)
             ->assertJsonPath('data.trainer_profile.gym_id', null)
             ->assertJsonPath('data.assigned_gym', null);
+    }
+
+    public function test_apple_login_records_the_firebase_apple_provider(): void
+    {
+        $this->seed(PermissionSeeder::class);
+
+        $this->mock(FirebaseTokenVerifier::class, function ($mock): void {
+            $mock->shouldReceive('verify')
+                ->once()
+                ->andReturn([
+                    'sub' => 'firebase-apple-member-001',
+                    'email' => 'member@privaterelay.appleid.com',
+                    'email_verified' => true,
+                    'firebase' => [
+                        'sign_in_provider' => 'apple.com',
+                    ],
+                    'aud' => 'gym-atlas-test',
+                    'iss' => 'https://securetoken.google.com/gym-atlas-test',
+                    'exp' => now()->addHour()->timestamp,
+                ]);
+        });
+
+        config()->set('services.firebase.project_id', 'gym-atlas-test');
+
+        $this->postJson('/api/public/auth/firebase/login', [
+            'id_token' => 'fake.firebase.apple.jwt',
+            'device_name' => 'flutter_member_app_ios',
+            'app_type' => 'member',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.user.email', 'member@privaterelay.appleid.com')
+            ->assertJsonPath('data.user.auth_provider', 'firebase_apple')
+            ->assertJsonPath('data.user.active_role', RoleName::Member->value);
+
+        $this->assertDatabaseHas('users', [
+            'firebase_uid' => 'firebase-apple-member-001',
+            'email' => 'member@privaterelay.appleid.com',
+            'auth_provider' => 'firebase_apple',
+        ]);
+
+        $this->assertDatabaseHas('activity_logs', [
+            'event' => 'auth.firebase.login',
+            'context->auth_provider' => 'firebase_apple',
+            'context->app_type' => 'member',
+        ]);
     }
 }

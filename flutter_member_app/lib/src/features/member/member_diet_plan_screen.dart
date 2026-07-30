@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import 'package:gym_flutter_core/diet_plan_meals_editor.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -59,7 +60,7 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
               .map((meal) => (meal['id'] as num).toInt()),
         );
     } catch (error) {
-      _error = error.toString();
+      _error = _dietErrorMessage(error);
     }
     if (mounted) setState(() => _loading = false);
   }
@@ -135,7 +136,7 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                       } catch (error) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(error.toString())),
+                            SnackBar(content: Text(_dietErrorMessage(error))),
                           );
                         }
                       }
@@ -308,7 +309,9 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                                 } catch (error) {
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text(error.toString())),
+                                      SnackBar(
+                                        content: Text(_dietErrorMessage(error)),
+                                      ),
                                     );
                                   }
                                 } finally {
@@ -332,11 +335,9 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
     }
   }
 
-  List<Map<String, dynamic>> _defaultMeals() => const [
-    {'name': 'Breakfast', 'meal_type': 'breakfast', 'items': []},
-    {'name': 'Lunch', 'meal_type': 'lunch', 'items': []},
-    {'name': 'Dinner', 'meal_type': 'dinner', 'items': []},
-  ].map((meal) => Map<String, dynamic>.from(meal)).toList();
+  List<Map<String, dynamic>> _defaultMeals() => [
+    <String, dynamic>{'name': 'Meal 1', 'meal_type': 'meal_1', 'items': []},
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -364,12 +365,27 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton.icon(
+                      onPressed: _openCreatePlanSheet,
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Create meal plan'),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
                   if (plan.isEmpty)
                     EmptyStateView(
                       title: 'No diet plan yet',
                       message:
-                          'Create your own plan or wait for one from your trainer.',
+                          'Build meals around your own schedule, or wait for a trainer-assigned plan.',
                       icon: Icons.restaurant_menu_rounded,
+                      action: GradientButton(
+                        label: 'Create your first meal plan',
+                        icon: Icons.add_rounded,
+                        expanded: true,
+                        onPressed: _openCreatePlanSheet,
+                      ),
                     )
                   else ...[
                     if (_plans.length > 1) ...[
@@ -533,6 +549,27 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
             ),
     );
   }
+}
+
+String _dietErrorMessage(Object error) {
+  if (error is DioException) {
+    final body = error.response?.data;
+    if (body is Map) {
+      final errors = body['errors'];
+      if (errors is Map) {
+        final messages = errors.values
+            .expand((value) => value is List ? value : <dynamic>[value])
+            .map((value) => value.toString())
+            .where((value) => value.trim().isNotEmpty)
+            .toSet()
+            .toList();
+        if (messages.isNotEmpty) return messages.join('\n');
+      }
+      final message = body['message']?.toString();
+      if (message != null && message.trim().isNotEmpty) return message;
+    }
+  }
+  return 'Could not save the diet plan. Please review the meals and try again.';
 }
 
 bool _hasGuidance(Map<String, dynamic> plan) => [

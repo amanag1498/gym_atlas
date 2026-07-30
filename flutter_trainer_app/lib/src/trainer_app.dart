@@ -43,6 +43,15 @@ class _TrainerAppState extends State<TrainerApp> {
       authService: _authService,
       fcmTokenService: _fcmTokenService,
     );
+    FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        )
+        .catchError((Object exception) {
+          debugPrint('[fcm] foreground presentation setup skipped: $exception');
+        });
     _notificationOpenSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
       _handleNotificationOpen,
     );

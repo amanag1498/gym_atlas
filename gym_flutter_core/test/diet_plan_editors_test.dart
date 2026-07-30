@@ -35,6 +35,8 @@ void main() {
       find.widgetWithText(TextFormField, 'Quantity or serving'),
       '80g',
     );
+    await tester.tap(find.text('Optional nutrition'));
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Calories').last,
       '302',
@@ -52,6 +54,43 @@ void main() {
     expect(items.single['quantity'], '80g');
     expect(items.single['calories'], 302);
     expect(items.single['protein_g'], 10.5);
+  });
+
+  testWidgets('meal editor adds a freely named meal instead of fixed slots', (
+    tester,
+  ) async {
+    List<Map<String, dynamic>> payload = const [];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: DietPlanMealsEditor(
+              initialMeals: const [],
+              onChanged: (value) => payload = value,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Meal 1'), findsWidgets);
+    await tester.tap(find.text('Add meal'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      'Post-workout recovery',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Post-workout recovery'), findsWidgets);
+    expect(payload, hasLength(2));
+    expect(payload.last['name'], 'Post-workout recovery');
+    expect(payload.last['meal_type'], 'post_workout_recovery');
   });
 
   testWidgets('plan details editor emits full scheduling and guidance fields', (
@@ -78,6 +117,8 @@ void main() {
       find.widgetWithText(TextFormField, 'Plan name'),
       'Recovery plan',
     );
+    await tester.tap(find.text('Optional plan details'));
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Starts on'),
       '2026-08-01',

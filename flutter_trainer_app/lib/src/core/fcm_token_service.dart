@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, debugPrint, defaultTargetPlatform, kIsWeb;
@@ -13,42 +15,91 @@ class TrainerFcmTokenService {
   Future<void> registerToken({required String appRole}) async {
     try {
       final messaging = FirebaseMessaging.instance;
-      await messaging.requestPermission(alert: true, badge: true, sound: true);
+      await messaging.setAutoInitEnabled(true);
+      final settings = await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      if (settings.authorizationStatus == AuthorizationStatus.denied) {
+        debugPrint('[fcm] notification permission denied');
+        return;
+      }
+
+      _listenForTokenRefresh(messaging, appRole);
+      if (!await _waitForApnsRegistration(messaging)) {
+        debugPrint('[fcm] APNs registration timed out');
+        return;
+      }
+
       final token = await messaging.getToken();
       if (token == null || token.isEmpty) {
         return;
       }
 
-      await _client.post(
-        '/fcm-tokens',
-        data: {
-          'token': token,
-          'platform': _platformLabel(),
-          'app_role': appRole,
-          'device_name': _deviceName(),
-        },
-      );
-
-      if (!_listeningForRefresh) {
-        _listeningForRefresh = true;
-        FirebaseMessaging.instance.onTokenRefresh.listen((updatedToken) {
-          if (updatedToken.isEmpty) {
-            return;
-          }
-          _client.post(
-            '/fcm-tokens',
-            data: {
-              'token': updatedToken,
-              'platform': _platformLabel(),
-              'app_role': appRole,
-              'device_name': _deviceName(),
-            },
-          );
-        });
-      }
+      await _sendToken(token, appRole);
     } catch (exception) {
       debugPrint('[fcm] token registration skipped: $exception');
     }
+  }
+
+  void _listenForTokenRefresh(FirebaseMessaging messaging, String appRole) {
+    if (_listeningForRefresh) {
+      return;
+    }
+
+    _listeningForRefresh = true;
+    messaging.onTokenRefresh.listen(
+      (updatedToken) {
+        unawaited(
+          Future<void>(() async {
+            if (updatedToken.isEmpty) {
+              return;
+            }
+            try {
+              await _sendToken(updatedToken, appRole);
+            } catch (exception) {
+              debugPrint(
+                '[fcm] refreshed token registration skipped: $exception',
+              );
+            }
+          }),
+        );
+      },
+      onError: (Object exception) {
+        debugPrint('[fcm] token refresh listener failed: $exception');
+      },
+    );
+  }
+
+  Future<bool> _waitForApnsRegistration(FirebaseMessaging messaging) async {
+    if (kIsWeb ||
+        (defaultTargetPlatform != TargetPlatform.iOS &&
+            defaultTargetPlatform != TargetPlatform.macOS)) {
+      return true;
+    }
+
+    for (var attempt = 0; attempt < 20; attempt++) {
+      final apnsToken = await messaging.getAPNSToken();
+      if (apnsToken != null && apnsToken.isNotEmpty) {
+        return true;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+
+    return false;
+  }
+
+  Future<void> _sendToken(String token, String appRole) {
+    return _client.post(
+      '/fcm-tokens',
+      data: {
+        'token': token,
+        'platform': _platformLabel(),
+        'app_role': appRole,
+        'device_name': _deviceName(),
+      },
+    );
   }
 
   Future<void> unregisterCurrentToken() async {

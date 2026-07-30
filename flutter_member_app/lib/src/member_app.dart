@@ -93,6 +93,15 @@ class _MemberAppState extends State<MemberApp> {
       },
     );
     sessionController.addListener(_openPendingChatIfReady);
+    FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        )
+        .catchError((Object exception) {
+          debugPrint('[fcm] foreground presentation setup skipped: $exception');
+        });
     _notificationOpenSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
       _handleNotificationOpen,
     );

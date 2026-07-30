@@ -18,6 +18,71 @@ class WorkoutScopeTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_member_sees_trainer_assignment_from_current_profile_when_an_older_profile_exists(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [$oldGym, $oldBranch] = $this->makeGymContext();
+        [$gym, $branch] = $this->makeGymContext();
+        $trainer = $this->makeTrainer($gym, $branch);
+
+        $member = User::factory()->create([
+            'active_role' => RoleName::Member->value,
+        ]);
+        $member->assignRole(RoleName::Member->value);
+        $member->gyms()->attach([$oldGym->id, $gym->id]);
+        $member->branches()->attach([$oldBranch->id, $branch->id]);
+        MemberProfile::query()->create([
+            'user_id' => $member->id,
+            'gym_id' => $oldGym->id,
+            'branch_id' => $oldBranch->id,
+            'membership_status' => 'inactive',
+            'is_active' => false,
+        ]);
+        MemberProfile::query()->create([
+            'user_id' => $member->id,
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'assigned_trainer_user_id' => $trainer->id,
+            'membership_status' => 'active',
+            'is_active' => true,
+        ]);
+
+        $exercise = Exercise::query()->create([
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'created_by_user_id' => $trainer->id,
+            'name' => 'Current Gym Squat',
+            'muscle_group' => 'legs',
+            'is_global' => false,
+            'status' => 'approved',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/trainer/workout-plans', [
+                'gym_id' => $gym->id,
+                'branch_id' => $branch->id,
+                'member_ids' => [$member->id],
+                'name' => 'Trainer Strength Plan',
+                'duration_weeks' => 4,
+                'days' => [[
+                    'day_number' => 1,
+                    'exercises' => [[
+                        'exercise_id' => $exercise->id,
+                        'sets' => 3,
+                    ]],
+                ]],
+            ])
+            ->assertCreated();
+
+        $this->actingAs($member, 'sanctum')
+            ->getJson('/api/member/workout-plans')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.name', 'Trainer Strength Plan')
+            ->assertJsonPath('data.0.trainer_id', $trainer->id);
+    }
+
     public function test_trainer_cannot_assign_workout_to_unassigned_member(): void
     {
         $this->seed(PermissionSeeder::class);

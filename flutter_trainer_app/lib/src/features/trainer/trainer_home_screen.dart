@@ -7392,6 +7392,14 @@ class _ChatPageState extends State<_ChatPage> {
 
   @override
   Widget build(BuildContext context) {
+    final unreadCount = widget.conversations.fold<int>(
+      0,
+      (total, conversation) =>
+          total + (_intValue(conversation['unread_count']) ?? 0),
+    );
+    final activeConversationCount = widget.conversations.where((conversation) {
+      return _map(conversation['last_message']).isNotEmpty;
+    }).length;
     final filteredMembers = widget.members.where((assignment) {
       if (_query.isEmpty) {
         return true;
@@ -7452,6 +7460,12 @@ class _ChatPageState extends State<_ChatPage> {
                       onTap: widget.loading ? () {} : () => widget.onRefresh!(),
                     ),
                 ],
+              ),
+              const SizedBox(height: 16),
+              _ChatInboxSummaryCard(
+                memberCount: widget.members.length,
+                activeConversationCount: activeConversationCount,
+                unreadCount: unreadCount,
               ),
               const SizedBox(height: 16),
               Container(
@@ -7536,6 +7550,154 @@ class _ChatPageState extends State<_ChatPage> {
   }
 }
 
+class _ChatInboxSummaryCard extends StatelessWidget {
+  const _ChatInboxSummaryCard({
+    required this.memberCount,
+    required this.activeConversationCount,
+    required this.unreadCount,
+  });
+
+  final int memberCount;
+  final int activeConversationCount;
+  final int unreadCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primary,
+            AppColors.primaryBright.withValues(alpha: 0.92),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(19),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+            ),
+            child: const Icon(
+              Icons.forum_rounded,
+              color: Colors.white,
+              size: 27,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  unreadCount > 0
+                      ? '$unreadCount unread message${unreadCount == 1 ? '' : 's'}'
+                      : 'Your coaching inbox',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$activeConversationCount active chats  •  $memberCount assigned members',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.82),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.lock_outline_rounded,
+              color: Colors.white,
+              size: 18,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChatInboxEmptyState extends StatelessWidget {
+  const _ChatInboxEmptyState({required this.title, required this.message});
+
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(28, 10, 28, 100),
+        child: PremiumCard(
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceSoft,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: AppColors.stroke),
+                ),
+                child: const Icon(
+                  Icons.forum_outlined,
+                  color: AppColors.primaryBright,
+                  size: 31,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TrainerChatInboxList extends StatelessWidget {
   const _TrainerChatInboxList({
     required this.members,
@@ -7556,17 +7718,13 @@ class _TrainerChatInboxList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (members.isEmpty) {
-      return EmptyStateView(
-        title: emptyTitle,
-        message: emptyMessage,
-        icon: Icons.group_outlined,
-      );
+      return _ChatInboxEmptyState(title: emptyTitle, message: emptyMessage);
     }
 
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(18, 0, 18, 104),
       itemCount: members.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         final assignment = members[index];
         final memberId = (assignment['member_id'] as num?)?.toInt();
@@ -7621,37 +7779,53 @@ class _ChatInboxCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 72),
+    return Material(
+      color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+          padding: const EdgeInsets.all(13),
           decoration: BoxDecoration(
             color: isSelected ? AppColors.surfaceSoft : AppColors.surface,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(22),
             border: Border.all(
               color: isSelected
-                  ? AppColors.primary.withValues(alpha: 0.22)
+                  ? AppColors.primaryBright.withValues(alpha: 0.24)
                   : AppColors.stroke,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.035),
+                blurRadius: 10,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: AppColors.surfaceSoft,
-                backgroundImage:
-                    avatarUrl != null && avatarUrl!.trim().isNotEmpty
-                    ? NetworkImage(avatarUrl!)
-                    : null,
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceSoft,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.stroke),
+                  image: avatarUrl != null && avatarUrl!.trim().isNotEmpty
+                      ? DecorationImage(
+                          image: NetworkImage(avatarUrl!),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                ),
+                alignment: Alignment.center,
                 child: avatarUrl == null || avatarUrl!.trim().isEmpty
                     ? Text(
                         name.trim().isEmpty ? 'M' : name.trim()[0],
                         style: const TextStyle(
-                          color: AppColors.primary,
+                          color: AppColors.primaryBright,
+                          fontSize: 18,
                           fontWeight: FontWeight.w900,
                         ),
                       )
@@ -7660,59 +7834,69 @@ class _ChatInboxCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          time,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: unreadCount > 0
+                                    ? AppColors.primaryBright
+                                    : AppColors.textMuted,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      preview,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: unreadCount > 0
-                            ? AppColors.textSecondary
-                            : AppColors.textMuted,
-                        fontWeight: unreadCount > 0
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                      ),
+                    const SizedBox(height: 5),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            preview,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: unreadCount > 0
+                                      ? AppColors.textSecondary
+                                      : AppColors.textMuted,
+                                  fontWeight: unreadCount > 0
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                ),
+                          ),
+                        ),
+                        if (unreadCount > 0) ...[
+                          const SizedBox(width: 8),
+                          _ChatUnreadBadge(unreadCount: unreadCount),
+                        ] else ...[
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            size: 20,
+                            color: AppColors.textMuted,
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    time,
-                    maxLines: 1,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: unreadCount > 0
-                          ? AppColors.primary
-                          : AppColors.textMuted,
-                      fontWeight: unreadCount > 0
-                          ? FontWeight.w800
-                          : FontWeight.w600,
-                    ),
-                  ),
-                  if (unreadCount > 0) ...[
-                    const SizedBox(height: 5),
-                    _ChatUnreadBadge(unreadCount: unreadCount),
-                  ],
-                ],
               ),
             ],
           ),
@@ -7773,117 +7957,138 @@ class _ChatThreadHeader extends StatelessWidget {
     final avatarUrl =
         member['avatar']?.toString() ?? member['profile_photo_url']?.toString();
 
-    return Row(
-      children: [
-        _SquareIconButton(icon: Icons.arrow_back_rounded, onTap: onBack),
-        const SizedBox(width: 11),
-        CircleAvatar(
-          radius: 22,
-          backgroundColor: AppColors.surface,
-          backgroundImage: avatarUrl != null && avatarUrl.trim().isNotEmpty
-              ? NetworkImage(avatarUrl)
-              : null,
-          child: avatarUrl == null || avatarUrl.trim().isEmpty
-              ? Text(
-                  name.trim().isEmpty ? 'M' : name.trim()[0],
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w900,
-                  ),
-                )
-              : null,
-        ),
-        const SizedBox(width: 11),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                blockedByMe ? 'Conversation blocked' : 'Private coaching chat',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: blockedByMe
-                      ? AppColors.error
-                      : AppColors.textSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      padding: const EdgeInsets.fromLTRB(6, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.stroke),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 8),
           ),
-        ),
-        if (onRefresh != null)
-          _SquareIconButton(
-            icon: loading ? Icons.sync_rounded : Icons.refresh_rounded,
-            onTap: loading ? () {} : () => onRefresh!(),
+        ],
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onBack,
+            icon: const Icon(
+              Icons.arrow_back_rounded,
+              color: AppColors.textPrimary,
+            ),
           ),
-        const SizedBox(width: 7),
-        PopupMenuButton<String>(
-          enabled: !busy,
-          tooltip: 'Conversation options',
-          onSelected: (value) {
-            if (value == 'report') {
-              onReport();
-            } else if (value == 'block') {
-              onToggleBlock();
-            }
-          },
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'report',
-              child: Row(
-                children: [
-                  Icon(Icons.flag_outlined, size: 19),
-                  SizedBox(width: 10),
-                  Text('Report conversation'),
-                ],
-              ),
-            ),
-            PopupMenuItem(
-              value: 'block',
-              child: Row(
-                children: [
-                  Icon(
-                    blockedByMe ? Icons.lock_open_rounded : Icons.block_rounded,
-                    size: 19,
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: AppColors.surfaceSoft,
+            backgroundImage: avatarUrl != null && avatarUrl.trim().isNotEmpty
+                ? NetworkImage(avatarUrl)
+                : null,
+            child: avatarUrl == null || avatarUrl.trim().isEmpty
+                ? Text(
+                    name.trim().isEmpty ? 'M' : name.trim()[0],
+                    style: const TextStyle(
+                      color: AppColors.primaryBright,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w800,
                   ),
-                  const SizedBox(width: 10),
-                  Text(blockedByMe ? 'Unblock member' : 'Block member'),
-                ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  blockedByMe
+                      ? 'Conversation blocked'
+                      : loading
+                      ? 'Syncing chat...'
+                      : 'Member conversation',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: blockedByMe
+                        ? AppColors.error
+                        : AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (onRefresh != null)
+            IconButton(
+              onPressed: loading ? null : () => onRefresh!(),
+              icon: Icon(
+                Icons.refresh_rounded,
+                color: loading
+                    ? AppColors.textMuted.withValues(alpha: 0.4)
+                    : AppColors.primaryBright,
               ),
             ),
-          ],
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.stroke),
-            ),
-            child: busy
-                ? const Padding(
-                    padding: EdgeInsets.all(13),
+          PopupMenuButton<String>(
+            enabled: !busy,
+            tooltip: 'Conversation options',
+            icon: busy
+                ? const SizedBox.square(
+                    dimension: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(
                     Icons.more_horiz_rounded,
                     color: AppColors.textSecondary,
-                    size: 22,
                   ),
+            onSelected: (value) {
+              if (value == 'report') {
+                onReport();
+              } else if (value == 'block') {
+                onToggleBlock();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'report',
+                child: Row(
+                  children: [
+                    Icon(Icons.flag_outlined, size: 19),
+                    SizedBox(width: 10),
+                    Text('Report conversation'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'block',
+                child: Row(
+                  children: [
+                    Icon(
+                      blockedByMe
+                          ? Icons.lock_open_rounded
+                          : Icons.block_rounded,
+                      size: 19,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(blockedByMe ? 'Unblock member' : 'Block member'),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -8314,13 +8519,15 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AppGradientScaffold(
-      title: widget.member['name']?.toString() ?? 'Member chat',
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 4),
-            child: _ChatThreadHeader(
+    final memberName = widget.member['name']?.toString() ?? 'Member';
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            _ChatThreadHeader(
               member: widget.member,
               loading: _loading,
               busy: _safetyBusy,
@@ -8330,141 +8537,117 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
               onReport: _reportConversation,
               onToggleBlock: _toggleBlock,
             ),
-          ),
-          _TrainerChatSafetyBar(
-            termsAccepted: _termsAccepted,
-            blockedByMe: _blockedByMe,
-            blockedMe: _blockedMe,
-            busy: _safetyBusy,
-            onAcceptTerms: _acceptTerms,
-            onToggleBlock: _toggleBlock,
-          ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: AppColors.error.withValues(alpha: 0.14),
+            _TrainerChatSafetyBar(
+              termsAccepted: _termsAccepted,
+              blockedByMe: _blockedByMe,
+              blockedMe: _blockedMe,
+              busy: _safetyBusy,
+              onAcceptTerms: _acceptTerms,
+              onToggleBlock: _toggleBlock,
+            ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: AppColors.error.withValues(alpha: 0.18),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.info_outline_rounded,
+                        color: AppColors.error,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: AppColors.error),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: Text(
-                  _error!,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: AppColors.error),
-                ),
               ),
-            ),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _messages.isEmpty
-                ? const EmptyStateView(
-                    title: 'No messages yet',
-                    message: 'Start a private member conversation.',
-                    icon: Icons.chat_bubble_outline_rounded,
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
-                    itemCount: _messages.length + (_hasOlderMessages ? 1 : 0),
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      if (_hasOlderMessages) {
-                        if (index == 0) {
-                          return _LoadOlderChatMessagesButton(
-                            loading: _loadingOlder,
-                            onPressed: _loadOlder,
-                          );
+            Expanded(
+              child: Stack(
+                children: [
+                  const _TrainerChatPatternBackground(),
+                  if (_loading)
+                    const Center(child: CircularProgressIndicator())
+                  else if (_messages.isEmpty)
+                    _TrainerChatEmptyState(memberName: memberName)
+                  else
+                    ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+                      itemCount: _messages.length + (_hasOlderMessages ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (_hasOlderMessages) {
+                          if (index == 0) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _LoadOlderChatMessagesButton(
+                                loading: _loadingOlder,
+                                onPressed: _loadOlder,
+                              ),
+                            );
+                          }
+                          index -= 1;
                         }
-                        index -= 1;
-                      }
 
-                      final message = _messages[index];
-                      final isOutgoing =
-                          _intValue(message['sender_id']) ==
-                          widget.currentUserId;
-                      final failed = message['failed'] == true;
-                      final pending = message['pending'] == true;
-                      return _ChatBubble(
-                        body: message['body']?.toString() ?? '',
-                        time: failed
-                            ? 'Failed to send'
-                            : pending
-                            ? 'Sending...'
-                            : _chatTime(message['created_at']),
-                        isOutgoing: isOutgoing,
-                        failed: failed,
-                      );
-                    },
-                  ),
-          ),
-          if (_termsAccepted && !_blockedByMe && !_blockedMe)
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: AppColors.stroke),
-                        ),
-                        child: TextField(
-                          controller: _controller,
-                          minLines: 1,
-                          maxLines: 4,
-                          enabled: !_sending,
-                          textCapitalization: TextCapitalization.sentences,
-                          decoration: const InputDecoration(
-                            hintText: 'Write a message',
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            filled: false,
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 13,
+                        final message = _messages[index];
+                        final dayLabel = _chatDayLabel(message['created_at']);
+                        final previousDay = index == 0
+                            ? null
+                            : _chatDayLabel(_messages[index - 1]['created_at']);
+                        final isOutgoing =
+                            _intValue(message['sender_id']) ==
+                            widget.currentUserId;
+                        final failed = message['failed'] == true;
+                        final pending = message['pending'] == true;
+                        return Column(
+                          children: [
+                            if (dayLabel != previousDay)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _TrainerChatDatePill(label: dayLabel),
+                              ),
+                            _ChatBubble(
+                              body: message['body']?.toString() ?? '',
+                              time: failed
+                                  ? 'Failed'
+                                  : pending
+                                  ? 'Sending'
+                                  : _chatTime(message['created_at']),
+                              isOutgoing: isOutgoing,
+                              pending: pending,
+                              failed: failed,
                             ),
-                          ),
-                          onSubmitted: (_) => _send(),
-                        ),
-                      ),
+                            const SizedBox(height: 8),
+                          ],
+                        );
+                      },
                     ),
-                    const SizedBox(width: 9),
-                    Material(
-                      color: _sending
-                          ? AppColors.strokeStrong
-                          : AppColors.primary,
-                      borderRadius: BorderRadius.circular(18),
-                      child: InkWell(
-                        onTap: _sending ? null : _send,
-                        borderRadius: BorderRadius.circular(18),
-                        child: SizedBox(
-                          width: 50,
-                          height: 50,
-                          child: Icon(
-                            _sending
-                                ? Icons.hourglass_top_rounded
-                                : Icons.arrow_upward_rounded,
-                            color: Colors.white,
-                            size: 21,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                ],
               ),
             ),
-        ],
+            if (_termsAccepted && !_blockedByMe && !_blockedMe)
+              _TrainerChatComposer(
+                controller: _controller,
+                sending: _sending,
+                onSend: _send,
+                memberName: memberName,
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -8489,32 +8672,23 @@ class _TrainerChatSafetyBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (termsAccepted && !blockedByMe && !blockedMe) {
-      return const SizedBox.shrink();
-    }
-
     final blocked = blockedByMe || blockedMe;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: (blocked ? AppColors.error : AppColors.primary).withValues(
-            alpha: 0.07,
-          ),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: (blocked ? AppColors.error : AppColors.primary).withValues(
-              alpha: 0.14,
-            ),
-          ),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.stroke),
         ),
         child: Row(
           children: [
             Icon(
-              blocked ? Icons.block_rounded : Icons.shield_outlined,
-              size: 19,
-              color: blocked ? AppColors.error : AppColors.primary,
+              blocked ? Icons.block_rounded : Icons.lock_outline_rounded,
+              size: 18,
+              color: blocked ? AppColors.error : AppColors.primaryBright,
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -8523,7 +8697,9 @@ class _TrainerChatSafetyBar extends StatelessWidget {
                     ? 'Accept respectful-use terms to start messaging.'
                     : blockedByMe
                     ? 'You blocked this conversation.'
-                    : 'Messaging is unavailable for this conversation.',
+                    : blockedMe
+                    ? 'Messaging is unavailable for this conversation.'
+                    : 'Private coaching chat',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppColors.textSecondary,
                   fontWeight: FontWeight.w600,
@@ -8547,6 +8723,217 @@ class _TrainerChatSafetyBar extends StatelessWidget {
   }
 }
 
+class _TrainerChatPatternBackground extends StatelessWidget {
+  const _TrainerChatPatternBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(color: AppColors.background),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -42,
+            top: 46,
+            child: _TrainerChatSoftOrb(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              size: 150,
+            ),
+          ),
+          Positioned(
+            left: -55,
+            bottom: 90,
+            child: _TrainerChatSoftOrb(
+              color: AppColors.primaryBright.withValues(alpha: 0.06),
+              size: 170,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrainerChatSoftOrb extends StatelessWidget {
+  const _TrainerChatSoftOrb({required this.color, required this.size});
+
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+}
+
+class _TrainerChatDatePill extends StatelessWidget {
+  const _TrainerChatDatePill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.stroke),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: AppColors.textSecondary,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _TrainerChatEmptyState extends StatelessWidget {
+  const _TrainerChatEmptyState({required this.memberName});
+
+  final String memberName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: PremiumCard(
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceSoft,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: AppColors.stroke),
+                ),
+                child: const Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  color: AppColors.primaryBright,
+                  size: 32,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Start the conversation',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Send $memberName a private message about their workout, recovery, nutrition, or progress.',
+                textAlign: TextAlign.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrainerChatComposer extends StatelessWidget {
+  const _TrainerChatComposer({
+    required this.controller,
+    required this.sending,
+    required this.onSend,
+    required this.memberName,
+  });
+
+  final TextEditingController controller;
+  final bool sending;
+  final VoidCallback onSend;
+  final String memberName;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
+        decoration: const BoxDecoration(color: AppColors.background),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: AppColors.stroke),
+                ),
+                child: TextField(
+                  controller: controller,
+                  minLines: 1,
+                  maxLines: 5,
+                  enabled: !sending,
+                  textCapitalization: TextCapitalization.sentences,
+                  textInputAction: TextInputAction.send,
+                  decoration: InputDecoration(
+                    hintText: 'Message $memberName',
+                    prefixIcon: const Icon(
+                      Icons.lock_outline_rounded,
+                      color: AppColors.textMuted,
+                    ),
+                    suffixIcon: Icon(
+                      Icons.sentiment_satisfied_alt_rounded,
+                      color: AppColors.textMuted.withValues(alpha: 0.75),
+                    ),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 15,
+                    ),
+                  ),
+                  onSubmitted: (_) => onSend(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: AppColors.primaryBright,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryBright.withValues(alpha: 0.22),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: IconButton(
+                onPressed: sending ? null : onSend,
+                icon: Icon(
+                  sending ? Icons.hourglass_top_rounded : Icons.send_rounded,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _LoadOlderChatMessagesButton extends StatelessWidget {
   const _LoadOlderChatMessagesButton({
     required this.loading,
@@ -8559,13 +8946,38 @@ class _LoadOlderChatMessagesButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: TextButton.icon(
-        onPressed: loading ? null : onPressed,
-        icon: Icon(
-          loading ? Icons.sync_rounded : Icons.history_rounded,
-          size: 18,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: loading ? null : onPressed,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: AppColors.stroke),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  loading ? Icons.sync_rounded : Icons.history_rounded,
+                  size: 16,
+                  color: AppColors.primaryBright,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  loading ? 'Loading older messages' : 'Load older messages',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        label: Text(loading ? 'Loading messages' : 'Earlier messages'),
       ),
     );
   }
@@ -8576,12 +8988,14 @@ class _ChatBubble extends StatelessWidget {
     required this.body,
     required this.time,
     required this.isOutgoing,
+    required this.pending,
     required this.failed,
   });
 
   final String body;
   final String time;
   final bool isOutgoing;
+  final bool pending;
   final bool failed;
 
   @override
@@ -8593,18 +9007,23 @@ class _ChatBubble extends StatelessWidget {
           maxWidth: MediaQuery.sizeOf(context).width * 0.76,
         ),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 11, 14, 8),
+          padding: const EdgeInsets.fromLTRB(14, 10, 12, 8),
           decoration: BoxDecoration(
-            color: isOutgoing
-                ? (failed ? AppColors.error : AppColors.primary)
-                : AppColors.surface,
+            color: isOutgoing ? AppColors.primaryBright : AppColors.surface,
             border: isOutgoing ? null : Border.all(color: AppColors.stroke),
             borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(19),
-              topRight: const Radius.circular(19),
-              bottomLeft: Radius.circular(isOutgoing ? 19 : 5),
-              bottomRight: Radius.circular(isOutgoing ? 5 : 19),
+              topLeft: Radius.circular(isOutgoing ? 18 : 8),
+              topRight: Radius.circular(isOutgoing ? 8 : 18),
+              bottomLeft: const Radius.circular(18),
+              bottomRight: const Radius.circular(18),
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -8612,25 +9031,44 @@ class _ChatBubble extends StatelessWidget {
             children: [
               Text(
                 body,
-                style: TextStyle(
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: isOutgoing ? Colors.white : AppColors.textPrimary,
-                  fontWeight: FontWeight.w500,
-                  height: 1.35,
+                  fontWeight: FontWeight.w600,
+                  height: 1.34,
                 ),
               ),
-              const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  time,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: isOutgoing
-                        ? Colors.white.withValues(alpha: 0.72)
-                        : AppColors.textMuted,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
+              const SizedBox(height: 5),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    time,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: failed
+                          ? AppColors.error
+                          : isOutgoing
+                          ? Colors.white.withValues(alpha: 0.82)
+                          : AppColors.textMuted,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
+                  if (isOutgoing) ...[
+                    const SizedBox(width: 4),
+                    Icon(
+                      failed
+                          ? Icons.error_outline_rounded
+                          : pending
+                          ? Icons.access_time_rounded
+                          : Icons.done_all_rounded,
+                      size: 15,
+                      color: failed
+                          ? AppColors.error
+                          : pending
+                          ? Colors.white.withValues(alpha: 0.72)
+                          : Colors.white,
+                    ),
+                  ],
+                ],
               ),
             ],
           ),
@@ -10172,6 +10610,25 @@ String _chatTime(dynamic value) {
   final hour = local.hour.toString().padLeft(2, '0');
   final minute = local.minute.toString().padLeft(2, '0');
   return '$hour:$minute';
+}
+
+String _chatDayLabel(dynamic value) {
+  final parsed = DateTime.tryParse(value?.toString() ?? '');
+  if (parsed == null) {
+    return 'Today';
+  }
+  final local = parsed.toLocal();
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final messageDay = DateTime(local.year, local.month, local.day);
+  final difference = today.difference(messageDay).inDays;
+  if (difference == 0) {
+    return 'Today';
+  }
+  if (difference == 1) {
+    return 'Yesterday';
+  }
+  return '${local.day.toString().padLeft(2, '0')}/${local.month.toString().padLeft(2, '0')}/${local.year}';
 }
 
 List<String> _list(dynamic value) {

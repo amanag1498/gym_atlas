@@ -59,6 +59,7 @@ class FirebaseAuthService
         }
 
         return DB::transaction(function () use ($payload, $event, $allowAutoProvision, $appType): User {
+            $authProvider = $this->resolveAuthProvider($payload);
             $user = User::query()->firstWhere('firebase_uid', $payload['sub'])
                 ?? User::query()->firstWhere('email', $payload['email']);
 
@@ -77,7 +78,7 @@ class FirebaseAuthService
                 'email' => $payload['email'],
                 'firebase_uid' => $payload['sub'],
                 'avatar' => $payload['picture'] ?? $user->avatar,
-                'auth_provider' => 'firebase_google',
+                'auth_provider' => $authProvider,
                 'is_active' => $user->exists ? $user->is_active : true,
                 'last_login_at' => now(),
             ]);
@@ -120,7 +121,7 @@ class FirebaseAuthService
                 'subject_type' => User::class,
                 'subject_id' => $user->id,
                 'context' => [
-                    'auth_provider' => 'firebase_google',
+                    'auth_provider' => $authProvider,
                     'app_type' => $appType,
                 ],
                 'occurred_at' => now(),
@@ -128,5 +129,22 @@ class FirebaseAuthService
 
             return $user->fresh(['roles', 'permissions']);
         });
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function resolveAuthProvider(array $payload): string
+    {
+        $firebase = $payload['firebase'] ?? null;
+        $signInProvider = is_array($firebase)
+            ? ($firebase['sign_in_provider'] ?? null)
+            : null;
+
+        return match ($signInProvider) {
+            'apple.com' => 'firebase_apple',
+            'google.com' => 'firebase_google',
+            default => 'firebase',
+        };
     }
 }

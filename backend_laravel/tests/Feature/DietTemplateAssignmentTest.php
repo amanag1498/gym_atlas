@@ -21,6 +21,37 @@ class DietTemplateAssignmentTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_trainer_diet_builder_accepts_custom_meals_and_ignores_blank_food_rows(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [, , $trainer] = $this->context();
+
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/trainer/diet-templates', [
+                'name' => 'Flexible meal plan',
+                'meals' => [
+                    [
+                        'name' => 'Pre-workout fuel',
+                        'items' => [
+                            ['name' => 'Banana', 'quantity' => '1'],
+                            ['name' => '', 'quantity' => ''],
+                        ],
+                    ],
+                    [
+                        'name' => '',
+                        'items' => [],
+                    ],
+                ],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'active')
+            ->assertJsonPath('data.meals.0.name', 'Pre-workout fuel')
+            ->assertJsonPath('data.meals.0.meal_type', 'pre_workout_fuel')
+            ->assertJsonCount(1, 'data.meals.0.items')
+            ->assertJsonPath('data.meals.1.name', 'Meal 2')
+            ->assertJsonPath('data.meals.1.meal_type', 'meal_2');
+    }
+
     public function test_diet_permission_backfill_repairs_an_existing_trainer_role(): void
     {
         $this->seed(PermissionSeeder::class);
@@ -427,19 +458,23 @@ class DietTemplateAssignmentTest extends TestCase
                 'name' => 'Member Complete Plan',
                 'goal' => 'Energy',
                 'meals' => [[
-                    'name' => 'Breakfast',
-                    'meal_type' => 'breakfast',
-                    'items' => [[
-                        'name' => 'Poha',
-                        'quantity' => '1 bowl',
-                        'calories' => 280,
-                        'protein_g' => 7,
-                        'carbs_g' => 52,
-                        'fats_g' => 6,
-                    ]],
+                    'name' => 'Early shift meal',
+                    'items' => [
+                        [
+                            'name' => 'Poha',
+                            'quantity' => '1 bowl',
+                            'calories' => 280,
+                            'protein_g' => 7,
+                            'carbs_g' => 52,
+                            'fats_g' => 6,
+                        ],
+                        [
+                            'name' => '',
+                            'quantity' => '',
+                        ],
+                    ],
                 ], [
                     'name' => 'Dinner',
-                    'meal_type' => 'dinner',
                     'items' => [[
                         'name' => 'Khichdi',
                         'quantity' => '1 bowl',
@@ -449,6 +484,8 @@ class DietTemplateAssignmentTest extends TestCase
             ])
             ->assertCreated()
             ->assertJsonPath('data.protein_target_g', null)
+            ->assertJsonPath('data.meals.0.meal_type', 'early_shift_meal')
+            ->assertJsonCount(1, 'data.meals.0.items')
             ->assertJsonPath('data.meals.0.items.0.name', 'Poha');
 
         $planId = $response->json('data.id');

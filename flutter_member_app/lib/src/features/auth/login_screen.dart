@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -46,8 +47,16 @@ class _MemberLoginScreenState extends State<MemberLoginScreen>
           final width = constraints.maxWidth;
           final height = constraints.maxHeight;
           final compact = height < 720 || width < 370;
-          final horizontalPadding = width < 360 ? 20.0 : width < 430 ? 24.0 : 32.0;
-          final headlineSize = width < 360 ? 30.0 : width < 430 ? 36.0 : 40.0;
+          final horizontalPadding = width < 360
+              ? 20.0
+              : width < 430
+              ? 24.0
+              : 32.0;
+          final headlineSize = width < 360
+              ? 30.0
+              : width < 430
+              ? 36.0
+              : 40.0;
           final logoSize = compact ? 56.0 : 64.0;
 
           return Stack(
@@ -87,27 +96,31 @@ class _MemberLoginScreenState extends State<MemberLoginScreen>
                                   Text(
                                     'Your training,\nall in one place.',
                                     textAlign: TextAlign.center,
-                                    style: theme.textTheme.displaySmall?.copyWith(
-                                      fontSize: headlineSize,
-                                      height: 0.94,
-                                      letterSpacing: -1.2,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                    style: theme.textTheme.displaySmall
+                                        ?.copyWith(
+                                          fontSize: headlineSize,
+                                          height: 0.94,
+                                          letterSpacing: -1.2,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                   ),
                                   const SizedBox(height: 12),
                                   ConstrainedBox(
-                                    constraints: const BoxConstraints(maxWidth: 340),
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 340,
+                                    ),
                                     child: Text(
                                       'Workouts, bookings, and membership in one focused member app.',
                                       textAlign: TextAlign.center,
-                                      style: theme.textTheme.bodyLarge?.copyWith(
-                                        color: AppColors.textSecondary,
-                                        height: 1.45,
-                                      ),
+                                      style: theme.textTheme.bodyLarge
+                                          ?.copyWith(
+                                            color: AppColors.textSecondary,
+                                            height: 1.45,
+                                          ),
                                     ),
                                   ),
                                 ],
-                                ),
+                              ),
                             ),
                             SizedBox(height: compact ? 22 : 28),
                             RevealOnBuild(
@@ -121,8 +134,13 @@ class _MemberLoginScreenState extends State<MemberLoginScreen>
                                 onPressed: session.busy
                                     ? null
                                     : () => context
-                                        .read<MemberSessionController>()
-                                        .login(),
+                                          .read<MemberSessionController>()
+                                          .login(),
+                                onApplePressed: session.busy
+                                    ? null
+                                    : () => context
+                                          .read<MemberSessionController>()
+                                          .loginWithApple(),
                               ),
                             ),
                             const SizedBox(height: 14),
@@ -172,10 +190,7 @@ class _BrandLockup extends StatelessWidget {
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                AppColors.primary,
-                AppColors.primaryBright,
-              ],
+              colors: [AppColors.primary, AppColors.primaryBright],
             ),
             boxShadow: [
               BoxShadow(
@@ -215,16 +230,19 @@ class _LoginPanel extends StatelessWidget {
     required this.busy,
     required this.error,
     required this.onPressed,
+    required this.onApplePressed,
   });
 
   final bool compact;
   final bool busy;
   final String? error;
   final VoidCallback? onPressed;
+  final VoidCallback? onApplePressed;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final showApple = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
     return Container(
       decoration: BoxDecoration(
@@ -279,7 +297,9 @@ class _LoginPanel extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Text(
-                    'Continue with Google',
+                    showApple
+                        ? 'Choose how to continue'
+                        : 'Continue with Google',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.headlineSmall?.copyWith(
                       fontSize: compact ? 22 : 24,
@@ -292,11 +312,48 @@ class _LoginPanel extends StatelessWidget {
                   const SizedBox(height: 22),
                   GradientButton(
                     expanded: true,
-                    label: busy ? 'Signing in...' : 'Continue',
+                    label: busy ? 'Signing in...' : 'Continue with Google',
                     icon: busy ? null : Icons.arrow_forward_rounded,
                     loading: busy,
                     onPressed: onPressed,
                   ),
+                  if (showApple) ...[
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        const Expanded(child: Divider()),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            'or',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                        const Expanded(child: Divider()),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: onApplePressed,
+                        icon: const Icon(Icons.apple, size: 20),
+                        label: const Text('Sign in with Apple'),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          backgroundColor: Colors.black,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: Colors.black54,
+                          disabledForegroundColor: Colors.white70,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -325,19 +382,15 @@ class _LoginError extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.error_outline_rounded,
-            size: 18,
-            color: AppColors.error,
-          ),
+          Icon(Icons.error_outline_rounded, size: 18, color: AppColors.error),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textPrimary,
-                    height: 1.4,
-                  ),
+                color: AppColors.textPrimary,
+                height: 1.4,
+              ),
             ),
           ),
         ],
@@ -363,10 +416,7 @@ class _AnimatedLoginBackground extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [
-                Color(0xFFF7FAFF),
-                Color(0xFFFFFFFF),
-              ],
+              colors: [Color(0xFFF7FAFF), Color(0xFFFFFFFF)],
             ),
           ),
           child: Stack(
@@ -430,10 +480,7 @@ class _AnimatedLoginBackground extends StatelessWidget {
 }
 
 class _HalfCircleGlow extends StatelessWidget {
-  const _HalfCircleGlow({
-    required this.size,
-    required this.color,
-  });
+  const _HalfCircleGlow({required this.size, required this.color});
 
   final double size;
   final Color color;

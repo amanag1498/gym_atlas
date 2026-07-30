@@ -99,29 +99,7 @@ class TrainerSessionController extends ChangeNotifier {
       );
       final firebaseUserCredential = await firebase.FirebaseAuth.instance
           .signInWithCredential(credential);
-      final idToken = await firebaseUserCredential.user?.getIdToken(true);
-      if (idToken == null || idToken.isEmpty) {
-        throw Exception('Firebase ID token missing.');
-      }
-
-      final session = await _authService.signInWithFirebase(
-        idToken: idToken,
-        appType: 'trainer',
-      );
-      if (session.token.isEmpty) {
-        throw Exception('Authentication token missing from server response.');
-      }
-
-      _apiClient.setBearerToken(session.token);
-
-      var me = await _authService.fetchMe();
-      me = await _ensureTrainerRole(me);
-      _ensureEligibleTrainer(me);
-
-      token = session.token;
-      user = me;
-      await _storage.saveSession(token: session.token, user: me);
-      await _registerFcmToken();
+      await _completeFirebaseLogin(firebaseUserCredential);
     } on DioException catch (exception) {
       await _googleSafeSignOut();
       await _clearLocalState(notify: false);
@@ -134,6 +112,70 @@ class TrainerSessionController extends ChangeNotifier {
 
     busy = false;
     notifyListeners();
+  }
+
+  Future<void> loginWithApple() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) {
+      error = 'Sign in with Apple is available on iPhone and iPad.';
+      notifyListeners();
+      return;
+    }
+
+    busy = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      final provider = firebase.AppleAuthProvider()
+        ..addScope('email')
+        ..addScope('name');
+      final firebaseUserCredential = await firebase.FirebaseAuth.instance
+          .signInWithProvider(provider);
+      await _completeFirebaseLogin(firebaseUserCredential);
+    } on DioException catch (exception) {
+      await _googleSafeSignOut();
+      await _clearLocalState(notify: false);
+      error = _mapAuthError(exception);
+    } on firebase.FirebaseAuthException catch (exception) {
+      await _googleSafeSignOut();
+      await _clearLocalState(notify: false);
+      error = _mapAppleAuthError(exception);
+    } catch (exception) {
+      await _googleSafeSignOut();
+      await _clearLocalState(notify: false);
+      error = exception.toString().replaceFirst('Exception: ', '');
+    }
+
+    busy = false;
+    notifyListeners();
+  }
+
+  Future<void> _completeFirebaseLogin(
+    firebase.UserCredential firebaseUserCredential,
+  ) async {
+    final idToken = await firebaseUserCredential.user?.getIdToken(true);
+    if (idToken == null || idToken.isEmpty) {
+      throw Exception('Firebase ID token missing.');
+    }
+
+    final session = await _authService.signInWithFirebase(
+      idToken: idToken,
+      appType: 'trainer',
+    );
+    if (session.token.isEmpty) {
+      throw Exception('Authentication token missing from server response.');
+    }
+
+    _apiClient.setBearerToken(session.token);
+
+    var me = await _authService.fetchMe();
+    me = await _ensureTrainerRole(me);
+    _ensureEligibleTrainer(me);
+
+    token = session.token;
+    user = me;
+    await _storage.saveSession(token: session.token, user: me);
+    await _registerFcmToken();
   }
 
   Future<void> logout({bool remote = true}) async {
@@ -258,6 +300,23 @@ class TrainerSessionController extends ChangeNotifier {
         return 'Network error. Please check your connection and try again.';
       default:
         return 'Trainer sign-in failed. Please try again.';
+    }
+  }
+
+  String _mapAppleAuthError(firebase.FirebaseAuthException exception) {
+    switch (exception.code) {
+      case 'canceled':
+      case 'web-context-canceled':
+      case 'web-context-cancelled':
+        return 'Apple sign-in cancelled.';
+      case 'operation-not-allowed':
+        return 'Sign in with Apple is not enabled yet.';
+      case 'account-exists-with-different-credential':
+        return 'An account already exists for this email. Sign in with Google first.';
+      case 'network-request-failed':
+        return 'Network error. Please check your connection and try again.';
+      default:
+        return exception.message ?? 'Apple sign-in failed. Please try again.';
     }
   }
 }

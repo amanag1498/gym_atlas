@@ -99,6 +99,34 @@ class ChatFcmNotificationFeatureTest extends TestCase
         });
     }
 
+    public function test_chat_push_does_not_fall_back_to_token_from_the_wrong_app_role(): void
+    {
+        $this->enableFcm();
+        [$trainer, $member] = $this->assignedTrainerPair();
+
+        UserFcmToken::query()->create([
+            'user_id' => $trainer->id,
+            'token' => 'trainer-user-member-app-token',
+            'platform' => 'ios',
+            'app_role' => RoleName::Member->value,
+        ]);
+
+        $this->postJson('/api/internal/chat/messages', [
+            'room' => "trainer:{$trainer->id}:member:{$member->id}",
+            'trainer_id' => $trainer->id,
+            'member_id' => $member->id,
+            'sender_id' => $member->id,
+            'recipient_id' => $trainer->id,
+            'message' => 'This must not appear in the member app.',
+            'client_message_id' => 'wrong-app-role-token-1',
+        ], [
+            'X-Internal-Api-Key' => config('services.realtime.internal_api_key'),
+        ])->assertCreated();
+
+        $this->assertSame(1, Notification::query()->count());
+        Http::assertSentCount(0);
+    }
+
     public function test_chat_message_client_id_is_idempotent_for_rest_fallback(): void
     {
         $this->enableFcm();

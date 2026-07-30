@@ -22,6 +22,7 @@ use App\Models\WorkoutPlan;
 use App\Models\WorkoutSession;
 use App\Models\WorkoutTemplate;
 use App\Services\Audit\AuditLogService;
+use App\Services\Member\MemberAppService;
 use App\Services\Workout\WorkoutAccessService;
 use App\Services\Workout\WorkoutPlanService;
 use App\Services\Workout\WorkoutSessionService;
@@ -36,6 +37,7 @@ class WorkoutController extends Controller
         private readonly WorkoutPlanService $workoutPlanService,
         private readonly WorkoutSessionService $workoutSessionService,
         private readonly AuditLogService $auditLogService,
+        private readonly MemberAppService $memberAppService,
     ) {
     }
 
@@ -188,7 +190,7 @@ class WorkoutController extends Controller
 
     public function plans(Request $request)
     {
-        $profile = $request->user()->memberProfile;
+        $profile = $this->memberAppService->memberProfileFor($request->user());
         if (! $profile?->gym_id) {
             return $this->success([], 'No active gym space is available.');
         }

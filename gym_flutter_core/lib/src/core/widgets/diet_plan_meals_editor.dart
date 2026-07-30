@@ -62,51 +62,64 @@ class _DietPlanDetailsEditorState extends State<DietPlanDetailsEditor> {
         TextFormField(
           controller: _draft.goal,
           enabled: widget.enabled,
-          decoration: const InputDecoration(labelText: 'Goal'),
-          onChanged: _emit,
-        ),
-        const SizedBox(height: 10),
-        _twoColumns(
-          _numberField(_draft.calories, 'Daily calories', integer: true),
-          _numberField(_draft.protein, 'Protein g'),
-        ),
-        const SizedBox(height: 10),
-        _twoColumns(
-          _numberField(_draft.carbs, 'Carbs g'),
-          _numberField(_draft.fats, 'Fats g'),
-        ),
-        const SizedBox(height: 10),
-        if (widget.includeSchedule) ...[
-          _twoColumns(
-            _dateField(_draft.startsOn, 'Starts on'),
-            _dateField(_draft.endsOn, 'Ends on'),
-          ),
-          const SizedBox(height: 10),
-        ],
-        TextFormField(
-          controller: _draft.preferences,
-          enabled: widget.enabled,
-          maxLines: 2,
-          decoration: const InputDecoration(labelText: 'Dietary preferences'),
-          onChanged: _emit,
-        ),
-        const SizedBox(height: 10),
-        TextFormField(
-          controller: _draft.allergies,
-          enabled: widget.enabled,
-          maxLines: 2,
           decoration: const InputDecoration(
-            labelText: 'Allergies and restrictions',
+            labelText: 'Goal (optional)',
+            hintText: 'For example: Muscle gain',
           ),
           onChanged: _emit,
         ),
         const SizedBox(height: 10),
-        TextFormField(
-          controller: _draft.notes,
-          enabled: widget.enabled,
-          maxLines: 3,
-          decoration: const InputDecoration(labelText: 'Plan notes'),
-          onChanged: _emit,
+        ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: EdgeInsets.zero,
+          title: const Text('Optional plan details'),
+          subtitle: const Text('Targets, dates, preferences and notes'),
+          children: [
+            _twoColumns(
+              _numberField(_draft.calories, 'Daily calories', integer: true),
+              _numberField(_draft.protein, 'Protein g'),
+            ),
+            const SizedBox(height: 10),
+            _twoColumns(
+              _numberField(_draft.carbs, 'Carbs g'),
+              _numberField(_draft.fats, 'Fats g'),
+            ),
+            if (widget.includeSchedule) ...[
+              const SizedBox(height: 10),
+              _twoColumns(
+                _dateField(_draft.startsOn, 'Starts on'),
+                _dateField(_draft.endsOn, 'Ends on'),
+              ),
+            ],
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _draft.preferences,
+              enabled: widget.enabled,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Dietary preferences',
+              ),
+              onChanged: _emit,
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _draft.allergies,
+              enabled: widget.enabled,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Allergies and restrictions',
+              ),
+              onChanged: _emit,
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _draft.notes,
+              enabled: widget.enabled,
+              maxLines: 3,
+              decoration: const InputDecoration(labelText: 'Plan notes'),
+              onChanged: _emit,
+            ),
+          ],
         ),
         if (widget.includeStatus) ...[
           const SizedBox(height: 10),
@@ -196,7 +209,7 @@ class _DietPlanMealsEditorState extends State<DietPlanMealsEditor> {
   void initState() {
     super.initState();
     _meals = widget.initialMeals.isEmpty
-        ? [_MealDraft.empty()]
+        ? [_MealDraft.empty(name: 'Meal 1')]
         : widget.initialMeals.map(_MealDraft.fromMap).toList();
   }
 
@@ -212,8 +225,38 @@ class _DietPlanMealsEditorState extends State<DietPlanMealsEditor> {
     _meals.map((meal) => meal.toPayload()).toList(growable: false),
   );
 
-  void _addMeal() {
-    setState(() => _meals.add(_MealDraft.empty()));
+  Future<void> _addMeal() async {
+    var draftName = 'Meal ${_meals.length + 1}';
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Add meal'),
+        content: TextFormField(
+          initialValue: draftName,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            labelText: 'Meal name',
+            hintText: 'For example: Pre-workout meal',
+          ),
+          onChanged: (value) => draftName = value,
+          onFieldSubmitted: (value) =>
+              Navigator.of(dialogContext).pop(value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(draftName.trim()),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty || !mounted) return;
+    setState(() => _meals.add(_MealDraft.empty(name: name)));
     _emit();
   }
 
@@ -249,13 +292,10 @@ class _DietPlanMealsEditorState extends State<DietPlanMealsEditor> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Meals and products',
-                    style: theme.textTheme.titleMedium,
-                  ),
+                  Text('Build meals', style: theme.textTheme.titleMedium),
                   const SizedBox(height: 2),
                   Text(
-                    'Add meal timings, nutrition and repeatable food lines.',
+                    'Name each meal your way, then add its foods and servings.',
                     style: theme.textTheme.bodySmall,
                   ),
                 ],
@@ -264,7 +304,7 @@ class _DietPlanMealsEditorState extends State<DietPlanMealsEditor> {
             OutlinedButton.icon(
               onPressed: widget.enabled ? _addMeal : null,
               icon: const Icon(Icons.add_rounded),
-              label: const Text('Meal'),
+              label: const Text('Add meal'),
             ),
           ],
         ),
@@ -291,7 +331,7 @@ class _DietPlanMealsEditorState extends State<DietPlanMealsEditor> {
       ),
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
-        initiallyExpanded: index == 0,
+        initiallyExpanded: true,
         title: Text(
           meal.name.text.trim().isEmpty
               ? 'Meal ${index + 1}'
@@ -325,29 +365,34 @@ class _DietPlanMealsEditorState extends State<DietPlanMealsEditor> {
             ],
           ),
           const SizedBox(height: 10),
-          _twoColumns(
-            _textField(meal.type, 'Meal type', onChanged: (_) => _emit()),
-            _textField(
-              meal.time,
-              'Time (HH:mm)',
-              keyboardType: TextInputType.datetime,
-              validator: _timeValidator,
-              onChanged: (_) => _emit(),
-            ),
-          ),
-          const SizedBox(height: 10),
-          _nutritionGrid(
-            calories: meal.calories,
-            protein: meal.protein,
-            carbs: meal.carbs,
-            fats: meal.fats,
-          ),
-          const SizedBox(height: 10),
           _textField(
-            meal.notes,
-            'Meal notes or substitutions',
-            maxLines: 2,
+            meal.time,
+            'Meal time (optional)',
+            keyboardType: TextInputType.datetime,
+            validator: _timeValidator,
             onChanged: (_) => _emit(),
+          ),
+          const SizedBox(height: 10),
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: EdgeInsets.zero,
+            title: const Text('Optional meal details'),
+            subtitle: const Text('Macros, calories and coach notes'),
+            children: [
+              _nutritionGrid(
+                calories: meal.calories,
+                protein: meal.protein,
+                carbs: meal.carbs,
+                fats: meal.fats,
+              ),
+              const SizedBox(height: 10),
+              _textField(
+                meal.notes,
+                'Meal notes or substitutions',
+                maxLines: 2,
+                onChanged: (_) => _emit(),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
           Row(
@@ -369,7 +414,7 @@ class _DietPlanMealsEditorState extends State<DietPlanMealsEditor> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: Text(
-                'No products yet. Add individual foods, supplements or prepared dishes.',
+                'Add foods, supplements or prepared dishes for this meal.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             )
@@ -422,19 +467,25 @@ class _DietPlanMealsEditorState extends State<DietPlanMealsEditor> {
               'Quantity or serving',
               onChanged: (_) => _emit(),
             ),
-            const SizedBox(height: 10),
-            _nutritionGrid(
-              calories: item.calories,
-              protein: item.protein,
-              carbs: item.carbs,
-              fats: item.fats,
-            ),
-            const SizedBox(height: 10),
-            _textField(
-              item.notes,
-              'Preparation or product notes',
-              maxLines: 2,
-              onChanged: (_) => _emit(),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: EdgeInsets.zero,
+              title: const Text('Optional nutrition'),
+              children: [
+                _nutritionGrid(
+                  calories: item.calories,
+                  protein: item.protein,
+                  carbs: item.carbs,
+                  fats: item.fats,
+                ),
+                const SizedBox(height: 10),
+                _textField(
+                  item.notes,
+                  'Preparation or product notes',
+                  maxLines: 2,
+                  onChanged: (_) => _emit(),
+                ),
+              ],
             ),
           ],
         ),
@@ -617,7 +668,8 @@ class _MealDraft {
     required this.items,
   });
 
-  factory _MealDraft.empty() => _MealDraft.fromMap(const {});
+  factory _MealDraft.empty({required String name}) =>
+      _MealDraft.fromMap({'name': name});
 
   factory _MealDraft.fromMap(Map<String, dynamic> meal) {
     return _MealDraft(
@@ -653,7 +705,7 @@ class _MealDraft {
   Map<String, dynamic> toPayload() => {
     if (id != null) 'id': id,
     'name': name.text.trim(),
-    'meal_type': _nullableText(type),
+    'meal_type': _nullableText(type) ?? _mealType(name.text),
     'scheduled_time': _nullableText(time),
     'calories': _integer(calories),
     'protein_g': _decimal(protein),
@@ -754,6 +806,15 @@ String? _time(dynamic value) {
   final text = value?.toString();
   if (text == null || text.isEmpty) return null;
   return text.length >= 5 ? text.substring(0, 5) : text;
+}
+
+String _mealType(String name) {
+  final normalized = name
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+      .replaceAll(RegExp(r'^_+|_+$'), '');
+  return normalized.isEmpty ? 'meal' : normalized;
 }
 
 String? _numberError(String? value, {required bool integer}) {

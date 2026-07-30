@@ -11,6 +11,7 @@ use App\Models\MembershipPlan;
 use App\Models\TrainerProfile;
 use App\Models\TrialRequest;
 use App\Models\User;
+use Carbon\Carbon;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -18,6 +19,68 @@ use Tests\TestCase;
 class MemberDiscoveryFeatureTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_open_now_filter_supports_overnight_branches_and_legacy_flat_hours(): void
+    {
+        Carbon::setTestNow(Carbon::create(2026, 7, 29, 1, 0, 0, 'Asia/Kolkata'));
+
+        $overnightGym = Gym::query()->create([
+            'name' => 'Overnight Branch Gym',
+            'slug' => 'overnight-branch-gym',
+            'timezone' => 'Asia/Kolkata',
+            'status' => 'active',
+            'approval_status' => 'approved',
+            'is_active' => true,
+            'public_listing_enabled' => true,
+            'public_listing_approval_status' => 'approved',
+        ]);
+        Branch::query()->create([
+            'gym_id' => $overnightGym->id,
+            'name' => 'Night Branch',
+            'slug' => 'night-branch',
+            'timezone' => 'Asia/Kolkata',
+            'timings' => [
+                'tuesday' => [['open' => '22:00', 'close' => '06:00']],
+            ],
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+
+        Gym::query()->create([
+            'name' => 'Legacy Hours Gym',
+            'slug' => 'legacy-hours-gym',
+            'timezone' => 'Asia/Kolkata',
+            'opening_time' => '00:00:00',
+            'closing_time' => '02:00:00',
+            'status' => 'active',
+            'approval_status' => 'approved',
+            'is_active' => true,
+            'public_listing_enabled' => true,
+            'public_listing_approval_status' => 'approved',
+        ]);
+
+        Gym::query()->create([
+            'name' => 'Closed Gym',
+            'slug' => 'closed-gym',
+            'timezone' => 'Asia/Kolkata',
+            'opening_time' => '08:00',
+            'closing_time' => '20:00',
+            'status' => 'active',
+            'approval_status' => 'approved',
+            'is_active' => true,
+            'public_listing_enabled' => true,
+            'public_listing_approval_status' => 'approved',
+        ]);
+
+        $this->getJson('/api/public/discovery/gyms?open_now=1')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.is_open_now', true)
+            ->assertJsonPath('data.1.is_open_now', true)
+            ->assertJsonMissing(['slug' => 'closed-gym']);
+
+        Carbon::setTestNow();
+    }
 
     public function test_public_discovery_shows_only_public_enabled_approved_gyms(): void
     {

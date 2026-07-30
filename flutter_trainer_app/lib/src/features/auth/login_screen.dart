@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -135,6 +136,11 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
                                     : () => context
                                           .read<TrainerSessionController>()
                                           .login(),
+                                onApplePressed: session.busy
+                                    ? null
+                                    : () => context
+                                          .read<TrainerSessionController>()
+                                          .loginWithApple(),
                               ),
                             ),
                             const SizedBox(height: 14),
@@ -224,16 +230,19 @@ class _LoginPanel extends StatelessWidget {
     required this.busy,
     required this.error,
     required this.onPressed,
+    required this.onApplePressed,
   });
 
   final bool compact;
   final bool busy;
   final String? error;
   final VoidCallback? onPressed;
+  final VoidCallback? onApplePressed;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final showApple = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
     return Container(
       decoration: BoxDecoration(
@@ -288,7 +297,9 @@ class _LoginPanel extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Text(
-                    'Continue with Google',
+                    showApple
+                        ? 'Choose how to continue'
+                        : 'Continue with Google',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.headlineSmall?.copyWith(
                       fontSize: compact ? 22 : 24,
@@ -301,11 +312,48 @@ class _LoginPanel extends StatelessWidget {
                   const SizedBox(height: 22),
                   GradientButton(
                     expanded: true,
-                    label: busy ? 'Signing in...' : 'Continue',
+                    label: busy ? 'Signing in...' : 'Continue with Google',
                     icon: busy ? null : Icons.arrow_forward_rounded,
                     loading: busy,
                     onPressed: onPressed,
                   ),
+                  if (showApple) ...[
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        const Expanded(child: Divider()),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            'or',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                        const Expanded(child: Divider()),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: onApplePressed,
+                        icon: const Icon(Icons.apple, size: 20),
+                        label: const Text('Sign in with Apple'),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          backgroundColor: Colors.black,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: Colors.black54,
+                          disabledForegroundColor: Colors.white70,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

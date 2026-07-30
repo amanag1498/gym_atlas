@@ -99,7 +99,7 @@ class GymDiscoveryService
             'plans_count' => $plans->count(),
         ] : null;
 
-        $gym->setAttribute('is_open_now', $this->isOpenNow($gym->timings, $gym->timezone, $gym->weekly_off ?? []));
+        $gym->setAttribute('is_open_now', $this->isGymOpenNow($gym));
         $gym->setAttribute('personal_training_available', $plans->contains(fn ($plan) => (bool) $plan->pt_included)
             || $gym->trainerProfiles->where('is_active', true)->isNotEmpty());
         $gym->setAttribute('fee_summary', $feeSummary);
@@ -164,11 +164,7 @@ class GymDiscoveryService
         }
 
         if (isset($filters['open_now']) && filter_var($filters['open_now'], FILTER_VALIDATE_BOOLEAN)) {
-            $gymOpen = $this->isOpenNow($gym->timings, $gym->timezone, $gym->weekly_off ?? []);
-            $branchOpen = $gym->branches->contains(fn ($branch) => $branch->is_active
-                && $this->isOpenNow($branch->timings, $branch->timezone, $branch->weekly_off ?? []));
-
-            if (! $gymOpen && ! $branchOpen) {
+            if (! $this->isGymOpenNow($gym)) {
                 return false;
             }
         }
@@ -222,6 +218,47 @@ class GymDiscoveryService
         }
 
         return true;
+    }
+
+    private function isGymOpenNow(Gym $gym): bool
+    {
+        if ($this->isLocationOpenNow(
+            $gym->timings,
+            $gym->timezone,
+            $gym->weekly_off ?? [],
+            $gym->opening_time,
+            $gym->closing_time,
+        )) {
+            return true;
+        }
+
+        return $gym->branches->contains(fn ($branch): bool => $branch->is_active
+            && $this->isLocationOpenNow(
+                $branch->timings,
+                $branch->timezone ?: $gym->timezone,
+                $branch->weekly_off ?? [],
+                $branch->opening_time,
+                $branch->closing_time,
+            ));
+    }
+
+    private function isLocationOpenNow(
+        ?array $timings,
+        ?string $timezone,
+        array $weeklyOff,
+        ?string $openingTime,
+        ?string $closingTime,
+    ): bool {
+        $schedule = OperatingHours::normalize($timings, $weeklyOff);
+        if (collect($schedule)->flatten(1)->isEmpty()) {
+            $schedule = OperatingHours::buildFromFlat(
+                $openingTime,
+                $closingTime,
+                $weeklyOff,
+            );
+        }
+
+        return OperatingHours::isOpenNow($schedule, $timezone);
     }
 
     private function paginateCollection(Collection $items, int $perPage, int $page): LengthAwarePaginator

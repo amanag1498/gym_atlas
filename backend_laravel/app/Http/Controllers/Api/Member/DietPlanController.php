@@ -14,6 +14,7 @@ use App\Models\DietPlanTemplate;
 use App\Services\Audit\AuditLogService;
 use App\Services\Diet\DietPlanService;
 use App\Services\Diet\DietPlanTemplateService;
+use App\Services\Member\MemberAppService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -23,11 +24,12 @@ class DietPlanController extends Controller
         private readonly DietPlanService $dietPlanService,
         private readonly DietPlanTemplateService $dietPlanTemplateService,
         private readonly AuditLogService $auditLogService,
+        private readonly MemberAppService $memberAppService,
     ) {}
 
     public function index(Request $request)
     {
-        $profile = $request->user()->memberProfile;
+        $profile = $this->memberAppService->memberProfileFor($request->user());
         if (! $profile?->gym_id) {
             return $this->success([], 'No active gym space is available.');
         }
@@ -59,7 +61,7 @@ class DietPlanController extends Controller
 
     public function store(StoreMemberDietPlanRequest $request)
     {
-        $profile = $request->user()->memberProfile;
+        $profile = $this->memberAppService->memberProfileFor($request->user());
         if (! $profile?->gym_id) {
             throw ValidationException::withMessages(['diet_plan' => ['Join a gym before creating a personal diet plan.']]);
         }
@@ -78,7 +80,7 @@ class DietPlanController extends Controller
 
     public function templates(Request $request)
     {
-        if (! $request->user()->memberProfile?->gym_id) {
+        if (! $this->memberAppService->memberProfileFor($request->user())?->gym_id) {
             return $this->success([], 'Join a gym to use global diet templates.');
         }
 
@@ -95,7 +97,7 @@ class DietPlanController extends Controller
 
     public function adoptTemplate(Request $request, DietPlanTemplate $dietPlanTemplate)
     {
-        $profile = $request->user()->memberProfile;
+        $profile = $this->memberAppService->memberProfileFor($request->user());
         if (! $profile?->gym_id) {
             throw ValidationException::withMessages([
                 'diet_template_id' => ['Join a gym before adopting a diet template.'],
@@ -166,7 +168,7 @@ class DietPlanController extends Controller
 
     private function assertOwner(Request $request, DietPlan $plan): void
     {
-        $profile = $request->user()->memberProfile;
+        $profile = $this->memberAppService->memberProfileFor($request->user());
         if ((int) $plan->member_id !== (int) $request->user()->id || ! $profile?->gym_id || (int) $plan->gym_id !== (int) $profile->gym_id || ($plan->branch_id && (int) $plan->branch_id !== (int) $profile->branch_id)) {
             throw ValidationException::withMessages(['diet_plan_id' => ['You do not have access to this diet plan.']]);
         }

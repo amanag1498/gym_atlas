@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Diet;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class StoreDietPlanRequest extends FormRequest
@@ -10,6 +11,32 @@ class StoreDietPlanRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'meals' => collect($this->input('meals', []))
+                ->filter(fn ($meal) => is_array($meal))
+                ->values()
+                ->map(function (array $meal, int $index): array {
+                    $name = trim((string) ($meal['name'] ?? ''));
+                    $meal['name'] = $name !== '' ? $name : 'Meal '.($index + 1);
+                    $meal['meal_type'] = filled($meal['meal_type'] ?? null)
+                        ? trim((string) $meal['meal_type'])
+                        : Str::of($meal['name'])->slug('_')->limit(80, '')->toString();
+                    $meal['items'] = collect($meal['items'] ?? [])
+                        ->filter(
+                            fn ($item) => is_array($item)
+                                && filled($item['name'] ?? null)
+                        )
+                        ->values()
+                        ->all();
+
+                    return $meal;
+                })
+                ->all(),
+        ]);
     }
 
     public function rules(): array

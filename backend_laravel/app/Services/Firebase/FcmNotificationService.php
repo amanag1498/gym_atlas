@@ -27,15 +27,6 @@ class FcmNotificationService
             ->unique()
             ->values();
 
-        if ($tokens->isEmpty() && $appRole !== null) {
-            $tokens = UserFcmToken::query()
-                ->where('user_id', $user->id)
-                ->pluck('token')
-                ->filter()
-                ->unique()
-                ->values();
-        }
-
         if ($tokens->isEmpty()) {
             return 0;
         }
