@@ -22,6 +22,8 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>GIDClientID</key>
 	<string>707275991691-catqhsa9ln8j9e87975oikl7ds8gdcs3.apps.googleusercontent.com</string>
 	<key>CFBundleURLTypes</key>
@@ -39,7 +41,6 @@
 	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>fetch</string>
 		<string>remote-notification</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
@@ -69,5 +70,9 @@
 	<string>Gym Atlas Member uses your health activity totals to sync step progress with your training dashboard.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Gym Atlas Member uses your current location to sort nearby gyms and show distance in discovery.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Gym Atlas Member uses the camera when you take profile and progress photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Gym Atlas Member uses your photo library when you choose profile and progress photos.</string>
 </dict>
 </plist>
