@@ -8113,7 +8113,8 @@ class _TrainerChatThreadScreen extends StatefulWidget {
       _TrainerChatThreadScreenState();
 }
 
-class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
+class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen>
+    with WidgetsBindingObserver {
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, dynamic>> _messages = <Map<String, dynamic>>[];
   bool _loading = true;
@@ -8128,27 +8129,57 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen> {
   int? _nextBeforeId;
   dynamic _chatMessageHandler;
   dynamic _chatReadHandler;
+  dynamic _chatConnectHandler;
+  bool _appIsResumed = true;
 
   @override
   void initState() {
     super.initState();
+    final lifecycleState = WidgetsBinding.instance.lifecycleState;
+    _appIsResumed =
+        lifecycleState == null || lifecycleState == AppLifecycleState.resumed;
     _chatMessageHandler = _handleSocketMessage;
     _chatReadHandler = _handleSocketRead;
+    _chatConnectHandler = (_) => _setChatFocus(_appIsResumed);
+    WidgetsBinding.instance.addObserver(this);
     widget.socket?.on('chat:new_message', _chatMessageHandler);
     widget.socket?.on('chat:read_receipt', _chatReadHandler);
+    widget.socket?.on('connect', _chatConnectHandler);
+    _setChatFocus(true);
     _load();
   }
 
   @override
   void dispose() {
+    _setChatFocus(false);
+    WidgetsBinding.instance.removeObserver(this);
     if (_chatMessageHandler != null) {
       widget.socket?.off('chat:new_message', _chatMessageHandler);
     }
     if (_chatReadHandler != null) {
       widget.socket?.off('chat:read_receipt', _chatReadHandler);
     }
+    if (_chatConnectHandler != null) {
+      widget.socket?.off('connect', _chatConnectHandler);
+    }
     _controller.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appIsResumed = state == AppLifecycleState.resumed;
+    _setChatFocus(_appIsResumed);
+  }
+
+  void _setChatFocus(bool active) {
+    if (widget.socket?.connected != true) {
+      return;
+    }
+    widget.socket!.emit('chat:focus', {
+      'recipientId': widget.memberId,
+      'active': active,
+    });
   }
 
   void _handleSocketMessage(dynamic data) {

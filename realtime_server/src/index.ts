@@ -7,6 +7,7 @@ import { internalApiMiddleware } from './middleware/internal-api.middleware';
 import { socketAuthMiddleware } from './middleware/socket-auth.middleware';
 import { buildInternalRoutes } from './routes/internal.routes';
 import { apiFetch } from './services/http';
+import { ActiveChatService } from './services/active-chat.service';
 import { logger } from './services/logger';
 import { registerSocketServer } from './socket/socket.server';
 
@@ -72,10 +73,12 @@ app.get('/ready', async (_request, response) => {
   }
 });
 
-app.use('/internal', internalApiMiddleware, buildInternalRoutes(io));
+const activeChatService = new ActiveChatService();
+
+app.use('/internal', internalApiMiddleware, buildInternalRoutes(io, activeChatService));
 
 io.use(socketAuthMiddleware);
-registerSocketServer(io);
+registerSocketServer(io, activeChatService);
 
 server.listen(env.port, () => {
   logger.info('Realtime server started', {

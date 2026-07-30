@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/gym_flutter_core.dart'
+    show ChatNotificationService;
 import 'package:provider/provider.dart';
 
 import 'core/api_client.dart';
@@ -26,6 +28,8 @@ class _TrainerAppState extends State<TrainerApp> {
   late final TrainerAuthService _authService;
   late final TrainerFcmTokenService _fcmTokenService;
   late final TrainerSessionController _sessionController;
+  late final ChatNotificationService _chatNotificationService;
+  StreamSubscription<RemoteMessage>? _foregroundNotificationSubscription;
   StreamSubscription<RemoteMessage>? _notificationOpenSubscription;
   int? _pendingChatMemberId;
   int _chatLaunchVersion = 0;
@@ -37,6 +41,7 @@ class _TrainerAppState extends State<TrainerApp> {
     _apiClient = TrainerApiClient(token: null, onUnauthorized: () async {});
     _authService = TrainerAuthService(_apiClient);
     _fcmTokenService = TrainerFcmTokenService(_apiClient);
+    _chatNotificationService = ChatNotificationService();
     _sessionController = TrainerSessionController(
       storage: _storage,
       apiClient: _apiClient,
@@ -52,8 +57,18 @@ class _TrainerAppState extends State<TrainerApp> {
         .catchError((Object exception) {
           debugPrint('[fcm] foreground presentation setup skipped: $exception');
         });
+    _chatNotificationService.initialize(_handleNotificationData).catchError((
+      Object exception,
+    ) {
+      debugPrint(
+        '[notifications] local notification setup skipped: $exception',
+      );
+    });
     _notificationOpenSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
       _handleNotificationOpen,
+    );
+    _foregroundNotificationSubscription = FirebaseMessaging.onMessage.listen(
+      _showForegroundChatNotification,
     );
     FirebaseMessaging.instance
         .getInitialMessage()
@@ -69,11 +84,34 @@ class _TrainerAppState extends State<TrainerApp> {
   }
 
   void _handleNotificationOpen(RemoteMessage message) {
+    _handleNotificationData(message.data);
+  }
+
+  void _showForegroundChatNotification(RemoteMessage message) {
     if (message.data['type'] != 'chat_message') {
       return;
     }
 
-    final memberId = int.tryParse(message.data['member_id']?.toString() ?? '');
+    final notification = message.notification;
+    _chatNotificationService
+        .show(
+          title: notification?.title ?? 'New chat message',
+          body: notification?.body ?? 'Open the app to view your message.',
+          data: message.data,
+        )
+        .catchError((Object exception) {
+          debugPrint(
+            '[notifications] foreground chat alert skipped: $exception',
+          );
+        });
+  }
+
+  void _handleNotificationData(Map<String, dynamic> data) {
+    if (data['type'] != 'chat_message') {
+      return;
+    }
+
+    final memberId = int.tryParse(data['member_id']?.toString() ?? '');
     if (memberId == null || memberId <= 0 || !mounted) {
       return;
     }
@@ -86,6 +124,7 @@ class _TrainerAppState extends State<TrainerApp> {
 
   @override
   void dispose() {
+    _foregroundNotificationSubscription?.cancel();
     _notificationOpenSubscription?.cancel();
     _sessionController.dispose();
     super.dispose();

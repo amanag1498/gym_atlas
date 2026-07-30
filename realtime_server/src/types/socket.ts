@@ -13,6 +13,11 @@ export interface ChatReadPayload {
   readAt?: string;
 }
 
+export interface ChatFocusPayload {
+  recipientId: number;
+  active: boolean;
+}
+
 export interface PresenceUpdatePayload {
   status?: 'online' | 'offline' | 'away';
 }

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:gym_flutter_core/gym_flutter_core.dart'
+    show ChatNotificationService;
 import 'package:provider/provider.dart';
 
 import '../core/theme/app_theme.dart';
@@ -30,7 +32,9 @@ class _MemberAppState extends State<MemberApp> {
   late final MemberFcmTokenService fcmTokenService;
   late final MemberSessionController sessionController;
   late final MemberRepository memberRepository;
+  late final ChatNotificationService _chatNotificationService;
   late final GoRouter router;
+  StreamSubscription<RemoteMessage>? _foregroundNotificationSubscription;
   StreamSubscription<RemoteMessage>? _notificationOpenSubscription;
   int _chatLaunchSequence = 0;
   bool _pendingChatLaunch = false;
@@ -49,6 +53,7 @@ class _MemberAppState extends State<MemberApp> {
       fcmTokenService: fcmTokenService,
     );
     memberRepository = MemberRepository(apiClient);
+    _chatNotificationService = ChatNotificationService();
     router = GoRouter(
       refreshListenable: sessionController,
       routes: <GoRoute>[
@@ -70,6 +75,11 @@ class _MemberAppState extends State<MemberApp> {
               initialIndex: state.uri.queryParameters['section'] == 'chat'
                   ? 3
                   : 0,
+              chatLaunchVersion:
+                  int.tryParse(
+                    state.uri.queryParameters['launch']?.toString() ?? '',
+                  ) ??
+                  0,
             ),
           ),
         ),
@@ -93,6 +103,13 @@ class _MemberAppState extends State<MemberApp> {
       },
     );
     sessionController.addListener(_openPendingChatIfReady);
+    _chatNotificationService.initialize(_handleNotificationData).catchError((
+      Object exception,
+    ) {
+      debugPrint(
+        '[notifications] local notification setup skipped: $exception',
+      );
+    });
     FirebaseMessaging.instance
         .setForegroundNotificationPresentationOptions(
           alert: true,
@@ -104,6 +121,9 @@ class _MemberAppState extends State<MemberApp> {
         });
     _notificationOpenSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
       _handleNotificationOpen,
+    );
+    _foregroundNotificationSubscription = FirebaseMessaging.onMessage.listen(
+      _showForegroundChatNotification,
     );
     FirebaseMessaging.instance
         .getInitialMessage()
@@ -119,7 +139,30 @@ class _MemberAppState extends State<MemberApp> {
   }
 
   void _handleNotificationOpen(RemoteMessage message) {
+    _handleNotificationData(message.data);
+  }
+
+  void _showForegroundChatNotification(RemoteMessage message) {
     if (message.data['type'] != 'chat_message') {
+      return;
+    }
+
+    final notification = message.notification;
+    _chatNotificationService
+        .show(
+          title: notification?.title ?? 'New chat message',
+          body: notification?.body ?? 'Open the app to view your message.',
+          data: message.data,
+        )
+        .catchError((Object exception) {
+          debugPrint(
+            '[notifications] foreground chat alert skipped: $exception',
+          );
+        });
+  }
+
+  void _handleNotificationData(Map<String, dynamic> data) {
+    if (data['type'] != 'chat_message') {
       return;
     }
 
@@ -141,6 +184,7 @@ class _MemberAppState extends State<MemberApp> {
 
   @override
   void dispose() {
+    _foregroundNotificationSubscription?.cancel();
     _notificationOpenSubscription?.cancel();
     sessionController.removeListener(_openPendingChatIfReady);
     router.dispose();

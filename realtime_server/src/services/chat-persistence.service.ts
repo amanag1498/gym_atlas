@@ -20,6 +20,7 @@ export class ChatPersistenceService {
     room: string,
     senderId: number,
     payload: ChatSendPayload,
+    recipientActiveInChat: boolean,
   ): Promise<PersistedChatMessage> {
     try {
       const [trainerId, memberId] = this.parseRoom(room);
@@ -49,6 +50,7 @@ export class ChatPersistenceService {
           message: payload.message,
           client_message_id: payload.clientMessageId,
           metadata: payload.metadata,
+          recipient_active_in_chat: recipientActiveInChat,
         }),
       });
 

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import type { Server } from 'socket.io';
+import { ActiveChatService } from '../services/active-chat.service';
 import { rooms } from '../socket/rooms';
 import type {
   InternalAnnouncementPayload,
@@ -8,7 +9,7 @@ import type {
   InternalNotificationPayload,
 } from '../types/socket';
 
-export function buildInternalRoutes(io: Server): Router {
+export function buildInternalRoutes(io: Server, activeChatService: ActiveChatService): Router {
   const router = Router();
 
   router.post('/notifications', (request, response) => {
@@ -101,6 +102,32 @@ export function buildInternalRoutes(io: Server): Router {
     response.json({
       success: true,
       message: 'Chat message event published.',
+    });
+  });
+
+  router.post('/chat/active-status', (request, response) => {
+    const payload = request.body as { room?: unknown; userId?: unknown } | null;
+    const match = typeof payload?.room === 'string'
+      ? /^trainer:(\d+):member:(\d+)$/.exec(payload.room)
+      : null;
+    const userId = payload?.userId;
+
+    if (!match
+      || !Number.isSafeInteger(userId)
+      || ![Number(match[1]), Number(match[2])].includes(userId as number)) {
+      response.status(422).json({
+        success: false,
+        message: 'Invalid chat focus query.',
+      });
+      return;
+    }
+
+    response.json({
+      success: true,
+      message: 'Chat focus status fetched.',
+      data: {
+        active: activeChatService.isActive(userId as number, payload?.room as string),
+      },
     });
   });
 

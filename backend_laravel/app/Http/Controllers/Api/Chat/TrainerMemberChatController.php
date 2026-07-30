@@ -11,7 +11,6 @@ use App\Models\ChatConversation;
 use App\Models\ChatMessage;
 use App\Models\ChatSafetyAction;
 use App\Models\MemberProfile;
-use App\Models\Notification;
 use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Services\Firebase\FcmNotificationService;
@@ -178,9 +177,11 @@ class TrainerMemberChatController extends Controller
 
         if ($created) {
             $this->realtimePublisher->chatMessage($message);
-            $notification = $this->createChatNotification($message, $request->user()->name);
-            if ($notification) {
-                $this->sendChatPush($message, $notification);
+            if (! $this->realtimePublisher->isUserActiveInChat(
+                $message->room,
+                $message->recipient_id,
+            )) {
+                $this->sendChatPush($message, $request->user()->name);
             }
         }
 
@@ -333,7 +334,7 @@ class TrainerMemberChatController extends Controller
             'message' => ['required', 'string', 'max:4000'],
             'client_message_id' => ['nullable', 'string', 'max:120'],
             'metadata' => ['nullable', 'array'],
-            'suppress_push' => ['sometimes', 'boolean'],
+            'recipient_active_in_chat' => ['sometimes', 'boolean'],
         ]);
 
         $canonicalRoom = $this->room((int) $validated['trainer_id'], (int) $validated['member_id']);
@@ -389,13 +390,9 @@ class TrainerMemberChatController extends Controller
             return $message;
         });
 
-        if ($created) {
+        if ($created && ! ($validated['recipient_active_in_chat'] ?? false)) {
             $senderName = User::query()->whereKey($message->sender_id)->value('name') ?: 'New message';
-            $notification = $this->createChatNotification($message, $senderName);
-
-            if ($notification) {
-                $this->sendChatPush($message, $notification);
-            }
+            $this->sendChatPush($message, $senderName);
         }
 
         return $this->success(ChatMessageResource::make($message), 'Message persisted.', 201);
@@ -541,10 +538,21 @@ class TrainerMemberChatController extends Controller
         }
     }
 
-    private function sendChatPush(ChatMessage $message, Notification $notification): void
+    private function sendChatPush(ChatMessage $message, string $senderName): void
     {
         $recipient = User::query()->find($message->recipient_id);
         if (! $recipient) {
+            return;
+        }
+
+        $member = User::query()->find($message->member_id);
+        $scope = $member ? $this->memberAppService->memberProfileForChat($member) : null;
+        if (! $this->notificationService->isEnabled(
+            $recipient->id,
+            NotificationType::TrainerMessage->value,
+            $scope?->gym_id,
+            $scope?->branch_id,
+        )) {
             return;
         }
 
@@ -554,11 +562,10 @@ class TrainerMemberChatController extends Controller
 
         $this->fcmNotificationService->sendToUser(
             user: $recipient,
-            title: $notification->title,
-            body: $notification->body,
+            title: $senderName.' sent you a message',
+            body: $message->body,
             data: [
                 'type' => 'chat_message',
-                'notification_id' => $notification->id,
                 'room' => $message->room,
                 'sender_id' => $message->sender_id,
                 'recipient_id' => $message->recipient_id,
@@ -568,33 +575,6 @@ class TrainerMemberChatController extends Controller
                 'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
             ],
             appRole: $appRole,
-        );
-    }
-
-    private function createChatNotification(ChatMessage $message, string $senderName): ?Notification
-    {
-        $recipient = User::query()->find($message->recipient_id);
-        if (! $recipient) {
-            return null;
-        }
-
-        $member = User::query()->find($message->member_id);
-        $scope = $member ? $this->memberAppService->memberProfileForChat($member) : null;
-
-        return $this->notificationService->create(
-            user: $recipient,
-            type: NotificationType::TrainerMessage->value,
-            title: $senderName.' sent you a message',
-            body: $message->body,
-            gymId: $scope?->gym_id,
-            branchId: $scope?->branch_id,
-            createdByUserId: $message->sender_id,
-            data: [
-                'room' => $message->room,
-                'sender_id' => $message->sender_id,
-                'trainer_id' => $message->trainer_id,
-                'member_id' => $message->member_id,
-            ],
         );
     }
 

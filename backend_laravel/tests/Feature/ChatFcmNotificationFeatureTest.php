@@ -29,6 +29,7 @@ class ChatFcmNotificationFeatureTest extends TestCase
         parent::setUp();
 
         config()->set('services.realtime.internal_api_key', 'chat-test-internal-key');
+        config()->set('services.realtime.url', '');
     }
 
     public function test_trainer_chat_message_sends_fcm_push_to_member_app_token(): void
@@ -51,6 +52,7 @@ class ChatFcmNotificationFeatureTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('success', true);
 
+        $this->assertSame(0, Notification::query()->count());
         Http::assertSent(function ($request): bool {
             $payload = $request->data();
 
@@ -88,6 +90,7 @@ class ChatFcmNotificationFeatureTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('success', true);
 
+        $this->assertSame(0, Notification::query()->count());
         Http::assertSent(function ($request): bool {
             $payload = $request->data();
 
@@ -123,7 +126,7 @@ class ChatFcmNotificationFeatureTest extends TestCase
             'X-Internal-Api-Key' => config('services.realtime.internal_api_key'),
         ])->assertCreated();
 
-        $this->assertSame(1, Notification::query()->count());
+        $this->assertSame(0, Notification::query()->count());
         Http::assertSentCount(0);
     }
 
@@ -150,7 +153,7 @@ class ChatFcmNotificationFeatureTest extends TestCase
 
         $this->assertSame($first, $second);
         $this->assertSame(1, ChatMessage::query()->where('client_message_id', 'trainer-idempotent-1')->count());
-        $this->assertSame(1, Notification::query()->where('data->room', "trainer:{$trainer->id}:member:{$member->id}")->count());
+        $this->assertSame(0, Notification::query()->count());
     }
 
     public function test_internal_chat_message_client_id_is_idempotent_for_socket_retry(): void
@@ -182,7 +185,7 @@ class ChatFcmNotificationFeatureTest extends TestCase
 
         $this->assertSame($first, $second);
         $this->assertSame(1, ChatMessage::query()->where('client_message_id', 'member-idempotent-1')->count());
-        $this->assertSame(1, Notification::query()->where('data->room', "trainer:{$trainer->id}:member:{$member->id}")->count());
+        $this->assertSame(0, Notification::query()->count());
     }
 
     public function test_internal_chat_message_does_not_suppress_push_from_global_presence_alone(): void
@@ -205,7 +208,7 @@ class ChatFcmNotificationFeatureTest extends TestCase
             'recipient_id' => $trainer->id,
             'message' => 'Global presence must not hide this push.',
             'client_message_id' => 'member-online-1',
-            'suppress_push' => true,
+            'recipient_active_in_chat' => false,
         ], [
             'X-Internal-Api-Key' => config('services.realtime.internal_api_key'),
         ])
@@ -213,8 +216,117 @@ class ChatFcmNotificationFeatureTest extends TestCase
             ->assertJsonPath('success', true);
 
         $this->assertSame(1, ChatMessage::query()->where('client_message_id', 'member-online-1')->count());
-        $this->assertSame(1, Notification::query()->where('data->room', "trainer:{$trainer->id}:member:{$member->id}")->count());
+        $this->assertSame(0, Notification::query()->count());
         Http::assertSent(fn ($request): bool => str_contains((string) $request->url(), '/messages:send'));
+    }
+
+    public function test_internal_chat_message_suppresses_push_only_when_recipient_is_in_exact_chat(): void
+    {
+        $this->enableFcm();
+        [$trainer, $member] = $this->assignedTrainerPair();
+
+        UserFcmToken::query()->create([
+            'user_id' => $trainer->id,
+            'token' => 'trainer-focused-fcm-token',
+            'platform' => 'android',
+            'app_role' => RoleName::Trainer->value,
+        ]);
+
+        $this->postJson('/api/internal/chat/messages', [
+            'room' => "trainer:{$trainer->id}:member:{$member->id}",
+            'trainer_id' => $trainer->id,
+            'member_id' => $member->id,
+            'sender_id' => $member->id,
+            'recipient_id' => $trainer->id,
+            'message' => 'Realtime delivery is enough while this chat is open.',
+            'client_message_id' => 'trainer-focused-1',
+            'recipient_active_in_chat' => true,
+        ], [
+            'X-Internal-Api-Key' => config('services.realtime.internal_api_key'),
+        ])->assertCreated();
+
+        $this->assertSame(1, ChatMessage::query()->count());
+        $this->assertSame(0, Notification::query()->count());
+        Http::assertSentCount(0);
+    }
+
+    public function test_rest_fallback_checks_exact_realtime_chat_focus_before_push(): void
+    {
+        $this->enableFcm();
+        Queue::fake();
+        config()->set('services.realtime.url', 'https://realtime.example.test');
+        [$trainer, $member] = $this->assignedTrainerPair();
+
+        UserFcmToken::query()->create([
+            'user_id' => $member->id,
+            'token' => 'member-focused-fcm-token',
+            'platform' => 'android',
+            'app_role' => RoleName::Member->value,
+        ]);
+        Http::fake([
+            'https://realtime.example.test/internal/chat/active-status' => Http::response([
+                'success' => true,
+                'data' => ['active' => true],
+            ]),
+            'https://fcm.googleapis.com/*' => Http::response(['name' => 'unexpected']),
+        ]);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/chat/messages', [
+                'recipient_id' => $member->id,
+                'message' => 'Do not push while this exact room is focused.',
+                'client_message_id' => 'rest-focused-1',
+            ])
+            ->assertCreated();
+
+        $this->assertSame(0, Notification::query()->count());
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request): bool => str_ends_with(
+            (string) $request->url(),
+            '/internal/chat/active-status'
+        ));
+    }
+
+    public function test_rest_fallback_sends_push_when_recipient_is_not_in_exact_chat(): void
+    {
+        $this->enableFcm();
+        Queue::fake();
+        config()->set('services.realtime.url', 'https://realtime.example.test');
+        [$trainer, $member] = $this->assignedTrainerPair();
+
+        UserFcmToken::query()->create([
+            'user_id' => $member->id,
+            'token' => 'member-not-focused-fcm-token',
+            'platform' => 'android',
+            'app_role' => RoleName::Member->value,
+        ]);
+        Http::fake([
+            'https://realtime.example.test/internal/chat/active-status' => Http::response([
+                'success' => true,
+                'data' => ['active' => false],
+            ]),
+            'https://fcm.googleapis.com/*' => Http::response([
+                'name' => 'projects/gym-atlas-test/messages/not-focused',
+            ]),
+        ]);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/chat/messages', [
+                'recipient_id' => $member->id,
+                'message' => 'Push this because the member is elsewhere.',
+                'client_message_id' => 'rest-not-focused-1',
+            ])
+            ->assertCreated();
+
+        $this->assertSame(0, Notification::query()->count());
+        Http::assertSentCount(2);
+        Http::assertSent(function ($request): bool {
+            $payload = $request->data();
+
+            return str_contains((string) $request->url(), '/messages:send')
+                && $payload['message']['token'] === 'member-not-focused-fcm-token'
+                && $payload['message']['data']['type'] === 'chat_message';
+        });
     }
 
     public function test_rest_fallback_message_is_queued_for_realtime_delivery_once(): void
@@ -358,7 +470,7 @@ class ChatFcmNotificationFeatureTest extends TestCase
             'recipient_id' => $trainer->id,
             'message' => 'Canonicalize this rolling-deploy message.',
             'client_message_id' => 'legacy-room-1',
-            'suppress_push' => true,
+            'recipient_active_in_chat' => true,
         ], $headers)
             ->assertCreated()
             ->assertJsonPath('data.room', "trainer:{$trainer->id}:member:{$member->id}");

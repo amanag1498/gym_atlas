@@ -107,6 +107,7 @@ class MemberAssignedTrainerScreen extends StatefulWidget {
     required this.repository,
     required this.socket,
     required this.chatEventVersion,
+    required this.chatLaunchVersion,
     required this.userState,
     required this.currentUserName,
     required this.fallbackTrainerConnection,
@@ -116,6 +117,7 @@ class MemberAssignedTrainerScreen extends StatefulWidget {
   final MemberRepository repository;
   final io.Socket? socket;
   final int chatEventVersion;
+  final int chatLaunchVersion;
   final String userState;
   final String currentUserName;
   final Map<String, dynamic> fallbackTrainerConnection;
@@ -135,6 +137,8 @@ class _MemberAssignedTrainerScreenState
   Map<String, dynamic> _trainerResponse = const {};
   final List<Map<String, dynamic>> _messages = <Map<String, dynamic>>[];
   dynamic _chatMessageHandler;
+  int _openedChatLaunchVersion = 0;
+  bool _openingNotificationChat = false;
 
   @override
   void initState() {
@@ -160,6 +164,9 @@ class _MemberAssignedTrainerScreenState
       if (trainerId != null) {
         _loadChat(trainerId);
       }
+    }
+    if (oldWidget.chatLaunchVersion != widget.chatLaunchVersion) {
+      _openNotificationChatIfReady();
     }
   }
 
@@ -227,7 +234,36 @@ class _MemberAssignedTrainerScreenState
 
     if (mounted) {
       setState(() => _loading = false);
+      _openNotificationChatIfReady();
     }
+  }
+
+  void _openNotificationChatIfReady() {
+    if (!mounted ||
+        _loading ||
+        _openingNotificationChat ||
+        widget.chatLaunchVersion <= _openedChatLaunchVersion) {
+      return;
+    }
+
+    final assignedTrainer = Map<String, dynamic>.from(
+      _trainerResponse['assigned_trainer'] as Map? ??
+          widget.fallbackTrainerConnection['assigned_trainer'] as Map? ??
+          const {},
+    );
+    if (_assignedTrainerId == null || assignedTrainer.isEmpty) {
+      return;
+    }
+
+    _openedChatLaunchVersion = widget.chatLaunchVersion;
+    _openingNotificationChat = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        return;
+      }
+      await _openTrainerChatThread(assignedTrainer);
+      _openingNotificationChat = false;
+    });
   }
 
   Future<void> _loadChat(int trainerId) async {
@@ -1177,7 +1213,8 @@ class _MemberTrainerChatThreadScreen extends StatefulWidget {
 }
 
 class _MemberTrainerChatThreadScreenState
-    extends State<_MemberTrainerChatThreadScreen> {
+    extends State<_MemberTrainerChatThreadScreen>
+    with WidgetsBindingObserver {
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, dynamic>> _messages = <Map<String, dynamic>>[];
   bool _loading = true;
@@ -1192,27 +1229,57 @@ class _MemberTrainerChatThreadScreenState
   int? _nextBeforeId;
   dynamic _chatMessageHandler;
   dynamic _chatReadHandler;
+  dynamic _chatConnectHandler;
+  bool _appIsResumed = true;
 
   @override
   void initState() {
     super.initState();
+    final lifecycleState = WidgetsBinding.instance.lifecycleState;
+    _appIsResumed =
+        lifecycleState == null || lifecycleState == AppLifecycleState.resumed;
     _chatMessageHandler = _handleSocketMessage;
     _chatReadHandler = _handleSocketRead;
+    _chatConnectHandler = (_) => _setChatFocus(_appIsResumed);
+    WidgetsBinding.instance.addObserver(this);
     widget.socket?.on('chat:new_message', _chatMessageHandler);
     widget.socket?.on('chat:read_receipt', _chatReadHandler);
+    widget.socket?.on('connect', _chatConnectHandler);
+    _setChatFocus(true);
     _load();
   }
 
   @override
   void dispose() {
+    _setChatFocus(false);
+    WidgetsBinding.instance.removeObserver(this);
     if (_chatMessageHandler != null) {
       widget.socket?.off('chat:new_message', _chatMessageHandler);
     }
     if (_chatReadHandler != null) {
       widget.socket?.off('chat:read_receipt', _chatReadHandler);
     }
+    if (_chatConnectHandler != null) {
+      widget.socket?.off('connect', _chatConnectHandler);
+    }
     _controller.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appIsResumed = state == AppLifecycleState.resumed;
+    _setChatFocus(_appIsResumed);
+  }
+
+  void _setChatFocus(bool active) {
+    if (widget.socket?.connected != true) {
+      return;
+    }
+    widget.socket!.emit('chat:focus', {
+      'recipientId': widget.trainerId,
+      'active': active,
+    });
   }
 
   void _handleSocketMessage(dynamic data) {

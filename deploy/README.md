@@ -158,17 +158,34 @@ From repo root on server:
 git pull origin main
 cd backend_laravel
 composer install --no-dev --optimize-autoloader
-npm install
+npm ci
 npm run build
 php artisan migrate --force
 php artisan optimize:clear
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
+cd ../realtime_server
+npm ci
+npm run build
 systemctl restart gymatlas-queue
 systemctl restart gymatlas-realtime
 systemctl reload nginx
 ```
+
+Verify both application layers after the restart:
+
+```bash
+systemctl --no-pager --full status gymatlas-queue gymatlas-realtime
+curl --fail --silent --show-error http://127.0.0.1:4010/health
+curl --fail --silent --show-error http://127.0.0.1:4010/ready
+php ../backend_laravel/artisan queue:monitor default --max=1000
+```
+
+`/ready` confirms that realtime can reach Laravel with the configured
+`SOCKET_INTERNAL_API_KEY`. If it returns `503`, confirm that
+`LARAVEL_API_BASE_URL`, `REALTIME_SERVER_URL`, and the matching internal key
+were preserved in the two production `.env` files before restarting again.
 
 ## Notes About This Monorepo
 

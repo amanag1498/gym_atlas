@@ -1,11 +1,13 @@
 import type { Server, Socket } from 'socket.io';
 import { ChatAuthorizationService } from '../services/chat-authorization.service';
+import { ActiveChatService } from '../services/active-chat.service';
 import { ChatPersistenceService } from '../services/chat-persistence.service';
 import { logger } from '../services/logger';
 import { PresenceService } from '../services/presence.service';
 import { RoomService } from '../services/room.service';
 import type {
   AuthenticatedSocketData,
+  ChatFocusPayload,
   ChatReadPayload,
   ChatSendPayload,
   PresenceUpdatePayload,
@@ -70,7 +72,16 @@ function assertChatReadPayload(payload: ChatReadPayload): void {
   }
 }
 
-export function registerSocketServer(io: Server): void {
+function assertChatFocusPayload(payload: ChatFocusPayload): void {
+  if (!payload
+    || !Number.isSafeInteger(payload.recipientId)
+    || payload.recipientId <= 0
+    || typeof payload.active !== 'boolean') {
+    throw new Error('A valid chat focus state is required.');
+  }
+}
+
+export function registerSocketServer(io: Server, activeChatService: ActiveChatService): void {
   io.on('connection', async (socket: TypedSocket) => {
     const user = assertSocketUser(socket);
     const sentMessageTimes: number[] = [];
@@ -98,10 +109,15 @@ export function registerSocketServer(io: Server): void {
         const actor = assertSocketUser(socket);
         const authorizedPeer = chatAuthorizationService.authorizePeer(actor, payload.recipientId);
         await socket.join(authorizedPeer.room);
+        const recipientActiveInChat = activeChatService.isActive(
+          payload.recipientId,
+          authorizedPeer.room,
+        );
         const persisted = await chatPersistenceService.persistMessage(
           authorizedPeer.room,
           actor.id,
           payload,
+          recipientActiveInChat,
         );
 
         const chatMessageEvent = {
@@ -124,6 +140,32 @@ export function registerSocketServer(io: Server): void {
         acknowledgement?.({
           ok: false,
           error: error instanceof Error ? error.message : 'Unable to send chat message.',
+        });
+      }
+    });
+
+    socket.on('chat:focus', async (payload: ChatFocusPayload, acknowledgement?: (response: unknown) => void) => {
+      try {
+        assertChatFocusPayload(payload);
+        const actor = assertSocketUser(socket);
+        const authorizedPeer = chatAuthorizationService.authorizePeer(actor, payload.recipientId);
+
+        if (payload.active) {
+          await socket.join(authorizedPeer.room);
+          activeChatService.setActive(actor.id, socket.id, authorizedPeer.room);
+        } else {
+          activeChatService.clear(actor.id, socket.id, authorizedPeer.room);
+        }
+
+        acknowledgement?.({
+          ok: true,
+          room: authorizedPeer.room,
+          active: payload.active,
+        });
+      } catch (error) {
+        acknowledgement?.({
+          ok: false,
+          error: error instanceof Error ? error.message : 'Unable to update chat focus.',
         });
       }
     });
@@ -167,6 +209,7 @@ export function registerSocketServer(io: Server): void {
     });
 
     socket.on('disconnect', () => {
+      activeChatService.clear(user.id, socket.id);
       presenceService.unregisterConnection(io, user, socket.id);
       logger.info('Socket disconnected', {
         socketId: socket.id,

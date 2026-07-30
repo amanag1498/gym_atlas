@@ -43,10 +43,12 @@ class MemberHomeScreen extends StatefulWidget {
   const MemberHomeScreen({
     super.key,
     this.initialIndex = 0,
+    this.chatLaunchVersion = 0,
     this.storePreviewData,
   });
 
   final int initialIndex;
+  final int chatLaunchVersion;
   final Map<String, dynamic>? storePreviewData;
 
   @override
@@ -615,6 +617,7 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
         repository: _memberRepository,
         socket: _socket,
         chatEventVersion: _chatEventVersion,
+        chatLaunchVersion: widget.chatLaunchVersion,
         userState: userState,
         currentUserName: user.name,
         fallbackTrainerConnection: trainerConnection,

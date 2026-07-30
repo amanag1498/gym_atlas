@@ -4,6 +4,8 @@ namespace App\Services\Realtime;
 
 use App\Jobs\PublishRealtimeEvent;
 use App\Models\ChatMessage;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class RealtimePublisher
 {
@@ -50,6 +52,37 @@ class RealtimePublisher
                 'messageIds' => array_map('strval', $chunk),
                 'readAt' => $readAt,
             ]);
+        }
+    }
+
+    public function isUserActiveInChat(string $room, int $userId): bool
+    {
+        if (! $this->configured()) {
+            return false;
+        }
+
+        try {
+            $response = Http::acceptJson()
+                ->withHeaders([
+                    'X-Internal-Api-Key' => (string) config('services.realtime.internal_api_key'),
+                ])
+                ->connectTimeout(1)
+                ->timeout(2)
+                ->post(rtrim((string) config('services.realtime.url'), '/').'/internal/chat/active-status', [
+                    'room' => $room,
+                    'userId' => $userId,
+                ]);
+
+            return $response->successful()
+                && $response->json('data.active') === true;
+        } catch (\Throwable $exception) {
+            Log::info('Realtime chat focus check unavailable; chat push will be sent.', [
+                'room' => $room,
+                'user_id' => $userId,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return false;
         }
     }
 
