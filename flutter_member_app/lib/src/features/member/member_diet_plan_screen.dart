@@ -213,218 +213,381 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
     final meals = _meals(plan);
     return AppGradientScaffold(
       title: 'Diet Plan',
-      actions: [
-        IconButton(
-          tooltip: 'Create personal diet plan',
-          onPressed: _loading ? null : _openCreateStudio,
-          icon: const Icon(Icons.add_rounded),
-        ),
-        IconButton(
-          onPressed: _loading ? null : _load,
-          icon: const Icon(Icons.refresh_rounded),
-        ),
-      ],
-      body: _loading
-          ? const LoadingState(label: 'Loading your diet plan...')
-          : _error != null
-          ? ErrorStateView(message: _error!, onRetry: _load)
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                children: [
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: OutlinedButton.icon(
-                      onPressed: _openCreateStudio,
-                      icon: const Icon(Icons.add_rounded),
-                      label: const Text('Create meal plan'),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  if (plan.isEmpty)
-                    EmptyStateView(
-                      title: 'No diet plan yet',
-                      message:
-                          'Build meals around your own schedule, or wait for a trainer-assigned plan.',
-                      icon: Icons.restaurant_menu_rounded,
-                      action: GradientButton(
-                        label: 'Create your first meal plan',
-                        icon: Icons.add_rounded,
-                        expanded: true,
-                        onPressed: _openCreateStudio,
-                      ),
-                    )
-                  else ...[
-                    if (_plans.length > 1) ...[
-                      DropdownButtonFormField<int>(
-                        key: ValueKey((plan['id'] as num?)?.toInt()),
-                        initialValue: (plan['id'] as num?)?.toInt(),
-                        isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Viewing plan',
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            _DietPageTopBar(
+              title: 'Diet plans',
+              subtitle: 'Meals, nutrition targets, and daily progress.',
+              actionIcon: Icons.refresh_rounded,
+              onAction: _loading ? null : _load,
+            ),
+            Expanded(
+              child: _loading
+                  ? const LoadingState(label: 'Loading your diet plan...')
+                  : _error != null
+                  ? ErrorStateView(message: _error!, onRetry: _load)
+                  : RefreshIndicator(
+                      onRefresh: _load,
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.lg,
+                          0,
+                          AppSpacing.lg,
+                          AppSpacing.xl,
                         ),
-                        items: _plans
-                            .map(
-                              (item) => DropdownMenuItem(
-                                value: (item['id'] as num?)?.toInt(),
-                                child: Text(
-                                  item['name']?.toString() ?? 'Diet plan',
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) =>
-                            setState(() => _selectedPlanId = value),
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                    ],
-                    _Hero(plan: plan),
-                    const SizedBox(height: AppSpacing.sm),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () =>
-                            showDietPlanSummarySheet(context, plan: plan),
-                        icon: const Icon(Icons.visibility_outlined),
-                        label: const Text('See full plan'),
-                      ),
-                    ),
-                    if (plan['is_member_owned'] == true)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          TextButton.icon(
-                            onPressed: () => _editPersonalPlan(plan),
-                            icon: const Icon(Icons.edit_outlined),
-                            label: const Text('Edit foods'),
-                          ),
-                          TextButton.icon(
-                            onPressed: () => _deletePersonalPlan(plan),
-                            icon: const Icon(
-                              Icons.delete_outline_rounded,
-                              color: AppColors.error,
-                            ),
-                            label: const Text('Delete'),
-                          ),
-                        ],
-                      ),
-                    const SizedBox(height: AppSpacing.lg),
-                    if (_hasGuidance(plan)) ...[
-                      _Guidance(plan: plan),
-                      const SizedBox(height: AppSpacing.lg),
-                    ],
-                    Row(
-                      children: [
-                        _Macro(
-                          label: 'Protein',
-                          value: '${plan['protein_target_g'] ?? 0}g',
-                          color: AppColors.primary,
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        _Macro(
-                          label: 'Carbs',
-                          value: '${plan['carbs_target_g'] ?? 0}g',
-                          color: AppColors.info,
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        _Macro(
-                          label: 'Fats',
-                          value: '${plan['fats_target_g'] ?? 0}g',
-                          color: AppColors.accent,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Today\'s meals',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                        ),
-                        Text(
-                          '${_completedMealIds.length}/${meals.length} done',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: AppColors.success,
-                                fontWeight: FontWeight.w700,
+                          _DietCreateCard(onCreate: _openCreateStudio),
+                          const SizedBox(height: AppSpacing.lg),
+                          if (plan.isEmpty)
+                            const EmptyStateView(
+                              title: 'No diet plan yet',
+                              message:
+                                  'Build meals around your own schedule, or wait for a trainer-assigned plan.',
+                              icon: Icons.restaurant_menu_rounded,
+                            )
+                          else ...[
+                            if (_plans.length > 1) ...[
+                              DropdownButtonFormField<int>(
+                                key: ValueKey((plan['id'] as num?)?.toInt()),
+                                initialValue: (plan['id'] as num?)?.toInt(),
+                                isExpanded: true,
+                                decoration: const InputDecoration(
+                                  labelText: 'Viewing plan',
+                                ),
+                                items: _plans
+                                    .map(
+                                      (item) => DropdownMenuItem(
+                                        value: (item['id'] as num?)?.toInt(),
+                                        child: Text(
+                                          item['name']?.toString() ??
+                                              'Diet plan',
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (value) =>
+                                    setState(() => _selectedPlanId = value),
                               ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    ...meals.map((meal) {
-                      final done = _completedMealIds.contains(
-                        (meal['id'] as num?)?.toInt(),
-                      );
-                      final items =
-                          (meal['items'] as List<dynamic>? ?? const [])
-                              .map(
-                                (item) =>
-                                    Map<String, dynamic>.from(item as Map),
-                              )
-                              .toList();
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: PremiumCard(
-                          padding: const EdgeInsets.all(AppSpacing.md),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
+                              const SizedBox(height: AppSpacing.lg),
+                            ],
+                            _Hero(plan: plan),
+                            const SizedBox(height: AppSpacing.sm),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () => showDietPlanSummarySheet(
+                                  context,
+                                  plan: plan,
+                                ),
+                                icon: const Icon(Icons.visibility_outlined),
+                                label: const Text('See full plan'),
+                              ),
+                            ),
+                            if (plan['is_member_owned'] == true)
                               Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
                                 children: [
-                                  Icon(
-                                    done
-                                        ? Icons.check_circle_rounded
-                                        : Icons.restaurant_rounded,
-                                    color: done
-                                        ? AppColors.success
-                                        : AppColors.primary,
+                                  TextButton.icon(
+                                    onPressed: () => _editPersonalPlan(plan),
+                                    icon: const Icon(Icons.edit_outlined),
+                                    label: const Text('Edit foods'),
                                   ),
-                                  const SizedBox(width: AppSpacing.sm),
-                                  Expanded(
-                                    child: Text(
-                                      meal['name']?.toString() ?? 'Meal',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleMedium,
+                                  TextButton.icon(
+                                    onPressed: () => _deletePersonalPlan(plan),
+                                    icon: const Icon(
+                                      Icons.delete_outline_rounded,
+                                      color: AppColors.error,
                                     ),
-                                  ),
-                                  Checkbox(
-                                    value: done,
-                                    onChanged: (_) => _toggleMeal(plan, meal),
+                                    label: const Text('Delete'),
                                   ),
                                 ],
                               ),
-                              if (meal['scheduled_time'] != null)
-                                Text(
-                                  meal['scheduled_time'].toString(),
-                                  style: Theme.of(context).textTheme.bodySmall,
+                            const SizedBox(height: AppSpacing.lg),
+                            if (_hasGuidance(plan)) ...[
+                              _Guidance(plan: plan),
+                              const SizedBox(height: AppSpacing.lg),
+                            ],
+                            Row(
+                              children: [
+                                _Macro(
+                                  label: 'Protein',
+                                  value: '${plan['protein_target_g'] ?? 0}g',
+                                  color: AppColors.primary,
                                 ),
-                              ...items.map(
-                                (item) => Padding(
-                                  padding: const EdgeInsets.only(top: 6),
+                                const SizedBox(width: AppSpacing.sm),
+                                _Macro(
+                                  label: 'Carbs',
+                                  value: '${plan['carbs_target_g'] ?? 0}g',
+                                  color: AppColors.info,
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                _Macro(
+                                  label: 'Fats',
+                                  value: '${plan['fats_target_g'] ?? 0}g',
+                                  color: AppColors.accent,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.lg),
+                            Row(
+                              children: [
+                                Expanded(
                                   child: Text(
-                                    '• ${item['name']}${item['quantity'] != null ? ' — ${item['quantity']}' : ''}',
+                                    'Today\'s meals',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleLarge,
                                   ),
                                 ),
-                              ),
-                              if (meal['notes']?.toString().isNotEmpty ?? false)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Text(meal['notes'].toString()),
+                                Text(
+                                  '${_completedMealIds.length}/${meals.length} done',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: AppColors.success,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                 ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            ...meals.map((meal) {
+                              final done = _completedMealIds.contains(
+                                (meal['id'] as num?)?.toInt(),
+                              );
+                              final items =
+                                  (meal['items'] as List<dynamic>? ?? const [])
+                                      .map(
+                                        (item) => Map<String, dynamic>.from(
+                                          item as Map,
+                                        ),
+                                      )
+                                      .toList();
+                              return Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: AppSpacing.sm,
+                                ),
+                                child: PremiumCard(
+                                  padding: const EdgeInsets.all(AppSpacing.md),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            done
+                                                ? Icons.check_circle_rounded
+                                                : Icons.restaurant_rounded,
+                                            color: done
+                                                ? AppColors.success
+                                                : AppColors.primary,
+                                          ),
+                                          const SizedBox(width: AppSpacing.sm),
+                                          Expanded(
+                                            child: Text(
+                                              meal['name']?.toString() ??
+                                                  'Meal',
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.titleMedium,
+                                            ),
+                                          ),
+                                          Checkbox(
+                                            value: done,
+                                            onChanged: (_) =>
+                                                _toggleMeal(plan, meal),
+                                          ),
+                                        ],
+                                      ),
+                                      if (meal['scheduled_time'] != null)
+                                        Text(
+                                          meal['scheduled_time'].toString(),
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall,
+                                        ),
+                                      ...items.map(
+                                        (item) => Padding(
+                                          padding: const EdgeInsets.only(
+                                            top: 6,
+                                          ),
+                                          child: Text(
+                                            '• ${item['name']}${item['quantity'] != null ? ' — ${item['quantity']}' : ''}',
+                                          ),
+                                        ),
+                                      ),
+                                      if (meal['notes']
+                                              ?.toString()
+                                              .isNotEmpty ??
+                                          false)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            top: 8,
+                                          ),
+                                          child: Text(meal['notes'].toString()),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                          ],
+                        ],
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DietPageTopBar extends StatelessWidget {
+  const _DietPageTopBar({
+    required this.title,
+    required this.subtitle,
+    this.actionIcon,
+    this.onAction,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData? actionIcon;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.md,
+      ),
+      child: Row(
+        children: [
+          InkWell(
+            onTap: () => Navigator.of(context).maybePop(),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.stroke),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 6),
+                  ),
                 ],
               ),
+              child: const Icon(
+                Icons.arrow_back_rounded,
+                color: AppColors.textPrimary,
+                size: 20,
+              ),
             ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (actionIcon != null && onAction != null) ...[
+            const SizedBox(width: AppSpacing.sm),
+            MemberHeaderActionButton(icon: actionIcon!, onTap: onAction!),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DietCreateCard extends StatelessWidget {
+  const _DietCreateCard({required this.onCreate});
+
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    return PremiumCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceSoft,
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: AppColors.stroke),
+                ),
+                child: const Icon(
+                  Icons.restaurant_menu_rounded,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Build your nutrition plan',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Create custom meals or start from an Atlas template.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          GradientButton(
+            label: 'Create meal plan',
+            icon: Icons.add_rounded,
+            expanded: true,
+            onPressed: onCreate,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -534,47 +697,22 @@ class _MemberDietCreationStudioState extends State<_MemberDietCreationStudio> {
         bottom: false,
         child: Column(
           children: [
+            _DietPageTopBar(
+              title: 'Diet Studio',
+              subtitle: 'Build meal by meal or start from a template.',
+              actionIcon: Icons.restart_alt_rounded,
+              onAction: _saving ? null : _resetBuilder,
+            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.lg,
-                AppSpacing.sm,
+                0,
                 AppSpacing.lg,
                 AppSpacing.md,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Create your diet plan',
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(
-                                    color: AppColors.textPrimary,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              'Build meal by meal or start from an Atlas template.',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: AppColors.textSecondary),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Reset builder',
-                        onPressed: _saving ? null : _resetBuilder,
-                        icon: const Icon(Icons.restart_alt_rounded),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
                   _MemberDietStudioTabs(
                     selectedIndex: _selectedTab,
                     onChanged: (index) => setState(() {
@@ -974,41 +1112,160 @@ class _Guidance extends StatelessWidget {
 class _Hero extends StatelessWidget {
   const _Hero({required this.plan});
   final Map<String, dynamic> plan;
+
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      color: AppColors.primary,
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            plan['name']?.toString() ?? 'Your nutrition plan',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(color: Colors.white),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            plan['goal']?.toString() ?? 'Daily nutrition targets',
-            style: const TextStyle(color: Colors.white70),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            '${plan['daily_calorie_target'] ?? '--'} kcal / day',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
+  Widget build(BuildContext context) {
+    final meals = (plan['meals'] as List<dynamic>? ?? const []).length;
+    final source = plan['trainer_id'] != null
+        ? 'Trainer assigned'
+        : 'Personal plan';
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.24),
+            blurRadius: 24,
+            offset: const Offset(0, 14),
           ),
         ],
       ),
-    ),
-  );
+      child: Stack(
+        children: [
+          Positioned(
+            right: -34,
+            top: -30,
+            child: Container(
+              width: 128,
+              height: 128,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.15),
+              ),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          plan['name']?.toString() ?? 'Your nutrition plan',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.5,
+                              ),
+                        ),
+                        const SizedBox(height: 7),
+                        Text(
+                          plan['goal']?.toString() ?? 'Daily nutrition targets',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: Colors.white.withValues(alpha: 0.86),
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 72,
+                    height: 72,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.22),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.52),
+                        width: 2,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.restaurant_rounded,
+                      color: Colors.white,
+                      size: 32,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Text(
+                '${plan['daily_calorie_target'] ?? '--'} kcal / day',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _DietHeroPill(label: source),
+                  _DietHeroPill(label: '$meals meal${meals == 1 ? '' : 's'}'),
+                  _DietHeroPill(
+                    label: _dietTitleCase(
+                      plan['status']?.toString() ?? 'active',
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
+
+class _DietHeroPill extends StatelessWidget {
+  const _DietHeroPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+String _dietTitleCase(String value) => value
+    .replaceAll('_', ' ')
+    .split(' ')
+    .where((part) => part.isNotEmpty)
+    .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+    .join(' ');
 
 class _Macro extends StatelessWidget {
   const _Macro({required this.label, required this.value, required this.color});
