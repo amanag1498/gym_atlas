@@ -231,6 +231,17 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
           ),
         ),
         actions: [
+          if (unreadCount > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 8),
+              child: _TopSquareButton(
+                icon: _markingAllRead
+                    ? Icons.sync_rounded
+                    : Icons.done_all_rounded,
+                onTap: _markingAllRead ? null : _markAllRead,
+              ),
+            ),
+          if (unreadCount > 0) const SizedBox(width: 8),
           Padding(
             padding: const EdgeInsets.only(right: 16, top: 8, bottom: 8),
             child: _TopSquareButton(
@@ -249,13 +260,6 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(25, 15, 25, 28),
                 children: [
-                  _NotificationSummaryBand(
-                    unreadCount: unreadCount,
-                    totalCount: _notifications.length,
-                    invitationCount: pendingInvitations.length,
-                    markingAllRead: _markingAllRead,
-                    onMarkAllRead: unreadCount == 0 ? null : _markAllRead,
-                  ),
                   if (pendingInvitations.isNotEmpty) ...[
                     const SizedBox(height: 18),
                     _NotificationSectionTitle(
@@ -382,100 +386,6 @@ class _TopSquareButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, color: const Color(0xFF1D1617), size: 18),
-      ),
-    );
-  }
-}
-
-class _NotificationSummaryBand extends StatelessWidget {
-  const _NotificationSummaryBand({
-    required this.unreadCount,
-    required this.totalCount,
-    required this.invitationCount,
-    required this.markingAllRead,
-    required this.onMarkAllRead,
-  });
-
-  final int unreadCount;
-  final int totalCount;
-  final int invitationCount;
-  final bool markingAllRead;
-  final VoidCallback? onMarkAllRead;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF92A3FD).withValues(alpha: 0.25),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.24),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.notifications_active_rounded,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$unreadCount unread updates',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  invitationCount == 0
-                      ? '$totalCount total notifications'
-                      : '$totalCount updates • $invitationCount invitations',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.82),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          TextButton(
-            onPressed: markingAllRead ? null : onMarkAllRead,
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            ),
-            child: Text(
-              markingAllRead ? '...' : 'Read all',
-              style: const TextStyle(fontWeight: FontWeight.w800),
-            ),
-          ),
-        ],
       ),
     );
   }

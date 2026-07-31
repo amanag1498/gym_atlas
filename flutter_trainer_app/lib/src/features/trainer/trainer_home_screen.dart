@@ -9035,35 +9035,18 @@ class _NotificationPage extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 104),
+        padding: const EdgeInsets.fromLTRB(25, 15, 25, 104),
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Notifications',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.6,
-                          ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      'Coaching updates, requests, and gym activity.',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  'Notification',
+                  style: const TextStyle(
+                    color: Color(0xFF1D1617),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
               if (members.isNotEmpty) ...[
@@ -9073,29 +9056,28 @@ class _NotificationPage extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
               ],
+              if (unreadCount > 0) ...[
+                _SquareIconButton(
+                  icon: Icons.done_all_rounded,
+                  onTap: () async {
+                    try {
+                      await onMarkAllRead();
+                    } catch (exception) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(exception.toString())),
+                        );
+                      }
+                    }
+                  },
+                ),
+                const SizedBox(width: 8),
+              ],
               _SquareIconButton(
                 icon: Icons.refresh_rounded,
                 onTap: () => onRefresh(),
               ),
             ],
-          ),
-          const SizedBox(height: 16),
-          _TrainerNotificationSummaryBand(
-            unreadCount: unreadCount,
-            totalCount: notifications.length,
-            trialCount: trialRequests.length,
-            canMarkAllRead: unreadCount > 0,
-            onMarkAllRead: () async {
-              try {
-                await onMarkAllRead();
-              } catch (exception) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text(exception.toString())));
-                }
-              }
-            },
           ),
           if (trialRequests.isNotEmpty) ...[
             const SizedBox(height: 18),
@@ -9539,93 +9521,6 @@ InputDecoration _fitInputDecoration(String label, IconData icon) {
   );
 }
 
-class _TrainerNotificationSummaryBand extends StatelessWidget {
-  const _TrainerNotificationSummaryBand({
-    required this.unreadCount,
-    required this.totalCount,
-    required this.trialCount,
-    required this.canMarkAllRead,
-    required this.onMarkAllRead,
-  });
-
-  final int unreadCount;
-  final int totalCount;
-  final int trialCount;
-  final bool canMarkAllRead;
-  final VoidCallback onMarkAllRead;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primaryBright, AppColors.primary],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.18),
-            blurRadius: 18,
-            offset: const Offset(0, 9),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.20),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.notifications_active_rounded,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$unreadCount unread updates',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  trialCount == 0
-                      ? '$totalCount total notifications'
-                      : '$totalCount updates • $trialCount trial leads',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.78),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (canMarkAllRead)
-            TextButton(
-              onPressed: onMarkAllRead,
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
-              child: const Text('Read all'),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 class _TrainerNotificationSectionTitle extends StatelessWidget {
   const _TrainerNotificationSectionTitle({
     required this.title,
@@ -9642,16 +9537,18 @@ class _TrainerNotificationSectionTitle extends StatelessWidget {
         Expanded(
           child: Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: AppColors.textPrimary,
+            style: const TextStyle(
+              color: Color(0xFF1D1617),
+              fontSize: 16,
               fontWeight: FontWeight.w800,
             ),
           ),
         ),
         Text(
           action,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: AppColors.textSecondary,
+          style: const TextStyle(
+            color: Color(0xFF786F72),
+            fontSize: 11,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -9677,8 +9574,23 @@ class _TrainerTrialLeadCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PremiumCard(
+    return Container(
       padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFFFFF), Color(0xFFF7F9FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF92A3FD).withValues(alpha: 0.14),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
       child: Column(
         children: [
           Row(
@@ -9686,14 +9598,15 @@ class _TrainerTrialLeadCard extends StatelessWidget {
               Container(
                 width: 46,
                 height: 46,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceSoft,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.stroke),
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
+                  ),
                 ),
                 child: const Icon(
                   Icons.person_add_alt_1_rounded,
-                  color: AppColors.primaryBright,
+                  color: Colors.white,
                 ),
               ),
               const SizedBox(width: 12),
@@ -9705,9 +9618,10 @@ class _TrainerTrialLeadCard extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: AppColors.textPrimary,
+                      style: const TextStyle(
+                        color: Color(0xFF1D1617),
                         fontWeight: FontWeight.w900,
+                        fontSize: 14,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -9715,9 +9629,10 @@ class _TrainerTrialLeadCard extends StatelessWidget {
                       subtitle,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
+                      style: const TextStyle(
+                        color: Color(0xFF786F72),
                         fontWeight: FontWeight.w600,
+                        fontSize: 11,
                       ),
                     ),
                   ],
@@ -9786,6 +9701,7 @@ class _TrainerNotificationRow extends StatelessWidget {
 
     return InkWell(
       onTap: isUnread ? onMarkRead : null,
+      borderRadius: BorderRadius.circular(18),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(
@@ -9823,14 +9739,14 @@ class _TrainerNotificationRow extends StatelessWidget {
                           title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(
-                                color: AppColors.textPrimary,
-                                fontWeight: isUnread
-                                    ? FontWeight.w800
-                                    : FontWeight.w600,
-                                height: 1.25,
-                              ),
+                          style: TextStyle(
+                            color: const Color(0xFF1D1617),
+                            fontWeight: isUnread
+                                ? FontWeight.w800
+                                : FontWeight.w600,
+                            fontSize: 13,
+                            height: 1.25,
+                          ),
                         ),
                       ),
                       if (isUnread)
@@ -9839,7 +9755,7 @@ class _TrainerNotificationRow extends StatelessWidget {
                           height: 8,
                           margin: const EdgeInsets.only(left: 8),
                           decoration: const BoxDecoration(
-                            color: AppColors.primary,
+                            color: Color(0xFF92A3FD),
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -9850,8 +9766,9 @@ class _TrainerNotificationRow extends StatelessWidget {
                     body,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
+                    style: TextStyle(
+                      color: const Color(0xFF786F72).withValues(alpha: 0.92),
+                      fontSize: 11,
                       height: 1.35,
                       fontWeight: FontWeight.w500,
                     ),
@@ -9879,11 +9796,11 @@ class _TrainerNotificationRow extends StatelessWidget {
                       Expanded(
                         child: Text(
                           prettyDateTime(notification['created_at']),
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: AppColors.textMuted,
-                                fontWeight: FontWeight.w500,
-                              ),
+                          style: const TextStyle(
+                            color: Color(0xFF786F72),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                       Container(
@@ -9892,14 +9809,14 @@ class _TrainerNotificationRow extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.surfaceSoft,
+                          color: const Color(0xFFF7F8F8),
                           borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: AppColors.stroke),
                         ),
                         child: Text(
                           _notificationLabel(type),
                           style: TextStyle(
                             color: color,
+                            fontSize: 9,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -9909,6 +9826,17 @@ class _TrainerNotificationRow extends StatelessWidget {
                 ],
               ),
             ),
+            if (isUnread) ...[
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: onMarkRead,
+                icon: const Icon(
+                  Icons.done_rounded,
+                  color: Color(0xFF786F72),
+                  size: 18,
+                ),
+              ),
+            ],
           ],
         ),
       ),
