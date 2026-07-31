@@ -87,6 +87,7 @@ class DietPlanController extends Controller
         return $this->success(
             DietPlanTemplateResource::collection(
                 DietPlanTemplate::query()
+                    ->globalCatalog()
                     ->where('status', 'active')
                     ->orderBy('name')
                     ->get()
@@ -97,6 +98,12 @@ class DietPlanController extends Controller
 
     public function adoptTemplate(Request $request, DietPlanTemplate $dietPlanTemplate)
     {
+        if ($dietPlanTemplate->status !== 'active' || ! $dietPlanTemplate->isGlobalCatalog()) {
+            throw ValidationException::withMessages([
+                'diet_template_id' => ['This diet template is not available in the member catalog.'],
+            ]);
+        }
+
         $profile = $this->memberAppService->memberProfileFor($request->user());
         if (! $profile?->gym_id) {
             throw ValidationException::withMessages([

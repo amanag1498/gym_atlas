@@ -448,6 +448,63 @@ class DietTemplateAssignmentTest extends TestCase
             ->assertUnprocessable();
     }
 
+    public function test_member_catalog_hides_trainer_templates_until_they_are_assigned(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch, $trainer, $assignedMember] = $this->context();
+        $globalTemplate = $this->template();
+        $trainerTemplate = DietPlanTemplate::query()->create([
+            'created_by_user_id' => $trainer->id,
+            'name' => 'Trainer Private Nutrition',
+            'goal' => 'Private coaching',
+            'status' => 'active',
+            'meals' => [[
+                'name' => 'Coach meal',
+                'meal_type' => 'coach_meal',
+                'items' => [['name' => 'Paneer', 'quantity' => '150g']],
+            ]],
+        ]);
+        $otherMember = User::factory()->create([
+            'active_role' => RoleName::Member->value,
+        ]);
+        $otherMember->assignRole(RoleName::Member->value);
+        MemberProfile::query()->create([
+            'user_id' => $otherMember->id,
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'assigned_trainer_user_id' => $trainer->id,
+            'membership_status' => 'active',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($assignedMember, 'sanctum')
+            ->getJson('/api/member/diet-templates')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $globalTemplate->id)
+            ->assertJsonMissing(['id' => $trainerTemplate->id]);
+
+        $this->actingAs($assignedMember, 'sanctum')
+            ->postJson("/api/member/diet-templates/{$trainerTemplate->id}/adopt")
+            ->assertUnprocessable();
+
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson("/api/trainer/diet-templates/{$trainerTemplate->id}/assign", [
+                'member_ids' => [$assignedMember->id],
+            ])
+            ->assertCreated();
+
+        $this->actingAs($assignedMember, 'sanctum')
+            ->getJson('/api/member/diet-plans')
+            ->assertOk()
+            ->assertJsonFragment(['name' => 'Trainer Private Nutrition']);
+
+        $this->actingAs($otherMember, 'sanctum')
+            ->getJson('/api/member/diet-plans')
+            ->assertOk()
+            ->assertJsonMissing(['name' => 'Trainer Private Nutrition']);
+    }
+
     public function test_member_created_products_persist_and_plan_edits_keep_meal_progress(): void
     {
         $this->seed(PermissionSeeder::class);
