@@ -8008,6 +8008,7 @@ class _TrainerChatThreadScreen extends StatefulWidget {
 class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen>
     with WidgetsBindingObserver {
   final TextEditingController _controller = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   final List<Map<String, dynamic>> _messages = <Map<String, dynamic>>[];
   bool _loading = true;
   bool _loadingOlder = false;
@@ -8055,6 +8056,7 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen>
       widget.socket?.off('connect', _chatConnectHandler);
     }
     _controller.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -8062,6 +8064,20 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _appIsResumed = state == AppLifecycleState.resumed;
     _setChatFocus(_appIsResumed);
+  }
+
+  @override
+  void didChangeMetrics() {
+    _scrollToLatest();
+  }
+
+  void _scrollToLatest() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    });
   }
 
   void _setChatFocus(bool active) {
@@ -8158,6 +8174,7 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen>
     } finally {
       if (mounted) {
         setState(() => _loading = false);
+        _scrollToLatest();
       }
     }
   }
@@ -8419,6 +8436,7 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen>
       _upsertSilently(normalized);
       _messages.sort(_compareChatMessages);
     });
+    _scrollToLatest();
   }
 
   void _upsertSilently(Map<String, dynamic> message) {
@@ -8510,6 +8528,7 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen>
                     _TrainerChatEmptyState(memberName: memberName)
                   else
                     ListView.builder(
+                      controller: _scrollController,
                       padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
                       itemCount: _messages.length + (_hasOlderMessages ? 1 : 0),
                       itemBuilder: (context, index) {

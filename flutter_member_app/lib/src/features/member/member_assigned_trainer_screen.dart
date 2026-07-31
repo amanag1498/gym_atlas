@@ -788,6 +788,7 @@ class _MemberTrainerChatThreadScreenState
     extends State<_MemberTrainerChatThreadScreen>
     with WidgetsBindingObserver {
   final TextEditingController _controller = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   final List<Map<String, dynamic>> _messages = <Map<String, dynamic>>[];
   bool _loading = true;
   bool _loadingOlder = false;
@@ -835,6 +836,7 @@ class _MemberTrainerChatThreadScreenState
       widget.socket?.off('connect', _chatConnectHandler);
     }
     _controller.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -842,6 +844,20 @@ class _MemberTrainerChatThreadScreenState
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _appIsResumed = state == AppLifecycleState.resumed;
     _setChatFocus(_appIsResumed);
+  }
+
+  @override
+  void didChangeMetrics() {
+    _scrollToLatest();
+  }
+
+  void _scrollToLatest() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    });
   }
 
   void _setChatFocus(bool active) {
@@ -941,6 +957,7 @@ class _MemberTrainerChatThreadScreenState
     } finally {
       if (mounted) {
         setState(() => _loading = false);
+        _scrollToLatest();
       }
     }
   }
@@ -1205,6 +1222,7 @@ class _MemberTrainerChatThreadScreenState
       _upsertSilently(normalized);
       _messages.sort(_compareMemberChatMessages);
     });
+    _scrollToLatest();
   }
 
   void _upsertSilently(Map<String, dynamic> message) {
@@ -1299,6 +1317,7 @@ class _MemberTrainerChatThreadScreenState
                     const _MemberChatEmptyState()
                   else
                     ListView.builder(
+                      controller: _scrollController,
                       padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
                       itemBuilder: (context, index) {
                         if (_hasOlderMessages) {
