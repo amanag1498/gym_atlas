@@ -7392,14 +7392,6 @@ class _ChatPageState extends State<_ChatPage> {
 
   @override
   Widget build(BuildContext context) {
-    final unreadCount = widget.conversations.fold<int>(
-      0,
-      (total, conversation) =>
-          total + (_intValue(conversation['unread_count']) ?? 0),
-    );
-    final activeConversationCount = widget.conversations.where((conversation) {
-      return _map(conversation['last_message']).isNotEmpty;
-    }).length;
     final filteredMembers = widget.members.where((assignment) {
       if (_query.isEmpty) {
         return true;
@@ -7460,12 +7452,6 @@ class _ChatPageState extends State<_ChatPage> {
                       onTap: widget.loading ? () {} : () => widget.onRefresh!(),
                     ),
                 ],
-              ),
-              const SizedBox(height: 16),
-              _ChatInboxSummaryCard(
-                memberCount: widget.members.length,
-                activeConversationCount: activeConversationCount,
-                unreadCount: unreadCount,
               ),
               const SizedBox(height: 16),
               Container(
@@ -7547,100 +7533,6 @@ class _ChatPageState extends State<_ChatPage> {
     }
 
     return const <String, dynamic>{};
-  }
-}
-
-class _ChatInboxSummaryCard extends StatelessWidget {
-  const _ChatInboxSummaryCard({
-    required this.memberCount,
-    required this.activeConversationCount,
-    required this.unreadCount,
-  });
-
-  final int memberCount;
-  final int activeConversationCount;
-  final int unreadCount;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.primary,
-            AppColors.primaryBright.withValues(alpha: 0.92),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.18),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(19),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-            ),
-            child: const Icon(
-              Icons.forum_rounded,
-              color: Colors.white,
-              size: 27,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  unreadCount > 0
-                      ? '$unreadCount unread message${unreadCount == 1 ? '' : 's'}'
-                      : 'Your coaching inbox',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '$activeConversationCount active chats  •  $memberCount assigned members',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.82),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.14),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.lock_outline_rounded,
-              color: Colors.white,
-              size: 18,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 

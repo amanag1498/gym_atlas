@@ -74,6 +74,26 @@ Minimum production values to review:
 - `GOOGLE_CLIENT_IDS=...`
 - `FIREBASE_*` values
 
+Chat push notifications require Firebase Admin credentials, not only the
+Firebase project/web values used by OAuth. Download a service-account JSON for
+the same Firebase project used by both mobile apps, store it outside the public
+web root, and configure one of:
+
+```dotenv
+FIREBASE_SERVICE_ACCOUNT_PATH=/var/www/gym-atlas/shared/firebase-admin.json
+FIREBASE_SERVICE_ACCOUNT_JSON=
+```
+
+The JSON value may alternatively contain the raw or base64-encoded service
+account document. Never commit the credential. After changing it, rebuild
+Laravel configuration and verify both credentials and registered app tokens:
+
+```bash
+php artisan optimize:clear
+php artisan config:cache
+php artisan notifications:fcm-health
+```
+
 If Talkee already has Redis on the VPS, moving these to Redis is better:
 
 - `QUEUE_CONNECTION=redis`

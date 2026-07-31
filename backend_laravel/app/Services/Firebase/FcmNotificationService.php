@@ -45,11 +45,19 @@ class FcmNotificationService
     {
         $projectId = (string) config('services.firebase.project_id');
         if ($projectId === '') {
+            Log::warning('FCM notification skipped because FIREBASE_PROJECT_ID is not configured.');
+
             return false;
         }
 
         $accessToken = $this->accessToken();
         if ($accessToken === null) {
+            Log::warning('FCM notification skipped because Firebase Admin credentials are unavailable.', [
+                'project_id' => $projectId,
+                'service_account_path_configured' => (string) config('services.firebase.service_account_path') !== '',
+                'service_account_json_configured' => (string) config('services.firebase.service_account_json') !== '',
+            ]);
+
             return false;
         }
 
@@ -111,6 +119,8 @@ class FcmNotificationService
     {
         $credentials = $this->serviceAccount();
         if ($credentials === null) {
+            Log::warning('Firebase Admin service account could not be loaded.');
+
             return null;
         }
 

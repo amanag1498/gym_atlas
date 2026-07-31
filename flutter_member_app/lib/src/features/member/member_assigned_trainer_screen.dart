@@ -361,7 +361,14 @@ class _MemberAssignedTrainerScreenState
         assignedTrainer['profile_photo_url']?.toString() ??
         assignedTrainer['avatar']?.toString() ??
         assignedTrainer['photo']?.toString();
-    final firstName = firstNameFromFullName(widget.currentUserName);
+    final lastMessage = _messages.isEmpty ? null : _messages.last;
+    final preview = lastMessage == null
+        ? 'Tap to open private thread'
+        : lastMessage['body']?.toString() ?? 'Message';
+    final hasUnread =
+        trainerId != null &&
+        lastMessage != null &&
+        _memberIntValue(lastMessage['sender_id']) == trainerId;
 
     return AppGradientScaffold(
       title: 'Chats',
@@ -380,60 +387,88 @@ class _MemberAssignedTrainerScreenState
                   120,
                 ),
                 children: [
-                  MemberPageGreetingHeader(
-                    firstName: firstName,
-                    subtitle: 'Chats and coaching follow-ups in one place.',
-                    actions: [
-                      MemberHeaderActionButton(
-                        icon: Icons.refresh_rounded,
-                        onTap: _load,
-                      ),
-                      if (hasTrainer)
-                        MemberHeaderActionButton(
-                          icon: Icons.fitness_center_rounded,
-                          onTap: widget.onOpenAssignedWorkout,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Messages',
+                              style: Theme.of(context).textTheme.headlineSmall
+                                  ?.copyWith(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Private coaching conversations',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          ],
                         ),
+                      ),
+                      _MemberChatSquareButton(
+                        icon: _loading
+                            ? Icons.sync_rounded
+                            : Icons.refresh_rounded,
+                        onTap: _loading ? null : _load,
+                      ),
                     ],
                   ),
-                  const SizedBox(height: AppSpacing.lg),
-                  RevealOnBuild(
-                    child: _MemberChatInboxHero(
-                      hasTrainer: hasTrainer,
-                      trainerName: trainerName,
-                      trainerAvatarUrl: trainerAvatarUrl,
-                      loading: _loading || _chatLoading,
-                      onRefresh: _loading ? null : _load,
+                  const SizedBox(height: 16),
+                  if (_chatLoading)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 12),
+                      child: LinearProgressIndicator(
+                        minHeight: 3,
+                        backgroundColor: AppColors.surfaceSoft,
+                        color: AppColors.primaryBright,
+                      ),
                     ),
-                  ),
                   if (hasTrainer) ...[
-                    const SizedBox(height: AppSpacing.lg),
                     RevealOnBuild(
-                      delay: const Duration(milliseconds: 80),
-                      child: _MemberTrainerChatCard(
-                        trainerId: trainerId,
+                      child: _MemberConversationCard(
                         trainerName: trainerName,
                         trainerAvatarUrl: trainerAvatarUrl,
-                        messages: _messages,
+                        preview: preview,
+                        time: lastMessage == null
+                            ? 'New'
+                            : _memberChatTime(lastMessage['created_at']),
+                        enabled: trainerId != null,
+                        unreadCount: hasUnread ? 1 : 0,
                         loading: _chatLoading,
-                        error: _chatError,
-                        onOpenChat: () =>
-                            _openTrainerChatThread(assignedTrainer),
-                        onRefresh: trainerId == null
+                        onTap: trainerId == null
                             ? null
-                            : () => _loadChat(trainerId),
+                            : () => _openTrainerChatThread(assignedTrainer),
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.md),
-                    RevealOnBuild(
-                      delay: const Duration(milliseconds: 140),
-                      child: _MemberChatQuickActions(
-                        onOpenWorkout: widget.onOpenAssignedWorkout,
+                    if (_chatError != null) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: AppColors.error.withValues(alpha: 0.14),
+                          ),
+                        ),
+                        child: Text(
+                          _chatError!,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: AppColors.error),
+                        ),
                       ),
-                    ),
+                    ],
                   ] else ...[
-                    const SizedBox(height: AppSpacing.lg),
                     RevealOnBuild(
-                      delay: const Duration(milliseconds: 80),
                       child: _MemberChatNoTrainerCard(onRefresh: _load),
                     ),
                   ],
@@ -444,274 +479,29 @@ class _MemberAssignedTrainerScreenState
   }
 }
 
-class _MemberChatInboxHero extends StatelessWidget {
-  const _MemberChatInboxHero({
-    required this.hasTrainer,
-    required this.trainerName,
-    required this.loading,
-    this.trainerAvatarUrl,
-    this.onRefresh,
-  });
-
-  final bool hasTrainer;
-  final String trainerName;
-  final String? trainerAvatarUrl;
-  final bool loading;
-  final VoidCallback? onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    return PremiumCard(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Trainer chat',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      hasTrainer
-                          ? 'Message $trainerName about workouts, progress, and recovery.'
-                          : 'Your trainer conversation will appear here once the gym assigns a coach.',
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w600,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 14),
-              _MemberChatHeroAvatar(
-                trainerAvatarUrl: trainerAvatarUrl,
-                hasTrainer: hasTrainer,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _MemberChatHeroPill(
-                icon: hasTrainer
-                    ? Icons.lock_rounded
-                    : Icons.hourglass_top_rounded,
-                label: hasTrainer ? 'Private 1:1 chat' : 'Pending trainer',
-              ),
-              const _MemberChatHeroPill(
-                icon: Icons.notifications_active_rounded,
-                label: 'Push alerts',
-              ),
-              if (onRefresh != null)
-                InkWell(
-                  borderRadius: BorderRadius.circular(999),
-                  onTap: loading ? null : onRefresh,
-                  child: _MemberChatHeroPill(
-                    icon: loading ? Icons.sync_rounded : Icons.refresh_rounded,
-                    label: loading ? 'Syncing' : 'Refresh',
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MemberChatHeroAvatar extends StatelessWidget {
-  const _MemberChatHeroAvatar({
-    required this.trainerAvatarUrl,
-    required this.hasTrainer,
-  });
-
-  final String? trainerAvatarUrl;
-  final bool hasTrainer;
-
-  @override
-  Widget build(BuildContext context) {
-    final imageUrl = trainerAvatarUrl?.trim();
-    return Container(
-      width: 58,
-      height: 58,
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceSoft,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.stroke),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(15),
-        child: imageUrl == null || imageUrl.isEmpty
-            ? Container(
-                color: AppColors.surface,
-                child: Icon(
-                  hasTrainer
-                      ? Icons.support_agent_rounded
-                      : Icons.person_search_rounded,
-                  color: AppColors.primaryBright,
-                ),
-              )
-            : Image.network(
-                imageUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => Container(
-                  color: AppColors.surface,
-                  child: const Icon(
-                    Icons.support_agent_rounded,
-                    color: AppColors.primaryBright,
-                  ),
-                ),
-              ),
-      ),
-    );
-  }
-}
-
-class _MemberChatHeroPill extends StatelessWidget {
-  const _MemberChatHeroPill({required this.icon, required this.label});
+class _MemberChatSquareButton extends StatelessWidget {
+  const _MemberChatSquareButton({required this.icon, required this.onTap});
 
   final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceSoft,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.stroke),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: AppColors.primaryBright),
-          const SizedBox(width: 7),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MemberChatQuickActions extends StatelessWidget {
-  const _MemberChatQuickActions({required this.onOpenWorkout});
-
-  final VoidCallback onOpenWorkout;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _MemberChatActionTile(
-            icon: Icons.fitness_center_rounded,
-            title: 'Assigned workout',
-            subtitle: 'Open current plan',
-            onTap: onOpenWorkout,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        const Expanded(
-          child: _MemberChatActionTile(
-            icon: Icons.verified_user_rounded,
-            title: 'Trainer chat',
-            subtitle: 'Private to you',
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MemberChatActionTile extends StatelessWidget {
-  const _MemberChatActionTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return PremiumCard(
-      padding: const EdgeInsets.all(12),
-      onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: AppColors.surfaceSoft,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.stroke),
-            ),
-            child: Icon(icon, color: AppColors.primaryBright, size: 20),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(15),
+        onTap: onTap,
+        child: Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: AppColors.stroke),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (onTap != null)
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: AppColors.textMuted,
-              size: 18,
-            ),
-        ],
+          child: Icon(icon, color: AppColors.primaryBright, size: 21),
+        ),
       ),
     );
   }
@@ -792,224 +582,6 @@ class _MemberChatNoTrainerCard extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _MemberTrainerChatCard extends StatelessWidget {
-  const _MemberTrainerChatCard({
-    required this.trainerId,
-    required this.trainerName,
-    required this.trainerAvatarUrl,
-    required this.messages,
-    required this.loading,
-    required this.onOpenChat,
-    this.error,
-    this.onRefresh,
-  });
-
-  final int? trainerId;
-  final String trainerName;
-  final String? trainerAvatarUrl;
-  final List<Map<String, dynamic>> messages;
-  final bool loading;
-  final VoidCallback onOpenChat;
-  final String? error;
-  final Future<void> Function()? onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    final lastMessage = messages.isEmpty ? null : messages.last;
-    final preview = lastMessage == null
-        ? 'Tap into your private trainer conversation'
-        : lastMessage['body']?.toString() ?? 'Message';
-    final hasUnread =
-        trainerId != null &&
-        lastMessage != null &&
-        _memberIntValue(lastMessage['sender_id']) == trainerId;
-
-    return PremiumCard(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceSoft,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.stroke),
-                ),
-                child: const Icon(
-                  Icons.chat_bubble_rounded,
-                  color: AppColors.primaryBright,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Messages',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    Text(
-                      trainerId == null
-                          ? 'Trainer assignment pending'
-                          : 'Your trainer inbox',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 11,
-                  vertical: 7,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceSoft,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: trainerId == null
-                        ? AppColors.stroke
-                        : AppColors.primary.withValues(alpha: 0.18),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                        color: trainerId == null
-                            ? AppColors.primaryBright
-                            : AppColors.success,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      trainerId == null ? 'Locked' : 'Live',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: trainerId == null
-                            ? AppColors.textSecondary
-                            : AppColors.success,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (onRefresh != null)
-                IconButton(
-                  onPressed: loading ? null : onRefresh,
-                  icon: const Icon(Icons.refresh_rounded),
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          if (loading)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: const LinearProgressIndicator(
-                minHeight: 4,
-                backgroundColor: AppColors.surfaceSoft,
-                color: AppColors.primaryBright,
-              ),
-            ),
-          if (loading) const SizedBox(height: AppSpacing.md),
-          _MemberConversationCard(
-            trainerName: trainerName,
-            trainerAvatarUrl: trainerAvatarUrl,
-            preview: preview,
-            time: lastMessage == null
-                ? 'New'
-                : _memberChatTime(lastMessage['created_at']),
-            enabled: trainerId != null,
-            unreadCount: hasUnread ? 1 : 0,
-            loading: loading,
-            onTap: trainerId == null ? null : onOpenChat,
-          ),
-          if (error != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.error.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: AppColors.error.withValues(alpha: 0.14),
-                ),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.info_outline_rounded,
-                    color: AppColors.error,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      error!,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: AppColors.error),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: const [
-              _MemberChatTopicChip(label: 'Workout'),
-              _MemberChatTopicChip(label: 'Progress'),
-              _MemberChatTopicChip(label: 'Recovery'),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MemberChatTopicChip extends StatelessWidget {
-  const _MemberChatTopicChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceSoft,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.stroke),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: AppColors.textSecondary,
-          fontWeight: FontWeight.w700,
-        ),
       ),
     );
   }
@@ -1672,7 +1244,11 @@ class _MemberTrainerChatThreadScreenState
               trainerName: trainerName,
               trainerAvatarUrl: avatarUrl,
               loading: _loading,
+              busy: _safetyBusy,
+              blockedByMe: _blockedByMe,
               onRefresh: _load,
+              onReport: _reportConversation,
+              onToggleBlock: _toggleBlock,
             ),
             _MemberChatSafetyBar(
               termsAccepted: _termsAccepted,
@@ -1680,7 +1256,6 @@ class _MemberTrainerChatThreadScreenState
               blockedMe: _blockedMe,
               busy: _safetyBusy,
               onAcceptTerms: _acceptTerms,
-              onReport: _reportConversation,
               onToggleBlock: _toggleBlock,
             ),
             if (_error != null)
@@ -1799,7 +1374,6 @@ class _MemberChatSafetyBar extends StatelessWidget {
     required this.blockedMe,
     required this.busy,
     required this.onAcceptTerms,
-    required this.onReport,
     required this.onToggleBlock,
   });
 
@@ -1808,11 +1382,11 @@ class _MemberChatSafetyBar extends StatelessWidget {
   final bool blockedMe;
   final bool busy;
   final VoidCallback onAcceptTerms;
-  final VoidCallback onReport;
   final VoidCallback onToggleBlock;
 
   @override
   Widget build(BuildContext context) {
+    final blocked = blockedByMe || blockedMe;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
       child: Container(
@@ -1823,42 +1397,41 @@ class _MemberChatSafetyBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: AppColors.stroke),
         ),
-        child: !termsAccepted
-            ? Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Accept the Terms and respectful-use rules before messaging.',
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: busy ? null : onAcceptTerms,
-                    child: const Text('Accept'),
-                  ),
-                ],
-              )
-            : Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      blockedByMe
-                          ? 'You blocked this trainer.'
-                          : blockedMe
-                          ? 'Messaging is unavailable.'
-                          : 'Private coaching chat',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: busy ? null : onReport,
-                    child: const Text('Report'),
-                  ),
-                  TextButton(
-                    onPressed: busy ? null : onToggleBlock,
-                    child: Text(blockedByMe ? 'Unblock' : 'Block'),
-                  ),
-                ],
+        child: Row(
+          children: [
+            Icon(
+              blocked ? Icons.block_rounded : Icons.lock_outline_rounded,
+              size: 18,
+              color: blocked ? AppColors.error : AppColors.primaryBright,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                !termsAccepted
+                    ? 'Accept respectful-use terms to start messaging.'
+                    : blockedByMe
+                    ? 'You blocked this conversation.'
+                    : blockedMe
+                    ? 'Messaging is unavailable for this conversation.'
+                    : 'Private coaching chat',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
+            ),
+            if (!termsAccepted)
+              TextButton(
+                onPressed: busy ? null : onAcceptTerms,
+                child: const Text('Accept'),
+              )
+            else if (blockedByMe)
+              TextButton(
+                onPressed: busy ? null : onToggleBlock,
+                child: const Text('Unblock'),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1868,20 +1441,28 @@ class _MemberChatThreadHeader extends StatelessWidget {
   const _MemberChatThreadHeader({
     required this.trainerName,
     required this.loading,
+    required this.busy,
+    required this.blockedByMe,
     required this.onRefresh,
+    required this.onReport,
+    required this.onToggleBlock,
     this.trainerAvatarUrl,
   });
 
   final String trainerName;
   final String? trainerAvatarUrl;
   final bool loading;
+  final bool busy;
+  final bool blockedByMe;
   final VoidCallback onRefresh;
+  final VoidCallback onReport;
+  final VoidCallback onToggleBlock;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-      padding: const EdgeInsets.fromLTRB(6, 10, 10, 10),
+      padding: const EdgeInsets.fromLTRB(6, 10, 8, 10),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(24),
@@ -1936,9 +1517,15 @@ class _MemberChatThreadHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  loading ? 'Syncing chat...' : 'Trainer conversation',
+                  blockedByMe
+                      ? 'Conversation blocked'
+                      : loading
+                      ? 'Syncing chat...'
+                      : 'Trainer conversation',
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: blockedByMe
+                        ? AppColors.error
+                        : AppColors.textSecondary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -1953,6 +1540,53 @@ class _MemberChatThreadHeader extends StatelessWidget {
                   ? AppColors.textMuted.withValues(alpha: 0.4)
                   : AppColors.primaryBright,
             ),
+          ),
+          PopupMenuButton<String>(
+            enabled: !busy,
+            tooltip: 'Conversation options',
+            icon: busy
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(
+                    Icons.more_horiz_rounded,
+                    color: AppColors.textSecondary,
+                  ),
+            onSelected: (value) {
+              if (value == 'report') {
+                onReport();
+              } else if (value == 'block') {
+                onToggleBlock();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'report',
+                child: Row(
+                  children: [
+                    Icon(Icons.flag_outlined, size: 19),
+                    SizedBox(width: 10),
+                    Text('Report conversation'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'block',
+                child: Row(
+                  children: [
+                    Icon(
+                      blockedByMe
+                          ? Icons.lock_open_rounded
+                          : Icons.block_rounded,
+                      size: 19,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(blockedByMe ? 'Unblock trainer' : 'Block trainer'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -2164,6 +1798,7 @@ class _MemberChatComposer extends StatelessWidget {
                   minLines: 1,
                   maxLines: 5,
                   enabled: !sending,
+                  textCapitalization: TextCapitalization.sentences,
                   textInputAction: TextInputAction.send,
                   decoration: InputDecoration(
                     hintText: 'Message your trainer',
