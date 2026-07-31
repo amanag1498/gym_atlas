@@ -70,6 +70,8 @@
 	<string>Gym Atlas Member uses your health activity totals to sync step progress with your training dashboard.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Gym Atlas Member uses your current location to sort nearby gyms and show distance in discovery.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Gym Atlas Member uses your location to show nearby gyms and distance information when you use gym discovery. The app does not continuously track your location.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Gym Atlas Member uses the camera when you take profile and progress photos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
