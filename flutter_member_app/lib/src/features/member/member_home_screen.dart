@@ -559,6 +559,7 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
         onRequestStepPermission: () =>
             unawaited(_handleStepPermissionRequest()),
         onOpenNotifications: _openNotificationsScreen,
+        onOpenDietPlan: _openDietPlanScreen,
         onStartWorkout: () => setState(() => _index = 1),
         onMessageTrainer: () => setState(() => _index = 3),
         onLogWeight: () => setState(() => _index = 2),
@@ -986,6 +987,7 @@ class _DashboardPage extends StatelessWidget {
     required this.onRefresh,
     required this.onRequestStepPermission,
     required this.onOpenNotifications,
+    required this.onOpenDietPlan,
     required this.onStartWorkout,
     required this.onMessageTrainer,
     required this.onLogWeight,
@@ -1014,6 +1016,7 @@ class _DashboardPage extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final VoidCallback onRequestStepPermission;
   final VoidCallback onOpenNotifications;
+  final VoidCallback onOpenDietPlan;
   final VoidCallback onStartWorkout;
   final VoidCallback onMessageTrainer;
   final VoidCallback onLogWeight;
@@ -1175,6 +1178,15 @@ class _DashboardPage extends StatelessWidget {
         onTap: hasGymMembership ? onStartWorkout : onFindGyms,
       ),
       _DashboardActionData(
+        label: 'Diet plans',
+        helper: 'Build meals and nutrition',
+        description:
+            'Create a personal meal-based diet or start from an Atlas template.',
+        icon: Icons.restaurant_menu_rounded,
+        color: AppColors.primaryBright,
+        onTap: onOpenDietPlan,
+      ),
+      _DashboardActionData(
         label: 'Open profile',
         helper: 'Update your setup',
         description: 'Review your baseline and keep your profile complete.',
@@ -1307,6 +1319,7 @@ class _DashboardPage extends StatelessWidget {
                 subtitle: 'Ready for today\'s session?',
                 unreadNotifications: unreadNotifications,
                 onOpenNotifications: onOpenNotifications,
+                onOpenDietPlan: onOpenDietPlan,
                 onOpenSettings: onOpenSettings,
               ),
             ),
@@ -1890,6 +1903,7 @@ class _MemberGreetingHeader extends StatelessWidget {
     required this.subtitle,
     required this.unreadNotifications,
     required this.onOpenNotifications,
+    required this.onOpenDietPlan,
     required this.onOpenSettings,
   });
 
@@ -1897,6 +1911,7 @@ class _MemberGreetingHeader extends StatelessWidget {
   final String subtitle;
   final int unreadNotifications;
   final VoidCallback onOpenNotifications;
+  final VoidCallback onOpenDietPlan;
   final VoidCallback onOpenSettings;
 
   @override
@@ -1938,6 +1953,11 @@ class _MemberGreetingHeader extends StatelessWidget {
             icon: Icons.notifications_none_rounded,
             count: unreadNotifications,
             onTap: onOpenNotifications,
+          ),
+          const SizedBox(width: 10),
+          _HeaderAction(
+            icon: Icons.restaurant_menu_rounded,
+            onTap: onOpenDietPlan,
           ),
           const SizedBox(width: 10),
           _HeaderAction(icon: Icons.settings_rounded, onTap: onOpenSettings),
