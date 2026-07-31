@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/workout_plan_summary_view.dart';
 import 'package:provider/provider.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
@@ -5583,6 +5584,8 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                         icon: template['is_public_catalog'] == true
                             ? Icons.public_rounded
                             : Icons.fitness_center_rounded,
+                        actionLabel: 'Preview',
+                        onAction: () => _openWorkoutTemplatePreview(template),
                       ),
                     );
                   }).toList(),
@@ -5623,6 +5626,30 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         ),
       ],
     );
+  }
+
+  Future<void> _openWorkoutTemplatePreview(
+    Map<String, dynamic> template,
+  ) async {
+    var detail = Map<String, dynamic>.from(template);
+    final templateId = (template['id'] as num?)?.toInt();
+    if (templateId != null) {
+      try {
+        final response = await widget.repository.fetchWorkoutTemplate(
+          templateId,
+        );
+        final fetched = _map(response['data']);
+        if (fetched.isNotEmpty) {
+          detail = fetched;
+        }
+      } catch (_) {
+        // The list payload is still useful if the detail refresh is unavailable.
+      }
+    }
+    if (!mounted) {
+      return;
+    }
+    await showWorkoutPlanSummarySheet(context, plan: detail);
   }
 
   _WorkoutDayDraft _ensureDayDraft(String day) {

@@ -193,152 +193,19 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
     }
   }
 
-  Future<void> _openCreatePlanSheet() async {
-    final formKey = GlobalKey<FormState>();
-    final name = TextEditingController();
-    var draftDetails = <String, dynamic>{'status': 'active'};
-    var draftMeals = _defaultMeals();
-    int? templateId;
-    var saving = false;
-    try {
-      final created = await showModalBottomSheet<bool>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        backgroundColor: Colors.transparent,
-        builder: (sheetContext) => StatefulBuilder(
-          builder: (context, setSheetState) => Padding(
-            padding: EdgeInsets.only(
-              left: AppSpacing.lg,
-              right: AppSpacing.lg,
-              bottom: MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
-            ),
-            child: PremiumCard(
-              child: SingleChildScrollView(
-                child: Form(
-                  key: formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Create personal diet plan',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'This is private to you. Trainer and gym-assigned plans remain unchanged.',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      DropdownButtonFormField<int?>(
-                        initialValue: templateId,
-                        isExpanded: true,
-                        items: [
-                          const DropdownMenuItem<int?>(
-                            value: null,
-                            child: Text('Build a custom personal plan'),
-                          ),
-                          ..._templates.map(
-                            (template) => DropdownMenuItem<int?>(
-                              value: (template['id'] as num?)?.toInt(),
-                              child: Text(
-                                template['name']?.toString() ??
-                                    'Global template',
-                              ),
-                            ),
-                          ),
-                        ],
-                        onChanged: (value) =>
-                            setSheetState(() => templateId = value),
-                        decoration: const InputDecoration(
-                          labelText: 'Start from global template',
-                        ),
-                      ),
-                      if (templateId != null) ...[
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          'All meals and food products will be copied into your editable personal plan.',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                      const SizedBox(height: AppSpacing.md),
-                      if (templateId == null) ...[
-                        DietPlanDetailsEditor(
-                          initialPlan: draftDetails,
-                          onChanged: (value) => draftDetails = value,
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        DietPlanMealsEditor(
-                          initialMeals: draftMeals,
-                          onChanged: (value) => draftMeals = value,
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                      ] else ...[
-                        TextFormField(
-                          controller: name,
-                          decoration: const InputDecoration(
-                            labelText: 'Custom plan name (optional)',
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                      ],
-                      GradientButton(
-                        label: saving ? 'Creating...' : 'Create diet plan',
-                        expanded: true,
-                        icon: Icons.add_rounded,
-                        onPressed: saving
-                            ? null
-                            : () async {
-                                if (!formKey.currentState!.validate()) return;
-                                setSheetState(() => saving = true);
-                                try {
-                                  if (templateId != null) {
-                                    await widget.repository.adoptDietTemplate(
-                                      templateId!,
-                                      name: name.text,
-                                    );
-                                  } else {
-                                    await widget.repository.createDietPlan({
-                                      ...draftDetails,
-                                      'meals': draftMeals,
-                                    });
-                                  }
-                                  if (context.mounted) {
-                                    Navigator.of(context).pop(true);
-                                  }
-                                } catch (error) {
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(_dietErrorMessage(error)),
-                                      ),
-                                    );
-                                  }
-                                } finally {
-                                  if (context.mounted) {
-                                    setSheetState(() => saving = false);
-                                  }
-                                }
-                              },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+  Future<void> _openCreateStudio() async {
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => _MemberDietCreationStudio(
+          repository: widget.repository,
+          templates: _templates,
         ),
-      );
-      if (created == true) await _load();
-    } finally {
-      name.dispose();
+      ),
+    );
+    if (created == true) {
+      await _load();
     }
   }
-
-  List<Map<String, dynamic>> _defaultMeals() => [
-    <String, dynamic>{'name': 'Meal 1', 'meal_type': 'meal_1', 'items': []},
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -349,7 +216,7 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
       actions: [
         IconButton(
           tooltip: 'Create personal diet plan',
-          onPressed: _loading ? null : _openCreatePlanSheet,
+          onPressed: _loading ? null : _openCreateStudio,
           icon: const Icon(Icons.add_rounded),
         ),
         IconButton(
@@ -369,7 +236,7 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                   Align(
                     alignment: Alignment.centerRight,
                     child: OutlinedButton.icon(
-                      onPressed: _openCreatePlanSheet,
+                      onPressed: _openCreateStudio,
                       icon: const Icon(Icons.add_rounded),
                       label: const Text('Create meal plan'),
                     ),
@@ -385,7 +252,7 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                         label: 'Create your first meal plan',
                         icon: Icons.add_rounded,
                         expanded: true,
-                        onPressed: _openCreatePlanSheet,
+                        onPressed: _openCreateStudio,
                       ),
                     )
                   else ...[
@@ -561,6 +428,476 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
     );
   }
 }
+
+class _MemberDietCreationStudio extends StatefulWidget {
+  const _MemberDietCreationStudio({
+    required this.repository,
+    required this.templates,
+  });
+
+  final MemberRepository repository;
+  final List<Map<String, dynamic>> templates;
+
+  @override
+  State<_MemberDietCreationStudio> createState() =>
+      _MemberDietCreationStudioState();
+}
+
+class _MemberDietCreationStudioState extends State<_MemberDietCreationStudio> {
+  final _formKey = GlobalKey<FormState>();
+  int _selectedTab = 0;
+  int _editorRevision = 0;
+  bool _saving = false;
+  String? _error;
+  Map<String, dynamic> _draftDetails = <String, dynamic>{'status': 'active'};
+  List<Map<String, dynamic>> _draftMeals = _studioDefaultMeals();
+
+  Future<void> _saveCustomPlan() async {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    final name = _draftDetails['name']?.toString().trim() ?? '';
+    if (name.isEmpty) {
+      setState(() => _error = 'Add a name for this diet plan.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    var succeeded = false;
+    try {
+      await widget.repository.createDietPlan({
+        ..._draftDetails,
+        'name': name,
+        'status': 'active',
+        'meals': _draftMeals,
+      });
+      succeeded = true;
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = _dietErrorMessage(error));
+      }
+    } finally {
+      if (mounted && !succeeded) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  Future<void> _adoptTemplate(Map<String, dynamic> template) async {
+    final templateId = (template['id'] as num?)?.toInt();
+    if (templateId == null) {
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    var succeeded = false;
+    try {
+      await widget.repository.adoptDietTemplate(templateId);
+      succeeded = true;
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = _dietErrorMessage(error));
+      }
+    } finally {
+      if (mounted && !succeeded) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  void _resetBuilder() {
+    setState(() {
+      _draftDetails = <String, dynamic>{'status': 'active'};
+      _draftMeals = _studioDefaultMeals();
+      _editorRevision++;
+      _error = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppGradientScaffold(
+      title: 'Diet Studio',
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.sm,
+                AppSpacing.lg,
+                AppSpacing.md,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Create your diet plan',
+                              style: Theme.of(context).textTheme.headlineSmall
+                                  ?.copyWith(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Build meal by meal or start from an Atlas template.',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Reset builder',
+                        onPressed: _saving ? null : _resetBuilder,
+                        icon: const Icon(Icons.restart_alt_rounded),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  _MemberDietStudioTabs(
+                    selectedIndex: _selectedTab,
+                    onChanged: (index) => setState(() {
+                      _selectedTab = index;
+                      _error = null;
+                    }),
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        _error!,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.error,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Expanded(
+              child: _selectedTab == 0 ? _buildCustomPlan() : _buildTemplates(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomPlan() {
+    return Form(
+      key: _formKey,
+      child: ListView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          2,
+          AppSpacing.lg,
+          AppSpacing.xl,
+        ),
+        children: [
+          _MemberDietBuilderSection(
+            title: 'Plan details',
+            subtitle: 'Set your goal, nutrition targets, and preferences.',
+            icon: Icons.tune_rounded,
+            child: DietPlanDetailsEditor(
+              key: ValueKey('member-diet-details-$_editorRevision'),
+              initialPlan: _draftDetails,
+              onChanged: (value) => _draftDetails = value,
+            ),
+          ),
+          const SizedBox(height: 14),
+          _MemberDietBuilderSection(
+            title: 'Meals',
+            subtitle: 'Add any meals, foods, portions, timings, and macros.',
+            icon: Icons.restaurant_menu_rounded,
+            child: DietPlanMealsEditor(
+              key: ValueKey('member-diet-meals-$_editorRevision'),
+              initialMeals: _draftMeals,
+              onChanged: (value) => _draftMeals = value,
+            ),
+          ),
+          const SizedBox(height: 16),
+          GradientButton(
+            label: _saving ? 'Creating diet plan...' : 'Save to my diet plans',
+            icon: Icons.library_add_check_rounded,
+            expanded: true,
+            onPressed: _saving ? null : _saveCustomPlan,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTemplates() {
+    if (widget.templates.isEmpty) {
+      return const EmptyStateView(
+        title: 'No templates available',
+        message: 'Build a custom meal plan while Atlas templates are prepared.',
+        icon: Icons.restaurant_menu_rounded,
+      );
+    }
+    return ListView.separated(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        2,
+        AppSpacing.lg,
+        AppSpacing.xl,
+      ),
+      itemCount: widget.templates.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        final template = widget.templates[index];
+        final meals = (template['meals'] as List<dynamic>? ?? const []);
+        return PremiumCard(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            children: [
+              InkWell(
+                onTap: () => showDietPlanSummarySheet(context, plan: template),
+                borderRadius: BorderRadius.circular(16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceSoft,
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: const Icon(
+                        Icons.public_rounded,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            template['name']?.toString() ?? 'Diet template',
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${template['daily_calorie_target'] ?? '--'} kcal • ${meals.length} meals',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right_rounded),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _saving ? null : () => _adoptTemplate(template),
+                  icon: const Icon(Icons.add_task_rounded),
+                  label: const Text('Add to my diet plans'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MemberDietStudioTabs extends StatelessWidget {
+  const _MemberDietStudioTabs({
+    required this.selectedIndex,
+    required this.onChanged,
+  });
+
+  final int selectedIndex;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSoft,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.stroke),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _MemberDietStudioTab(
+              label: 'Build plan',
+              icon: Icons.restaurant_menu_rounded,
+              selected: selectedIndex == 0,
+              onTap: () => onChanged(0),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _MemberDietStudioTab(
+              label: 'Templates',
+              icon: Icons.library_books_rounded,
+              selected: selectedIndex == 1,
+              onTap: () => onChanged(1),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MemberDietStudioTab extends StatelessWidget {
+  const _MemberDietStudioTab({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? AppColors.surface : Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 11),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: selected ? AppColors.primary : AppColors.textMuted,
+              ),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: selected
+                      ? AppColors.textPrimary
+                      : AppColors.textSecondary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MemberDietBuilderSection extends StatelessWidget {
+  const _MemberDietBuilderSection({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.child,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return PremiumCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceSoft,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.stroke),
+                ),
+                child: Icon(icon, color: AppColors.primary, size: 20),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+List<Map<String, dynamic>> _studioDefaultMeals() => [
+  <String, dynamic>{'name': 'Meal 1', 'meal_type': 'meal_1', 'items': []},
+];
 
 String _dietErrorMessage(Object error) {
   if (error is DioException) {

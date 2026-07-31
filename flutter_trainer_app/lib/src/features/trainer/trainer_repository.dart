@@ -149,6 +149,8 @@ class TrainerRepository {
     '/trainer/workout-templates',
     queryParameters: {'per_page': 50},
   );
+  Future<Map<String, dynamic>> fetchWorkoutTemplate(int templateId) async =>
+      _client.get('/trainer/workout-templates/$templateId');
   Future<Map<String, dynamic>> fetchWorkoutPlans() async =>
       _client.get('/trainer/workout-plans');
   Future<Map<String, dynamic>> fetchDietPlans({int? memberId}) => _client.get(
