@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:gym_flutter_core/diet_plan_summary_view.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -1157,6 +1158,16 @@ class _DietPlansTab extends StatelessWidget {
                             ),
                       ),
                   ],
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () =>
+                          showDietPlanSummarySheet(context, plan: plan),
+                      icon: const Icon(Icons.visibility_outlined),
+                      label: const Text('See full plan'),
+                    ),
+                  ),
                 ],
               ),
             ),

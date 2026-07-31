@@ -622,7 +622,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
           assignment: assignment,
           repository: _repository,
           onAssignWorkout: () => _openQuickAssignSheet(assignment),
-          onAssignDiet: _openDietBuilder,
+          onAssignDiet: () => _openDietBuilder(preselectedMemberId: memberId),
           onMessage: () => _openChatWithMember(assignment),
           onAddCoachingNote: () => _openQuickNoteSheet(assignment),
         ),
@@ -630,10 +630,14 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     );
   }
 
-  Future<void> _openDietBuilder() async {
+  Future<void> _openDietBuilder({int? preselectedMemberId}) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => TrainerDietPlanScreen(repository: _repository),
+        builder: (_) => TrainerDietPlanScreen(
+          repository: _repository,
+          members: _members,
+          preselectedMemberId: preselectedMemberId,
+        ),
       ),
     );
     if (mounted) {
@@ -4922,6 +4926,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     if (_workoutTabIndex == 2) {
       return TrainerDietPlanScreen(
         repository: widget.repository,
+        members: widget.members,
         embedded: true,
         plannerNavigation: _TrainerWorkoutTabs(
           selectedIndex: _workoutTabIndex,

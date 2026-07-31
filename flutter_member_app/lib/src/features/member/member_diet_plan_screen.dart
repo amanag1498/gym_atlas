@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:gym_flutter_core/diet_plan_meals_editor.dart';
+import 'package:gym_flutter_core/diet_plan_summary_view.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -412,6 +413,16 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                       const SizedBox(height: AppSpacing.lg),
                     ],
                     _Hero(plan: plan),
+                    const SizedBox(height: AppSpacing.sm),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            showDietPlanSummarySheet(context, plan: plan),
+                        icon: const Icon(Icons.visibility_outlined),
+                        label: const Text('See full plan'),
+                      ),
+                    ),
                     if (plan['is_member_owned'] == true)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,

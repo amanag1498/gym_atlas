@@ -14,6 +14,7 @@ export 'src/core/storage/secure_token_storage.dart';
 export 'src/core/theme/app_theme.dart';
 export 'src/core/widgets/common_widgets.dart';
 export 'src/core/widgets/diet_plan_meals_editor.dart';
+export 'src/core/widgets/diet_plan_summary_view.dart';
 export 'src/features/admin/admin_repository.dart';
 export 'src/features/chat/chat_controller.dart';
 export 'src/features/member/member_repository.dart';

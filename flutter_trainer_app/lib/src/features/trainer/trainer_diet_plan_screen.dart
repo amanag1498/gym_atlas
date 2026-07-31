@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:gym_flutter_core/diet_plan_meals_editor.dart';
+import 'package:gym_flutter_core/diet_plan_summary_view.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -13,11 +14,15 @@ class TrainerDietPlanScreen extends StatefulWidget {
   const TrainerDietPlanScreen({
     super.key,
     required this.repository,
+    this.members = const [],
+    this.preselectedMemberId,
     this.embedded = false,
     this.plannerNavigation,
   });
 
   final TrainerRepository repository;
+  final List<Map<String, dynamic>> members;
+  final int? preselectedMemberId;
   final bool embedded;
   final Widget? plannerNavigation;
 
@@ -61,7 +66,7 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
     }
   }
 
-  Future<void> _save() async {
+  Future<void> _save({bool assignAfterSave = false}) async {
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
@@ -76,12 +81,15 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
       _error = null;
     });
     try {
-      await widget.repository.createDietTemplate({
+      final response = await widget.repository.createDietTemplate({
         ..._draftDetails,
         'name': name,
         'status': 'active',
         'meals': _draftMeals,
       });
+      final created = response['data'] is Map
+          ? Map<String, dynamic>.from(response['data'] as Map)
+          : <String, dynamic>{};
       if (!mounted) {
         return;
       }
@@ -96,6 +104,9 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Diet plan saved to your library.')),
         );
+        if (assignAfterSave && created.isNotEmpty) {
+          await _assign(created);
+        }
       }
     } catch (error) {
       if (mounted) {
@@ -259,6 +270,262 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
     }
   }
 
+  Future<void> _assign(Map<String, dynamic> template) async {
+    final templateId = (template['id'] as num?)?.toInt();
+    final eligibleMembers = widget.members
+        .where((assignment) => _assignmentMemberId(assignment) != null)
+        .toList();
+    if (templateId == null) {
+      return;
+    }
+    if (eligibleMembers.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No linked members are available for assignment.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    final selectedMemberIds = <int>{};
+    if (widget.preselectedMemberId != null &&
+        eligibleMembers.any(
+          (assignment) =>
+              _assignmentMemberId(assignment) == widget.preselectedMemberId,
+        )) {
+      selectedMemberIds.add(widget.preselectedMemberId!);
+    }
+    var customName = '';
+    DateTime? startsOn;
+    DateTime? endsOn;
+    var assigning = false;
+
+    final assigned = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => DraggableScrollableSheet(
+          initialChildSize: 0.82,
+          minChildSize: 0.58,
+          maxChildSize: 0.96,
+          expand: false,
+          builder: (context, controller) => Container(
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            child: ListView(
+              controller: controller,
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.strokeStrong,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Assign diet plan',
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            template['name']?.toString() ?? 'Diet plan',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  initialValue: customName,
+                  onChanged: (value) => customName = value.trim(),
+                  decoration: const InputDecoration(
+                    labelText: 'Custom plan name (optional)',
+                    hintText: 'Keep the library plan name',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Linked members',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...eligibleMembers.map((assignment) {
+                  final memberId = _assignmentMemberId(assignment)!;
+                  final member = _assignmentMember(assignment);
+                  final selected = selectedMemberIds.contains(memberId);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 7),
+                    child: CheckboxListTile(
+                      value: selected,
+                      onChanged: assigning
+                          ? null
+                          : (value) => setSheetState(() {
+                              if (value == true) {
+                                selectedMemberIds.add(memberId);
+                              } else {
+                                selectedMemberIds.remove(memberId);
+                              }
+                            }),
+                      title: Text(
+                        member['name']?.toString() ?? 'Assigned member',
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      subtitle: Text(member['email']?.toString() ?? ''),
+                      secondary: const CircleAvatar(
+                        child: Icon(Icons.person_outline_rounded),
+                      ),
+                      controlAffinity: ListTileControlAffinity.trailing,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: const BorderSide(color: AppColors.stroke),
+                      ),
+                      tileColor: selected
+                          ? AppColors.primary.withValues(alpha: 0.06)
+                          : AppColors.surfaceSoft,
+                    ),
+                  );
+                }),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: assigning
+                            ? null
+                            : () async {
+                                final value = await showDatePicker(
+                                  context: context,
+                                  initialDate: startsOn ?? DateTime.now(),
+                                  firstDate: DateTime.now().subtract(
+                                    const Duration(days: 365),
+                                  ),
+                                  lastDate: DateTime.now().add(
+                                    const Duration(days: 3650),
+                                  ),
+                                );
+                                if (value != null) {
+                                  setSheetState(() => startsOn = value);
+                                }
+                              },
+                        icon: const Icon(Icons.event_rounded),
+                        label: Text(
+                          startsOn == null
+                              ? 'Start date'
+                              : _dateValue(startsOn!),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: assigning
+                            ? null
+                            : () async {
+                                final value = await showDatePicker(
+                                  context: context,
+                                  initialDate:
+                                      endsOn ?? startsOn ?? DateTime.now(),
+                                  firstDate:
+                                      startsOn ??
+                                      DateTime.now().subtract(
+                                        const Duration(days: 365),
+                                      ),
+                                  lastDate: DateTime.now().add(
+                                    const Duration(days: 3650),
+                                  ),
+                                );
+                                if (value != null) {
+                                  setSheetState(() => endsOn = value);
+                                }
+                              },
+                        icon: const Icon(Icons.event_available_rounded),
+                        label: Text(
+                          endsOn == null ? 'End date' : _dateValue(endsOn!),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                GradientButton(
+                  label: assigning
+                      ? 'Assigning...'
+                      : 'Assign to ${selectedMemberIds.length} member${selectedMemberIds.length == 1 ? '' : 's'}',
+                  icon: Icons.assignment_turned_in_rounded,
+                  expanded: true,
+                  onPressed: assigning || selectedMemberIds.isEmpty
+                      ? null
+                      : () async {
+                          setSheetState(() => assigning = true);
+                          try {
+                            await widget.repository
+                                .assignDietTemplate(templateId, {
+                                  'member_ids': selectedMemberIds.toList(),
+                                  if (customName.isNotEmpty) 'name': customName,
+                                  if (startsOn != null)
+                                    'starts_on': _dateValue(startsOn!),
+                                  if (endsOn != null)
+                                    'ends_on': _dateValue(endsOn!),
+                                });
+                            if (context.mounted) {
+                              Navigator.of(context).pop(true);
+                            }
+                          } catch (error) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(_dietErrorMessage(error)),
+                                ),
+                              );
+                              setSheetState(() => assigning = false);
+                            }
+                          }
+                        },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (assigned == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Diet plan assigned to ${selectedMemberIds.length} member${selectedMemberIds.length == 1 ? '' : 's'}.',
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final content = Column(
@@ -335,12 +602,29 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          GradientButton(
-            label: _saving ? 'Saving plan...' : 'Save to diet library',
-            icon: Icons.library_add_check_rounded,
-            expanded: true,
-            onPressed: _saving ? null : _save,
-          ),
+          if (widget.members.isNotEmpty) ...[
+            GradientButton(
+              label: _saving ? 'Saving plan...' : 'Save and assign to members',
+              icon: Icons.assignment_turned_in_rounded,
+              expanded: true,
+              onPressed: _saving ? null : () => _save(assignAfterSave: true),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton.icon(
+                onPressed: _saving ? null : _save,
+                icon: const Icon(Icons.library_add_check_rounded),
+                label: const Text('Save to library only'),
+              ),
+            ),
+          ] else
+            GradientButton(
+              label: _saving ? 'Saving plan...' : 'Save to diet library',
+              icon: Icons.library_add_check_rounded,
+              expanded: true,
+              onPressed: _saving ? null : _save,
+            ),
         ],
       ),
     );
@@ -367,6 +651,7 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
         return _DietLibraryCard(
           template: template,
           onOpen: () => _openPreview(template),
+          onAssign: () => _assign(template),
           onEdit: template['is_owned'] == true ? () => _edit(template) : null,
           onDelete: template['is_owned'] == true
               ? () => _delete(template)
@@ -376,123 +661,8 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
     );
   }
 
-  Future<void> _openPreview(Map<String, dynamic> template) {
-    final meals = _mapList(template['meals']);
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.78,
-        minChildSize: 0.5,
-        maxChildSize: 0.94,
-        expand: false,
-        builder: (context, controller) => Container(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-          ),
-          child: ListView(
-            controller: controller,
-            children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.strokeStrong,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                template['name']?.toString() ?? 'Diet plan',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                template['goal']?.toString() ?? 'Flexible nutrition plan',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _DietMetric(
-                    icon: Icons.local_fire_department_outlined,
-                    label: '${template['daily_calorie_target'] ?? '--'} kcal',
-                  ),
-                  _DietMetric(
-                    icon: Icons.restaurant_menu_rounded,
-                    label: '${meals.length} meals',
-                  ),
-                  _DietMetric(
-                    icon: Icons.fitness_center_outlined,
-                    label: 'P ${template['protein_target_g'] ?? '--'}g',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Meals',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 10),
-              ...meals.map(
-                (meal) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceSoft,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: AppColors.stroke),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.restaurant_outlined,
-                          color: AppColors.primary,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                meal['name']?.toString() ?? 'Meal',
-                                style: const TextStyle(
-                                  color: AppColors.textPrimary,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                '${_mapList(meal['items']).length} food items',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Future<void> _openPreview(Map<String, dynamic> template) =>
+      showDietPlanSummarySheet(context, plan: template);
 }
 
 class _DietBuilderHeader extends StatelessWidget {
@@ -742,12 +912,14 @@ class _DietLibraryCard extends StatelessWidget {
   const _DietLibraryCard({
     required this.template,
     required this.onOpen,
+    required this.onAssign,
     this.onEdit,
     this.onDelete,
   });
 
   final Map<String, dynamic> template;
   final VoidCallback onOpen;
+  final VoidCallback onAssign;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
@@ -767,71 +939,89 @@ class _DietLibraryCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: AppColors.stroke),
           ),
-          child: Row(
+          child: Column(
             children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceSoft,
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Icon(
-                  owned ? Icons.restaurant_menu_rounded : Icons.public_rounded,
-                  color: AppColors.primary,
-                  size: 21,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      template['name']?.toString() ?? 'Diet plan',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w900,
-                      ),
+              Row(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceSoft,
+                      borderRadius: BorderRadius.circular(15),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${template['daily_calorie_target'] ?? '--'} kcal • ${meals.length} meals • ${owned ? 'Your plan' : 'Atlas library'}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                    child: Icon(
+                      owned
+                          ? Icons.restaurant_menu_rounded
+                          : Icons.public_rounded,
+                      color: AppColors.primary,
+                      size: 21,
                     ),
-                  ],
-                ),
-              ),
-              if (owned)
-                PopupMenuButton<String>(
-                  tooltip: 'Plan options',
-                  onSelected: (value) {
-                    if (value == 'edit') {
-                      onEdit?.call();
-                    } else if (value == 'delete') {
-                      onDelete?.call();
-                    }
-                  },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'edit', child: Text('Edit plan')),
-                    PopupMenuItem(value: 'delete', child: Text('Delete plan')),
-                  ],
-                  icon: const Icon(
-                    Icons.more_horiz_rounded,
-                    color: AppColors.textMuted,
                   ),
-                )
-              else
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppColors.textMuted,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          template['name']?.toString() ?? 'Diet plan',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${template['daily_calorie_target'] ?? '--'} kcal • ${meals.length} meals • ${owned ? 'Your plan' : 'Atlas library'}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (owned)
+                    PopupMenuButton<String>(
+                      tooltip: 'Plan options',
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          onEdit?.call();
+                        } else if (value == 'delete') {
+                          onDelete?.call();
+                        }
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'edit', child: Text('Edit plan')),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Delete plan'),
+                        ),
+                      ],
+                      icon: const Icon(
+                        Icons.more_horiz_rounded,
+                        color: AppColors.textMuted,
+                      ),
+                    )
+                  else
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppColors.textMuted,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onAssign,
+                  icon: const Icon(Icons.assignment_ind_outlined),
+                  label: const Text('Assign to members'),
                 ),
+              ),
             ],
           ),
         ),
@@ -866,42 +1056,21 @@ class _DietErrorBanner extends StatelessWidget {
   }
 }
 
-class _DietMetric extends StatelessWidget {
-  const _DietMetric({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceSoft,
-        borderRadius: BorderRadius.circular(99),
-        border: Border.all(color: AppColors.stroke),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: AppColors.primary),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 List<Map<String, dynamic>> _defaultMeals() => [
   <String, dynamic>{'name': 'Meal 1', 'meal_type': 'meal_1', 'items': []},
 ];
+
+int? _assignmentMemberId(Map<String, dynamic> assignment) =>
+    (assignment['member_id'] as num?)?.toInt() ??
+    (_assignmentMember(assignment)['id'] as num?)?.toInt();
+
+Map<String, dynamic> _assignmentMember(Map<String, dynamic> assignment) {
+  final member = assignment['member'];
+  return member is Map ? Map<String, dynamic>.from(member) : assignment;
+}
+
+String _dateValue(DateTime date) =>
+    '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
 List<Map<String, dynamic>> _mapList(dynamic value) {
   if (value is! List) {
