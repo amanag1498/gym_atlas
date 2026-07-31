@@ -1,6 +1,6 @@
 server {
     listen 80;
-    server_name gymatlas.example.com;
+    server_name gymatlas.in www.gymatlas.in;
 
     root /var/www/gym-atlas/backend_laravel/public;
     index index.php index.html;
@@ -36,4 +36,3 @@ server {
         deny all;
     }
 }
-

@@ -6,6 +6,6 @@ class TrainerConfig {
 
   static const socketBaseUrl = String.fromEnvironment(
     'SOCKET_BASE_URL',
-    defaultValue: '',
+    defaultValue: 'https://socket.gymatlas.in',
   );
 }

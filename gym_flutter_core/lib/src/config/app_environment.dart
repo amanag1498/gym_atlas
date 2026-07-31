@@ -20,7 +20,7 @@ class AppEnvironment {
       ),
       socketBaseUrl: const String.fromEnvironment(
         'SOCKET_BASE_URL',
-        defaultValue: 'http://127.0.0.1:3000',
+        defaultValue: 'https://socket.gymatlas.in',
       ),
       googleWebClientId: const String.fromEnvironment(
         'GOOGLE_WEB_CLIENT_ID',

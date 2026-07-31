@@ -11,9 +11,9 @@ This workspace is intended to be deployed alongside the existing Talkee VPS, but
 - Realtime server:
   - `/var/www/gym-atlas/realtime_server`
 - Public domain:
-  - `gymatlas.example.com`
+  - `gymatlas.in`
 - Realtime subdomain:
-  - `socket.gymatlas.example.com`
+  - `socket.gymatlas.in`
 
 Do not mix Gym Atlas code into the Talkee app directory. Reuse the same VPS, but keep separate Nginx vhosts, separate process units, and separate `.env` files.
 
@@ -61,7 +61,7 @@ Minimum production values to review:
 
 - `APP_ENV=production`
 - `APP_DEBUG=false`
-- `APP_URL=https://gymatlas.example.com`
+- `APP_URL=https://gymatlas.in`
 - `DB_CONNECTION=mysql`
 - `DB_HOST=127.0.0.1`
 - `DB_PORT=3306`
@@ -116,10 +116,32 @@ Build the member and trainer apps with the deployed realtime URL explicitly:
 ```bash
 flutter build apk \
   --dart-define=API_BASE_URL=https://gymatlas.in/api \
-  --dart-define=SOCKET_BASE_URL=https://your-realtime-domain.example.com
+  --dart-define=SOCKET_BASE_URL=https://socket.gymatlas.in
 ```
 
-When `SOCKET_BASE_URL` is omitted, chat remains available through the durable Laravel API without realtime updates.
+The member, trainer, admin, shared Flutter configuration, and App Store build
+script default to `https://socket.gymatlas.in`. A `SOCKET_BASE_URL` define can
+still override it for non-production builds.
+
+Build both signed iOS App Store IPAs from the repository root:
+
+```bash
+./scripts/build_app_store_ios.sh
+```
+
+The script verifies the realtime `/health` and `/ready` endpoints before
+building. It also puts the system tools first in `PATH` so Xcode export uses
+Apple's compatible `/usr/bin/rsync`. When App Store Connect requires a newer
+build number, override it without changing the marketing version:
+
+```bash
+BUILD_NUMBER=3 ./scripts/build_app_store_ios.sh
+```
+
+`SOCKET_RESOLVE_IP` is available only as a temporary DNS-propagation override
+for build-time health checks. It still validates HTTPS for
+`socket.gymatlas.in`, and the apps continue to embed the domain rather than the
+IP address.
 
 ## Process Management
 
@@ -148,6 +170,17 @@ ln -s /etc/nginx/sites-available/gymatlas.conf /etc/nginx/sites-enabled/gymatlas
 ln -s /etc/nginx/sites-available/gymatlas-socket.conf /etc/nginx/sites-enabled/gymatlas-socket.conf
 nginx -t
 systemctl reload nginx
+certbot --nginx -d gymatlas.in -d www.gymatlas.in
+certbot --nginx -d socket.gymatlas.in
+```
+
+Create DNS records pointing `gymatlas.in`, `www.gymatlas.in`, and
+`socket.gymatlas.in` to the VPS before running Certbot. Verify the public
+realtime endpoint before building a release:
+
+```bash
+curl --fail --silent --show-error https://socket.gymatlas.in/health
+curl --fail --silent --show-error https://socket.gymatlas.in/ready
 ```
 
 ## Release Update Flow

@@ -6,6 +6,6 @@ class AppConfig {
 
   static const socketBaseUrl = String.fromEnvironment(
     'SOCKET_BASE_URL',
-    defaultValue: 'http://127.0.0.1:4000',
+    defaultValue: 'https://socket.gymatlas.in',
   );
 }
