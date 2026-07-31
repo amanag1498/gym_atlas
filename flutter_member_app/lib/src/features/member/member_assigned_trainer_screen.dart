@@ -137,6 +137,8 @@ class _MemberAssignedTrainerScreenState
   Map<String, dynamic> _trainerResponse = const {};
   final List<Map<String, dynamic>> _messages = <Map<String, dynamic>>[];
   dynamic _chatMessageHandler;
+  int _unreadCount = 0;
+  bool _chatThreadOpen = false;
   int _openedChatLaunchVersion = 0;
   bool _openingNotificationChat = false;
 
@@ -193,8 +195,13 @@ class _MemberAssignedTrainerScreenState
       final senderId = _memberIntValue(message['sender_id']);
       final recipientId = _memberIntValue(message['recipient_id']);
       if (senderId == trainerId || recipientId == trainerId) {
-        _upsertMessage(message);
-        widget.repository.markChatRead(trainerId);
+        final isNewMessage = _upsertMessage(message);
+        if (isNewMessage &&
+            senderId == trainerId &&
+            !_chatThreadOpen &&
+            mounted) {
+          setState(() => _unreadCount++);
+        }
       }
     };
     widget.socket?.on('chat:new_message', _chatMessageHandler);
@@ -276,7 +283,23 @@ class _MemberAssignedTrainerScreenState
     });
 
     try {
-      final response = await widget.repository.fetchChatMessages(trainerId);
+      final responses = await Future.wait([
+        widget.repository.fetchChatMessages(trainerId),
+        widget.repository.fetchChatConversations(),
+      ]);
+      final response = responses[0];
+      final conversations = (responses[1]['data'] as List<dynamic>? ?? const [])
+          .map(_trainerRecordMap)
+          .toList();
+      final conversation = conversations
+          .cast<Map<String, dynamic>?>()
+          .firstWhere(
+            (item) =>
+                _memberIntValue(item?['trainer_id']) == trainerId ||
+                _memberIntValue(_trainerRecordMap(item?['peer'])['id']) ==
+                    trainerId,
+            orElse: () => null,
+          );
       final messages =
           (response['data'] as List<dynamic>? ?? const [])
               .map(_normalizeMemberChatMessage)
@@ -290,9 +313,11 @@ class _MemberAssignedTrainerScreenState
           _messages
             ..clear()
             ..addAll(messages);
+          _unreadCount = _chatThreadOpen
+              ? 0
+              : (_memberIntValue(conversation?['unread_count']) ?? 0);
         });
       }
-      widget.repository.markChatRead(trainerId);
     } catch (exception) {
       if (mounted) {
         setState(() => _chatError = exception.toString());
@@ -304,13 +329,21 @@ class _MemberAssignedTrainerScreenState
     }
   }
 
-  void _upsertMessage(Map<String, dynamic> message) {
+  bool _upsertMessage(Map<String, dynamic> message) {
     if (!mounted) {
-      return;
+      return false;
     }
     final normalized = _normalizeMemberChatMessage(message);
     final key = _memberChatKey(normalized);
     final clientId = normalized['client_message_id']?.toString();
+    final alreadyPresent = _messages.any((item) {
+      final sameKey = _memberChatKey(item) == key;
+      final sameClient =
+          clientId != null &&
+          clientId.isNotEmpty &&
+          item['client_message_id']?.toString() == clientId;
+      return sameKey || sameClient;
+    });
     setState(() {
       _messages.removeWhere((item) {
         final sameKey = _memberChatKey(item) == key;
@@ -323,6 +356,7 @@ class _MemberAssignedTrainerScreenState
       _messages.add(normalized);
       _messages.sort(_compareMemberChatMessages);
     });
+    return !alreadyPresent;
   }
 
   Future<void> _openTrainerChatThread(Map<String, dynamic> trainer) async {
@@ -331,19 +365,33 @@ class _MemberAssignedTrainerScreenState
       return;
     }
 
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => _MemberTrainerChatThreadScreen(
-          repository: widget.repository,
-          socket: widget.socket,
-          trainerId: trainerId,
-          trainer: trainer,
-        ),
-      ),
-    );
+    setState(() {
+      _chatThreadOpen = true;
+      _unreadCount = 0;
+    });
 
-    if (mounted) {
-      await _load();
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => _MemberTrainerChatThreadScreen(
+            repository: widget.repository,
+            socket: widget.socket,
+            trainerId: trainerId,
+            trainer: trainer,
+          ),
+        ),
+      );
+    } finally {
+      try {
+        await widget.repository.markChatRead(trainerId);
+      } catch (_) {
+        // Keep navigation responsive; opening the thread again retries the read.
+      }
+
+      if (mounted) {
+        setState(() => _chatThreadOpen = false);
+        await _load();
+      }
     }
   }
 
@@ -365,11 +413,6 @@ class _MemberAssignedTrainerScreenState
     final preview = lastMessage == null
         ? 'Tap to open private thread'
         : lastMessage['body']?.toString() ?? 'Message';
-    final hasUnread =
-        trainerId != null &&
-        lastMessage != null &&
-        _memberIntValue(lastMessage['sender_id']) == trainerId;
-
     return AppGradientScaffold(
       title: 'Chats',
       body: _loading && !hasTrainer
@@ -441,7 +484,7 @@ class _MemberAssignedTrainerScreenState
                             ? 'New'
                             : _memberChatTime(lastMessage['created_at']),
                         enabled: trainerId != null,
-                        unreadCount: hasUnread ? 1 : 0,
+                        unreadCount: _unreadCount,
                         loading: _chatLoading,
                         onTap: trainerId == null
                             ? null
