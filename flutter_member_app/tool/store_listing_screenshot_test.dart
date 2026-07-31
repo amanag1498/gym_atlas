@@ -134,7 +134,6 @@ const _previewData = <String, dynamic>{
       'created_at': '2026-07-28T08:00:00Z',
     },
   ],
-  'qr_data': <String, dynamic>{'member_code': 'ATLAS-1024'},
 };
 
 MemberSessionController _session() {

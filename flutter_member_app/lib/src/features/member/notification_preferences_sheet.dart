@@ -219,11 +219,7 @@ class _PreferenceContent extends StatelessWidget {
             ],
           ),
         ),
-        _PreferenceActionBar(
-          saving: saving,
-          onClose: onClose,
-          onSave: onSave,
-        ),
+        _PreferenceActionBar(saving: saving, onClose: onClose, onSave: onSave),
       ],
     );
   }
@@ -417,10 +413,7 @@ class _PreferenceCategorySection extends StatelessWidget {
 }
 
 class _PreferenceTile extends StatelessWidget {
-  const _PreferenceTile({
-    required this.item,
-    required this.onChanged,
-  });
+  const _PreferenceTile({required this.item, required this.onChanged});
 
   final Map<String, dynamic> item;
   final ValueChanged<bool> onChanged;
@@ -490,12 +483,11 @@ class _PreferenceTile extends StatelessWidget {
                         item['label']?.toString() ?? 'Preference',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall
-                            ?.copyWith(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w800,
-                              height: 1.15,
-                            ),
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w800,
+                          height: 1.15,
+                        ),
                       ),
                     ),
                     if (isCritical || isPlaceholder) ...[
@@ -773,9 +765,7 @@ class _PreferenceLoadingState extends StatelessWidget {
           const _PreferenceHeroSkeleton(),
           const SizedBox(height: 18),
           Expanded(
-            child: LoadingStateView(
-              label: 'Loading your reminder controls...',
-            ),
+            child: LoadingStateView(label: 'Loading your reminder controls...'),
           ),
         ],
       ),
@@ -802,10 +792,7 @@ class _PreferenceErrorState extends StatelessWidget {
           const _PreferenceHeroSkeleton(error: true),
           const SizedBox(height: 18),
           Expanded(
-            child: ErrorStateView(
-              message: message,
-              onRetry: onRetry,
-            ),
+            child: ErrorStateView(message: message, onRetry: onRetry),
           ),
         ],
       ),
@@ -924,10 +911,7 @@ class _PreferencesBackdrop extends StatelessWidget {
 }
 
 class _BackdropOrb extends StatelessWidget {
-  const _BackdropOrb({
-    required this.size,
-    required this.colors,
-  });
+  const _BackdropOrb({required this.size, required this.colors});
 
   final double size;
   final List<Color> colors;
@@ -946,10 +930,7 @@ class _BackdropOrb extends StatelessWidget {
 }
 
 class _HeroCounterBadge extends StatelessWidget {
-  const _HeroCounterBadge({
-    required this.value,
-    required this.label,
-  });
+  const _HeroCounterBadge({required this.value, required this.label});
 
   final String value;
   final String label;
@@ -989,11 +970,7 @@ class _HeroCounterBadge extends StatelessWidget {
 }
 
 class _HeroInfoPill extends StatelessWidget {
-  const _HeroInfoPill({
-    required this.icon,
-    required this.label,
-    this.gradient,
-  });
+  const _HeroInfoPill({required this.icon, required this.label, this.gradient});
 
   final IconData icon;
   final String label;
@@ -1050,10 +1027,7 @@ class _CategoryIcon extends StatelessWidget {
 }
 
 class _PreferenceTag extends StatelessWidget {
-  const _PreferenceTag({
-    required this.label,
-    required this.gradient,
-  });
+  const _PreferenceTag({required this.label, required this.gradient});
 
   final String label;
   final List<Color> gradient;
@@ -1116,7 +1090,7 @@ IconData _iconForLabel(String label) {
     return Icons.sports_rounded;
   }
   if (normalized.contains('attendance') || normalized.contains('check')) {
-    return Icons.qr_code_scanner_rounded;
+    return Icons.fact_check_outlined;
   }
   if (normalized.contains('workout') || normalized.contains('training')) {
     return Icons.fitness_center_rounded;

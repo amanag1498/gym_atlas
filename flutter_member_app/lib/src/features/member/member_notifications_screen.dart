@@ -883,7 +883,7 @@ class _NotificationCard extends StatelessWidget {
       case 'gym_member_invitation':
         return Icons.handshake_rounded;
       case 'attendance_inactivity':
-        return Icons.qr_code_2_rounded;
+        return Icons.fact_check_outlined;
       case 'trial_request_update':
         return Icons.flag_rounded;
       case 'workout_reminder':

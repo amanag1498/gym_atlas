@@ -72,7 +72,6 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
   Map<String, dynamic> _progressSummary = const {};
   Map<String, dynamic> _logbookSummary = const {};
   List<Map<String, dynamic>> _notifications = const [];
-  Map<String, dynamic> _qrData = const {};
   List<Map<String, dynamic>> _publicGyms = const [];
   int _chatEventVersion = 0;
   bool _stepSyncInFlight = false;
@@ -126,9 +125,6 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
       previewData['logbook_summary'] as Map? ?? const {},
     );
     _notifications = records('notifications');
-    _qrData = Map<String, dynamic>.from(
-      previewData['qr_data'] as Map? ?? const {},
-    );
     _publicGyms = records('public_gyms');
     _stepPermissionStatus = 'granted';
     _loading = false;
@@ -206,7 +202,6 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
           _memberRepository.fetchNotifications,
           label: 'notifications',
         ),
-        _safeMapRequest(_memberRepository.fetchQrCode, label: 'qr code'),
         _safeMapRequest(
           _memberRepository.fetchPublicGyms,
           label: 'public gyms',
@@ -239,10 +234,7 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
       _notifications = (results[5]['data'] as List<dynamic>? ?? const [])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
-      _qrData = Map<String, dynamic>.from(
-        results[6]['data'] as Map? ?? const {},
-      );
-      _publicGyms = (results[7]['data'] as List<dynamic>? ?? const [])
+      _publicGyms = (results[6]['data'] as List<dynamic>? ?? const [])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
     } catch (exception) {
@@ -388,24 +380,12 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
     }
   }
 
-  Future<void> _openQrScreen() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (context) => MemberQrScreen(
-          repository: _memberRepository,
-          onDiscoverGyms: () => setState(() => _index = 4),
-        ),
-      ),
-    );
-  }
-
   Future<void> _openMembershipScreen() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (context) => MemberMembershipScreen(
           repository: _memberRepository,
           onDiscoverGyms: () => setState(() => _index = 4),
-          onShowQr: _openQrScreen,
           onOpenAttendance: _openAttendanceScreen,
         ),
       ),
@@ -567,7 +547,6 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
             .length,
         contextData: _contextData,
         attendance: _attendance,
-        qrData: _qrData,
         plans: _plans,
         history: _history,
         progressSummary: _progressSummary,
@@ -581,7 +560,6 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
             unawaited(_handleStepPermissionRequest()),
         onOpenNotifications: _openNotificationsScreen,
         onStartWorkout: () => setState(() => _index = 1),
-        onShowQr: _openQrScreen,
         onMessageTrainer: () => setState(() => _index = 3),
         onLogWeight: () => setState(() => _index = 2),
         onFindGyms: () => setState(() => _index = 4),
@@ -997,7 +975,6 @@ class _DashboardPage extends StatelessWidget {
     required this.unreadNotifications,
     required this.contextData,
     required this.attendance,
-    required this.qrData,
     required this.plans,
     required this.history,
     required this.progressSummary,
@@ -1010,7 +987,6 @@ class _DashboardPage extends StatelessWidget {
     required this.onRequestStepPermission,
     required this.onOpenNotifications,
     required this.onStartWorkout,
-    required this.onShowQr,
     required this.onMessageTrainer,
     required this.onLogWeight,
     required this.onFindGyms,
@@ -1027,7 +1003,6 @@ class _DashboardPage extends StatelessWidget {
   final int unreadNotifications;
   final Map<String, dynamic> contextData;
   final List<Map<String, dynamic>> attendance;
-  final Map<String, dynamic> qrData;
   final List<Map<String, dynamic>> plans;
   final List<Map<String, dynamic>> history;
   final Map<String, dynamic> progressSummary;
@@ -1040,7 +1015,6 @@ class _DashboardPage extends StatelessWidget {
   final VoidCallback onRequestStepPermission;
   final VoidCallback onOpenNotifications;
   final VoidCallback onStartWorkout;
-  final VoidCallback onShowQr;
   final VoidCallback onMessageTrainer;
   final VoidCallback onLogWeight;
   final VoidCallback onFindGyms;
@@ -1150,7 +1124,7 @@ class _DashboardPage extends StatelessWidget {
         : isTrialUser
         ? 'Explore gyms and keep moving'
         : 'Build your independent routine';
-    final heroActionLabel = hasGymMembership ? 'QR pass' : 'Profile';
+    const heroActionLabel = 'Profile';
     final firstName =
         userName.trim().split(RegExp(r'\s+')).firstOrNull ?? userName;
     final metricCards = [
@@ -1201,16 +1175,12 @@ class _DashboardPage extends StatelessWidget {
         onTap: hasGymMembership ? onStartWorkout : onFindGyms,
       ),
       _DashboardActionData(
-        label: hasGymMembership ? 'Show QR pass' : 'Open profile',
-        helper: hasGymMembership
-            ? 'Scan at the front desk'
-            : 'Update your setup',
-        description: hasGymMembership
-            ? 'Open your access pass instantly when you arrive.'
-            : 'Review your baseline and keep your profile complete.',
-        icon: hasGymMembership ? Icons.qr_code_2_rounded : Icons.person_rounded,
+        label: 'Open profile',
+        helper: 'Update your setup',
+        description: 'Review your baseline and keep your profile complete.',
+        icon: Icons.person_rounded,
         color: AppColors.primaryBright,
-        onTap: hasGymMembership ? onShowQr : onOpenProfile,
+        onTap: onOpenProfile,
       ),
       _DashboardActionData(
         label: 'Body progress',
@@ -1354,7 +1324,7 @@ class _DashboardPage extends StatelessWidget {
                     : 'Explore Gyms',
                 secondaryActionLabel: heroActionLabel,
                 onPrimaryAction: hasGymMembership ? onStartWorkout : onFindGyms,
-                onSecondaryAction: hasGymMembership ? onShowQr : onOpenProfile,
+                onSecondaryAction: onOpenProfile,
                 chips: [
                   _DashboardChipData(
                     icon: Icons.directions_walk_rounded,
@@ -3369,7 +3339,7 @@ class _MemberUtilityRail extends StatelessWidget {
           _MemberUtilityPill(
             icon: Icons.fact_check_outlined,
             title: 'Attendance',
-            subtitle: 'Check-ins, QR visits',
+            subtitle: 'Check-ins and visits',
             colors: const [Color(0xFF67A7FF), Color(0xFF9A7BFF)],
             onTap: onOpenAttendance,
           ),

@@ -4,8 +4,6 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
-import '../../../core/widgets/empty_state.dart';
-import '../../../core/widgets/error_state.dart';
 import '../../../core/widgets/premium_card.dart';
 import 'member_repository.dart';
 
@@ -14,13 +12,11 @@ class MemberMembershipScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.onDiscoverGyms,
-    this.onShowQr,
     this.onOpenAttendance,
   });
 
   final MemberRepository repository;
   final VoidCallback onDiscoverGyms;
-  final VoidCallback? onShowQr;
   final VoidCallback? onOpenAttendance;
 
   @override
@@ -104,7 +100,7 @@ class _MemberMembershipScreenState extends State<MemberMembershipScreen> {
             ? _FitEmptyState(
                 icon: Icons.workspace_premium_outlined,
                 title: 'No active membership yet',
-                message: 'Join a gym to unlock QR check-in and member access.',
+                message: 'Join a gym to unlock member access and gym benefits.',
                 buttonLabel: 'Discover Gyms',
                 onPressed: _handleDiscoverGyms,
               )
@@ -133,7 +129,6 @@ class _MemberMembershipScreenState extends State<MemberMembershipScreen> {
                         gymName: gymName,
                         branchName: branchName,
                         status: status,
-                        onQr: isPaused ? null : widget.onShowQr,
                       ),
                     ),
                     const SizedBox(height: 15),
@@ -192,14 +187,6 @@ class _MemberMembershipScreenState extends State<MemberMembershipScreen> {
                       child: _FitGroup(
                         title: 'Access',
                         children: <Widget>[
-                          _FitRow(
-                            icon: Icons.qr_code_2_rounded,
-                            title: 'QR Check-in Pass',
-                            subtitle: isPaused
-                                ? 'Unavailable while membership is paused'
-                                : branchName,
-                            onPressed: isPaused ? null : widget.onShowQr,
-                          ),
                           _FitRow(
                             icon: Icons.fact_check_outlined,
                             title: 'Attendance History',
@@ -315,222 +302,6 @@ class _MemberMembershipScreenState extends State<MemberMembershipScreen> {
   }
 }
 
-class MemberQrScreen extends StatefulWidget {
-  const MemberQrScreen({
-    super.key,
-    required this.repository,
-    required this.onDiscoverGyms,
-  });
-
-  final MemberRepository repository;
-  final VoidCallback onDiscoverGyms;
-
-  @override
-  State<MemberQrScreen> createState() => _MemberQrScreenState();
-}
-
-class _MemberQrScreenState extends State<MemberQrScreen>
-    with SingleTickerProviderStateMixin {
-  bool _loading = true;
-  String? _error;
-  Map<String, dynamic>? _membership;
-  Map<String, dynamic> _qr = const <String, dynamic>{};
-  late final AnimationController _pulseController;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat(reverse: true);
-    _load();
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-
-    try {
-      final results = await Future.wait(<Future<Map<String, dynamic>>>[
-        widget.repository.fetchMembership(),
-        widget.repository.fetchQrCode(),
-      ]);
-
-      final membershipData = results[0]['data'];
-      _membership = membershipData is Map
-          ? Map<String, dynamic>.from(membershipData)
-          : null;
-      _qr = Map<String, dynamic>.from(results[1]['data'] as Map? ?? const {});
-    } catch (exception) {
-      _error = exception.toString();
-    }
-
-    if (mounted) {
-      setState(() => _loading = false);
-    }
-  }
-
-  void _handleDiscoverGyms() {
-    widget.onDiscoverGyms();
-    Navigator.of(context).pop();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final membership = _membership;
-    final enabled = _qr['enabled'] == true;
-    final qrPayload = _qr['qr_payload']?.toString() ?? '';
-    final status = _qr['check_in_status'] is Map
-        ? Map<String, dynamic>.from(_qr['check_in_status'] as Map)
-        : const <String, dynamic>{};
-
-    return AppGradientScaffold(
-      title: 'Member QR',
-      actions: <Widget>[
-        IconButton(
-          onPressed: _loading ? null : _load,
-          icon: const Icon(Icons.refresh_rounded),
-        ),
-      ],
-      body: _loading
-          ? const _MemberStatusSkeleton()
-          : _error != null
-          ? ErrorState(message: _error!, onRetry: _load)
-          : membership == null || !enabled || qrPayload.isEmpty
-          ? EmptyState(
-              title: 'QR check-in is locked',
-              message:
-                  _qr['message']?.toString() ??
-                  'Attendance QR becomes available once you have an active gym membership and branch assignment.',
-              icon: Icons.qr_code_2_rounded,
-              action: GradientButton(
-                label: 'Discover Gyms',
-                icon: Icons.travel_explore_rounded,
-                onPressed: _handleDiscoverGyms,
-              ),
-            )
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                children: <Widget>[
-                  PremiumCard(
-                    glowColor: AppColors.primaryBright,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          'Scan at front desk',
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          'Present this active member check-in token when you arrive. It is tied to your current gym and branch.',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        AnimatedBuilder(
-                          animation: _pulseController,
-                          builder: (context, child) {
-                            final pulse = 1 + (_pulseController.value * 0.03);
-                            return Transform.scale(scale: pulse, child: child);
-                          },
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(AppSpacing.lg),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(
-                                AppSpacing.radiusLg,
-                              ),
-                              gradient: const LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: <Color>[
-                                  Color(0xFFEDF7FF),
-                                  Color(0xFFCFEFFF),
-                                  Color(0xFFB9F4FF),
-                                ],
-                              ),
-                              boxShadow: <BoxShadow>[
-                                BoxShadow(
-                                  color: AppColors.primary.withValues(
-                                    alpha: 0.22,
-                                  ),
-                                  blurRadius: 26,
-                                  offset: const Offset(0, 18),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              children: <Widget>[
-                                const Icon(
-                                  Icons.qr_code_2_rounded,
-                                  size: 124,
-                                  color: Color(0xFF08111C),
-                                ),
-                                const SizedBox(height: AppSpacing.md),
-                                Text(
-                                  _chunkToken(qrPayload),
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(context).textTheme.titleSmall
-                                      ?.copyWith(
-                                        color: const Color(0xFF08111C),
-                                        fontFamily: 'monospace',
-                                        height: 1.5,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        Wrap(
-                          spacing: AppSpacing.sm,
-                          runSpacing: AppSpacing.sm,
-                          children: <Widget>[
-                            StatusBadge(
-                              label: status['checked_in_today'] == true
-                                  ? 'Checked in today'
-                                  : 'Ready to scan',
-                              color: status['checked_in_today'] == true
-                                  ? AppColors.statusCompleted
-                                  : AppColors.primaryBright,
-                              icon: Icons.flash_on_rounded,
-                            ),
-                            if (_membership?['branch'] is Map)
-                              StatusBadge(
-                                label: _stringValue(
-                                  (_membership!['branch'] as Map)['name'],
-                                  fallback: 'Assigned branch',
-                                ),
-                                color: AppColors.accentNeon,
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          'Last check-in: ${_formatDateTime(status['last_check_in_at'])}',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-    );
-  }
-}
-
 class MemberAttendanceScreen extends StatefulWidget {
   const MemberAttendanceScreen({super.key, required this.repository});
 
@@ -580,9 +351,6 @@ class _MemberAttendanceScreenState extends State<MemberAttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final qrCount = _attendance
-        .where((entry) => entry['check_in_method']?.toString() == 'qr')
-        .length;
     final latestGym = _attendance.isEmpty
         ? 'No gym yet'
         : _attendance.first['gym'] is Map
@@ -639,13 +407,6 @@ class _MemberAttendanceScreenState extends State<MemberAttendanceScreen> {
                             child: _FitInfoCell(
                               title: '${_attendance.length}',
                               subtitle: 'Visits',
-                            ),
-                          ),
-                          const SizedBox(width: 15),
-                          Expanded(
-                            child: _FitInfoCell(
-                              title: '$qrCount',
-                              subtitle: 'QR',
                             ),
                           ),
                           const SizedBox(width: 15),
@@ -798,13 +559,11 @@ class _MembershipProfileHeader extends StatelessWidget {
     required this.gymName,
     required this.branchName,
     required this.status,
-    required this.onQr,
   });
 
   final String gymName;
   final String branchName;
   final String status;
-  final VoidCallback? onQr;
 
   @override
   Widget build(BuildContext context) {
@@ -850,25 +609,6 @@ class _MembershipProfileHeader extends StatelessWidget {
                   ),
                 ),
               ],
-            ),
-          ),
-          InkWell(
-            onTap: onQr,
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceSoft,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.stroke),
-              ),
-              child: Text(
-                'QR',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
             ),
           ),
         ],
@@ -1144,8 +884,6 @@ class _AttendanceHistoryRow extends StatelessWidget {
     final gym = entry['gym'] is Map
         ? Map<String, dynamic>.from(entry['gym'] as Map)
         : const <String, dynamic>{};
-    final method = entry['check_in_method']?.toString() ?? 'unknown';
-    final isManual = method == 'manual';
     final gymName = _stringValue(
       gym['name'],
       fallback: entry['gym_id'] != null
@@ -1157,12 +895,7 @@ class _AttendanceHistoryRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: <Widget>[
-          _FitRowIcon(
-            icon: isManual
-                ? Icons.edit_calendar_rounded
-                : Icons.qr_code_scanner_rounded,
-            secondary: isManual,
-          ),
+          _FitRowIcon(icon: Icons.event_available_rounded),
           const SizedBox(width: 15),
           Expanded(
             child: Column(
@@ -1190,8 +923,6 @@ class _AttendanceHistoryRow extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          _FitMethodPill(label: method.toUpperCase(), secondary: isManual),
         ],
       ),
     );
@@ -1247,39 +978,10 @@ class _FitInlineEmpty extends StatelessWidget {
   }
 }
 
-class _FitMethodPill extends StatelessWidget {
-  const _FitMethodPill({required this.label, required this.secondary});
-
-  final String label;
-  final bool secondary;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: secondary ? AppColors.surfaceSoft : AppColors.primaryBright,
-        borderRadius: BorderRadius.circular(999),
-        border: secondary ? Border.all(color: AppColors.stroke) : null,
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: secondary ? AppColors.textPrimary : Colors.white,
-          fontSize: 9,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.4,
-        ),
-      ),
-    );
-  }
-}
-
 class _FitRowIcon extends StatelessWidget {
-  const _FitRowIcon({required this.icon, this.secondary = false});
+  const _FitRowIcon({required this.icon});
 
   final IconData icon;
-  final bool secondary;
 
   @override
   Widget build(BuildContext context) {
@@ -1287,15 +989,11 @@ class _FitRowIcon extends StatelessWidget {
       width: 30,
       height: 30,
       decoration: BoxDecoration(
-        color: secondary ? AppColors.surfaceSoft : AppColors.surfaceSoft,
+        color: AppColors.surfaceSoft,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.stroke),
       ),
-      child: Icon(
-        icon,
-        color: secondary ? AppColors.textSecondary : AppColors.primaryBright,
-        size: 16,
-      ),
+      child: Icon(icon, color: AppColors.primaryBright, size: 16),
     );
   }
 }
@@ -1474,28 +1172,6 @@ class _FitEmptyState extends StatelessWidget {
   }
 }
 
-class _MemberStatusSkeleton extends StatelessWidget {
-  const _MemberStatusSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    return SkeletonPulse(
-      child: ListView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        children: const <Widget>[
-          SkeletonProfileHeader(),
-          SizedBox(height: AppSpacing.lg),
-          SkeletonWorkoutCard(),
-          SizedBox(height: AppSpacing.md),
-          SkeletonWorkoutCard(),
-          SizedBox(height: AppSpacing.md),
-          SkeletonHistoryList(items: 3),
-        ],
-      ),
-    );
-  }
-}
-
 String _stringValue(Object? value, {String fallback = 'Not available'}) {
   final text = value?.toString().trim() ?? '';
   return text.isEmpty ? fallback : text;
@@ -1542,18 +1218,4 @@ String _titleCase(String value) {
       .where((part) => part.trim().isNotEmpty)
       .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
       .join(' ');
-}
-
-String _chunkToken(String token) {
-  if (token.isEmpty) {
-    return 'QR payload unavailable.';
-  }
-
-  final buffer = StringBuffer();
-  for (var i = 0; i < token.length; i += 18) {
-    final end = (i + 18 < token.length) ? i + 18 : token.length;
-    buffer.writeln(token.substring(i, end));
-  }
-
-  return buffer.toString().trim();
 }

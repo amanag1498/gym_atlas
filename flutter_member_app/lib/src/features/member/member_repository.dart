@@ -13,8 +13,6 @@ class MemberRepository {
       _client.get('/member/attendance');
   Future<Map<String, dynamic>> fetchAttendanceStatus() async =>
       _client.get('/member/attendance/status');
-  Future<Map<String, dynamic>> fetchQrCode() async =>
-      _client.get('/member/qr-code');
   Future<Map<String, dynamic>> fetchMembership() async =>
       _client.get('/member/membership');
   Future<Map<String, dynamic>> leaveCurrentGym() async =>
