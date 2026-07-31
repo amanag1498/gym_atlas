@@ -8596,6 +8596,10 @@ class _TrainerChatSafetyBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final blocked = blockedByMe || blockedMe;
+    if (termsAccepted && !blocked) {
+      return const SizedBox.shrink();
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
       child: Container(
@@ -8620,9 +8624,7 @@ class _TrainerChatSafetyBar extends StatelessWidget {
                     ? 'Accept respectful-use terms to start messaging.'
                     : blockedByMe
                     ? 'You blocked this conversation.'
-                    : blockedMe
-                    ? 'Messaging is unavailable for this conversation.'
-                    : 'Private coaching chat',
+                    : 'Messaging is unavailable for this conversation.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppColors.textSecondary,
                   fontWeight: FontWeight.w600,
