@@ -101,6 +101,57 @@ Route::get('/', function (GymDiscoveryService $discoveryService) {
     ]);
 })->name('public.home');
 
+Route::get('/sitemap.xml', function () {
+    $staticRoutes = collect([
+        ['url' => route('public.home'), 'priority' => '1.0', 'changefreq' => 'weekly'],
+        ['url' => route('public.product'), 'priority' => '0.9', 'changefreq' => 'monthly'],
+        ['url' => route('public.member-app'), 'priority' => '0.9', 'changefreq' => 'monthly'],
+        ['url' => route('public.trainer-app'), 'priority' => '0.9', 'changefreq' => 'monthly'],
+        ['url' => route('public.gym-management'), 'priority' => '0.9', 'changefreq' => 'monthly'],
+        ['url' => route('public.how-it-works'), 'priority' => '0.8', 'changefreq' => 'monthly'],
+        ['url' => route('public.gyms.index'), 'priority' => '0.9', 'changefreq' => 'daily'],
+        ['url' => route('public.for-gyms'), 'priority' => '0.8', 'changefreq' => 'monthly'],
+        ['url' => route('public.for-trainers'), 'priority' => '0.8', 'changefreq' => 'monthly'],
+        ['url' => route('public.pricing'), 'priority' => '0.7', 'changefreq' => 'monthly'],
+        ['url' => route('public.about'), 'priority' => '0.6', 'changefreq' => 'monthly'],
+        ['url' => route('public.faq'), 'priority' => '0.6', 'changefreq' => 'monthly'],
+        ['url' => route('public.contact'), 'priority' => '0.6', 'changefreq' => 'monthly'],
+        ['url' => route('public.privacy-policy'), 'priority' => '0.3', 'changefreq' => 'yearly'],
+        ['url' => route('public.terms'), 'priority' => '0.3', 'changefreq' => 'yearly'],
+        ['url' => route('public.account-deletion'), 'priority' => '0.3', 'changefreq' => 'yearly'],
+    ]);
+
+    $gymRoutes = Schema::hasTable('gyms')
+        ? Gym::query()
+            ->where('public_listing_enabled', true)
+            ->where('public_listing_approval_status', 'approved')
+            ->where(function ($query): void {
+                $query->where('approval_status', 'approved')
+                    ->orWhereNull('approval_status');
+            })
+            ->where('is_active', true)
+            ->where('status', 'active')
+            ->whereNotNull('slug')
+            ->get(['slug', 'updated_at'])
+            ->map(fn (Gym $gym) => [
+                'url' => route('public.gyms.show', $gym->slug),
+                'priority' => '0.7',
+                'changefreq' => 'weekly',
+                'lastmod' => $gym->updated_at?->toAtomString(),
+            ])
+        : collect();
+
+    return response()
+        ->view('public.sitemap', ['entries' => $staticRoutes->concat($gymRoutes)])
+        ->header('Content-Type', 'application/xml; charset=UTF-8');
+})->name('public.sitemap');
+
+Route::get('/robots.txt', fn () => response(
+    "User-agent: *\nAllow: /\nSitemap: ".route('public.sitemap')."\n",
+    200,
+    ['Content-Type' => 'text/plain; charset=UTF-8'],
+))->name('public.robots');
+
 Route::get('/gyms', function (Request $request, GymDiscoveryService $discoveryService) {
     $filters = array_filter([
         'search' => trim((string) $request->string('search')),
@@ -188,6 +239,13 @@ Route::get('/gyms/{slug}', function (string $slug, GymDiscoveryService $discover
 
 Route::view('/for-gyms', 'public.pages.for-gyms')->name('public.for-gyms');
 Route::view('/for-trainers', 'public.pages.for-trainers')->name('public.for-trainers');
+Route::view('/product', 'public.pages.product')->name('public.product');
+Route::view('/member-app', 'public.pages.member-app')->name('public.member-app');
+Route::view('/trainer-app', 'public.pages.trainer-app')->name('public.trainer-app');
+Route::view('/gym-management', 'public.pages.gym-management')->name('public.gym-management');
+Route::permanentRedirect('/platform-administration', '/product');
+Route::view('/how-it-works', 'public.pages.how-it-works')->name('public.how-it-works');
+Route::view('/faq', 'public.pages.faq')->name('public.faq');
 Route::view('/pricing', 'public.pages.pricing')->name('public.pricing');
 Route::view('/about', 'public.pages.about')->name('public.about');
 Route::get('/contact', function (Request $request, PlatformSettingService $platformSettingService) {

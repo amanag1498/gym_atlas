@@ -3,7 +3,7 @@
     use Illuminate\Support\Str;
 
     $priceSummary = $gym->fee_summary;
-    $heroImage = $gym->cover_image_url ?: $gym->cover_image ?: $gym->logo_url ?: $gym->logo ?: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1800&q=80';
+    $heroImage = $gym->cover_image_url ?: $gym->cover_image ?: $gym->logo_url ?: $gym->logo ?: asset('images/public-site/editorial/trainer-member-coaching.webp');
 
     $activeBranches = $gym->branches->where('is_active', true)->values();
 
@@ -67,393 +67,56 @@
     if ($gym->trial_available) {
         $heroBadges->push(['label' => 'Trial available', 'tone' => 'green']);
     }
+
+    $gymSchema = array_filter([
+        '@context' => 'https://schema.org',
+        '@type' => 'HealthClub',
+        'name' => $gym->name,
+        'url' => route('public.gyms.show', $gym->slug),
+        'image' => $heroImage,
+        'description' => $gym->description ?: $gym->name.' public gym profile on Atlas.',
+        'telephone' => $gym->contact_visible ? $gym->contact_number : null,
+        'address' => $addressLine !== '' ? array_filter([
+            '@type' => 'PostalAddress',
+            'streetAddress' => $gym->address ?: $gym->address_line,
+            'addressLocality' => $gym->city,
+            'addressRegion' => $gym->state,
+            'postalCode' => $gym->pincode,
+            'addressCountry' => 'IN',
+        ]) : null,
+        'geo' => $gym->latitude && $gym->longitude ? [
+            '@type' => 'GeoCoordinates',
+            'latitude' => (float) $gym->latitude,
+            'longitude' => (float) $gym->longitude,
+        ] : null,
+    ]);
+
+    $breadcrumbSchema = [
+        '@context' => 'https://schema.org',
+        '@type' => 'BreadcrumbList',
+        'itemListElement' => [
+            ['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => route('public.home')],
+            ['@type' => 'ListItem', 'position' => 2, 'name' => 'Find Gyms', 'item' => route('public.gyms.index')],
+            ['@type' => 'ListItem', 'position' => 3, 'name' => $gym->name, 'item' => route('public.gyms.show', $gym->slug)],
+        ],
+    ];
 @endphp
 
-<x-public.layouts.app :page-title="$gym->name" :page-description="$gym->description ?: $gym->name.' public profile'">
-    <style>
-        .atlas-profile-page {
-            background:
-                radial-gradient(circle at 12% 0%, rgba(37, 99, 235, 0.14), transparent 28rem),
-                radial-gradient(circle at 88% 7%, rgba(56, 189, 248, 0.12), transparent 26rem),
-                linear-gradient(180deg, #f8fbff 0%, #eef5ff 45%, #ffffff 100%);
-        }
-
-        .atlas-profile-hero {
-            position: relative;
-            min-height: 42rem;
-            overflow: hidden;
-            background-image:
-                linear-gradient(110deg, rgba(8, 14, 28, 0.82) 0%, rgba(15, 23, 42, 0.54) 48%, rgba(37, 99, 235, 0.18) 100%),
-                url('{{ $heroImage }}');
-            background-size: cover;
-            background-position: center;
-        }
-
-        .atlas-profile-hero::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background:
-                radial-gradient(circle at 78% 18%, rgba(96, 165, 250, 0.36), transparent 19rem),
-                linear-gradient(180deg, transparent 0%, rgba(248, 251, 255, 0.08) 100%);
-            pointer-events: none;
-        }
-
-        .atlas-profile-hero::after {
-            content: "";
-            position: absolute;
-            left: 0;
-            right: 0;
-            bottom: -1px;
-            height: 9rem;
-            background: linear-gradient(180deg, transparent, #f8fbff);
-            pointer-events: none;
-        }
-
-        .atlas-kicker {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.58rem;
-            color: #bfdbfe;
-            font-size: 0.72rem;
-            font-weight: 900;
-            letter-spacing: 0.18em;
-            text-transform: uppercase;
-        }
-
-        .atlas-kicker::before {
-            content: "";
-            width: 0.48rem;
-            height: 0.48rem;
-            border-radius: 9999px;
-            background: #60a5fa;
-            box-shadow: 0 0 18px rgba(96, 165, 250, 0.95);
-        }
-
-        .atlas-profile-shell {
-            position: relative;
-            z-index: 6;
-            margin-top: -7.5rem;
-            padding-bottom: 5rem;
-        }
-
-        .atlas-quick-panel {
-            overflow: hidden;
-            border-radius: 2rem;
-            border: 1px solid rgba(148, 163, 184, 0.18);
-            background: rgba(255, 255, 255, 0.90);
-            box-shadow:
-                0 34px 100px rgba(15, 23, 42, 0.14),
-                inset 0 1px 0 rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(24px);
-        }
-
-        .atlas-quick-panel-inner {
-            position: relative;
-            padding: 1.35rem;
-        }
-
-        @media (min-width: 768px) {
-            .atlas-quick-panel-inner {
-                padding: 2rem;
-            }
-        }
-
-        .atlas-quick-panel-inner::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background:
-                radial-gradient(circle at top right, rgba(37, 99, 235, 0.10), transparent 22rem),
-                linear-gradient(180deg, rgba(255,255,255,0.62), transparent 50%);
-            pointer-events: none;
-        }
-
-        .atlas-panel-content {
-            position: relative;
-            z-index: 2;
-        }
-
-        .atlas-badge {
-            display: inline-flex;
-            align-items: center;
-            min-height: 2rem;
-            border-radius: 9999px;
-            padding: 0.4rem 0.72rem;
-            background: rgba(255, 255, 255, 0.92);
-            color: #1d4ed8;
-            font-size: 0.72rem;
-            font-weight: 900;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-            backdrop-filter: blur(12px);
-        }
-
-        .atlas-badge-blue {
-            color: #1d4ed8;
-        }
-
-        .atlas-badge-green {
-            color: #047857;
-        }
-
-        .atlas-badge-gold {
-            color: #92400e;
-        }
-
-        .atlas-badge-purple {
-            color: #6d28d9;
-        }
-
-        .atlas-badge-muted {
-            color: #475569;
-        }
-
-        .atlas-action-primary,
-        .atlas-action-secondary {
-            min-height: 3.2rem;
-            border-radius: 9999px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid transparent;
-            padding: 0 1.25rem;
-            font-size: 0.9rem;
-            font-weight: 900;
-            text-decoration: none !important;
-            transition: all 180ms ease;
-            white-space: nowrap;
-        }
-
-        .atlas-action-primary {
-            background: linear-gradient(135deg, #2563eb, #1d4ed8);
-            color: #ffffff !important;
-            box-shadow: 0 18px 42px rgba(37, 99, 235, 0.25);
-        }
-
-        .atlas-action-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 26px 64px rgba(37, 99, 235, 0.33);
-        }
-
-        .atlas-action-secondary {
-            background: #ffffff;
-            border-color: rgba(148, 163, 184, 0.22);
-            color: #334155 !important;
-            box-shadow: 0 10px 26px rgba(15, 23, 42, 0.045);
-        }
-
-        .atlas-action-secondary:hover {
-            color: #1d4ed8 !important;
-            border-color: rgba(37, 99, 235, 0.26);
-            transform: translateY(-1px);
-        }
-
-        .atlas-metric {
-            border-radius: 1.25rem;
-            border: 1px solid rgba(148, 163, 184, 0.15);
-            background: rgba(248, 251, 255, 0.82);
-            padding: 1rem;
-            height: 100%;
-        }
-
-        .atlas-label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: #64748b;
-            font-size: 0.68rem;
-            font-weight: 900;
-            letter-spacing: 0.16em;
-            text-transform: uppercase;
-        }
-
-        .atlas-section-title {
-            color: #0f172a;
-            font-size: clamp(1.95rem, 3vw, 2.65rem);
-            line-height: 1;
-            font-weight: 900;
-            letter-spacing: -0.06em;
-        }
-
-        .atlas-card {
-            position: relative;
-            overflow: hidden;
-            border-radius: 1.75rem;
-            border: 1px solid rgba(148, 163, 184, 0.16);
-            background: rgba(255, 255, 255, 0.94);
-            box-shadow: 0 24px 70px rgba(15, 23, 42, 0.085);
-        }
-
-        .atlas-card-dark {
-            background:
-                radial-gradient(circle at top right, rgba(96, 165, 250, 0.22), transparent 18rem),
-                linear-gradient(135deg, #0f172a 0%, #172554 58%, #0b1120 100%);
-            border-color: rgba(191, 219, 254, 0.15);
-            color: #ffffff;
-            box-shadow: 0 28px 86px rgba(15, 23, 42, 0.20);
-        }
-
-        .atlas-card-inner {
-            padding: 1.35rem;
-        }
-
-        @media (min-width: 768px) {
-            .atlas-card-inner {
-                padding: 1.8rem;
-            }
-        }
-
-        .atlas-card-dark .atlas-label {
-            color: #bfdbfe;
-        }
-
-        .atlas-card-dark p,
-        .atlas-card-dark li {
-            color: rgba(255, 255, 255, 0.72);
-        }
-
-        .atlas-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.45rem;
-            min-height: 2.1rem;
-            border-radius: 9999px;
-            border: 1px solid rgba(148, 163, 184, 0.20);
-            background: #ffffff;
-            color: #475569;
-            padding: 0.42rem 0.7rem;
-            font-size: 0.72rem;
-            font-weight: 900;
-        }
-
-        .atlas-pill::before {
-            content: "";
-            width: 0.4rem;
-            height: 0.4rem;
-            border-radius: 9999px;
-            background: #2563eb;
-        }
-
-        .atlas-card-dark .atlas-pill {
-            border-color: rgba(255, 255, 255, 0.12);
-            background: rgba(255, 255, 255, 0.08);
-            color: #e2e8f0;
-        }
-
-        .atlas-plan {
-            height: 100%;
-            border-radius: 1.25rem;
-            border: 1px solid rgba(148, 163, 184, 0.14);
-            background: #f8fbff;
-            padding: 1.15rem;
-        }
-
-        .atlas-card-dark .atlas-plan {
-            border-color: rgba(255, 255, 255, 0.10);
-            background: rgba(255, 255, 255, 0.07);
-        }
-
-        .atlas-timetable-row {
-            display: flex;
-            justify-content: space-between;
-            gap: 1rem;
-            padding: 0.85rem 0;
-            border-bottom: 1px solid rgba(148, 163, 184, 0.14);
-        }
-
-        .atlas-card-dark .atlas-timetable-row {
-            border-bottom-color: rgba(255, 255, 255, 0.08);
-        }
-
-        .atlas-gallery-tile {
-            display: block;
-            min-height: 13.5rem;
-            border-radius: 1.2rem;
-            overflow: hidden;
-            background-size: cover;
-            background-position: center;
-            position: relative;
-            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
-        }
-
-        .atlas-gallery-tile::after {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(180deg, rgba(15,23,42,0.04), rgba(15,23,42,0.34));
-        }
-
-        .atlas-trainer-avatar {
-            width: 3rem;
-            height: 3rem;
-            flex: 0 0 auto;
-            border-radius: 1rem;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, #eff6ff, #dbeafe);
-            color: #2563eb;
-            font-weight: 900;
-        }
-
-        .atlas-card-dark .atlas-trainer-avatar {
-            background: rgba(255,255,255,0.09);
-            color: #dbeafe;
-        }
-
-        .atlas-form-control {
-            width: 100%;
-            min-height: 3.25rem;
-            border-radius: 1rem !important;
-            border: 1px solid rgba(148, 163, 184, 0.22) !important;
-            background: #ffffff !important;
-            color: #0f172a !important;
-            padding: 0 1rem;
-            font-size: 0.95rem;
-            font-weight: 600;
-            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.045);
-            outline: none;
-        }
-
-        textarea.atlas-form-control {
-            padding-top: 0.9rem;
-            min-height: 7rem;
-        }
-
-        .atlas-form-control::placeholder {
-            color: #94a3b8;
-            font-weight: 500;
-        }
-
-        .atlas-form-control:focus {
-            border-color: rgba(37, 99, 235, 0.46) !important;
-            box-shadow: 0 0 0 0.22rem rgba(37, 99, 235, 0.12) !important;
-        }
-
-        .atlas-card-dark .atlas-form-control {
-            border-color: rgba(255, 255, 255, 0.12) !important;
-            background: rgba(255, 255, 255, 0.08) !important;
-            color: #ffffff !important;
-            box-shadow: none;
-        }
-
-        .atlas-card-dark .atlas-form-control::placeholder {
-            color: rgba(255, 255, 255, 0.50);
-        }
-
-        @media (max-width: 991.98px) {
-            .atlas-profile-shell {
-                margin-top: -5.5rem;
-            }
-        }
-    </style>
+<x-public.layouts.app
+    :page-title="$gym->name"
+    :page-description="$gym->description ?: $gym->name.' public profile'"
+    :social-image="$heroImage"
+    :social-image-alt="$gym->name.' gym profile'"
+    :schemas="[$gymSchema, $breadcrumbSchema]"
+>
 
     <section class="atlas-profile-page">
-        <section class="atlas-profile-hero">
-            <div class="container position-relative" style="z-index: 2;">
-                <div class="row no-gutters align-items-end" style="min-height: 42rem; padding-top: 8rem; padding-bottom: 10rem;">
+        <section class="atlas-profile-hero" style="--atlas-profile-hero-image: url('{{ $heroImage }}');">
+            <div class="public-container position-relative" style="z-index: 2;">
+                <div class="atlas-profile-hero-content row no-gutters align-items-end" style="min-height: 42rem; padding-top: 8rem; padding-bottom: 10rem;">
                     <div class="col-xl-9 col-lg-10 ftco-animate">
                         @if (session('success'))
-                            <div class="mb-4" style="border-radius: 1rem; border: 1px solid rgba(16,185,129,0.25); background: rgba(16,185,129,0.12); padding: 1rem; color: #d1fae5; font-weight: 700;">
+                            <div class="mb-4" role="status" aria-live="polite" style="border-radius: 1rem; border: 1px solid rgba(16,185,129,0.25); background: rgba(16,185,129,0.12); padding: 1rem; color: #d1fae5; font-weight: 700;">
                                 {{ session('success') }}
                             </div>
                         @endif
@@ -475,7 +138,7 @@
                         </h1>
 
                         <p class="mb-0" style="max-width: 48rem; color: rgba(255,255,255,0.78); font-size: 1.06rem; line-height: 1.9;">
-                            {{ $gym->description ?: 'A premium public gym profile with live discovery visibility, trainer presence, visible facilities, and a structured trial path.' }}
+                            {{ $gym->description ?: 'Explore the public information, facilities, branches, plans, and contact options this gym has chosen to publish.' }}
                         </p>
                     </div>
                 </div>
@@ -483,8 +146,8 @@
         </section>
 
         <section class="atlas-profile-shell">
-            <div class="container">
-                <div class="atlas-quick-panel mb-5 ftco-animate">
+            <div class="public-container-wide">
+                <div class="atlas-quick-panel public-surface-premium mb-5 ftco-animate">
                     <div class="atlas-quick-panel-inner">
                         <div class="atlas-panel-content">
                             <div class="row align-items-stretch">
@@ -525,18 +188,18 @@
                                 <div class="col-lg-4">
                                     <div class="h-100 d-flex flex-wrap align-items-center justify-content-lg-end" style="gap: 0.7rem;">
                                         @if ($gym->trial_available)
-                                            <a href="#request-trial" class="atlas-action-primary">Request trial</a>
+                                            <a href="#request-trial" class="public-button public-button-primary atlas-action-primary">Request trial</a>
                                         @endif
 
                                         @if ($mapsHref)
-                                            <a href="{{ $mapsHref }}" target="_blank" rel="noreferrer" class="atlas-action-secondary">Open maps</a>
+                                            <a href="{{ $mapsHref }}" target="_blank" rel="noreferrer" class="public-button public-button-secondary atlas-action-secondary">Open maps</a>
                                         @endif
 
                                         @if ($contactTelHref && $gym->contact_visible)
-                                            <a href="{{ $contactTelHref }}" class="atlas-action-secondary">Call gym</a>
+                                            <a href="{{ $contactTelHref }}" class="public-button public-button-secondary atlas-action-secondary">Call gym</a>
                                         @endif
 
-                                        <a href="#request-trial" class="atlas-action-secondary">{{ $gym->trial_available ? 'Contact gym' : 'Send enquiry' }}</a>
+                                        <a href="#request-trial" class="public-button public-button-secondary atlas-action-secondary">{{ $gym->trial_available ? 'Contact gym' : 'Send enquiry' }}</a>
                                     </div>
                                 </div>
                             </div>
@@ -544,19 +207,30 @@
                     </div>
                 </div>
 
+                <nav class="atlas-profile-nav" aria-label="Gym profile sections">
+                    <a href="#profile-overview">Overview</a>
+                    <a href="#membership-plans">Plans</a>
+                    <a href="#branches">Branches</a>
+                    <a href="#gallery">Gallery</a>
+                    <a href="#trainers">Trainers</a>
+                    @if ($gym->trial_available || $gym->contact_visible)
+                        <a class="atlas-profile-nav-action" href="#request-trial">{{ $gym->trial_available ? 'Request trial' : 'Enquire' }}</a>
+                    @endif
+                </nav>
+
                 <div class="row mb-5">
                     <div class="col-lg-8 ftco-animate">
                         <div class="atlas-label mb-2">Profile</div>
-                        <h2 class="atlas-section-title mb-3">Everything needed before a visit.</h2>
+                        <h2 class="atlas-section-title mb-3">About this gym</h2>
                         <p class="mb-0" style="color: #64748b; max-width: 45rem; line-height: 1.85;">
-                            Facilities, pricing, locations, timings, trainers, gallery, and trial request are arranged in one premium decision flow.
+                            Review the published facilities, plans, locations, opening hours and visit options.
                         </p>
                     </div>
                 </div>
 
                 <div class="row">
                     <div class="col-lg-7">
-                        <div class="atlas-card mb-4 ftco-animate">
+                        <div id="profile-overview" class="atlas-card public-surface-premium mb-4 ftco-animate atlas-profile-overview-card">
                             <div class="atlas-card-inner">
                                 <div class="row">
                                     <div class="col-md-6 mb-4 mb-md-0">
@@ -585,7 +259,7 @@
                             </div>
                         </div>
 
-                        <div class="atlas-card mb-4 ftco-animate">
+                        <div id="membership-plans" class="atlas-card public-surface-premium mb-4 ftco-animate atlas-profile-plans-card">
                             <div class="atlas-card-inner">
                                 <div class="d-flex flex-wrap justify-content-between align-items-start mb-4" style="gap: 1rem;">
                                     <div>
@@ -663,7 +337,7 @@
                             </div>
                         </div>
 
-                        <div class="atlas-card mb-4 ftco-animate">
+                        <div id="branches" class="atlas-card public-surface-premium mb-4 ftco-animate atlas-profile-branches-card">
                             <div class="atlas-card-inner">
                                 <span class="atlas-label">Branch network</span>
 
@@ -695,7 +369,7 @@
                             </div>
                         </div>
 
-                        <div class="atlas-card mb-4 ftco-animate">
+                        <div id="gallery" class="atlas-card public-surface-premium mb-4 ftco-animate atlas-profile-gallery-card">
                             <div class="atlas-card-inner">
                                 <div class="d-flex flex-wrap justify-content-between align-items-start mb-4" style="gap: 1rem;">
                                     <div>
@@ -712,7 +386,7 @@
                                     <div class="row">
                                         @foreach ($galleryImages->take(6) as $image)
                                             <div class="col-md-4 mb-4">
-                                                <a href="{{ $image }}" class="gallery image-popup atlas-gallery-tile" style="background-image: url('{{ $image }}');"></a>
+                                                <a href="{{ $image }}" class="gallery atlas-gallery-tile" style="background-image: url('{{ $image }}');" target="_blank" rel="noopener" aria-label="Open {{ $gym->name }} gallery image {{ $loop->iteration }} in a new tab"></a>
                                             </div>
                                         @endforeach
                                     </div>
@@ -725,8 +399,8 @@
                         </div>
                     </div>
 
-                    <div class="col-lg-5">
-                        <div class="atlas-card atlas-card-dark mb-4 ftco-animate">
+                    <div class="col-lg-5 atlas-profile-sidebar">
+                        <div class="atlas-card atlas-card-dark public-surface-dark mb-4 ftco-animate atlas-profile-visit-card">
                             <div class="atlas-card-inner">
                                 <span class="atlas-label">Visit planning</span>
 
@@ -787,7 +461,7 @@
                             </div>
                         </div>
 
-                        <div class="atlas-card mb-4 ftco-animate">
+                        <div id="trainers" class="atlas-card public-surface-premium mb-4 ftco-animate atlas-profile-trainers-card">
                             <div class="atlas-card-inner">
                                 <div class="d-flex flex-wrap justify-content-between align-items-start mb-4" style="gap: 1rem;">
                                     <div>
@@ -825,7 +499,7 @@
                         </div>
 
                         @if ($gym->trial_available || $gym->contact_visible)
-                            <div id="request-trial" class="atlas-card atlas-card-dark ftco-animate">
+                            <div id="request-trial" class="atlas-card atlas-card-dark public-surface-dark ftco-animate">
                                 <div class="atlas-card-inner">
                                     <div class="d-flex flex-wrap justify-content-between align-items-start mb-3" style="gap: 1rem;">
                                         <div>
@@ -845,7 +519,7 @@
                                     </p>
 
                                     @if ($errors->any())
-                                        <div class="mb-4" style="border-radius: 1rem; border: 1px solid rgba(244,63,94,0.25); background: rgba(244,63,94,0.12); padding: 1rem; color: #ffe4e6;">
+                                        <div id="trial-form-errors" class="mb-4" role="alert" style="border-radius: 1rem; border: 1px solid rgba(244,63,94,0.25); background: rgba(244,63,94,0.12); padding: 1rem; color: #ffe4e6;">
                                             <div style="font-weight: 900;">Please correct the highlighted trial request fields.</div>
                                             <ul class="mt-3 mb-0">
                                                 @foreach ($errors->all() as $error)
@@ -855,52 +529,80 @@
                                         </div>
                                     @endif
 
-                                    <form method="POST" action="{{ route('public.gyms.trial-request', $gym->slug) }}">
+                                    <form method="POST" action="{{ route('public.gyms.trial-request', $gym->slug) }}" aria-label="{{ $gym->trial_available ? 'Request a gym trial' : 'Contact this gym' }}" @if ($errors->any()) aria-describedby="trial-form-errors" @endif>
                                         @csrf
                                         <input type="hidden" name="request_type" id="request_type" value="{{ old('request_type', $gym->trial_available ? 'trial' : 'contact') }}">
 
                                         <div class="form-row">
                                             <div class="form-group col-md-6 mb-3">
-                                                <input id="name" name="name" value="{{ old('name') }}" class="atlas-form-control" placeholder="Your name">
+                                                <label for="name" class="atlas-form-label">Your name <span aria-hidden="true">*</span></label>
+                                                <input id="name" name="name" value="{{ old('name') }}" class="atlas-form-control" placeholder="Enter your full name" autocomplete="name" required @error('name') aria-invalid="true" aria-describedby="name-error" @enderror>
+                                                @error('name')
+                                                    <span id="name-error" class="atlas-field-error">{{ $message }}</span>
+                                                @enderror
                                             </div>
 
                                             <div class="form-group col-md-6 mb-3">
-                                                <input id="phone" name="phone" value="{{ old('phone') }}" class="atlas-form-control" placeholder="Phone number">
+                                                <label for="phone" class="atlas-form-label">Phone number <span aria-hidden="true">*</span></label>
+                                                <input id="phone" name="phone" type="tel" value="{{ old('phone') }}" class="atlas-form-control" placeholder="Enter your phone number" autocomplete="tel" inputmode="tel" required @error('phone') aria-invalid="true" aria-describedby="phone-error" @enderror>
+                                                @error('phone')
+                                                    <span id="phone-error" class="atlas-field-error">{{ $message }}</span>
+                                                @enderror
                                             </div>
                                         </div>
 
                                         <div class="form-group mb-3">
-                                            <input id="email" name="email" type="email" value="{{ old('email') }}" class="atlas-form-control" placeholder="Email address">
+                                            <label for="email" class="atlas-form-label">Email address <span class="font-weight-normal">(optional)</span></label>
+                                            <input id="email" name="email" type="email" value="{{ old('email') }}" class="atlas-form-control" placeholder="Enter your email address" autocomplete="email" @error('email') aria-invalid="true" aria-describedby="email-error" @enderror>
+                                            @error('email')
+                                                <span id="email-error" class="atlas-field-error">{{ $message }}</span>
+                                            @enderror
                                         </div>
 
                                         <div class="form-group mb-3">
-                                            <select id="branch_id" name="branch_id" class="atlas-form-control">
+                                            <label for="branch_id" class="atlas-form-label">Preferred branch <span class="font-weight-normal">(optional)</span></label>
+                                            <select id="branch_id" name="branch_id" class="atlas-form-control" @error('branch_id') aria-invalid="true" aria-describedby="branch-id-error" @enderror>
                                                 <option value="">Any available branch</option>
                                                 @foreach ($activeBranches as $branch)
                                                     <option value="{{ $branch->id }}" @selected(old('branch_id') == $branch->id)>{{ $branch->name }}</option>
                                                 @endforeach
                                             </select>
+                                            @error('branch_id')
+                                                <span id="branch-id-error" class="atlas-field-error">{{ $message }}</span>
+                                            @enderror
                                         </div>
 
                                         <div class="form-row">
                                             <div class="form-group col-md-6 mb-3">
-                                                <input id="preferred_date" name="preferred_date" type="date" value="{{ old('preferred_date') }}" class="atlas-form-control">
+                                                <label for="preferred_date" class="atlas-form-label">Preferred date <span class="font-weight-normal">(optional)</span></label>
+                                                <input id="preferred_date" name="preferred_date" type="date" min="{{ now()->toDateString() }}" value="{{ old('preferred_date') }}" class="atlas-form-control" @error('preferred_date') aria-invalid="true" aria-describedby="preferred-date-error" @enderror>
+                                                @error('preferred_date')
+                                                    <span id="preferred-date-error" class="atlas-field-error">{{ $message }}</span>
+                                                @enderror
                                             </div>
 
                                             <div class="form-group col-md-6 mb-3">
-                                                <input id="preferred_time" name="preferred_time" type="time" value="{{ old('preferred_time') }}" class="atlas-form-control">
+                                                <label for="preferred_time" class="atlas-form-label">Preferred time <span class="font-weight-normal">(optional)</span></label>
+                                                <input id="preferred_time" name="preferred_time" type="time" value="{{ old('preferred_time') }}" class="atlas-form-control" @error('preferred_time') aria-invalid="true" aria-describedby="preferred-time-error" @enderror>
+                                                @error('preferred_time')
+                                                    <span id="preferred-time-error" class="atlas-field-error">{{ $message }}</span>
+                                                @enderror
                                             </div>
                                         </div>
 
                                         <div class="form-group mb-4">
-                                            <textarea id="notes" name="notes" rows="4" class="atlas-form-control" placeholder="Anything the gym should know before reaching out">{{ old('notes') }}</textarea>
+                                            <label for="notes" class="atlas-form-label">Notes <span class="font-weight-normal">(optional)</span></label>
+                                            <textarea id="notes" name="notes" rows="4" class="atlas-form-control" placeholder="Anything the gym should know before reaching out" @error('notes') aria-invalid="true" aria-describedby="notes-error" @enderror>{{ old('notes') }}</textarea>
+                                            @error('notes')
+                                                <span id="notes-error" class="atlas-field-error">{{ $message }}</span>
+                                            @enderror
                                         </div>
 
                                         <div class="d-flex flex-wrap" style="gap: 0.75rem;">
                                             @if ($gym->trial_available)
-                                                <button class="atlas-action-primary" type="submit" onclick="document.getElementById('request_type').value='trial'">Request trial</button>
+                                                <button class="public-button public-button-primary atlas-action-primary" type="submit" onclick="document.getElementById('request_type').value='trial'">Request trial</button>
                                             @endif
-                                            <button class="atlas-action-secondary" type="submit" onclick="document.getElementById('request_type').value='contact'">
+                                            <button class="public-button public-button-secondary atlas-action-secondary" type="submit" onclick="document.getElementById('request_type').value='contact'">
                                                 {{ $gym->trial_available ? 'Send enquiry' : 'Contact gym' }}
                                             </button>
                                         </div>

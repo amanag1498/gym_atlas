@@ -11,6 +11,15 @@ class PublicSupportingPagesTest extends TestCase
 
     public function test_supporting_public_pages_load(): void
     {
+        $this->get('/product')->assertOk()->assertSee('One connected ecosystem');
+        $this->get('/member-app')->assertOk()->assertSee('Atlas Member App');
+        $this->get('/trainer-app')->assertOk()->assertSee('Atlas Trainer App');
+        $this->get('/gym-management')->assertOk()->assertSee('Gym management');
+        $this->get('/platform-administration')
+            ->assertStatus(301)
+            ->assertRedirect('/product');
+        $this->get('/how-it-works')->assertOk()->assertSee('How Atlas works');
+        $this->get('/faq')->assertOk()->assertSee('FAQPage');
         $this->get('/pricing')->assertOk();
         $this->get('/about')->assertOk();
         $this->get('/contact')->assertOk();
@@ -19,6 +28,30 @@ class PublicSupportingPagesTest extends TestCase
             ->assertOk()
             ->assertSee('Delete your Atlas account');
         $this->get('/terms')->assertOk();
+    }
+
+    public function test_public_layout_uses_public_navigation_runtime_and_skip_link(): void
+    {
+        $this->get('/about')
+            ->assertOk()
+            ->assertSee('Skip to main content')
+            ->assertSee('id="public-main-content"', false)
+            ->assertSee(asset('js/public.js'))
+            ->assertDontSee('resources/js/app.js');
+    }
+
+    public function test_public_seo_endpoints_are_available(): void
+    {
+        $this->get('/sitemap.xml')
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/xml; charset=UTF-8')
+            ->assertSee(route('public.product'))
+            ->assertSee(route('public.gyms.index'));
+
+        $this->get('/robots.txt')
+            ->assertOk()
+            ->assertHeader('Content-Type', 'text/plain; charset=UTF-8')
+            ->assertSee(route('public.sitemap'));
     }
 
     public function test_account_deletion_request_is_stored_and_returns_to_the_deletion_page(): void

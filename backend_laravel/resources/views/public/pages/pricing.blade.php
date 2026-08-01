@@ -1,82 +1,31 @@
 @php
-    $tiers = [
-        ['eyebrow' => 'Members', 'title' => 'Free', 'copy' => 'Gym discovery, profile access, and the initial member experience stay free while the network grows.'],
-        ['eyebrow' => 'Gyms', 'title' => 'Free onboarding initially', 'copy' => 'Gym setup, branches, trainers, members, attendance, and billing foundations can be activated during the rollout phase.'],
-        ['eyebrow' => 'Trainers', 'title' => 'Free through gym initially', 'copy' => 'Trainers join through their connected gym and begin using coaching-linked workflows without separate launch pricing.'],
-    ];
-
-    $futureItems = [
-        'Premium member features',
-        'Advanced trainer tooling',
-        'Promoted gym visibility layers',
+    $whatsappNumber = preg_replace('/\D+/', '', (string) config('services.public_whatsapp.number', '917451008842'));
+    $whatsappHref = 'https://wa.me/'.$whatsappNumber.'?text='.urlencode('Hello Atlas, I would like to discuss current access and pricing.');
+    $paths = [
+        ['Member', 'Use the Member App independently', 'Create a personal Member account for workouts, diet and progress, then connect a gym relationship when you need membership, attendance or assigned coaching context.', ['Independent personal fitness access', 'Connect a gym later without losing your history', 'Gym-only features appear when a gym relationship exists'], route('public.contact', ['inquiry_type' => 'user']), false],
+        ['Gym operator', 'Scope an operating workspace', 'Commercial terms reflect the operational modules, subscription plan, and onboarding arrangement your gym needs.', ['Review branches and operating model', 'Confirm required modules and permissions', 'Agree current onboarding and subscription terms'], route('public.for-gyms').'#lead-form', true],
+        ['Trainer', 'Coach independently after verification', 'A trainer can create an account without a gym. Atlas must verify the trainer account before independent coaching access is enabled to add members and manage their plans.', ['Create and complete the trainer profile', 'Submit identity and certification details for verification', 'After approval, add members and manage eligible plans'], route('public.for-trainers').'#trainer-access', false],
     ];
 @endphp
-
-<x-public.layouts.app page-title="Pricing" page-description="Launch pricing strategy for members, gyms, and trainers with premium expansion paths.">
-    <section class="hero-wrap hero-wrap-2" style="background-image: url('https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1800&q=80'); min-height: 34rem;">
-        <div class="overlay"></div>
-        <div class="container">
-            <div class="row no-gutters align-items-end" style="min-height: 34rem; padding-top: 8rem; padding-bottom: 4.5rem;">
-                <div class="col-xl-8 col-lg-10 ftco-animate">
-                    <div class="public-kicker mb-3" style="color: #bfdbfe !important;">Pricing</div>
-                    <h1 class="mb-3 text-white" style="font-size: clamp(3rem, 6vw, 5.4rem); line-height: 0.98;">Simple launch pricing designed for adoption first.</h1>
-                    <p class="atlas-hero-copy mb-0">Atlas stays easy to adopt while the network grows, with premium layers reserved for real leverage later.</p>
-                    <p class="breadcrumbs mt-4 mb-0"><span class="mr-2"><a href="{{ route('public.home') }}">Home</a></span> <span>Pricing</span></p>
-                </div>
-            </div>
+<x-public.layouts.app page-title="Pricing" page-description="Compare independent Member access, verified independent Trainer access, and Gym Atlas onboarding paths. Contact Atlas for current commercial terms.">
+    <section class="ops-hero">
+        <div class="public-container-wide grid gap-12 lg:grid-cols-[1.05fr_.95fr] lg:items-end">
+            <div><p class="public-eyebrow">Pricing</p><h1 class="ops-title mt-6">Commercial terms that match the way you use Atlas.</h1><p class="ops-lede mt-6">Use the Member App independently, apply for verified independent Trainer access, or onboard a complete gym workspace. We confirm the current terms for the access path you actually need.</p><div class="mt-8 flex flex-wrap gap-3"><a href="{{ route('public.contact') }}" class="public-button public-button-primary">Ask about current pricing</a><a href="{{ $whatsappHref }}" target="_blank" rel="noopener noreferrer" class="public-button border border-white/20 bg-white/10 text-white hover:bg-white/15 hover:text-white">Ask on WhatsApp</a><a href="#pricing-paths" class="public-button border border-white/20 bg-white/10 text-white hover:bg-white/15 hover:text-white">Compare access paths</a></div></div>
+            <div class="ops-window p-6 sm:p-8"><p class="ops-canvas-kicker">Transparent consultation</p><h2 class="mt-3 text-2xl font-semibold tracking-tight text-white">What determines the right arrangement?</h2><div class="mt-6 grid gap-3 sm:grid-cols-2">@foreach ([['ti-stack-2','Product surface','Member, Trainer, or Gym Admin'],['ti-user-check','Verification','Required for independent trainers'],['ti-building','Operating scope','Personal use or gym operations'],['ti-route','Onboarding','Current needs and next steps']] as $item)<div class="rounded-xl border border-white/10 bg-white/[.045] p-4"><i class="ti {{ $item[0] }} text-xl text-cyan-300"></i><p class="mt-3 text-sm font-semibold text-white">{{ $item[1] }}</p><p class="mt-1 text-xs leading-5 text-slate-400">{{ $item[2] }}</p></div>@endforeach</div></div>
         </div>
     </section>
 
-    <section class="ftco-section bg-light">
-        <div class="container">
-            <div class="row justify-content-center mb-5 pb-3">
-                <div class="col-lg-8 heading-section ftco-animate text-center public-reveal">
-                    <h3 class="subheading">Launch pricing</h3>
-                    <h2 class="mb-3">Free to start for the people who need the ecosystem working first</h2>
-                    <p class="atlas-lead mb-0">The current model focuses on distribution, trust, and operational activation before adding advanced paid layers.</p>
-                </div>
-            </div>
-            <div class="row">
-                @foreach ($tiers as $tier)
-                    <div class="col-lg-4 ftco-animate public-reveal {{ $loop->index === 1 ? 'public-reveal-delay-1' : ($loop->index === 2 ? 'public-reveal-delay-2' : '') }}">
-                        <div class="block-7 h-100 mb-4">
-                            <div class="text-center">
-                                <span class="excerpt d-block public-kicker mb-3">{{ $tier['eyebrow'] }}</span>
-                                <span class="price d-block mb-2"><sup>{{ $loop->iteration === 1 ? '₹' : '' }}</sup> <span class="number">{{ $loop->iteration === 1 ? '0' : 'Free' }}</span></span>
-                                <span class="pricing-text d-block">{{ $tier['title'] }}</span>
-                                <p class="mt-4 px-lg-3">{{ $tier['copy'] }}</p>
-                            </div>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
+    <section id="pricing-paths" class="ops-section bg-white" aria-labelledby="pricing-audiences-heading">
+        <div class="public-container-wide"><div class="grid gap-8 lg:grid-cols-[.75fr_1.25fr] lg:items-end"><div><p class="public-kicker">Choose your path</p><h2 id="pricing-audiences-heading" class="mt-4 text-4xl font-semibold tracking-[-.04em] text-slate-950 sm:text-5xl">Three clear access paths.</h2></div><p class="max-w-2xl leading-8 text-slate-600 lg:justify-self-end">Member and Trainer Apps can be used without a gym connection. Independent Trainer coaching tools require account verification before member and plan management is enabled.</p></div>
+            <div class="mt-12 grid gap-5 lg:grid-cols-3">@foreach ($paths as $path)<article class="ops-price-path" @if($path[5]) data-featured @endif><div class="flex items-center justify-between gap-3"><span class="text-xs font-bold uppercase tracking-[.18em] {{ $path[5] ? 'text-cyan-200' : 'text-brand-600' }}">{{ $path[0] }}</span>@if($path[5])<span class="rounded-full bg-white/15 px-3 py-1 text-[.65rem] font-bold uppercase tracking-wider text-white">Operator focus</span>@endif</div><h3 class="mt-5 text-2xl font-semibold tracking-tight">{{ $path[1] }}</h3><p class="mt-4 min-h-[5.2rem] text-sm leading-7 {{ $path[5] ? '' : 'text-slate-600' }}">{{ $path[2] }}</p><div class="ops-price-rule"></div><div class="space-y-3">@foreach ($path[3] as $item)<p class="ops-check">{{ $item }}</p>@endforeach</div><a href="{{ $path[4] }}" class="atlas-inline-action mt-7 gap-2 text-sm font-bold {{ $path[5] ? 'text-white' : 'text-brand-600' }}">Discuss this path <i class="ti ti-arrow-right"></i></a></article>@endforeach</div>
         </div>
     </section>
 
-    <section class="ftco-section">
-        <div class="container">
-            <div class="row align-items-center">
-                <div class="col-lg-6 ftco-animate public-reveal">
-                    <div class="heading-section mb-0">
-                        <h3 class="subheading">Future lanes</h3>
-                        <h2 class="mb-4">Premium only where leverage becomes real</h2>
-                        <p class="atlas-lead mb-0">The platform is positioned to win on adoption first, then add paid capabilities where they genuinely improve visibility, growth, and operational control.</p>
-                    </div>
-                </div>
-                <div class="col-lg-5 offset-lg-1 mt-5 mt-lg-0 ftco-animate public-reveal public-reveal-delay-1">
-                    <div class="atlas-card p-4 p-md-5">
-                        <div class="public-kicker mb-4">Expansion path</div>
-                        <div style="display: grid; gap: 1rem;">
-                            @foreach ($futureItems as $item)
-                                <div class="d-flex align-items-start" style="gap: 0.85rem;">
-                                    <span class="public-pill">0{{ $loop->iteration }}</span>
-                                    <p class="mb-0" style="font-weight: 700; color: #0f172a; line-height: 1.65;">{{ $item }}</p>
-                                </div>
-                            @endforeach
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <section class="ops-section bg-slate-50">
+        <div class="public-container-wide grid gap-10 lg:grid-cols-[.7fr_1.3fr]">
+            <div><p class="public-kicker">How consultation works</p><h2 class="mt-4 text-4xl font-semibold tracking-[-.04em] text-slate-950">A current answer in four clear steps.</h2><p class="mt-5 leading-8 text-slate-600">No hidden feature promises. Atlas confirms the arrangement against the workflow you actually need.</p></div>
+            <ol class="ops-timeline mt-0">@foreach ([['Choose your surface','Tell us whether you need independent Member, verified Trainer, or Gym Admin access.'],['Share the context','For trainers, include your coaching background and verification details; for gyms, include branches and operating scope.'],['Review the arrangement','Atlas confirms verification, subscription, onboarding, and current commercial terms.'],['Agree next steps','Receive applicable dependencies, limits, and the next action.']] as $step)<li class="ops-timeline-step"><span class="ops-timeline-dot">{{ str_pad($loop->iteration,2,'0',STR_PAD_LEFT) }}</span><div><h3>{{ $step[0] }}</h3><p>{{ $step[1] }}</p></div></li>@endforeach</ol>
         </div>
     </section>
+    <section class="ops-section bg-white"><div class="public-container"><x-public.cta-section eyebrow="Get a current answer" title="Tell us which part of Atlas you want to use." copy="The team will route your enquiry and confirm the current access, onboarding and commercial terms that apply." primary-label="Contact Atlas" :primary-href="route('public.contact')" secondary-label="Explore the product" :secondary-href="url('/product')" /></div></section>
 </x-public.layouts.app>

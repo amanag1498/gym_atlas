@@ -2,288 +2,140 @@
     $gymLoginHref = Route::has('web.gym.login') ? route('web.gym.login') : null;
     $formRedirect = route('public.for-gyms').'#lead-form';
 
-    $painPoints = [
-        ['title' => 'Attendance still eats desk time', 'copy' => 'Check-ins, missed entries, and follow-up corrections still sit too close to the front desk instead of the system.'],
-        ['title' => 'Collections stay fragmented', 'copy' => 'Dues, reminders, partial payments, and renewals often live across chats, sheets, and memory.'],
-        ['title' => 'Retention signals surface too late', 'copy' => 'Owners usually notice churn when a membership is already slipping, not when the risk first appears.'],
-        ['title' => 'Visibility and operations are disconnected', 'copy' => 'The public profile attracts interest, but the gym often cannot continue that journey in the same operating flow.'],
+    $modules = [
+        ['icon' => 'ti-users', 'title' => 'Members and memberships', 'copy' => 'Create or invite members, manage status, assign plans and trainers, and handle renewals, freezes, reactivation, extensions, cancellations and approved custom fees.'],
+        ['icon' => 'ti-cash-banknote', 'title' => 'Payments and dues', 'copy' => 'Record collections, review outstanding dues, issue invoices and receipts, and retain reversible ledger history for operational accountability.'],
+        ['icon' => 'ti-scan', 'title' => 'Attendance', 'copy' => 'Track daily and historical attendance through manual and supported biometric workflows, including correction review and exports.'],
+        ['icon' => 'ti-building-community', 'title' => 'Branches, trainers and staff', 'copy' => 'Organize locations and teams, control active status and permissions, and keep trainer assignments tied to the right members.'],
+        ['icon' => 'ti-target', 'title' => 'Trials and leads', 'copy' => 'Receive public trial requests, assign follow-up, update status and move completed trials into the member workflow.'],
+        ['icon' => 'ti-report-analytics', 'title' => 'Reports and reminders', 'copy' => 'Review revenue, payments, dues, memberships, attendance, trainers, custom fees and leads, with CSV exports where available.'],
+        ['icon' => 'ti-world', 'title' => 'Public gym presence', 'copy' => 'Control profile details, listing visibility, published pricing, contact information and trial availability shown in Atlas discovery.'],
+        ['icon' => 'ti-shield-check', 'title' => 'Settings and audit history', 'copy' => 'Keep important operational changes traceable through role-aware access, gym settings, notifications and audit logs.'],
     ];
 
-    $capabilityPillars = [
-        [
-            'title' => 'Member lifecycle',
-            'copy' => 'Onboarding, plan assignment, renewals, custom fees, dues, and continuity without scattered records.',
-            'points' => ['Members', 'Memberships', 'Custom fees', 'Renewals'],
-        ],
-        [
-            'title' => 'Floor operations',
-            'copy' => 'Attendance, trainer visibility, branch context, and everyday front-desk workflow in one place.',
-            'points' => ['Attendance', 'Branches', 'Trainer flow', 'Staff visibility'],
-        ],
-        [
-            'title' => 'Revenue and demand',
-            'copy' => 'Payments, reminders, public listing demand, and trial conversion move through the same system.',
-            'points' => ['Payments', 'Dues', 'Trial leads', 'Public listing'],
-        ],
-    ];
-
-    $journeySteps = [
-        [
-            'step' => '01',
-            'title' => 'A gym gets discovered',
-            'copy' => 'A cleaner public profile helps the right members find the right branch faster.',
-        ],
-        [
-            'step' => '02',
-            'title' => 'Interest becomes structured demand',
-            'copy' => 'Trials, enquiries, and contact requests move directly into an operating workflow instead of a dead-end inbox.',
-        ],
-        [
-            'step' => '03',
-            'title' => 'Operations continue in one system',
-            'copy' => 'Memberships, attendance, payments, trainers, and branch activity stay connected after the first touchpoint.',
-        ],
-    ];
-
-    $opsModules = [
-        ['title' => 'Members and plans', 'copy' => 'Track onboarding, active plans, due members, custom pricing, and renewals.'],
-        ['title' => 'Payments and dues', 'copy' => 'Keep collections, reminders, and auditability closer to actual operations.'],
-        ['title' => 'Attendance and floor flow', 'copy' => 'Reduce manual gaps and keep attendance tied to live member records.'],
-        ['title' => 'Trainer and branch visibility', 'copy' => 'Connect coaches and locations to the member relationship instead of separate sheets.'],
-        ['title' => 'Leads and public listing', 'copy' => 'Use public discovery as an operational input, not just a marketing artifact.'],
-        ['title' => 'Reports and decision support', 'copy' => 'Surface what matters faster so owners do not have to piece the story together manually.'],
+    $workflow = [
+        ['step' => '01', 'title' => 'Publish', 'copy' => 'Configure the gym profile, branches, facilities and the information members can see.'],
+        ['step' => '02', 'title' => 'Capture', 'copy' => 'Receive structured enquiries and trial requests from public discovery.'],
+        ['step' => '03', 'title' => 'Convert', 'copy' => 'Assign responsibility, follow up and move eligible prospects into membership.'],
+        ['step' => '04', 'title' => 'Operate', 'copy' => 'Manage attendance, collections, coaching context, renewals and reporting around one member record.'],
     ];
 @endphp
 
-<x-public.layouts.app page-title="For Gyms" page-description="A premium operating system for gyms that connects public discovery, member lifecycle, payments, attendance, branches, trainers, and trial demand.">
-    <section class="hero-wrap" style="background-image: linear-gradient(110deg, rgba(10,17,32,0.58) 0%, rgba(20,58,138,0.22) 44%, rgba(255,255,255,0.04) 100%), url('https://images.unsplash.com/photo-1571902943202-507ec2618e8f?auto=format&fit=crop&w=1800&q=80'); min-height: 88vh; background-position: center;">
-        <div class="overlay" style="background: transparent !important; opacity: 1 !important;"></div>
-        <div class="container">
-            <div class="row no-gutters align-items-center" style="min-height: 88vh; padding-top: 6rem; padding-bottom: 4rem;">
-                <div class="col-xl-8 col-lg-9 ftco-animate public-reveal">
-                    <div class="public-kicker mb-3" style="color: #bfdbfe !important;">For gym operators</div>
-                    <h1 class="mb-3 text-white" style="font-size: clamp(3rem, 6vw, 5.2rem); font-weight: 700; line-height: 1.02;">Run the gym from the same system that brings people in.</h1>
-                    <p class="mt-4 public-reveal public-reveal-delay-1" style="max-width: 44rem; color: rgba(255,255,255,0.84); font-size: 1.04rem; line-height: 1.95;">
-                        Atlas connects discovery, trial demand, memberships, attendance, payments, branches, and trainers so the gym does not have to switch tools the moment a lead becomes a real member relationship.
-                    </p>
-                    <div class="mt-4 d-flex flex-wrap public-reveal public-reveal-delay-2" style="gap: 0.9rem;">
-                        <a href="#lead-form" class="btn btn-primary p-3 px-4">Register Your Gym</a>
-                        @if ($gymLoginHref)
-                            <a href="{{ $gymLoginHref }}" class="btn btn-white btn-outline-white p-3 px-4">Gym Admin Login</a>
-                        @endif
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="ftco-section bg-light" style="background: linear-gradient(180deg, #ffffff 0%, #eef5ff 100%);">
-        <div class="container">
-            <div class="row align-items-end mb-5">
-                <div class="col-lg-6 ftco-animate public-reveal">
-                    <div class="heading-section mb-0">
-                        <h3 class="subheading">Operational friction</h3>
-                        <h2 class="mb-2">Most gyms do not lack effort. They lack one connected operating layer.</h2>
-                    </div>
-                </div>
-                <div class="col-lg-5 offset-lg-1 ftco-animate public-reveal public-reveal-delay-1">
-                    <p class="mb-0" style="color: #475569; line-height: 1.9;">
-                        The usual problem is not one missing feature. It is the break between public visibility, collections, attendance, retention, and trainer workflow. That break is where time and revenue get lost.
-                    </p>
-                </div>
-            </div>
-
-            <div class="row">
-                @foreach ($painPoints as $point)
-                    <div class="col-md-6 col-xl-3 ftco-animate public-reveal {{ $loop->index === 1 ? 'public-reveal-delay-1' : ($loop->index > 1 ? 'public-reveal-delay-2' : '') }}">
-                        <div style="height: 100%; padding: 1.9rem 1.6rem; border-radius: 1.45rem; background: rgba(255,255,255,0.9); border: 1px solid rgba(148,163,184,0.14); box-shadow: 0 18px 40px rgba(15,23,42,0.06);">
-                            <div style="width: 2.7rem; height: 2.7rem; border-radius: 9999px; background: linear-gradient(135deg, #dbeafe, #eff6ff); display: inline-flex; align-items: center; justify-content: center; color: #2563eb; font-weight: 800;">0{{ $loop->iteration }}</div>
-                            <h3 class="mt-4" style="font-size: 1.18rem; font-weight: 700; color: #0f172a; line-height: 1.2;">{{ $point['title'] }}</h3>
-                            <p class="mt-3 mb-0" style="color: #475569; line-height: 1.86;">{{ $point['copy'] }}</p>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-    </section>
-
-    <section class="ftco-section" style="background: #ffffff;">
-        <div class="container">
-            <div class="row align-items-end mb-5">
-                <div class="col-lg-6 ftco-animate public-reveal">
-                    <div class="heading-section mb-0">
-                        <h3 class="subheading">What changes</h3>
-                        <h2 class="mb-2">Atlas gives the gym one place to continue the member story after discovery.</h2>
-                    </div>
-                </div>
-                <div class="col-lg-5 offset-lg-1 ftco-animate public-reveal public-reveal-delay-1">
-                    <p class="mb-0" style="color: #475569; line-height: 1.92;">
-                        Once a member discovers the gym, the rest should not fragment. The same system should hold their enquiry, trial, plan, attendance, payments, and coaching continuity.
-                    </p>
-                </div>
-            </div>
-
-            <div class="row">
-                @foreach ($capabilityPillars as $pillar)
-                    <div class="col-lg-4 ftco-animate public-reveal {{ $loop->index === 1 ? 'public-reveal-delay-1' : ($loop->index === 2 ? 'public-reveal-delay-2' : '') }}">
-                        <div style="height: 100%; padding: 2rem 1.75rem; border-radius: 1.55rem; background: linear-gradient(180deg, #ffffff, #f7fbff); border: 1px solid rgba(148,163,184,0.14); box-shadow: 0 20px 48px rgba(15,23,42,0.07);">
-                            <div style="font-size: 0.76rem; letter-spacing: 0.16em; text-transform: uppercase; color: #2563eb; font-weight: 700;">Pillar {{ $loop->iteration }}</div>
-                            <h3 class="mt-3" style="font-size: 1.42rem; font-weight: 700; color: #0f172a; line-height: 1.1;">{{ $pillar['title'] }}</h3>
-                            <p class="mt-3" style="color: #475569; line-height: 1.9;">{{ $pillar['copy'] }}</p>
-                            <div class="mt-4 d-flex flex-wrap" style="gap: 0.5rem;">
-                                @foreach ($pillar['points'] as $point)
-                                    <span class="public-pill">{{ $point }}</span>
-                                @endforeach
-                            </div>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-    </section>
-
-    <section class="ftco-section bg-light" style="background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);">
-        <div class="container">
-            <div class="row align-items-end mb-5">
-                <div class="col-lg-6 ftco-animate public-reveal">
-                    <div class="heading-section mb-0">
-                        <h3 class="subheading">How the journey works</h3>
-                        <h2 class="mb-2">Public discovery is only useful when the relationship keeps moving inside the same flow.</h2>
-                    </div>
-                </div>
-                <div class="col-lg-5 offset-lg-1 ftco-animate public-reveal public-reveal-delay-1">
-                    <p class="mb-0" style="color: #475569; line-height: 1.9;">
-                        The strongest gyms do not just capture leads. They continue those leads into operations without losing information, accountability, or timing.
-                    </p>
-                </div>
-            </div>
-
-            <div class="row">
-                @foreach ($journeySteps as $step)
-                    <div class="col-lg-4 ftco-animate public-reveal {{ $loop->index === 1 ? 'public-reveal-delay-1' : ($loop->index === 2 ? 'public-reveal-delay-2' : '') }}">
-                        <div style="height: 100%; padding: 2rem 1.75rem; border-radius: 1.45rem; background: rgba(255,255,255,0.9); border: 1px solid rgba(148,163,184,0.14); box-shadow: 0 18px 40px rgba(15,23,42,0.06);">
-                            <div style="font-size: 0.78rem; letter-spacing: 0.18em; text-transform: uppercase; color: #60a5fa; font-weight: 700;">{{ $step['step'] }}</div>
-                            <h3 class="mt-4" style="font-size: 1.34rem; font-weight: 700; color: #0f172a; line-height: 1.12;">{{ $step['title'] }}</h3>
-                            <p class="mt-3 mb-0" style="color: #475569; line-height: 1.88;">{{ $step['copy'] }}</p>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-    </section>
-
-    <section class="ftco-section" style="background: #ffffff;">
-        <div class="container">
-            <div class="row align-items-end mb-5">
-                <div class="col-lg-6 ftco-animate public-reveal">
-                    <div class="heading-section mb-0">
-                        <h3 class="subheading">What operators get</h3>
-                        <h2 class="mb-2">The workflows that usually live in separate tools sit inside one operating layer.</h2>
-                    </div>
-                </div>
-                <div class="col-lg-5 offset-lg-1 ftco-animate public-reveal public-reveal-delay-1">
-                    <p class="mb-0" style="color: #475569; line-height: 1.92;">
-                        Atlas is not just a public listing page for gyms. It is the system that can continue once the member enters the funnel and the real operational work begins.
-                    </p>
-                </div>
-            </div>
-
-            <div class="row">
-                @foreach ($opsModules as $module)
-                    <div class="col-md-6 col-xl-4 ftco-animate public-reveal {{ $loop->index % 3 === 1 ? 'public-reveal-delay-1' : ($loop->index % 3 === 2 ? 'public-reveal-delay-2' : '') }}">
-                        <div class="mb-4" style="height: calc(100% - 1.5rem); padding: 1.9rem 1.6rem; border-radius: 1.45rem; background: rgba(255,255,255,0.92); border: 1px solid rgba(148,163,184,0.14); box-shadow: 0 18px 40px rgba(15,23,42,0.06);">
-                            <h3 style="font-size: 1.2rem; font-weight: 700; color: #0f172a; line-height: 1.15;">{{ $module['title'] }}</h3>
-                            <p class="mt-3 mb-0" style="color: #475569; line-height: 1.85;">{{ $module['copy'] }}</p>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-    </section>
-
-    <section id="lead-form" class="ftco-section bg-light" style="background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);">
-        <div class="container">
-            <div class="row align-items-start">
-                <div class="col-lg-5 ftco-animate public-reveal mb-4 mb-lg-0">
-                    <div style="height: 100%; padding: 2.25rem 2rem; border-radius: 1.65rem; background: linear-gradient(135deg, #ffffff, #f4f9ff); border: 1px solid rgba(148,163,184,0.14); box-shadow: 0 22px 52px rgba(15,23,42,0.07);">
-                        <div class="public-kicker mb-3">Next step</div>
-                        <h2 style="font-size: clamp(2rem, 4vw, 2.8rem); font-weight: 700; line-height: 1.04; color: #0f172a;">Register your gym through the actual onboarding path.</h2>
-                        <p class="mt-4 mb-0" style="color: #475569; line-height: 1.9;">
-                            This is not a decorative lead form. It routes a real gym inquiry into the platform onboarding flow. Existing operators can use the gym login directly.
-                        </p>
-
-                        <div class="mt-5" style="display: grid; gap: 1rem;">
-                            @foreach ([
-                                'The team receives a structured gym inquiry.',
-                                'You can describe current workflow gaps and onboarding needs.',
-                                'Existing operators can skip directly to gym admin login.',
-                            ] as $line)
-                                <div class="d-flex align-items-start" style="gap: 0.8rem;">
-                                    <div style="width: 0.55rem; height: 0.55rem; border-radius: 9999px; background: linear-gradient(135deg, #93c5fd, #2563eb); margin-top: 0.45rem;"></div>
-                                    <p class="mb-0" style="color: #475569; line-height: 1.82;">{{ $line }}</p>
-                                </div>
-                            @endforeach
-                        </div>
-
-                        @if ($gymLoginHref)
-                            <div class="mt-5">
-                                <a href="{{ $gymLoginHref }}" class="btn btn-white btn-outline-white py-3 px-4">Gym Admin Login</a>
-                            </div>
-                        @endif
-                    </div>
-                </div>
-
-                <div class="col-lg-6 offset-lg-1 ftco-animate public-reveal public-reveal-delay-1">
-                    @if (session('success'))
-                        <div class="mb-4 rounded-[1rem] border border-emerald-400/20 bg-emerald-400/10 px-4 py-4 text-sm text-emerald-100">
-                            {{ session('success') }}
-                        </div>
+<x-public.layouts.app page-title="For Gyms" page-description="Connect gym discovery, trials, memberships, attendance, payments, branches, trainers, reports and public listing control with Atlas Gym Management.">
+    <section class="ops-hero">
+        <div class="public-container-wide ops-hero-grid">
+            <div>
+                <p class="public-eyebrow">For gym operators</p>
+                <h1 class="ops-title mt-6">Run the gym from the same ecosystem that brings members in.</h1>
+                <p class="ops-lede mt-6">Atlas connects discovery with trials, memberships, collections, attendance, branches, trainers, and reporting—so context survives every handoff.</p>
+                <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+                    <a href="#lead-form" class="public-button public-button-primary">Register your gym</a>
+                    @if ($gymLoginHref)
+                        <a href="{{ $gymLoginHref }}" class="public-button border border-white/20 bg-white/10 text-white hover:bg-white/15 hover:text-white">Gym admin login</a>
                     @endif
-
-                    @if ($errors->any())
-                        <div class="mb-4 rounded-[1rem] border border-rose-400/20 bg-rose-400/10 px-4 py-4 text-sm text-rose-100">
-                            <div class="font-semibold">Please correct the highlighted gym inquiry fields.</div>
-                            <ul class="mt-3 mb-0">
-                                @foreach ($errors->all() as $error)
-                                    <li>{{ $error }}</li>
-                                @endforeach
-                            </ul>
-                        </div>
-                    @endif
-
-                    <div style="padding: 2rem 1.9rem; border-radius: 1.55rem; background: rgba(255,255,255,0.94); border: 1px solid rgba(148,163,184,0.14); box-shadow: 0 20px 48px rgba(15,23,42,0.07);">
-                        <div class="public-kicker mb-3">Gym inquiry</div>
-                        <h3 style="font-size: 1.75rem; font-weight: 700; color: #0f172a; line-height: 1.08;">Start the onboarding conversation.</h3>
-
-                        <form method="POST" action="{{ route('public.contact.store') }}" class="mt-4">
-                            @csrf
-                            <input type="hidden" name="inquiry_type" value="gym">
-                            <input type="hidden" name="redirect_to" value="{{ $formRedirect }}">
-
-                            <div class="form-group">
-                                <input id="gym_name" name="name" value="{{ old('name') }}" class="form-control" placeholder="Gym or owner name">
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <input id="gym_email" name="email" type="email" value="{{ old('email') }}" class="form-control" placeholder="Email">
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <input id="gym_phone" name="phone" value="{{ old('phone') }}" class="form-control" placeholder="Phone">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <textarea id="gym_message" name="message" rows="6" class="form-control" placeholder="Tell us about your gym, current workflow, branches, or onboarding needs">{{ old('message', 'I want to onboard my gym onto the platform and understand how Atlas can support our operations.') }}</textarea>
-                            </div>
-                            <div class="form-group mb-0">
-                                <input type="submit" value="Submit Gym Inquiry" class="btn btn-primary py-3 px-5">
-                            </div>
-                        </form>
-                    </div>
                 </div>
+                <div class="ops-proofline"><span>Built for operating teams</span><span>Connected member record</span><span>Branch-aware access</span></div>
+            </div>
+            <aside class="ops-window" aria-label="Code-rendered representation of the gym onboarding pipeline">
+                <div class="ops-window-bar"><div class="ops-window-dots"><i></i><i></i><i></i></div><span class="ops-window-label">Gym growth · Operating loop</span><span class="ops-status">Connected</span></div>
+                <div class="p-5 sm:p-7">
+                    <p class="ops-canvas-kicker">Member journey</p><p class="ops-canvas-title">From interest to retention</p>
+                    <div class="mt-6 space-y-3">@foreach ([['ti-world','Discovery','Build trust publicly'],['ti-target','Trial inbox','Own the follow-up'],['ti-user-check','Membership','Convert with context'],['ti-scan','Daily operations','Serve consistently'],['ti-chart-line','Reports','Act on evidence']] as $item)<div class="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border border-white/10 bg-white/[.04] p-3"><span class="ops-feed-icon"><i class="ti {{ $item[0] }}"></i></span><div><p class="text-sm font-semibold text-white">{{ $item[1] }}</p><p class="mt-1 text-[.7rem] text-slate-400">{{ $item[2] }}</p></div><i class="ti ti-arrow-right text-slate-500"></i></div>@endforeach</div>
+                    <p class="mt-5 text-xs leading-6 text-slate-400">Payments are recorded and tracked; Atlas does not currently promise a member-facing payment gateway.</p>
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <section class="ops-section bg-slate-50">
+        <div class="public-container-wide">
+            <figure class="ops-editorial">
+                <img src="{{ asset('images/public-site/editorial/gym-operations-team.webp') }}" width="1800" height="900" loading="lazy" decoding="async" alt="Gym operations team coordinating member service at a modern front desk">
+                <figcaption class="ops-editorial-caption"><span class="ops-editorial-chip"><i class="ti ti-building-community"></i> The people behind the system</span><h2 class="text-3xl font-semibold tracking-[-.035em] sm:text-4xl">Software should help the team move together.</h2><p class="mt-4">Front desk, membership, coaching, and management workflows remain connected to the same operational context.</p></figcaption>
+            </figure>
+        </div>
+    </section>
+
+    <section class="ops-section bg-white" aria-labelledby="gym-capabilities-heading">
+        <div class="public-container-wide">
+            <div class="grid gap-8 lg:grid-cols-[.75fr_1.25fr] lg:items-end">
+              <div class="public-section-heading">
+                <p class="public-kicker">Current capabilities</p>
+                <h2 id="gym-capabilities-heading" class="mt-4">The daily workflows operators need, explained clearly.</h2>
+              </div><p class="max-w-2xl leading-8 text-slate-600 lg:justify-self-end">These capabilities are implemented in the current Gym Admin. Availability can vary with role, permission, and gym configuration.</p></div>
+            <div class="ops-index mt-12">
+                @foreach ($modules as $module)
+                    <article class="ops-module"><span class="ops-module-number">{{ str_pad($loop->iteration,2,'0',STR_PAD_LEFT) }}</span><h3>{{ $module['title'] }}</h3><p>{{ $module['copy'] }}</p><div class="ops-tags"><span><i class="ti {{ $module['icon'] }} mr-1"></i> Gym Admin module</span></div></article>
+                @endforeach
+            </div>
+        </div>
+    </section>
+
+    <section class="ops-section bg-slate-50" aria-labelledby="gym-workflow-heading">
+        <div class="public-container-wide">
+            <div class="public-section-heading">
+                <p class="public-kicker">From discovery to retention</p>
+                <h2 id="gym-workflow-heading" class="mt-4">Turn public interest into accountable operations.</h2>
+                <p class="mt-5">A trial request is submitted for gym review; it is not an instantly confirmed booking.</p>
+            </div>
+            <ol class="ops-timeline">
+                @foreach ($workflow as $step)
+                    <li class="ops-timeline-step"><span class="ops-timeline-dot">{{ $step['step'] }}</span><div><h3>{{ $step['title'] }}</h3><p>{{ $step['copy'] }}</p></div></li>
+                @endforeach
+            </ol>
+        </div>
+    </section>
+
+    <section id="lead-form" class="ops-section bg-white" aria-labelledby="gym-inquiry-heading">
+        <div class="public-container ops-form-shell">
+            <div class="ops-form-intro">
+                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-300">Start onboarding</p>
+                <h2 id="gym-inquiry-heading" class="mt-4 text-3xl font-semibold tracking-[-0.035em] text-white sm:text-4xl">Tell us how your gym operates today.</h2>
+                <p class="mt-5 leading-7 text-slate-300">Share your branch setup, member workflow and operational needs. This form creates a real gym enquiry for the Atlas team to review.</p>
+                <ul class="mt-7 space-y-3 text-sm leading-6 text-slate-300">
+                    <li>• Structured gym-onboarding enquiry</li>
+                    <li>• Space to explain current workflow gaps</li>
+                    <li>• Existing operators can use Gym Admin login</li>
+                </ul>
+            </div>
+            <div class="ops-form-body">
+                @if (session('success'))
+                    <div role="status" class="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('success') }}</div>
+                @endif
+                @if ($errors->any())
+                    <div role="alert" class="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                        <p class="font-semibold">Please correct the highlighted gym enquiry fields.</p>
+                        <ul class="mt-2 list-disc space-y-1 pl-5">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+                    </div>
+                @endif
+                <form method="POST" action="{{ route('public.contact.store') }}" class="space-y-5">
+                    @csrf
+                    <input type="hidden" name="inquiry_type" value="gym">
+                    <input type="hidden" name="redirect_to" value="{{ $formRedirect }}">
+                    <div>
+                        <label for="gym_name" class="mb-2 block text-sm font-semibold text-slate-800">Gym or owner name <span class="text-rose-600" aria-hidden="true">*</span></label>
+                        <input id="gym_name" name="name" value="{{ old('name') }}" class="form-control @error('name') border-rose-400 @enderror" autocomplete="name" required @error('name') aria-invalid="true" aria-describedby="gym_name_error" @enderror>
+                        @error('name')<p id="gym_name_error" class="mt-2 text-sm text-rose-600">{{ $message }}</p>@enderror
+                    </div>
+                    <div class="grid gap-5 sm:grid-cols-2">
+                        <div>
+                            <label for="gym_email" class="mb-2 block text-sm font-semibold text-slate-800">Email address <span class="text-rose-600" aria-hidden="true">*</span></label>
+                            <input id="gym_email" name="email" type="email" value="{{ old('email') }}" class="form-control" autocomplete="email" required @error('email') aria-invalid="true" aria-describedby="gym_email_error" @enderror>
+                            @error('email')<p id="gym_email_error" class="mt-2 text-sm text-rose-600">{{ $message }}</p>@enderror
+                        </div>
+                        <div>
+                            <label for="gym_phone" class="mb-2 block text-sm font-semibold text-slate-800">Phone number <span class="font-normal text-slate-500">(optional)</span></label>
+                            <input id="gym_phone" name="phone" value="{{ old('phone') }}" class="form-control" autocomplete="tel" @error('phone') aria-invalid="true" aria-describedby="gym_phone_error" @enderror>
+                            @error('phone')<p id="gym_phone_error" class="mt-2 text-sm text-rose-600">{{ $message }}</p>@enderror
+                        </div>
+                    </div>
+                    <div>
+                        <label for="gym_message" class="mb-2 block text-sm font-semibold text-slate-800">How can Atlas help? <span class="text-rose-600" aria-hidden="true">*</span></label>
+                        <textarea id="gym_message" name="message" rows="6" class="form-control" required @error('message') aria-invalid="true" aria-describedby="gym_message_error" @enderror>{{ old('message', 'I want to onboard my gym onto the platform and understand how Atlas can support our operations.') }}</textarea>
+                        @error('message')<p id="gym_message_error" class="mt-2 text-sm text-rose-600">{{ $message }}</p>@enderror
+                    </div>
+                    <button type="submit" class="public-button public-button-primary">Submit gym enquiry</button>
+                </form>
             </div>
         </div>
     </section>

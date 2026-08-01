@@ -1,204 +1,116 @@
 @php
-    $painPoints = [
-        ['title' => 'Plans get lost', 'copy' => 'Programming ends up in screenshots, chat threads, or memory instead of a stable workflow.'],
-        ['title' => 'Progress is scattered', 'copy' => 'Attendance, workouts, and notes are hard to review together at the right time.'],
-        ['title' => 'Follow-ups stay manual', 'copy' => 'Momentum drops when reminders depend on memory and ad hoc note apps.'],
-        ['title' => 'No clear daily view', 'copy' => 'Trainers often lack a clean surface for which clients need intervention today.'],
-    ];
-
-    $features = [
-        'Assigned members',
-        'Workout plans',
-        'Client progress',
-        'Progress photos',
-        'Trainer notes',
-        'Follow-up reminders',
-        'Trainer profile',
-        'Future online coaching',
-    ];
-
-    $workflow = [
-        ['title' => 'Gym assigns member', 'copy' => 'Coaching starts with real member context.'],
-        ['title' => 'Trainer creates plan', 'copy' => 'Programming becomes part of the same fitness loop.'],
-        ['title' => 'Member logs activity', 'copy' => 'Progress signals become visible instead of informal.'],
-        ['title' => 'Trainer reviews progress', 'copy' => 'Follow-up happens with better timing and context.'],
-    ];
-
     $formRedirect = route('public.for-trainers').'#trainer-access';
+    $whatsappNumber = preg_replace('/\D+/', '', (string) config('services.public_whatsapp.number'));
+    $whatsappHref = $whatsappNumber !== ''
+        ? 'https://wa.me/'.$whatsappNumber.'?text='.urlencode('Hello Atlas, I am a trainer and would like help with account access and verification.')
+        : null;
+    $capabilities = [
+        ['icon' => 'ti-dashboard', 'title' => 'Daily coaching view', 'copy' => 'Review today’s client queue, assigned members, alerts and the work that needs follow-up.'],
+        ['icon' => 'ti-activity', 'title' => 'Workout programming', 'copy' => 'Build member plans, reuse workout templates, search the exercise library and preview programs before assignment.'],
+        ['icon' => 'ti-apple', 'title' => 'Meal-based diet plans', 'copy' => 'Create and assign structured diet plans and reusable templates when your verified account or gym-granted access permits it.'],
+        ['icon' => 'ti-chart-line', 'title' => 'Member context', 'copy' => 'Review available attendance, progress, workout history and member details before deciding the next coaching action.'],
+        ['icon' => 'ti-notes', 'title' => 'Notes and follow-ups', 'copy' => 'Create and update member notes, track pending work and mark follow-up actions complete.'],
+        ['icon' => 'ti-message-circle', 'title' => 'Connected messaging', 'copy' => 'Keep assigned-member conversations in a persistent inbox with history, read state and safety controls. Live delivery updates depend on the configured realtime service.'],
+        ['icon' => 'ti-target', 'title' => 'Trials and invitations', 'copy' => 'Follow up on trial leads assigned by the gym and invite prospective members through the gym approval workflow.'],
+        ['icon' => 'ti-certificate', 'title' => 'Trainer identity', 'copy' => 'Maintain a trainer profile and certifications while receiving relevant announcements, notifications and alerts.'],
+    ];
 @endphp
 
-<x-public.layouts.app page-title="For Trainers" page-description="A premium trainer experience for assigned members, workout plans, progress tracking, follow-ups, and future coaching growth.">
-    <section class="hero-wrap" style="background-image: linear-gradient(110deg, rgba(10,17,32,0.58) 0%, rgba(20,58,138,0.22) 44%, rgba(255,255,255,0.04) 100%), url('https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=1800&q=80'); min-height: 88vh; background-position: center;">
-        <div class="overlay" style="background: transparent !important; opacity: 1 !important;"></div>
-        <div class="container">
-            <div class="row no-gutters align-items-center" style="min-height: 88vh; padding-top: 6rem; padding-bottom: 4rem;">
-                <div class="col-xl-8 col-lg-9 ftco-animate public-reveal">
-                    <div class="public-kicker mb-3" style="color: #bfdbfe !important;">For trainers</div>
-                    <h1 class="mb-3 text-white" style="font-size: clamp(3rem, 6vw, 5.35rem); font-weight: 800; line-height: 0.98;">Coach with context, not scattered screenshots.</h1>
-                    <p class="mt-4 atlas-hero-copy public-reveal public-reveal-delay-1">
-                        Atlas gives trainers a cleaner workspace for assigned members, workout plans, progress notes, reminders, and future online coaching inside the same gym ecosystem.
-                    </p>
-                    <div class="mt-4 d-flex flex-wrap public-reveal public-reveal-delay-2" style="gap: 0.9rem;">
-                        <a href="#trainer-access" class="btn btn-primary p-3 px-4">Request Trainer Access</a>
-                        <a href="#trainer-access" class="btn btn-white btn-outline-white p-3 px-4">Join Through Your Gym</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="ftco-section bg-light">
-        <div class="container">
-            <div class="row align-items-end mb-5">
-                <div class="col-lg-6 ftco-animate public-reveal">
-                    <div class="heading-section mb-0">
-                        <h3 class="subheading">Coaching friction</h3>
-                        <h2 class="mb-2">Most trainers do the right work in the wrong places.</h2>
-                    </div>
-                </div>
-                <div class="col-lg-5 offset-lg-1 ftco-animate public-reveal public-reveal-delay-1">
-                    <p class="atlas-lead mb-0">
-                        Trainer workflows become stronger when programming, member context, progress, and follow-ups stay connected to the gym’s operating layer.
-                    </p>
-                </div>
-            </div>
-
-            <div class="row">
-                @foreach ($painPoints as $point)
-                    <div class="col-md-6 col-xl-3 ftco-animate public-reveal {{ $loop->index === 1 ? 'public-reveal-delay-1' : ($loop->index > 1 ? 'public-reveal-delay-2' : '') }}">
-                        <div class="atlas-card p-4 h-100 mb-4">
-                            <span class="public-pill">0{{ $loop->iteration }}</span>
-                            <h3 class="mt-4" style="font-size: 1.2rem; font-weight: 800; color: #0f172a; line-height: 1.16;">{{ $point['title'] }}</h3>
-                            <p class="mt-3 mb-0">{{ $point['copy'] }}</p>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-    </section>
-
-    <section class="ftco-section">
-        <div class="container">
-            <div class="row justify-content-center mb-5 pb-3">
-                <div class="col-lg-8 heading-section ftco-animate text-center public-reveal">
-                    <h3 class="subheading">Feature set</h3>
-                    <h2 class="mb-3">A coaching workspace, not an afterthought</h2>
-                    <p class="atlas-lead mb-0">Designed for the real daily rhythm of trainers working with gym-assigned members.</p>
-                </div>
-            </div>
-            <div class="row">
-                @foreach ($features as $feature)
-                    <div class="col-md-6 col-lg-3 ftco-animate public-reveal {{ $loop->index % 4 === 1 ? 'public-reveal-delay-1' : ($loop->index % 4 > 1 ? 'public-reveal-delay-2' : '') }}">
-                        <div class="atlas-card p-4 mb-4 h-100">
-                            <div class="public-kicker mb-3">Trainer tool</div>
-                            <h3 style="font-size: 1.18rem; font-weight: 800; color: #0f172a; line-height: 1.15;">{{ $feature }}</h3>
-                            <p class="mt-3 mb-0">Built to stay attached to the member relationship instead of a separate note or chat thread.</p>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-    </section>
-
-    <section class="ftco-section bg-light">
-        <div class="container">
-            <div class="row align-items-end mb-5">
-                <div class="col-lg-6 ftco-animate public-reveal">
-                    <div class="heading-section mb-0">
-                        <h3 class="subheading">Workflow</h3>
-                        <h2 class="mb-2">From assigned member to better follow-up</h2>
-                    </div>
-                </div>
-                <div class="col-lg-5 offset-lg-1 ftco-animate public-reveal public-reveal-delay-1">
-                    <p class="atlas-lead mb-0">The trainer layer becomes useful when it is connected to the same member lifecycle the gym already runs.</p>
-                </div>
-            </div>
-            <div class="row">
-                @foreach ($workflow as $step)
-                    <div class="col-lg-3 ftco-animate public-reveal {{ $loop->index > 0 ? 'public-reveal-delay-1' : '' }}">
-                        <div class="atlas-card p-4 h-100 mb-4">
-                            <span class="public-pill">0{{ $loop->iteration }}</span>
-                            <h3 class="mt-4" style="font-size: 1.18rem; font-weight: 800; color: #0f172a; line-height: 1.16;">{{ $step['title'] }}</h3>
-                            <p class="mt-3 mb-0">{{ $step['copy'] }}</p>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-    </section>
-
-    <section id="trainer-access" class="ftco-section">
-        <div class="container">
-            <div class="row align-items-start">
-                <div class="col-lg-4 ftco-animate public-reveal mb-4 mb-lg-0">
-                    <div class="atlas-card p-4 p-md-5 h-100">
-                        <div class="public-kicker mb-3">Access flow</div>
-                        <h2 class="mb-4" style="font-size: 1.8rem; font-weight: 800; line-height: 1.08; color: #0f172a;">Request access through the real trainer inquiry path.</h2>
-                        <div style="display: grid; gap: 1rem;">
-                            @foreach ([
-                                ['title' => 'Real request', 'copy' => 'This page uses the actual trainer inquiry flow.'],
-                                ['title' => 'Structured routing', 'copy' => 'Your request reaches the team as a trainer inquiry.'],
-                                ['title' => 'Gym-linked', 'copy' => 'Your gym can then connect your trainer access in the platform.'],
-                            ] as $item)
-                                <div>
-                                    <div class="public-kicker mb-1">{{ $item['title'] }}</div>
-                                    <p class="mb-0">{{ $item['copy'] }}</p>
-                                </div>
-                            @endforeach
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-7 offset-lg-1 ftco-animate public-reveal public-reveal-delay-1">
-                    @if (session('success'))
-                        <div class="mb-4 px-4 py-4 atlas-alert-success">
-                            {{ session('success') }}
-                        </div>
+<x-public.layouts.app page-title="For Trainers" page-description="A coaching workspace for verified independent and gym-connected trainers, with member plans, progress context, follow-ups, messaging and alerts.">
+    <section class="ops-hero">
+        <div class="public-container-wide ops-hero-grid">
+            <div>
+                <p class="public-eyebrow">For independent and gym-connected trainers</p>
+                <h1 class="ops-title mt-6">Coach with the member context already in view.</h1>
+                <p class="ops-lede mt-6">Assigned clients, plans, progress context, follow-ups, trial work, alerts, and conversations—organized around the coaching day.</p>
+                <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+                    <a href="#trainer-access" class="public-button public-button-primary">Request trainer access</a>
+                    @if (Route::has('public.trainer-app'))
+                        <a href="{{ route('public.trainer-app') }}" class="public-button border border-white/20 bg-white/10 text-white hover:bg-white/15 hover:text-white">Explore the Trainer App</a>
                     @endif
-
-                    @if ($errors->any())
-                        <div class="mb-4 px-4 py-4 atlas-alert-danger">
-                            <div style="font-weight: 800;">Please correct the highlighted trainer inquiry fields.</div>
-                            <ul class="mt-3 mb-0">
-                                @foreach ($errors->all() as $error)
-                                    <li>{{ $error }}</li>
-                                @endforeach
-                            </ul>
-                        </div>
-                    @endif
-
-                    <div class="atlas-card p-4 p-md-5">
-                        <div class="public-kicker mb-3">Trainer inquiry</div>
-                        <h3 style="font-size: 1.9rem; font-weight: 800; color: #0f172a; line-height: 1.08;">Start the trainer access conversation.</h3>
-
-                        <form method="POST" action="{{ route('public.contact.store') }}" class="contact-form mt-4">
-                            @csrf
-                            <input type="hidden" name="inquiry_type" value="trainer">
-                            <input type="hidden" name="redirect_to" value="{{ $formRedirect }}">
-
-                            <div class="form-group">
-                                <input id="trainer_name" name="name" value="{{ old('name') }}" class="form-control" placeholder="Trainer name">
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <input id="trainer_email" name="email" type="email" value="{{ old('email') }}" class="form-control" placeholder="Email">
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <input id="trainer_phone" name="phone" value="{{ old('phone') }}" class="form-control" placeholder="Phone">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <textarea id="trainer_message" name="message" rows="5" class="form-control" placeholder="Tell us about your gym connection">{{ old('message', 'I want trainer access through my gym on the platform.') }}</textarea>
-                            </div>
-                            <div class="form-group mb-0">
-                                <input type="submit" value="Submit Trainer Inquiry" class="btn btn-primary py-3 px-5">
-                            </div>
-                        </form>
-                    </div>
                 </div>
+                <div class="ops-proofline"><span>Independent or gym-connected</span><span>Verified member access</span><span>Permission-aware tools</span></div>
+            </div>
+            <aside class="ops-window" aria-label="Code-rendered representation of the trainer coaching queue">
+                <div class="ops-window-bar"><div class="ops-window-dots"><i></i><i></i><i></i></div><span class="ops-window-label">Trainer workspace · Today</span><span class="ops-status">Ready</span></div>
+                <div class="p-5 sm:p-7"><div class="ops-canvas-head"><div><p class="ops-canvas-kicker">Coaching queue</p><p class="ops-canvas-title">A practical coaching day</p></div><span class="rounded-full bg-brand-500/15 px-3 py-1 text-[.68rem] font-bold text-indigo-300">Verified access</span></div><ol class="mt-6 space-y-3">@foreach ([['ti-bell','Review clients and alerts','Prioritize'],['ti-user-search','Open member context','Understand'],['ti-barbell','Build or update the plan','Program'],['ti-notes','Record the follow-up','Document'],['ti-message-circle','Continue the conversation','Support']] as $step)<li class="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border border-white/10 bg-white/[.04] p-3"><span class="ops-feed-icon"><i class="ti {{ $step[0] }}"></i></span><span class="text-sm font-semibold text-white">{{ $step[1] }}</span><em class="text-[.68rem] not-italic text-slate-500">{{ $step[2] }}</em></li>@endforeach</ol></div>
+            </aside>
+        </div>
+    </section>
+
+    <section class="ops-section bg-white" aria-labelledby="trainer-capabilities-heading">
+        <div class="public-container-wide">
+            <div class="grid gap-8 lg:grid-cols-[.75fr_1.25fr] lg:items-end"><div class="public-section-heading">
+                <p class="public-kicker">Current capabilities</p>
+                <h2 id="trainer-capabilities-heading" class="mt-4">The real coaching workflow, not a generic feature list.</h2>
+            </div><p class="max-w-2xl leading-8 text-slate-600 lg:justify-self-end">Independent trainers complete account verification before adding members or managing member plans. Gym-connected trainers retain their gym, branch, assignment, role and permission boundaries.</p></div>
+            <div class="ops-index mt-12">
+                @foreach ($capabilities as $capability)
+                    <article class="ops-module"><span class="ops-module-number">{{ str_pad($loop->iteration,2,'0',STR_PAD_LEFT) }}</span><h3>{{ $capability['title'] }}</h3><p>{{ $capability['copy'] }}</p><div class="ops-tags"><span><i class="ti {{ $capability['icon'] }} mr-1"></i> Trainer workflow</span></div></article>
+                @endforeach
+            </div>
+        </div>
+    </section>
+
+    <section class="ops-section bg-slate-50" aria-labelledby="trainer-scope-heading">
+        <div class="public-container-wide grid gap-8 lg:grid-cols-[.72fr_1.28fr] lg:items-center">
+            <div>
+                <p class="public-kicker">Current product scope</p>
+                <h2 id="trainer-scope-heading" class="mt-4 text-3xl font-semibold tracking-[-0.035em] text-slate-950">Choose the access path that matches how you coach.</h2>
+            </div>
+            <figure class="ops-editorial"><img src="{{ asset('images/public-site/editorial/trainer-member-coaching.webp') }}" width="1800" height="948" loading="lazy" alt="Personal trainer coaching a gym member with attentive, hands-on guidance"><figcaption class="ops-editorial-caption"><span class="ops-editorial-chip"><i class="ti ti-heart-rate-monitor"></i> Human coaching, informed</span><p>Independent trainers can use Atlas after account verification. Gym-connected trainers continue to work through gym-assigned roles and permissions. Atlas is not a public trainer marketplace.</p><p class="mt-2 text-xs">Paid online coaching, live video or voice sessions, and AI-generated programs are not part of the current product promise.</p></figcaption></figure>
+        </div>
+    </section>
+
+    <section id="trainer-access" class="ops-section bg-white" aria-labelledby="trainer-access-heading">
+        <div class="public-container ops-form-shell">
+            <div class="ops-form-intro">
+                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-300">Access path</p>
+                <h2 id="trainer-access-heading" class="mt-4 text-3xl font-semibold tracking-[-0.035em] text-white sm:text-4xl">Join independently or through your gym.</h2>
+                <p class="mt-5 leading-7 text-slate-300">Tell the Atlas team how you coach. Independent trainers are guided through account verification; gym-connected trainers can confirm their gym relationship and access needs.</p>
+                <p class="mt-6 text-sm leading-7 text-slate-400">Verification is required before an independent trainer can add members or manage member plans. This does not create a public marketplace profile.</p>
+                @if ($whatsappHref)
+                    <a href="{{ $whatsappHref }}" target="_blank" rel="noopener noreferrer" class="public-button mt-6 border border-white/20 bg-white/10 text-white hover:bg-white/15">Ask about access on WhatsApp</a>
+                @endif
+            </div>
+            <div class="ops-form-body">
+                @if (session('success'))
+                    <div role="status" class="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('success') }}</div>
+                @endif
+                @if ($errors->any())
+                    <div role="alert" class="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                        <p class="font-semibold">Please correct the highlighted trainer enquiry fields.</p>
+                        <ul class="mt-2 list-disc space-y-1 pl-5">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+                    </div>
+                @endif
+                <form method="POST" action="{{ route('public.contact.store') }}" class="space-y-5">
+                    @csrf
+                    <input type="hidden" name="inquiry_type" value="trainer">
+                    <input type="hidden" name="redirect_to" value="{{ $formRedirect }}">
+                    <div>
+                        <label for="trainer_name" class="mb-2 block text-sm font-semibold text-slate-800">Full name <span class="text-rose-600" aria-hidden="true">*</span></label>
+                        <input id="trainer_name" name="name" value="{{ old('name') }}" class="form-control" autocomplete="name" required @error('name') aria-invalid="true" aria-describedby="trainer_name_error" @enderror>
+                        @error('name')<p id="trainer_name_error" class="mt-2 text-sm text-rose-600">{{ $message }}</p>@enderror
+                    </div>
+                    <div class="grid gap-5 sm:grid-cols-2">
+                        <div>
+                            <label for="trainer_email" class="mb-2 block text-sm font-semibold text-slate-800">Email address <span class="text-rose-600" aria-hidden="true">*</span></label>
+                            <input id="trainer_email" name="email" type="email" value="{{ old('email') }}" class="form-control" autocomplete="email" required @error('email') aria-invalid="true" aria-describedby="trainer_email_error" @enderror>
+                            @error('email')<p id="trainer_email_error" class="mt-2 text-sm text-rose-600">{{ $message }}</p>@enderror
+                        </div>
+                        <div>
+                            <label for="trainer_phone" class="mb-2 block text-sm font-semibold text-slate-800">Phone number <span class="font-normal text-slate-500">(optional)</span></label>
+                            <input id="trainer_phone" name="phone" value="{{ old('phone') }}" class="form-control" autocomplete="tel" @error('phone') aria-invalid="true" aria-describedby="trainer_phone_error" @enderror>
+                            @error('phone')<p id="trainer_phone_error" class="mt-2 text-sm text-rose-600">{{ $message }}</p>@enderror
+                        </div>
+                    </div>
+                    <div>
+                        <label for="trainer_message" class="mb-2 block text-sm font-semibold text-slate-800">Access path and coaching needs <span class="text-rose-600" aria-hidden="true">*</span></label>
+                        <textarea id="trainer_message" name="message" rows="6" class="form-control" required @error('message') aria-invalid="true" aria-describedby="trainer_message_error" @enderror>{{ old('message', 'I am joining independently / through a gym and would like help with trainer access.') }}</textarea>
+                        @error('message')<p id="trainer_message_error" class="mt-2 text-sm text-rose-600">{{ $message }}</p>@enderror
+                    </div>
+                    <button type="submit" class="public-button public-button-primary">Submit trainer enquiry</button>
+                </form>
             </div>
         </div>
     </section>

@@ -63,4 +63,8 @@ return [
         'internal_api_key' => env('SOCKET_INTERNAL_API_KEY', ''),
     ],
 
+    'public_whatsapp' => [
+        'number' => env('PUBLIC_WHATSAPP_NUMBER', '917451008842'),
+    ],
+
 ];
