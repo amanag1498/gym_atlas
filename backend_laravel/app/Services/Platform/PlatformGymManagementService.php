@@ -371,7 +371,9 @@ class PlatformGymManagementService
             'status' => $status,
             'is_active' => $isActive,
             'operational_access_enabled' => $operationalAccessEnabled,
-            'gym_onboarding_completed' => $operationalAccessEnabled ? $currentGym?->gym_onboarding_completed : false,
+            'gym_onboarding_completed' => $operationalAccessEnabled
+                ? (bool) ($currentGym?->gym_onboarding_completed ?? false)
+                : false,
             'approval_status' => $approvalStatus,
             'approval_notes' => $approvalStatus === 'rejected'
                 ? (Arr::get($data, 'rejected_reason') ?: ($currentGym?->approval_notes))

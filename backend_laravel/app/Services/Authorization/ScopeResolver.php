@@ -6,12 +6,17 @@ use App\Enums\RoleName;
 use App\Models\Branch;
 use App\Models\Gym;
 use App\Models\User;
+use App\Services\Members\GymMemberAccessService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class ScopeResolver
 {
+    public function __construct(
+        private readonly GymMemberAccessService $gymMemberAccessService,
+    ) {}
+
     public function gymsQuery(User $user): Builder
     {
         if ($user->hasRole(RoleName::PlatformAdmin->value)) {
@@ -20,14 +25,31 @@ class ScopeResolver
 
         $query = Gym::query()
             ->where('operational_access_enabled', true)
+            ->where('is_active', true)
+            ->where('status', 'active')
             ->distinct();
 
         if ($user->active_role === RoleName::GymOwner->value) {
             return $query->where('owner_user_id', $user->id);
         }
 
+        if ($user->active_role === RoleName::Member->value) {
+            return $query->whereHas('memberProfiles', function (Builder $profile) use ($user): void {
+                $profile->where('user_id', $user->id);
+                $this->gymMemberAccessService->scopeAccessibleProfiles($profile);
+            });
+        }
+
+        if ($user->active_role === RoleName::Trainer->value) {
+            return $query->whereHas('trainerProfiles', fn (Builder $profile) => $profile
+                ->where('user_id', $user->id)
+                ->where('is_active', true)
+                ->where('status', 'active'));
+        }
+
         return $query->whereHas('users', function (Builder $builder) use ($user): void {
-            $builder->where('users.id', $user->id);
+            $builder->where('users.id', $user->id)
+                ->where('gym_user.status', 'active');
         });
     }
 
@@ -40,13 +62,45 @@ class ScopeResolver
         if ($user->active_role === RoleName::GymOwner->value) {
             return Branch::query()->whereHas('gym', function (Builder $builder) use ($user): void {
                 $builder->where('owner_user_id', $user->id)
-                    ->where('operational_access_enabled', true);
+                    ->where('operational_access_enabled', true)
+                    ->where('is_active', true)
+                    ->where('status', 'active');
             });
+        }
+
+        if ($user->active_role === RoleName::Member->value) {
+            return Branch::query()
+                ->whereHas('memberProfiles', function (Builder $profile) use ($user): void {
+                    $profile->where('user_id', $user->id);
+                    $this->gymMemberAccessService->scopeAccessibleProfiles($profile);
+                })
+                ->whereHas('gym', fn (Builder $builder) => $builder
+                    ->where('operational_access_enabled', true)
+                    ->where('is_active', true)
+                    ->where('status', 'active'));
+        }
+
+        if ($user->active_role === RoleName::Trainer->value) {
+            return Branch::query()
+                ->whereHas('trainerProfiles', fn (Builder $profile) => $profile
+                    ->where('user_id', $user->id)
+                    ->where('is_active', true)
+                    ->where('status', 'active'))
+                ->whereHas('gym', fn (Builder $builder) => $builder
+                    ->where('operational_access_enabled', true)
+                    ->where('is_active', true)
+                    ->where('status', 'active'));
         }
 
         return Branch::query()->whereHas('users', function (Builder $builder) use ($user): void {
             $builder->where('users.id', $user->id);
-        })->whereHas('gym', fn (Builder $builder) => $builder->where('operational_access_enabled', true));
+        })->whereHas('gym.users', function (Builder $builder) use ($user): void {
+            $builder->where('users.id', $user->id)
+                ->where('gym_user.status', 'active');
+        })->whereHas('gym', fn (Builder $builder) => $builder
+            ->where('operational_access_enabled', true)
+            ->where('is_active', true)
+            ->where('status', 'active'));
     }
 
     public function canAccessGym(User $user, int|string|Gym $gym): bool

@@ -2,6 +2,8 @@
 
 namespace App\Http\Resources\User;
 
+use App\Http\Resources\Gym\BranchResource;
+use App\Http\Resources\Gym\GymResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -28,8 +30,8 @@ class UserResource extends JsonResource
             'trainer_onboarding_step' => (int) ($this->trainer_onboarding_step ?? 1),
             'roles' => $this->getRoleNames()->values()->all(),
             'permissions' => $this->getAllPermissions()->pluck('name')->values()->all(),
-            'gyms' => \App\Http\Resources\Gym\GymResource::collection($this->whenLoaded('gyms')),
-            'branches' => \App\Http\Resources\Gym\BranchResource::collection($this->whenLoaded('branches')),
+            'gyms' => GymResource::collection($this->whenLoaded('gyms')),
+            'branches' => BranchResource::collection($this->whenLoaded('branches')),
             'trainer_profile' => $this->when(
                 $this->relationLoaded('managedTrainerProfile') && $this->managedTrainerProfile !== null,
                 fn () => TrainerProfileResource::make($this->managedTrainerProfile),
@@ -38,7 +40,8 @@ class UserResource extends JsonResource
                 $this->relationLoaded('memberProfile') && $this->memberProfile !== null,
                 fn () => MemberProfileResource::make($this->memberProfile),
             ),
-            'owned_gyms' => \App\Http\Resources\Gym\GymResource::collection($this->whenLoaded('ownedGyms')),
+            'member_profiles' => MemberProfileResource::collection($this->whenLoaded('memberProfiles')),
+            'owned_gyms' => GymResource::collection($this->whenLoaded('ownedGyms')),
             'owned_gyms_count' => $this->whenCounted('ownedGyms'),
             'staff_assignments' => $this->whenLoaded('staffAssignments', fn () => $this->staffAssignments->map(fn ($assignment): array => [
                 'id' => $assignment->id,

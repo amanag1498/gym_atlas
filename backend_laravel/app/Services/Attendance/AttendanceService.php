@@ -10,11 +10,86 @@ use App\Models\MemberMembership;
 use App\Models\MemberProfile;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AttendanceService
 {
+    private const QR_TTL_MINUTES = 5;
+
+    /** @return array{qr_payload: string, expires_at: string, gym_id: int, branch_id: int, member_id: int} */
+    public function buildQrPayload(User $member, Gym $gym, Branch $branch): array
+    {
+        $issuedAt = now();
+        $expiresAt = $issuedAt->copy()->addMinutes(self::QR_TTL_MINUTES);
+        $payload = Crypt::encryptString(json_encode([
+            'member_id' => $member->id,
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'issued_at' => $issuedAt->timestamp,
+            'expires_at' => $expiresAt->timestamp,
+            'nonce' => (string) Str::uuid(),
+        ], JSON_THROW_ON_ERROR));
+
+        return [
+            'qr_payload' => $payload,
+            'expires_at' => $expiresAt->toIso8601String(),
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_id' => $member->id,
+        ];
+    }
+
+    public function qrCheckIn(
+        Gym $gym,
+        Branch $branch,
+        string $qrPayload,
+        ?User $checkedInBy,
+        ?string $notes = null,
+        ?string $sourceDevice = null,
+    ): AttendanceLog {
+        try {
+            $payload = json_decode(Crypt::decryptString($qrPayload), true, 512, JSON_THROW_ON_ERROR);
+        } catch (DecryptException|\JsonException) {
+            throw ValidationException::withMessages([
+                'qr_payload' => ['The attendance QR code is invalid.'],
+            ]);
+        }
+
+        if (! is_array($payload)
+            || (int) ($payload['gym_id'] ?? 0) !== $gym->id
+            || (int) ($payload['branch_id'] ?? 0) !== $branch->id) {
+            throw ValidationException::withMessages([
+                'qr_payload' => ['The attendance QR code does not belong to this gym and branch.'],
+            ]);
+        }
+
+        if ((int) ($payload['expires_at'] ?? 0) < now()->timestamp) {
+            throw ValidationException::withMessages([
+                'qr_payload' => ['The attendance QR code has expired. Ask the member to refresh it.'],
+            ]);
+        }
+
+        $member = User::query()->find($payload['member_id'] ?? null);
+        if ($member === null) {
+            throw ValidationException::withMessages([
+                'qr_payload' => ['The attendance QR code member no longer exists.'],
+            ]);
+        }
+
+        return $this->recordCheckIn(
+            gym: $gym,
+            branch: $branch,
+            member: $member,
+            checkedInBy: $checkedInBy,
+            method: AttendanceCheckInMethod::Qr->value,
+            notes: $notes,
+            sourceDevice: $sourceDevice,
+        );
+    }
+
     public function biometricCheckIn(Gym $gym, Branch $branch, string $biometricIdentifier, ?User $checkedInBy, ?string $notes = null, ?string $sourceDevice = null): AttendanceLog
     {
         $profile = MemberProfile::query()
@@ -101,10 +176,7 @@ class AttendanceService
             })
             ->exists();
 
-        $profileAllowsCheckIn = (bool) $profile->is_active
-            && $profile->membership_status === 'active';
-
-        if (! $activeMembership && ! $profileAllowsCheckIn) {
+        if (! $activeMembership) {
             throw ValidationException::withMessages([
                 'member_id' => ['Attendance is unavailable because the member does not have an active membership.'],
             ]);

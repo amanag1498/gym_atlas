@@ -84,16 +84,24 @@
                             </div>
                         @endif
 
-                        @if ($userDetail->memberProfile)
-                            <div class="panel-card-muted px-4 py-4">
-                                <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Member Profile</div>
-                                <div class="mt-2 text-sm font-semibold text-slate-950 dark:text-white">{{ $userDetail->memberProfile->gym?->name ?? 'No gym linked' }}</div>
-                                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $userDetail->memberProfile->branch?->name ?? 'No branch linked' }}</div>
-                                <div class="mt-2 flex flex-wrap gap-2">
-                                    <x-status-badge :label="$userDetail->memberProfile->membership_status ?: 'inactive'" />
-                                    @if ($userDetail->memberProfile->membership_expires_on)
-                                        <x-status-badge :label="'Expires '.$userDetail->memberProfile->membership_expires_on->format('d M Y')" tone="warning" />
-                                    @endif
+                        @if ($userDetail->memberProfiles->isNotEmpty())
+                            <div class="panel-card-muted admin-detail-span-full px-4 py-4">
+                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                    <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Member Relationships</div>
+                                    <x-status-badge :label="$userDetail->memberProfiles->count().' profiles'" tone="info" />
+                                </div>
+                                <div class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                    @foreach ($userDetail->memberProfiles->sortByDesc(fn ($profile) => (int) $profile->is_active) as $profile)
+                                        <div class="rounded-xl border border-slate-200 bg-white/70 p-3 dark:border-slate-700 dark:bg-slate-900/50">
+                                            <div class="text-sm font-semibold text-slate-950 dark:text-white">{{ $profile->gym?->name ?? 'Independent member' }}</div>
+                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $profile->branch?->name ?? ($profile->gym_id ? 'All branches / no branch' : 'No gym scope') }}</div>
+                                            <div class="mt-2 text-xs text-slate-600 dark:text-slate-300">Trainer: {{ $profile->assignedTrainer?->name ?? 'Not assigned' }}</div>
+                                            <div class="mt-2 flex flex-wrap gap-2">
+                                                <x-status-badge :label="$profile->membership_status ?: 'inactive'" />
+                                                <x-status-badge :label="$profile->is_active ? 'Active relationship' : 'Inactive relationship'" :tone="$profile->is_active ? 'success' : 'danger'" />
+                                            </div>
+                                        </div>
+                                    @endforeach
                                 </div>
                             </div>
                         @endif

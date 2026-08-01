@@ -10,10 +10,12 @@ use App\Models\MemberMembership;
 use App\Models\MemberProfile;
 use App\Models\MembershipPlan;
 use App\Models\Notification;
+use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Services\Notification\ReminderService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class AttendanceNotificationFeatureTest extends TestCase
@@ -183,6 +185,64 @@ class AttendanceNotificationFeatureTest extends TestCase
             ->exists());
     }
 
+    public function test_due_reminder_is_cancelled_if_membership_access_ends_before_delivery(): void
+    {
+        Mail::fake();
+        [$manager, $member, $gym, $branch] = $this->makeScopedUsers(RoleName::BranchManager->value);
+        $membership = MemberMembership::query()
+            ->where('gym_id', $gym->id)
+            ->where('member_id', $member->id)
+            ->firstOrFail();
+        $membership->forceFill([
+            'due_date' => today()->toDateString(),
+            'due_amount' => 500,
+            'payment_status' => 'unpaid',
+        ])->save();
+
+        app(ReminderService::class)->syncMembershipReminders($membership->fresh('membershipPlan'));
+        $membership->forceFill(['status' => 'cancelled'])->save();
+        MemberProfile::query()
+            ->where('user_id', $member->id)
+            ->where('gym_id', $gym->id)
+            ->update(['status' => 'inactive', 'membership_status' => 'cancelled', 'is_active' => false]);
+
+        app(ReminderService::class)->runDueReminders(null, $gym->id, $branch->id);
+
+        $this->assertDatabaseHas('scheduled_reminders', [
+            'member_membership_id' => $membership->id,
+            'type' => 'payment_due',
+            'status' => 'cancelled',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'user_id' => $member->id,
+            'member_membership_id' => $membership->id,
+            'type' => NotificationType::PaymentDue->value,
+        ]);
+        Mail::assertNothingSent();
+    }
+
+    public function test_global_inactivity_scan_does_not_schedule_independent_members(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        $member = User::factory()->create(['active_role' => RoleName::Member->value, 'is_active' => true]);
+        $member->assignRole(RoleName::Member->value);
+        MemberProfile::query()->create([
+            'user_id' => $member->id,
+            'gym_id' => null,
+            'branch_id' => null,
+            'status' => 'active',
+            'membership_status' => 'independent',
+            'is_active' => true,
+        ]);
+
+        app(ReminderService::class)->scheduleAttendanceInactivityReminders();
+
+        $this->assertDatabaseMissing('scheduled_reminders', [
+            'user_id' => $member->id,
+            'type' => 'attendance_inactivity',
+        ]);
+    }
+
     private function makeScopedUsers(string $activeRole): array
     {
         $this->seed(PermissionSeeder::class);
@@ -229,8 +289,39 @@ class AttendanceNotificationFeatureTest extends TestCase
             'is_active' => true,
         ]);
 
+        $plan = MembershipPlan::query()->create([
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'name' => 'Scoped Active Plan',
+            'duration_days' => 30,
+            'plan_price' => 1000,
+            'joining_fee' => 0,
+            'status' => 'active',
+        ]);
+        MemberMembership::query()->create([
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_id' => $member->id,
+            'membership_plan_id' => $plan->id,
+            'start_date' => now()->toDateString(),
+            'expiry_date' => now()->addDays(30)->toDateString(),
+            'status' => 'active',
+            'default_plan_price' => 1000,
+            'default_joining_fee' => 0,
+            'discount_type' => 'none',
+            'discount_amount' => 0,
+            'custom_fee_enabled' => false,
+            'joining_fee_waived' => false,
+            'partial_month_fee' => 0,
+            'pt_custom_fee' => 0,
+            'final_payable_amount' => 1000,
+            'amount_paid' => 1000,
+            'due_amount' => 0,
+            'payment_status' => 'paid',
+        ]);
+
         if ($activeRole === RoleName::Trainer->value) {
-            \App\Models\TrainerProfile::query()->create([
+            TrainerProfile::query()->create([
                 'user_id' => $actor->id,
                 'gym_id' => $gym->id,
                 'branch_id' => $branch->id,

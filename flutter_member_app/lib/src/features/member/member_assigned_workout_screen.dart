@@ -32,6 +32,7 @@ class _MemberAssignedWorkoutScreenState
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _plans = const [];
+  int? _selectedPlanId;
   int _selectedDayIndex = 0;
 
   @override
@@ -40,6 +41,7 @@ class _MemberAssignedWorkoutScreenState
     _plans = widget.initialPlans
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
+    _selectedPlanId = (_preferredPlan(_plans)['id'] as num?)?.toInt();
     _selectedDayIndex = _preferredDayIndex(_activePlan(_plans));
     _load();
   }
@@ -55,6 +57,11 @@ class _MemberAssignedWorkoutScreenState
       _plans = (response['data'] as List<dynamic>? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map))
           .toList();
+      if (!_plans.any(
+        (plan) => (plan['id'] as num?)?.toInt() == _selectedPlanId,
+      )) {
+        _selectedPlanId = (_preferredPlan(_plans)['id'] as num?)?.toInt();
+      }
       await _hydrateActivePlanDetail();
       _selectedDayIndex = _preferredDayIndex(_activePlan(_plans));
     } catch (exception) {
@@ -141,6 +148,51 @@ class _MemberAssignedWorkoutScreenState
                       ),
                     )
                   else ...[
+                    if (_plans.length > 1) ...[
+                      DropdownButtonFormField<int>(
+                        key: ValueKey(_selectedPlanId),
+                        initialValue: _selectedPlanId,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Viewing assigned plan',
+                        ),
+                        items: _plans
+                            .map(
+                              (plan) => DropdownMenuItem<int>(
+                                value: (plan['id'] as num?)?.toInt(),
+                                child: Text(
+                                  '${plan['name']?.toString() ?? 'Workout plan'} · ${_planSourceLabel(plan)}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) async {
+                          setState(() {
+                            _selectedPlanId = value;
+                            _selectedDayIndex = 0;
+                          });
+                          await _hydrateActivePlanDetail();
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Chip(
+                        avatar: Icon(
+                          activePlan['independent_trainer_member_relationship_id'] !=
+                                  null
+                              ? Icons.verified_user_outlined
+                              : Icons.apartment_rounded,
+                          size: 17,
+                        ),
+                        label: Text(_planSourceLabel(activePlan)),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
                     RevealOnBuild(
                       child: _AssignedWorkoutHero(
                         title: planName,
@@ -334,6 +386,13 @@ class _MemberAssignedWorkoutScreenState
   }
 
   Map<String, dynamic> _activePlan(List<Map<String, dynamic>> plans) {
+    return plans.firstWhere(
+      (plan) => (plan['id'] as num?)?.toInt() == _selectedPlanId,
+      orElse: () => _preferredPlan(plans),
+    );
+  }
+
+  Map<String, dynamic> _preferredPlan(List<Map<String, dynamic>> plans) {
     return plans.firstWhere(
       (plan) => (plan['status']?.toString() ?? '').toLowerCase() == 'active',
       orElse: () => plans.firstOrNull ?? const <String, dynamic>{},
@@ -670,4 +729,12 @@ class _AssignedMetricTile extends StatelessWidget {
       ),
     );
   }
+}
+
+String _planSourceLabel(Map<String, dynamic> plan) {
+  final scope = plan['coaching_scope']?.toString().toLowerCase();
+  return scope == 'independent' ||
+          plan['independent_trainer_member_relationship_id'] != null
+      ? 'Independent trainer plan'
+      : 'Gym trainer plan';
 }

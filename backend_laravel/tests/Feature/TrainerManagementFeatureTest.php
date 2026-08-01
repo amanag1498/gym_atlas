@@ -398,6 +398,35 @@ class TrainerManagementFeatureTest extends TestCase
             ->postJson('/api/gym/trainers/'.$trainer->id.'/deactivate', [], $headers)
             ->assertOk()
             ->assertJsonPath('data.is_active', false);
+
+        $this->assertDatabaseHas('trainer_profiles', [
+            'user_id' => $trainer->id,
+            'gym_id' => $gym->id,
+            'status' => 'inactive',
+            'is_active' => false,
+        ]);
+        $this->assertDatabaseHas('member_profiles', [
+            'user_id' => $member->id,
+            'gym_id' => $gym->id,
+            'assigned_trainer_user_id' => null,
+            'assigned_trainer_id' => null,
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $member->id,
+            'gym_id' => $gym->id,
+            'type' => 'trainer_assignment_removed',
+        ]);
+
+        $this->actingAs($trainer->refresh(), 'sanctum')
+            ->getJson('/api/public/me')
+            ->assertForbidden()
+            ->assertJsonPath('message', 'This account is inactive. Please contact support.');
+
+        $this->actingAs($member, 'sanctum')
+            ->getJson('/api/member/trainer', ['X-Gym-Id' => (string) $gym->id])
+            ->assertOk()
+            ->assertJsonPath('data.assigned_trainer', null)
+            ->assertJsonPath('data.enabled', false);
     }
 
     private function makeUser(string $role, string $email): User

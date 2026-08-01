@@ -36,10 +36,18 @@ class _TrainerTasksScreenState extends State<TrainerTasksScreen> {
   late final TextEditingController _noteController;
   late final TextEditingController _followUpDateController;
 
+  List<Map<String, dynamic>> get _gymMembers => widget.members
+      .where(
+        (assignment) =>
+            assignment['relationship_type'] != 'independent' &&
+            assignment['gym_id'] != null,
+      )
+      .toList();
+
   @override
   void initState() {
     super.initState();
-    _selectedMemberId = (widget.members.firstOrNull?['member_id'] as num?)
+    _selectedMemberId = (_gymMembers.firstOrNull?['member_id'] as num?)
         ?.toInt();
     _noteController = TextEditingController();
     _followUpDateController = TextEditingController(
@@ -338,7 +346,7 @@ class _TrainerTasksScreenState extends State<TrainerTasksScreen> {
                   ),
                   const SizedBox(height: 22),
                   _FollowComposerCard(
-                    members: widget.members,
+                    members: _gymMembers,
                     selectedMemberId: _selectedMemberId,
                     noteController: _noteController,
                     followUpDateController: _followUpDateController,
@@ -705,7 +713,9 @@ class _FollowComposerCard extends StatelessWidget {
                         return DropdownMenuItem<int>(
                           value: memberId,
                           child: Text(
-                            member['name']?.toString() ?? 'Member',
+                            '${member['name']?.toString() ?? 'Member'} · '
+                            'Gym ${assignment['gym_id'] ?? '--'} / '
+                            'Branch ${assignment['branch_id'] ?? '--'}',
                             overflow: TextOverflow.ellipsis,
                           ),
                         );

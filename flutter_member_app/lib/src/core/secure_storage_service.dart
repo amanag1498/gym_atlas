@@ -13,6 +13,7 @@ class SecureStorageService {
   static const _userKey = 'member_user';
   static const _roleKey = 'member_active_role';
   static const _trialRequestsKey = 'member_trial_requests';
+  static const _selectedGymIdKey = 'member_selected_gym_id';
 
   final FlutterSecureStorage _storage;
 
@@ -45,6 +46,15 @@ class SecureStorageService {
   }
 
   Future<String?> readActiveRole() => _storage.read(key: _roleKey);
+
+  Future<int?> readSelectedGymId() async {
+    final raw = await _storage.read(key: _selectedGymIdKey);
+    return int.tryParse(raw ?? '');
+  }
+
+  Future<void> saveSelectedGymId(int? gymId) => gymId == null
+      ? _storage.delete(key: _selectedGymIdKey)
+      : _storage.write(key: _selectedGymIdKey, value: gymId.toString());
 
   Future<List<Map<String, dynamic>>> readTrialRequests(int userId) async {
     final raw = await _storage.read(key: _trialRequestsKey);
@@ -88,6 +98,7 @@ class SecureStorageService {
       _storage.delete(key: _userKey),
       _storage.delete(key: _roleKey),
       _storage.delete(key: _trialRequestsKey),
+      _storage.delete(key: _selectedGymIdKey),
     ]);
   }
 }

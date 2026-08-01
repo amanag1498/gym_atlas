@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DietPlan extends Model
 {
-    protected $fillable = ['gym_id', 'branch_id', 'member_id', 'trainer_id', 'created_by_user_id', 'name', 'goal', 'daily_calorie_target', 'protein_target_g', 'carbs_target_g', 'fats_target_g', 'dietary_preferences', 'allergies_and_restrictions', 'notes', 'status', 'assigned_at', 'starts_on', 'ends_on'];
+    protected $fillable = ['gym_id', 'branch_id', 'member_id', 'trainer_id', 'independent_trainer_member_relationship_id', 'created_by_user_id', 'name', 'goal', 'daily_calorie_target', 'protein_target_g', 'carbs_target_g', 'fats_target_g', 'dietary_preferences', 'allergies_and_restrictions', 'notes', 'status', 'assigned_at', 'starts_on', 'ends_on'];
 
     protected function casts(): array
     {
@@ -34,6 +34,14 @@ class DietPlan extends Model
     public function trainer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'trainer_id');
+    }
+
+    public function independentTrainerMemberRelationship(): BelongsTo
+    {
+        return $this->belongsTo(
+            IndependentTrainerMemberRelationship::class,
+            'independent_trainer_member_relationship_id',
+        );
     }
 
     public function creator(): BelongsTo

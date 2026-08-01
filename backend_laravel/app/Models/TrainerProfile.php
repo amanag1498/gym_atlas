@@ -26,6 +26,11 @@ class TrainerProfile extends Model
         'availability_notes',
         'is_active',
         'verification_status',
+        'verification_reviewed_by_user_id',
+        'verification_reviewed_at',
+        'verification_verified_at',
+        'verification_rejection_reason',
+        'verification_review_notes',
     ];
 
     protected function casts(): array
@@ -38,6 +43,8 @@ class TrainerProfile extends Model
             'availability_notes' => 'string',
             'status' => 'string',
             'is_active' => 'boolean',
+            'verification_reviewed_at' => 'datetime',
+            'verification_verified_at' => 'datetime',
         ];
     }
 
@@ -54,6 +61,11 @@ class TrainerProfile extends Model
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function verificationReviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'verification_reviewed_by_user_id');
     }
 
     public function assignedMembers(): HasMany

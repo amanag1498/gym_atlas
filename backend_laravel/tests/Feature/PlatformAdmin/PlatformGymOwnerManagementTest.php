@@ -146,14 +146,29 @@ class PlatformGymOwnerManagementTest extends TestCase
         $this->get(route('web.gym.dashboard', ['gym' => $gym->id]))
             ->assertOk()
             ->assertSee('Gym Dashboard')
-            ->assertSee('Viewing as gym owner')
-            ->assertSee('Back to Platform Admin');
+            ->assertSee('Gym workspace preview')
+            ->assertSee('Exit Preview')
+            ->assertDontSee('Platform Admin')
+            ->assertDontSee(route('web.admin.gyms.index'));
 
         $this->post(route('web.admin.impersonation.stop'))
             ->assertRedirect(route('web.admin.gym-owners.show', $owner))
             ->assertSessionMissing('web_panel.platform_admin_impersonator_id');
 
         $this->get(route('web.admin.dashboard'))->assertOk();
+    }
+
+    public function test_platform_admin_cannot_open_gym_routes_without_starting_a_preview_session(): void
+    {
+        $admin = User::factory()->create([
+            'active_role' => RoleName::PlatformAdmin->value,
+            'is_active' => true,
+        ]);
+        $admin->assignRole(RoleName::PlatformAdmin->value);
+
+        $this->actingAs($admin)
+            ->get(route('web.gym.dashboard'))
+            ->assertForbidden();
     }
 
     public function test_platform_admin_is_blocked_from_previewing_unowned_gym_dashboard(): void

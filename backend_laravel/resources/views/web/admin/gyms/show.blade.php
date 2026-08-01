@@ -105,7 +105,7 @@
 
                         <div class="space-y-3">
                             <div class="panel-card-muted px-4 py-4">
-                                <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Owner</div>
+                                <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Owner Details</div>
                                 <div class="mt-2 text-sm font-semibold text-slate-950 dark:text-white">{{ $gym->owner?->name ?? 'Unassigned' }}</div>
                                 <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $gym->owner?->email ?? 'No owner email' }}</div>
                             </div>

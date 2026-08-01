@@ -16,6 +16,10 @@ class DietPlanResource extends JsonResource
             'branch_id' => $this->branch_id,
             'member_id' => $this->member_id,
             'trainer_id' => $this->trainer_id,
+            'independent_trainer_member_relationship_id' => $this->independent_trainer_member_relationship_id,
+            'coaching_scope' => $this->independent_trainer_member_relationship_id !== null
+                ? 'independent'
+                : ($this->gym_id !== null ? 'gym' : 'personal'),
             'created_by_user_id' => $this->created_by_user_id,
             'is_member_owned' => (int) $this->created_by_user_id === (int) $request->user()?->id
                 && $this->trainer_id === null,

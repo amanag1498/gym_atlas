@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web\Admin;
 
 use App\Enums\AnnouncementAudienceType;
+use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Communication\StoreAnnouncementRequest;
 use App\Models\Announcement;
@@ -12,6 +13,8 @@ use App\Models\Gym;
 use App\Models\Notification;
 use App\Models\User;
 use App\Services\Communication\AnnouncementService;
+use App\Services\Members\GymMemberAccessService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -20,8 +23,8 @@ class AnnouncementController extends Controller
 {
     public function __construct(
         private readonly AnnouncementService $announcementService,
-    ) {
-    }
+        private readonly GymMemberAccessService $gymMemberAccessService,
+    ) {}
 
     public function index(Request $request): View
     {
@@ -61,7 +64,13 @@ class AnnouncementController extends Controller
             ],
             'gyms' => Gym::query()->orderBy('name')->get(['id', 'name']),
             'branches' => Branch::query()->with('gym:id,name')->orderBy('name')->get(['id', 'gym_id', 'name']),
-            'members' => User::query()->role(\App\Enums\RoleName::Member->value)->orderBy('name')->get(['id', 'name', 'email']),
+            'members' => User::query()
+                ->role(RoleName::Member->value)
+                ->whereHas('memberProfiles', function (Builder $query): void {
+                    $this->gymMemberAccessService->scopeAccessibleProfiles($query->whereNotNull('gym_id'));
+                })
+                ->orderBy('name')
+                ->get(['id', 'name', 'email']),
         ]);
     }
 

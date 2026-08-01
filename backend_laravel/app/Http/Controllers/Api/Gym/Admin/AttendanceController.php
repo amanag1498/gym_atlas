@@ -9,11 +9,13 @@ use App\Http\Requests\Attendance\ManualAttendanceRequest;
 use App\Http\Resources\Attendance\AttendanceLogResource;
 use App\Models\AttendanceLog;
 use App\Models\Gym;
+use App\Models\MemberProfile;
 use App\Models\User;
 use App\Services\Attendance\AttendanceService;
 use App\Services\Audit\AuditLogService;
-use App\Services\Authorization\ScopeResolver;
 use App\Services\Authorization\ScopedPermissionResolver;
+use App\Services\Authorization\ScopeResolver;
+use App\Services\Members\GymMemberAccessService;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -24,8 +26,8 @@ class AttendanceController extends Controller
         private readonly ScopedPermissionResolver $scopedPermissionResolver,
         private readonly AttendanceService $attendanceService,
         private readonly AuditLogService $auditLogService,
-    ) {
-    }
+        private readonly GymMemberAccessService $gymMemberAccessService,
+    ) {}
 
     public function index(Request $request)
     {
@@ -108,17 +110,27 @@ class AttendanceController extends Controller
         $branch = $this->resolveBranchForGym($request, $gym);
         $this->assertAttendanceManageAccess($request, $gym, $branch->id);
 
-        $log = $this->attendanceService->biometricCheckIn(
-            gym: $gym,
-            branch: $branch,
-            biometricIdentifier: $request->validated('biometric_identifier'),
-            checkedInBy: $request->user(),
-            notes: $request->validated('notes'),
-            sourceDevice: $request->validated('source_device'),
-        );
+        $isQrScan = filled($request->validated('qr_payload'));
+        $log = $isQrScan
+            ? $this->attendanceService->qrCheckIn(
+                gym: $gym,
+                branch: $branch,
+                qrPayload: $request->validated('qr_payload'),
+                checkedInBy: $request->user(),
+                notes: $request->validated('notes'),
+                sourceDevice: $request->validated('source_device'),
+            )
+            : $this->attendanceService->biometricCheckIn(
+                gym: $gym,
+                branch: $branch,
+                biometricIdentifier: $request->validated('biometric_identifier'),
+                checkedInBy: $request->user(),
+                notes: $request->validated('notes'),
+                sourceDevice: $request->validated('source_device'),
+            );
 
         $this->auditLogService->log(
-            event: 'attendance.biometric.created',
+            event: $isQrScan ? 'attendance.qr.created' : 'attendance.biometric.created',
             action: 'create',
             request: $request,
             subject: $log,
@@ -127,16 +139,24 @@ class AttendanceController extends Controller
             newValues: $log->toArray(),
         );
 
-        return $this->success(AttendanceLogResource::make($log->load(['member', 'checkedInByUser'])), 'Biometric attendance recorded successfully.', 201);
+        return $this->success(
+            AttendanceLogResource::make($log->load(['member', 'checkedInByUser'])),
+            $isQrScan ? 'QR attendance recorded successfully.' : 'Biometric attendance recorded successfully.',
+            201,
+        );
     }
 
     public function memberHistory(Request $request, User $member)
     {
         $gym = $this->resolveGym($request);
         $this->assertAttendanceViewAccess($request, $gym, $request->integer('branch_id') ?: null);
+        $memberProfile = MemberProfile::query()
+            ->where('user_id', $member->id)
+            ->where('gym_id', $gym->id)
+            ->firstOrFail();
+        $this->gymMemberAccessService->assertAccessible($memberProfile);
         abort_unless(
-            $member->memberProfile?->gym_id === $gym->id
-                && in_array((int) $member->memberProfile?->branch_id, $this->accessibleBranchIds($request, $gym), true),
+            in_array((int) $memberProfile->branch_id, $this->accessibleBranchIds($request, $gym), true),
             404,
             'Member not found in accessible scope.'
         );
@@ -194,16 +214,19 @@ class AttendanceController extends Controller
     {
         if ($request->boolean('today')) {
             $query->whereDate('checked_in_at', now()->toDateString());
+
             return;
         }
 
         if ($request->boolean('this_week')) {
             $query->whereBetween('checked_in_at', [now()->startOfWeek(), now()->endOfWeek()]);
+
             return;
         }
 
         if ($request->boolean('this_month')) {
             $query->whereBetween('checked_in_at', [now()->startOfMonth(), now()->endOfMonth()]);
+
             return;
         }
 

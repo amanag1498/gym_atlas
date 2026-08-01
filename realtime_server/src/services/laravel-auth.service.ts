@@ -23,6 +23,7 @@ interface RealtimeContextResponse {
   branch_scopes: Array<{ gym_id: number; branch_id: number }>;
   assigned_member_ids: number[];
   assigned_trainer_id: number | null;
+  assigned_trainer_ids?: number[];
 }
 
 export class LaravelAuthService {
@@ -48,6 +49,13 @@ export class LaravelAuthService {
       throw new Error('Invalid JWT payload for socket authentication.');
     }
 
+    const assignedTrainerId = decoded.assigned_trainer_id ? Number(decoded.assigned_trainer_id) : null;
+    const assignedTrainerIds = Array.isArray(decoded.assigned_trainer_ids)
+      ? decoded.assigned_trainer_ids.map(Number)
+      : assignedTrainerId
+        ? [assignedTrainerId]
+        : [];
+
     return {
       id: Number(decoded.sub),
       name: String(decoded.name ?? ''),
@@ -64,12 +72,19 @@ export class LaravelAuthService {
           }))
         : [],
       assignedMemberIds: Array.isArray(decoded.assigned_member_ids) ? decoded.assigned_member_ids.map(Number) : [],
-      assignedTrainerId: decoded.assigned_trainer_id ? Number(decoded.assigned_trainer_id) : null,
+      assignedTrainerId,
+      assignedTrainerIds: [...new Set(assignedTrainerIds)],
     };
   }
 
   private async fetchSocketUserFromLaravel(token: string): Promise<SocketUserContext> {
     const context = await this.fetchProtected<RealtimeContextResponse>('public/realtime/context', token);
+
+    const assignedTrainerIds = Array.isArray(context.assigned_trainer_ids)
+      ? context.assigned_trainer_ids.map(Number)
+      : context.assigned_trainer_id
+        ? [Number(context.assigned_trainer_id)]
+        : [];
 
     return {
       id: context.id,
@@ -86,6 +101,7 @@ export class LaravelAuthService {
       })),
       assignedMemberIds: context.assigned_member_ids,
       assignedTrainerId: context.assigned_trainer_id,
+      assignedTrainerIds: [...new Set(assignedTrainerIds)],
     };
   }
 

@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Diet\DietPlanService;
 use App\Services\Diet\DietPlanTemplateService;
+use App\Services\Trainer\IndependentCoachingAccessService;
 use App\Services\Trainer\TrainerScopeService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -26,24 +27,38 @@ class DietPlanController extends Controller
         private readonly DietPlanTemplateService $dietPlanTemplateService,
         private readonly TrainerScopeService $trainerScopeService,
         private readonly AuditLogService $auditLogService,
+        private readonly IndependentCoachingAccessService $independentCoachingAccessService,
     ) {}
 
     public function index(Request $request)
     {
         $profile = $this->trainerScopeService->resolveTrainerProfile($request);
+        $activeRelationshipIds = $profile->gym_id === null
+            && $this->independentCoachingAccessService->isVerifiedIndependentTrainer($request->user())
+            ? $this->independentCoachingAccessService
+                ->activeRelationshipsForTrainer($request->user())
+                ->get(['id', 'sharing_permissions'])
+                ->filter(fn ($relationship): bool => in_array('diets', $relationship->sharing_permissions ?? [], true))
+                ->pluck('id')
+            : collect();
         $memberId = $request->integer('member_id') ?: null;
         if ($memberId) {
-            $this->trainerScopeService->resolveAssignedMember(
-                $profile,
-                User::query()->findOrFail($memberId),
-            );
+            $member = User::query()->findOrFail($memberId);
+            $profile->gym_id === null
+                ? $this->independentCoachingAccessService->resolveActiveRelationship($request->user(), $member, null, 'diets')
+                : $this->trainerScopeService->resolveAssignedMember($profile, $member);
         }
 
         $paginator = DietPlan::query()
             ->with(['member', 'trainer', 'meals.items'])
             ->where('trainer_id', $request->user()->id)
             ->where('gym_id', $profile->gym_id)
+            ->where('status', 'active')
             ->when($profile->branch_id, fn ($query) => $query->where('branch_id', $profile->branch_id))
+            ->when(
+                $profile->gym_id === null,
+                fn ($query) => $query->whereIn('independent_trainer_member_relationship_id', $activeRelationshipIds),
+            )
             ->when($memberId, fn ($query, int $id) => $query->where('member_id', $id))
             ->latest()
             ->paginate(min(max($request->integer('per_page', 50), 1), 100));
@@ -54,12 +69,33 @@ class DietPlanController extends Controller
     public function store(StoreTrainerDietPlanRequest $request)
     {
         $profile = $this->trainerScopeService->resolveTrainerProfile($request);
-        foreach ($request->validated('member_ids') as $id) {
-            $this->trainerScopeService->resolveAssignedMember($profile, User::query()->findOrFail($id));
+        if ($profile->gym_id !== null) {
+            foreach ($request->validated('member_ids') as $id) {
+                $this->trainerScopeService->resolveAssignedMember($profile, User::query()->findOrFail($id));
+            }
         }
         $data = $request->validated();
         $data['gym_id'] = $profile->gym_id;
         $data['branch_id'] = $profile->branch_id;
+        if ($profile->gym_id === null) {
+            if (count($data['member_ids']) !== 1) {
+                throw ValidationException::withMessages([
+                    'member_ids' => ['Assign an independent diet plan to one member at a time.'],
+                ]);
+            }
+            $member = User::query()->findOrFail((int) $data['member_ids'][0]);
+            $relationship = $this->independentCoachingAccessService->resolveActiveRelationship(
+                $request->user(),
+                $member,
+                isset($data['independent_trainer_member_relationship_id'])
+                    ? (int) $data['independent_trainer_member_relationship_id']
+                    : null,
+                'diets',
+            );
+            $data['independent_trainer_member_relationship_id'] = $relationship->id;
+        } else {
+            $data['independent_trainer_member_relationship_id'] = null;
+        }
         $plans = $this->dietPlanService->create($request->user(), $data);
         foreach ($plans as $plan) {
             $this->auditLogService->log(event: 'diet_plan.created', action: 'create', request: $request, subject: $plan, gym: $plan->gym, branch: $plan->branch, newValues: $plan->toArray());
@@ -175,11 +211,13 @@ class DietPlanController extends Controller
             'starts_on' => ['nullable', 'date'],
             'ends_on' => ['nullable', 'date', 'after_or_equal:starts_on'],
         ]);
-        foreach ($data['member_ids'] as $memberId) {
-            $this->trainerScopeService->resolveAssignedMember(
-                $profile,
-                User::query()->findOrFail($memberId),
-            );
+        if ($profile->gym_id !== null) {
+            foreach ($data['member_ids'] as $memberId) {
+                $this->trainerScopeService->resolveAssignedMember(
+                    $profile,
+                    User::query()->findOrFail($memberId),
+                );
+            }
         }
 
         $templatePayload = $this->dietPlanTemplateService->planPayload($dietPlanTemplate);
@@ -193,6 +231,21 @@ class DietPlanController extends Controller
             'member_ids' => $data['member_ids'],
             'status' => 'active',
         ]);
+        if ($profile->gym_id === null) {
+            if (count($data['member_ids']) !== 1) {
+                throw ValidationException::withMessages([
+                    'member_ids' => ['Assign an independent diet plan to one member at a time.'],
+                ]);
+            }
+            $member = User::query()->findOrFail((int) $data['member_ids'][0]);
+            $relationship = $this->independentCoachingAccessService->resolveActiveRelationship(
+                $request->user(),
+                $member,
+                null,
+                'diets',
+            );
+            $payload['independent_trainer_member_relationship_id'] = $relationship->id;
+        }
         $plans = $this->dietPlanService->create($request->user(), $payload);
         foreach ($plans as $plan) {
             $this->auditLogService->log(
@@ -244,6 +297,25 @@ class DietPlanController extends Controller
     private function assertAccess(Request $request, DietPlan $plan): void
     {
         $profile = $this->trainerScopeService->resolveTrainerProfile($request);
+        if ($plan->independent_trainer_member_relationship_id !== null) {
+            if ((int) $plan->trainer_id !== (int) $request->user()->id) {
+                throw ValidationException::withMessages(['diet_plan_id' => ['You do not have access to this diet plan.']]);
+            }
+            $this->independentCoachingAccessService->resolveActiveRelationship(
+                $request->user(),
+                $plan->member,
+                (int) $plan->independent_trainer_member_relationship_id,
+                'diets',
+            );
+
+            return;
+        }
+        if ($plan->status !== 'active') {
+            throw ValidationException::withMessages([
+                'diet_plan_id' => ['This gym diet plan is historical and cannot be changed as a current assignment.'],
+            ]);
+        }
+        $this->trainerScopeService->resolveAssignedMember($profile, $plan->member);
         if ((int) $plan->trainer_id !== (int) $request->user()->id || (int) $plan->gym_id !== (int) $profile->gym_id || ($profile->branch_id && (int) $plan->branch_id !== (int) $profile->branch_id)) {
             throw ValidationException::withMessages(['diet_plan_id' => ['You do not have access to this diet plan.']]);
         }

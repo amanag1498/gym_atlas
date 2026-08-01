@@ -39,16 +39,48 @@ Map<String, dynamic> _recordMap(dynamic value) {
   return const <String, dynamic>{};
 }
 
+List<Map<String, dynamic>> _coachingRecords(Map<String, dynamic> response) {
+  final data = response['data'];
+  if (data is List) {
+    return data.whereType<Map>().map(_recordMap).toList();
+  }
+  final envelope = _recordMap(data);
+  for (final key in const ['data', 'relationships', 'trainers']) {
+    final records = envelope[key];
+    if (records is List) {
+      return records.whereType<Map>().map(_recordMap).toList();
+    }
+  }
+  return const [];
+}
+
+String _realtimeScope(
+  Map<String, dynamic> contextData,
+  List<Map<String, dynamic>> independentTrainers,
+) {
+  final membership = _recordMap(contextData['current_membership']);
+  final relationshipIds =
+      independentTrainers
+          .where((relationship) => relationship['access_active'] != false)
+          .map((relationship) => relationship['id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList()
+        ..sort();
+  return '${contextData['user_state']}|${membership['id']}|${relationshipIds.join(',')}';
+}
+
 class MemberHomeScreen extends StatefulWidget {
   const MemberHomeScreen({
     super.key,
     this.initialIndex = 0,
     this.chatLaunchVersion = 0,
+    this.chatTargetTrainerId,
     this.storePreviewData,
   });
 
   final int initialIndex;
   final int chatLaunchVersion;
+  final int? chatTargetTrainerId;
   final Map<String, dynamic>? storePreviewData;
 
   @override
@@ -73,6 +105,7 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
   Map<String, dynamic> _logbookSummary = const {};
   List<Map<String, dynamic>> _notifications = const [];
   List<Map<String, dynamic>> _publicGyms = const [];
+  List<Map<String, dynamic>> _independentTrainers = const [];
   int _chatEventVersion = 0;
   bool _stepSyncInFlight = false;
   String _stepPermissionStatus = 'unknown';
@@ -126,6 +159,7 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
     );
     _notifications = records('notifications');
     _publicGyms = records('public_gyms');
+    _independentTrainers = records('independent_trainers');
     _stepPermissionStatus = 'granted';
     _loading = false;
   }
@@ -152,31 +186,43 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
     await _syncStepsIfNeeded();
     await _load();
     if (session.token != null) {
-      _socket = _socketService.connect(session.token!);
-      _socket?.on('notification:new', (data) {
-        setState(
-          () => _notifications = [
-            Map<String, dynamic>.from(data as Map? ?? const {}),
-            ..._notifications,
-          ],
-        );
-      });
-      _socket?.on('chat:new_message', (_) {
-        if (!mounted) {
-          return;
-        }
-        setState(() => _chatEventVersion++);
-      });
+      _connectRealtime(session.token!);
     }
   }
 
+  void _connectRealtime(String token) {
+    _socket = _socketService.connect(token);
+    _socket?.on('notification:new', (data) {
+      if (!mounted) return;
+      setState(
+        () => _notifications = [
+          Map<String, dynamic>.from(data as Map? ?? const {}),
+          ..._notifications,
+        ],
+      );
+    });
+    _socket?.on('chat:new_message', (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _chatEventVersion++);
+    });
+  }
+
   Future<void> _load() async {
+    final previousScope = _realtimeScope(_contextData, _independentTrainers);
+    final sessionController = context.read<MemberSessionController>();
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       final contextResponse = await _memberRepository.fetchContext();
+      final freshContext = Map<String, dynamic>.from(
+        contextResponse['data'] as Map? ?? const {},
+      );
+      final selectedGymId = (freshContext['selected_gym_id'] as num?)?.toInt();
+      await sessionController.selectGymContext(selectedGymId);
       final results = await Future.wait([
         _safeMapRequest(
           _memberRepository.fetchAttendanceHistory,
@@ -206,13 +252,15 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
           _memberRepository.fetchPublicGyms,
           label: 'public gyms',
         ),
+        _safeMapRequest(
+          _memberRepository.fetchIndependentTrainers,
+          label: 'independent trainers',
+        ),
       ]);
-      _contextData = Map<String, dynamic>.from(
-        contextResponse['data'] as Map? ?? const {},
-      );
+      _contextData = freshContext;
       final userData = _contextData['user'];
       if (mounted && userData is Map) {
-        await context.read<MemberSessionController>().updateCurrentUser(
+        await sessionController.updateCurrentUser(
           MemberUser.fromJson(Map<String, dynamic>.from(userData)),
         );
       }
@@ -237,6 +285,12 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
       _publicGyms = (results[6]['data'] as List<dynamic>? ?? const [])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
+      _independentTrainers = _coachingRecords(results[7]);
+      final nextScope = _realtimeScope(_contextData, _independentTrainers);
+      final token = sessionController.token;
+      if (_socket != null && token != null && previousScope != nextScope) {
+        _connectRealtime(token);
+      }
     } catch (exception) {
       _error = exception.toString();
     }
@@ -361,6 +415,92 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
     if (mounted) {
       await _load();
     }
+  }
+
+  Future<void> _openGymSwitcher() async {
+    final relationships =
+        (_contextData['gym_relationships'] as List? ?? const [])
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+    if (relationships.length < 2) {
+      return;
+    }
+
+    final selectedGymId = (_contextData['selected_gym_id'] as num?)?.toInt();
+    final nextGymId = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Choose gym workspace'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: relationships.map((relationship) {
+                final gym = Map<String, dynamic>.from(
+                  relationship['gym'] as Map? ?? const {},
+                );
+                final branch = Map<String, dynamic>.from(
+                  relationship['branch'] as Map? ?? const {},
+                );
+                final trainer = Map<String, dynamic>.from(
+                  relationship['assigned_trainer'] as Map? ?? const {},
+                );
+                final membership = Map<String, dynamic>.from(
+                  relationship['membership'] as Map? ?? const {},
+                );
+                final gymId = (relationship['gym_id'] as num?)?.toInt();
+                final selected = gymId != null && gymId == selectedGymId;
+                final details = <String>[
+                  if (branch['name'] != null) branch['name'].toString(),
+                  if (trainer['name'] != null) 'Trainer: ${trainer['name']}',
+                  if (membership['status'] != null)
+                    membership['status'].toString(),
+                ];
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: ListTile(
+                    selected: selected,
+                    selectedTileColor: AppColors.primary.withValues(alpha: .08),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(
+                        color: selected ? AppColors.primary : AppColors.stroke,
+                      ),
+                    ),
+                    leading: CircleAvatar(
+                      backgroundColor: AppColors.surfaceSoft,
+                      child: const Icon(Icons.fitness_center_rounded),
+                    ),
+                    title: Text(
+                      gym['name']?.toString() ?? 'Gym workspace',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: Text(details.join(' • ')),
+                    trailing: selected
+                        ? const Icon(Icons.check_circle_rounded)
+                        : const Icon(Icons.chevron_right_rounded),
+                    onTap: gymId == null
+                        ? null
+                        : () => Navigator.of(dialogContext).pop(gymId),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (nextGymId == null || nextGymId == selectedGymId || !mounted) {
+      return;
+    }
+
+    await context.read<MemberSessionController>().selectGymContext(nextGymId);
+    await _load();
   }
 
   Future<void> _openLogbookScreen() async {
@@ -521,6 +661,12 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
     );
     final userState =
         _contextData['user_state']?.toString() ?? 'independent_user';
+    final gymRelationships =
+        (_contextData['gym_relationships'] as List? ?? const [])
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+    final selectedGymId = (_contextData['selected_gym_id'] as num?)?.toInt();
     final onboardingCompleted =
         (memberProfile['member_onboarding_completed'] as bool?) ??
         (memberUser['member_onboarding_completed'] as bool?) ??
@@ -571,13 +717,18 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
         onOpenAttendance: _openAttendanceScreen,
         onOpenWorkout: _openAssignedWorkoutScreen,
         onOpenTrials: () => _openTrialRequestsScreen(initialStatusTab: true),
+        gymRelationships: gymRelationships,
+        selectedGymId: selectedGymId,
+        onSwitchGym: _openGymSwitcher,
       ),
       _WorkoutPage(
+        key: ValueKey('member-workout-gym-$selectedGymId'),
         userName: user.name,
         plans: _plans,
         history: _history,
         logbookSummary: _logbookSummary,
         repository: _memberRepository,
+        independentTrainers: _independentTrainers,
         onOpenWorkoutBook: _openWorkoutBookScreen,
         initialPlanId: _preferredWorkoutPlanId,
         onPlanConsumed: () {
@@ -587,20 +738,26 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
         },
       ),
       MemberProgressScreen(
+        key: ValueKey('member-progress-gym-$selectedGymId'),
         repository: _memberRepository,
         initialSummary: _progressSummary,
         onRefreshParent: _load,
         memberName: user.name,
       ),
       MemberAssignedTrainerScreen(
+        key: ValueKey('member-trainers-gym-$selectedGymId'),
         repository: _memberRepository,
         socket: _socket,
         chatEventVersion: _chatEventVersion,
         chatLaunchVersion: widget.chatLaunchVersion,
+        chatTargetTrainerId: widget.chatTargetTrainerId,
         userState: userState,
+        selectedGymId: selectedGymId,
+        selectedGymName: _selectedGymName(gymRelationships, selectedGymId),
         currentUserName: user.name,
         fallbackTrainerConnection: trainerConnection,
         onOpenAssignedWorkout: _openAssignedWorkoutScreen,
+        onCoachingChanged: _load,
       ),
       MemberGymDiscoveryScreen(
         repository: _memberRepository,
@@ -621,6 +778,12 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
       title: 'Welcome Back',
       subtitle: user.name,
       actions: [
+        if (gymRelationships.length > 1)
+          IconButton(
+            tooltip: 'Switch gym',
+            onPressed: _openGymSwitcher,
+            icon: const Icon(Icons.swap_horiz_rounded),
+          ),
         _UnreadBellAction(
           unreadCount: _notifications
               .where((item) => item['read_at'] == null)
@@ -727,6 +890,19 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
       'lastSyncedAt': readAt?.toIso8601String(),
     };
   }
+}
+
+String _selectedGymName(
+  List<Map<String, dynamic>> relationships,
+  int? selectedGymId,
+) {
+  if (selectedGymId == null) return 'Selected gym';
+  final relationship = relationships.firstWhere(
+    (item) => (item['gym_id'] as num?)?.toInt() == selectedGymId,
+    orElse: () => const <String, dynamic>{},
+  );
+  final gym = _recordMap(relationship['gym']);
+  return gym['name']?.toString() ?? 'Selected gym';
 }
 
 class _MemberBottomNav extends StatelessWidget {
@@ -970,6 +1146,144 @@ class _MemberHomeSkeleton extends StatelessWidget {
   }
 }
 
+class _GymWorkspaceCard extends StatelessWidget {
+  const _GymWorkspaceCard({
+    required this.relationship,
+    required this.relationshipCount,
+    required this.onTap,
+  });
+
+  final Map<String, dynamic> relationship;
+  final int relationshipCount;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final gym = Map<String, dynamic>.from(
+      relationship['gym'] as Map? ?? const {},
+    );
+    final branch = Map<String, dynamic>.from(
+      relationship['branch'] as Map? ?? const {},
+    );
+    final trainer = Map<String, dynamic>.from(
+      relationship['assigned_trainer'] as Map? ?? const {},
+    );
+    final membership = Map<String, dynamic>.from(
+      relationship['membership'] as Map? ?? const {},
+    );
+    final plan = Map<String, dynamic>.from(
+      membership['plan'] as Map? ?? const {},
+    );
+    final details = <String>[
+      if (branch['name'] != null) branch['name'].toString(),
+      if (plan['name'] != null) plan['name'].toString(),
+    ];
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF102A24), Color(0xFF184E42)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF102A24).withValues(alpha: .18),
+                blurRadius: 22,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: const Icon(
+                  Icons.fitness_center_rounded,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      relationshipCount > 1
+                          ? 'Active gym • $relationshipCount memberships'
+                          : 'Active gym workspace',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: .68),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: .4,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      gym['name']?.toString() ?? 'Gym membership',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    if (details.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        details.join(' • '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: .74),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 7),
+                    Text(
+                      trainer['name'] == null
+                          ? 'No trainer assigned in this gym'
+                          : 'Trainer: ${trainer['name']}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF9DE7D2),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (onTap != null)
+                const Padding(
+                  padding: EdgeInsets.only(left: 8),
+                  child: Icon(Icons.swap_horiz_rounded, color: Colors.white),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DashboardPage extends StatelessWidget {
   const _DashboardPage({
     required this.userName,
@@ -999,6 +1313,9 @@ class _DashboardPage extends StatelessWidget {
     required this.onOpenAttendance,
     required this.onOpenWorkout,
     required this.onOpenTrials,
+    required this.gymRelationships,
+    required this.selectedGymId,
+    required this.onSwitchGym,
   });
 
   final String userName;
@@ -1028,6 +1345,9 @@ class _DashboardPage extends StatelessWidget {
   final VoidCallback onOpenAttendance;
   final VoidCallback onOpenWorkout;
   final VoidCallback onOpenTrials;
+  final List<Map<String, dynamic>> gymRelationships;
+  final int? selectedGymId;
+  final VoidCallback onSwitchGym;
 
   @override
   Widget build(BuildContext context) {
@@ -1093,6 +1413,11 @@ class _DashboardPage extends StatelessWidget {
     final stepGoal = stepSummary?.goal ?? 10000;
     final stepGoalReached = stepToday >= stepGoal && stepGoal > 0;
     final hasActivePlan = todayWorkout.isNotEmpty;
+    final selectedGymRelationship = gymRelationships.firstWhere(
+      (relationship) =>
+          (relationship['gym_id'] as num?)?.toInt() == selectedGymId,
+      orElse: () => gymRelationships.firstOrNull ?? const {},
+    );
     final readinessSignals = <bool>[
       profileReady,
       hasWeightLog,
@@ -1324,6 +1649,17 @@ class _DashboardPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
+            if (selectedGymRelationship.isNotEmpty) ...[
+              RevealOnBuild(
+                delay: const Duration(milliseconds: 25),
+                child: _GymWorkspaceCard(
+                  relationship: selectedGymRelationship,
+                  relationshipCount: gymRelationships.length,
+                  onTap: gymRelationships.length > 1 ? onSwitchGym : null,
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
             RevealOnBuild(
               delay: const Duration(milliseconds: 40),
               child: _PerformanceHeroPanel(
@@ -4815,11 +5151,13 @@ class _FeatureLockedCard extends StatelessWidget {
 
 class _WorkoutPage extends StatefulWidget {
   const _WorkoutPage({
+    super.key,
     required this.userName,
     required this.plans,
     required this.history,
     required this.logbookSummary,
     required this.repository,
+    required this.independentTrainers,
     required this.onOpenWorkoutBook,
     this.initialPlanId,
     this.onPlanConsumed,
@@ -4830,6 +5168,7 @@ class _WorkoutPage extends StatefulWidget {
   final List<Map<String, dynamic>> history;
   final Map<String, dynamic> logbookSummary;
   final MemberRepository repository;
+  final List<Map<String, dynamic>> independentTrainers;
   final VoidCallback onOpenWorkoutBook;
   final int? initialPlanId;
   final VoidCallback? onPlanConsumed;
@@ -4858,6 +5197,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   int _restTotalSeconds = 0;
   Timer? _restTimer;
   List<Map<String, dynamic>> _customExerciseLibrary = const [];
+  int? _selectedRelationshipId;
 
   @override
   void initState() {
@@ -4908,16 +5248,26 @@ class __WorkoutPageState extends State<_WorkoutPage> {
 
   @override
   Widget build(BuildContext context) {
+    final visiblePlans = _selectedRelationshipId == null
+        ? widget.plans
+        : widget.plans
+              .where(
+                (plan) =>
+                    (plan['independent_trainer_member_relationship_id'] as num?)
+                        ?.toInt() ==
+                    _selectedRelationshipId,
+              )
+              .toList();
     final personalRecords =
         (widget.logbookSummary['personal_records'] as List<dynamic>? ??
                 const [])
             .map((item) => Map<String, dynamic>.from(item as Map))
             .toList();
-    final selectedPlan = widget.plans.firstWhere(
+    final selectedPlan = visiblePlans.firstWhere(
       (plan) =>
           _planIdController.text.trim().isNotEmpty &&
           plan['id']?.toString() == _planIdController.text.trim(),
-      orElse: () => widget.plans.firstOrNull ?? const <String, dynamic>{},
+      orElse: () => visiblePlans.firstOrNull ?? const <String, dynamic>{},
     );
     final activeDuration = _activeStartedAt == null
         ? null
@@ -4939,7 +5289,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     final selectedGoal =
         selectedPlan['goal']?.toString() ?? 'Build a stronger routine';
     final selectedPlanId = _selectedPlanId();
-    final hasAssignedPlans = widget.plans.isNotEmpty;
+    final hasAssignedPlans = visiblePlans.isNotEmpty;
     final canStartWorkout = !_startingWorkout && _activeSessionId == null;
     final historyPreview = _workoutHistory.take(4).toList();
     final firstName = firstNameFromFullName(widget.userName);
@@ -4970,9 +5320,67 @@ class __WorkoutPageState extends State<_WorkoutPage> {
             ],
           ),
         ),
+        if (widget.independentTrainers.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  ChoiceChip(
+                    label: const Text('All plans'),
+                    selected: _selectedRelationshipId == null,
+                    onSelected: (_) => setState(() {
+                      _selectedRelationshipId = null;
+                      _planIdController.clear();
+                    }),
+                  ),
+                  const SizedBox(width: 8),
+                  ...widget.independentTrainers.map((relationship) {
+                    final relationshipId = (relationship['id'] as num?)
+                        ?.toInt();
+                    final accessActive = relationship['access_active'] != false;
+                    final trainer = _recordMap(
+                      relationship['trainer'] ?? relationship['trainer_user'],
+                    );
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        avatar: const Icon(
+                          Icons.verified_user_outlined,
+                          size: 16,
+                        ),
+                        label: Text(
+                          '${trainer['name']?.toString() ?? 'Independent trainer'}${accessActive ? '' : ' (paused)'}',
+                        ),
+                        selected:
+                            relationshipId != null &&
+                            _selectedRelationshipId == relationshipId,
+                        onSelected: relationshipId == null || !accessActive
+                            ? null
+                            : (_) => setState(() {
+                                _selectedRelationshipId = relationshipId;
+                                final first = widget.plans.firstWhere(
+                                  (plan) =>
+                                      (plan['independent_trainer_member_relationship_id']
+                                              as num?)
+                                          ?.toInt() ==
+                                      relationshipId,
+                                  orElse: () => const {},
+                                );
+                                _planIdController.text =
+                                    first['id']?.toString() ?? '';
+                              }),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ),
         _FitLifeWorkoutHeader(
           active: _activeSessionId != null,
-          planCount: widget.plans.length,
+          planCount: visiblePlans.length,
           exerciseCount: _sessionExercises.length,
           totalVolume: totalVolume,
           duration: activeDuration ?? Duration.zero,
@@ -5014,8 +5422,8 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                 title: _activeSessionId == null
                     ? 'Choose Workout'
                     : 'Workout Session',
-                actionLabel: widget.plans.isEmpty ? null : 'Library',
-                onAction: widget.plans.isEmpty
+                actionLabel: visiblePlans.isEmpty ? null : 'Library',
+                onAction: visiblePlans.isEmpty
                     ? null
                     : widget.onOpenWorkoutBook,
               ),
@@ -5026,7 +5434,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                   exerciseCount: _sessionExercises.length,
                   totalVolume: totalVolume,
                 )
-              else if (widget.plans.isEmpty)
+              else if (visiblePlans.isEmpty)
                 _FitLifeEmptyPanel(
                   title: 'No assigned workout yet',
                   message:
@@ -5036,10 +5444,10 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                   onAction: canStartWorkout ? _startWorkout : null,
                 )
               else
-                ...widget.plans.asMap().entries.map((entry) {
+                ...visiblePlans.asMap().entries.map((entry) {
                   final planValue = '${entry.value['id']}';
                   final selectedValue = _planIdController.text.trim().isEmpty
-                      ? '${widget.plans.first['id']}'
+                      ? '${visiblePlans.first['id']}'
                       : _planIdController.text.trim();
                   final isSelected = selectedValue == planValue;
                   return RevealOnBuild(
@@ -5100,7 +5508,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                 if (_sessionExercises.isEmpty)
                   _FitLifeEmptyPanel(
                     title: 'No exercises loaded',
-                    message: widget.plans.isEmpty
+                    message: visiblePlans.isEmpty
                         ? 'Add custom exercises from the exercise library, or end the workout below.'
                         : 'Add exercises from your assigned workout library, or end the workout below.',
                     icon: Icons.playlist_add_rounded,

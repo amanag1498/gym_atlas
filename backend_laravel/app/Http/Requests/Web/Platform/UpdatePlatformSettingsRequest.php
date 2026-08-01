@@ -23,7 +23,7 @@ class UpdatePlatformSettingsRequest extends FormRequest
             'featured_listing_price' => ['nullable', 'numeric', 'min:0'],
             'app_banners_placeholder' => ['nullable', 'string', 'max:5000'],
             'feature_flags_placeholder' => ['nullable', 'string', 'max:5000'],
-            'transactional_email_enabled' => ['required', 'boolean'],
+            'transactional_email_enabled' => ['sometimes', 'boolean'],
         ];
     }
 }

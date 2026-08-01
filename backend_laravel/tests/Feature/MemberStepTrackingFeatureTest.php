@@ -17,6 +17,20 @@ class MemberStepTrackingFeatureTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->travelTo(now('Asia/Kolkata')->startOfDay()->addHours(12));
+    }
+
+    protected function tearDown(): void
+    {
+        $this->travelBack();
+
+        parent::tearDown();
+    }
+
     public function test_member_can_create_a_new_step_row(): void
     {
         $this->seed(PermissionSeeder::class);

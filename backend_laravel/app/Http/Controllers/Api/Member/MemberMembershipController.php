@@ -11,8 +11,7 @@ class MemberMembershipController extends Controller
 {
     public function __construct(
         private readonly MemberAppService $memberAppService,
-    ) {
-    }
+    ) {}
 
     public function show(Request $request)
     {
@@ -26,11 +25,14 @@ class MemberMembershipController extends Controller
 
     public function leave(Request $request)
     {
+        $this->memberAppService->assertRequestedGymContextAccessible($request->user());
         $result = $this->memberAppService->leaveCurrentGym($request->user());
 
         return $this->success(
             $result,
-            'You have left the current gym. Your account is now independent; gym history remains available to the gym for audit.'
+            $result['status'] === 'independent_user'
+                ? 'You have left the current gym. Your account is now independent; gym history remains available to the gym for audit.'
+                : 'You have left the selected gym. Your other gym access remains active; the selected gym keeps its history for audit.'
         );
     }
 }

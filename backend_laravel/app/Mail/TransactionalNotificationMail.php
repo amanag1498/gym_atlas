@@ -15,6 +15,7 @@ class TransactionalNotificationMail extends Mailable
         public readonly string $heading,
         public readonly string $intro,
         public readonly array $lines = [],
+        public readonly array $context = [],
     ) {}
 
     public function build(): self

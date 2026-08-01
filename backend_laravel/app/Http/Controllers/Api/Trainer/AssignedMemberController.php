@@ -3,8 +3,12 @@
 namespace App\Http\Controllers\Api\Trainer;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Attendance\AttendanceLogResource;
 use App\Http\Resources\Trainer\TrainerAssignedMemberResource;
+use App\Http\Resources\Workout\BodyMeasurementResource;
 use App\Http\Resources\Workout\PersonalRecordResource;
+use App\Http\Resources\Workout\ProgressPhotoResource;
+use App\Http\Resources\Workout\WeightLogResource;
 use App\Http\Resources\Workout\WorkoutPlanResource;
 use App\Http\Resources\Workout\WorkoutSessionResource;
 use App\Models\User;
@@ -19,8 +23,7 @@ class AssignedMemberController extends Controller
     public function __construct(
         private readonly TrainerScopeService $trainerScopeService,
         private readonly EngagementScoreService $engagementScoreService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {
@@ -60,7 +63,7 @@ class AssignedMemberController extends Controller
         $attendanceLogs = $this->trainerScopeService->attendanceQuery($trainerProfile, $member)
             ->paginate((int) $request->integer('per_page', 20));
 
-        return $this->paginated($attendanceLogs, \App\Http\Resources\Attendance\AttendanceLogResource::collection($attendanceLogs->getCollection()), 'Attendance fetched successfully.');
+        return $this->paginated($attendanceLogs, AttendanceLogResource::collection($attendanceLogs->getCollection()), 'Attendance fetched successfully.');
     }
 
     public function progress(Request $request, User $member)
@@ -76,10 +79,23 @@ class AssignedMemberController extends Controller
             'experience_level' => $memberProfile->experience_level,
             'latest_note' => optional($memberProfile->trainerNotes->first())->note,
             'last_check_in_at' => optional($memberProfile->attendanceLogs->first())->checked_in_at?->toIso8601String(),
-            'weight_logs' => \App\Http\Resources\Workout\WeightLogResource::collection($member->weightLogs()->latest('log_date')->take(10)->get()),
-            'body_measurements' => \App\Http\Resources\Workout\BodyMeasurementResource::collection($member->bodyMeasurements()->latest('measured_on')->take(10)->get()),
-            'progress_photos' => \App\Http\Resources\Workout\ProgressPhotoResource::collection($member->progressPhotos()->latest('captured_on')->take(12)->get()),
-            'personal_records' => PersonalRecordResource::collection($member->personalRecords()->with('exercise')->get()),
+            'weight_logs' => WeightLogResource::collection($member->weightLogs()
+                ->where('gym_id', $trainerProfile->gym_id)
+                ->when($trainerProfile->branch_id, fn ($query) => $query->where('branch_id', $trainerProfile->branch_id))
+                ->latest('log_date')->take(10)->get()),
+            'body_measurements' => BodyMeasurementResource::collection($member->bodyMeasurements()
+                ->where('gym_id', $trainerProfile->gym_id)
+                ->when($trainerProfile->branch_id, fn ($query) => $query->where('branch_id', $trainerProfile->branch_id))
+                ->latest('measured_on')->take(10)->get()),
+            'progress_photos' => ProgressPhotoResource::collection($member->progressPhotos()
+                ->where('gym_id', $trainerProfile->gym_id)
+                ->when($trainerProfile->branch_id, fn ($query) => $query->where('branch_id', $trainerProfile->branch_id))
+                ->latest('captured_on')->take(12)->get()),
+            'personal_records' => PersonalRecordResource::collection($member->personalRecords()
+                ->with('exercise')
+                ->where('gym_id', $trainerProfile->gym_id)
+                ->when($trainerProfile->branch_id, fn ($query) => $query->where('branch_id', $trainerProfile->branch_id))
+                ->get()),
         ]);
     }
 
@@ -92,6 +108,9 @@ class AssignedMemberController extends Controller
             ->with(['days.exercises.exercise', 'template'])
             ->where('member_id', $member->id)
             ->where('trainer_id', $trainerProfile->user_id)
+            ->where('gym_id', $trainerProfile->gym_id)
+            ->whereNull('independent_trainer_member_relationship_id')
+            ->when($trainerProfile->branch_id, fn ($query) => $query->where('branch_id', $trainerProfile->branch_id))
             ->orderByDesc('id')
             ->paginate((int) $request->integer('per_page', 15));
 
@@ -106,12 +125,18 @@ class AssignedMemberController extends Controller
         $paginator = WorkoutSession::query()
             ->with('exercises.exercise', 'exercises.sets')
             ->where('member_id', $member->id)
+            ->where('gym_id', $trainerProfile->gym_id)
+            ->when($trainerProfile->branch_id, fn ($query) => $query->where('branch_id', $trainerProfile->branch_id))
             ->orderByDesc('session_date')
             ->paginate((int) $request->integer('per_page', 15));
 
         return $this->success([
             'history' => WorkoutSessionResource::collection($paginator->getCollection()),
-            'personal_records' => PersonalRecordResource::collection($member->personalRecords()->with('exercise')->get()),
+            'personal_records' => PersonalRecordResource::collection($member->personalRecords()
+                ->with('exercise')
+                ->where('gym_id', $trainerProfile->gym_id)
+                ->when($trainerProfile->branch_id, fn ($query) => $query->where('branch_id', $trainerProfile->branch_id))
+                ->get()),
             'meta' => [
                 'pagination' => [
                     'current_page' => $paginator->currentPage(),

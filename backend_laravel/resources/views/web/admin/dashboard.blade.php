@@ -3,6 +3,7 @@
 @php
     $headlineStats = [
         ['label' => 'Pending approvals', 'value' => $stats['pending_gym_approvals'], 'tone' => 'amber', 'toneClass' => 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300'],
+        ['label' => 'Trainer reviews', 'value' => $stats['pending_independent_trainer_verifications'], 'tone' => 'sky', 'toneClass' => 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300'],
         ['label' => 'Active gyms', 'value' => $stats['active_gyms'], 'tone' => 'emerald', 'toneClass' => 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300'],
         ['label' => 'Gym enquiries', 'value' => $stats['gym_enquiries'], 'tone' => 'violet', 'toneClass' => 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-300'],
         ['label' => 'Trainer enquiries', 'value' => $stats['trainer_enquiries'], 'tone' => 'rose', 'toneClass' => 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300'],
@@ -12,6 +13,7 @@
         ['label' => 'Total Gyms', 'value' => $stats['total_gyms'], 'tone' => 'sky', 'hint' => 'Platform directory size'],
         ['label' => 'Total Members', 'value' => $stats['total_members'], 'tone' => 'emerald', 'hint' => 'Registered members'],
         ['label' => 'Total Trainers', 'value' => $stats['total_trainers'], 'tone' => 'violet', 'hint' => 'Trainer accounts'],
+        ['label' => 'Verified Independent', 'value' => $stats['verified_independent_trainers'], 'tone' => 'sky', 'hint' => 'Eligible independent coaches'],
         ['label' => 'Total Branches', 'value' => $stats['total_branches'], 'tone' => 'amber', 'hint' => 'Operational locations'],
         ['label' => 'Frontend Enquiries', 'value' => $stats['total_frontend_enquiries'], 'tone' => 'rose', 'hint' => 'All public website submissions'],
         ['label' => 'New Enquiries', 'value' => $stats['new_frontend_enquiries'], 'tone' => 'sky', 'hint' => 'Still waiting for action'],
@@ -22,7 +24,12 @@
         ['label' => 'Manage Listings', 'href' => route('web.admin.listings.index'), 'variant' => 'secondary', 'icon' => 'ti ti-search'],
         ['label' => 'Open Reports', 'href' => route('web.admin.reports.index'), 'variant' => 'secondary', 'icon' => 'ti ti-chart-bar'],
         ['label' => 'Frontend Enquiries', 'href' => route('web.admin.enquiries.index'), 'variant' => 'secondary', 'icon' => 'ti ti-mail'],
+        ['label' => 'Trainer Verification', 'href' => route('web.admin.trainer-verifications.index', ['status' => 'pending']), 'variant' => 'secondary', 'icon' => 'ti ti-user-check'],
     ];
+    $recentPlatformActivity = collect($platform_activity)
+        ->flatten(1)
+        ->sortByDesc('occurred_at')
+        ->take(6);
 @endphp
 
 @section('content')
@@ -33,7 +40,7 @@
             <x-action-button as="a" variant="secondary" href="{{ route('web.admin.gyms.index', ['status' => 'pending']) }}">Review Queue</x-action-button>
         @endsection
 
-        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             @foreach ($headlineStats as $stat)
                 <div class="panel-card rounded-[1rem] border border-slate-200/80 bg-white/85 p-4 shadow-sm dark:border-slate-800/80 dark:bg-slate-900/88 dark:shadow-black/20">
                     <div class="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{{ $stat['label'] }}</div>
@@ -44,6 +51,36 @@
                 </div>
             @endforeach
         </div>
+
+        <x-table-wrapper class="overflow-hidden p-0">
+            <div class="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800">
+                <div>
+                    <h3 class="panel-section-title">Independent Trainer Reviews</h3>
+                    <p class="panel-section-copy">Recently submitted gym-independent trainers waiting for platform verification.</p>
+                </div>
+                <x-action-button as="a" variant="secondary" href="{{ route('web.admin.trainer-verifications.index', ['status' => 'pending']) }}">Open Queue</x-action-button>
+            </div>
+            @if (count($pending_independent_trainer_verifications) > 0)
+                <div class="overflow-x-auto">
+                    <table class="panel-table min-w-[760px]">
+                        <thead><tr><th>Trainer</th><th>Specialization</th><th>Experience</th><th>Submitted</th><th class="text-right">Action</th></tr></thead>
+                        <tbody>
+                            @foreach ($pending_independent_trainer_verifications as $submission)
+                                <tr>
+                                    <td><div class="font-semibold text-slate-950 dark:text-white">{{ $submission['name'] }}</div><div class="text-xs text-slate-500">{{ $submission['email'] }}</div></td>
+                                    <td>{{ $submission['specialization'] ?: 'Not supplied' }}</td>
+                                    <td>{{ $submission['experience_years'] !== null ? $submission['experience_years'].' years' : 'Not supplied' }}</td>
+                                    <td>{{ optional($submission['submitted_at'])->format('d M Y') ?? 'N/A' }}</td>
+                                    <td class="text-right"><x-action-button as="a" href="{{ route('web.admin.trainer-verifications.show', $submission['id']) }}">Review</x-action-button></td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @else
+                <div class="p-5"><x-empty-state title="No trainer reviews pending" message="Every independent trainer submission has been reviewed." /></div>
+            @endif
+        </x-table-wrapper>
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             @foreach ($overviewCards as $card)
                 <x-stat-card :label="$card['label']" :value="$card['value']" :tone="$card['tone']" :hint="$card['hint']" />
@@ -168,7 +205,7 @@
                         <div class="rounded-[1.2rem] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70">
                             <div class="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Platform activity</div>
                             <div class="mt-3 space-y-4">
-                                @forelse ($platform_activity['latest_gym_approvals'] as $activity)
+                                @forelse ($recentPlatformActivity as $activity)
                                     <div>
                                         <div class="font-medium text-slate-950 dark:text-slate-100">{{ $activity['title'] }}</div>
                                         <div class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $activity['description'] }}</div>
@@ -203,7 +240,10 @@
                                 <x-status-badge label="Featured" tone="featured" />
                             </div>
                         @empty
-                            <x-empty-state title="No featured gyms yet" message="Feature a gym from the listings page to surface it here." />
+                            <x-empty-state
+                                :title="count($recently_added_gyms) === 0 ? 'No gyms added yet' : 'No featured gyms yet'"
+                                message="Feature a gym from the listings page to surface it here."
+                            />
                         @endforelse
                     </div>
                 </div>

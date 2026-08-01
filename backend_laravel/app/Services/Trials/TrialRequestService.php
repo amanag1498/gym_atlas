@@ -114,6 +114,7 @@ class TrialRequestService
                     ]),
                     $gym->id,
                     'trial_request_owner_alert',
+                    ['branch_id' => $branch?->id, 'category_label' => 'New trial request'],
                 ));
             }
 
@@ -140,6 +141,11 @@ class TrialRequestService
                 ]),
                 $gym->id,
                 'trial_request_confirmation',
+                [
+                    'recipient_name' => $trialRequest->name,
+                    'branch_id' => $branch?->id,
+                    'category_label' => 'Trial request',
+                ],
             ));
 
             $this->auditLogService->log(
@@ -251,6 +257,9 @@ class TrialRequestService
                 $trainerProfile = TrainerProfile::query()
                     ->where('user_id', $data['assigned_trainer_id'])
                     ->where('gym_id', $trialRequest->gym_id)
+                    ->where('is_active', true)
+                    ->where('status', 'active')
+                    ->whereHas('user', fn ($trainer) => $trainer->where('is_active', true))
                     ->when($trialRequest->branch_id, fn ($query) => $query->where(function ($builder) use ($trialRequest): void {
                         $builder->whereNull('branch_id')->orWhere('branch_id', $trialRequest->branch_id);
                     }))
@@ -258,7 +267,7 @@ class TrialRequestService
 
                 if (! $trainerProfile) {
                     throw ValidationException::withMessages([
-                        'assigned_trainer_id' => ['The assigned trainer must belong to the same gym or branch.'],
+                        'assigned_trainer_id' => ['The assigned trainer must be active and belong to the same gym or branch.'],
                     ]);
                 }
             }
@@ -293,6 +302,11 @@ class TrialRequestService
                     ['Gym: '.$trialRequest->gym->name],
                     $trialRequest->gym_id,
                     'trial_request_status_update',
+                    [
+                        'recipient_name' => $trialRequest->name,
+                        'branch_id' => $trialRequest->branch_id,
+                        'category_label' => 'Trial request update',
+                    ],
                 ));
             }
 

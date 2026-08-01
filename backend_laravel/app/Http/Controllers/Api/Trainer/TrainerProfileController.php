@@ -6,6 +6,7 @@ use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Trainer\UpdateOwnTrainerProfileRequest;
 use App\Http\Resources\User\TrainerProfileResource;
+use App\Http\Resources\User\UserResource;
 use App\Services\Audit\AuditLogService;
 use App\Services\Onboarding\OnboardingProgressService;
 use App\Services\Trainer\TrainerScopeService;
@@ -14,12 +15,18 @@ use Illuminate\Support\Facades\Storage;
 
 class TrainerProfileController extends Controller
 {
+    private const INDEPENDENT_REVIEW_FIELDS = [
+        'bio',
+        'specializations',
+        'experience_years',
+        'certifications',
+    ];
+
     public function __construct(
         private readonly TrainerScopeService $trainerScopeService,
         private readonly AuditLogService $auditLogService,
         private readonly OnboardingProgressService $onboardingProgressService,
-    ) {
-    }
+    ) {}
 
     public function show(Request $request)
     {
@@ -28,7 +35,7 @@ class TrainerProfileController extends Controller
 
         return $this->success([
             'trainer_profile' => TrainerProfileResource::make($profile),
-            'trainer_user' => \App\Http\Resources\User\UserResource::make($profile->user),
+            'trainer_user' => UserResource::make($profile->user),
         ]);
     }
 
@@ -43,6 +50,35 @@ class TrainerProfileController extends Controller
             'trainer_onboarding_step',
             'trainer_onboarding_completed',
         ]));
+        $materialReviewChanges = collect(self::INDEPENDENT_REVIEW_FIELDS)
+            ->filter(fn (string $field): bool => $profile->wasChanged($field))
+            ->values()
+            ->all();
+        if (
+            $profile->gym_id === null
+            && $profile->branch_id === null
+            && $profile->verification_status === 'verified'
+            && $materialReviewChanges !== []
+        ) {
+            $profile->forceFill([
+                'verification_status' => 'pending',
+                'verification_reviewed_by_user_id' => null,
+                'verification_reviewed_at' => null,
+                'verification_verified_at' => null,
+                'verification_rejection_reason' => null,
+                'verification_review_notes' => null,
+            ])->save();
+
+            $this->auditLogService->log(
+                event: 'trainer.independent_verification.review_required',
+                action: 'update',
+                request: $request,
+                subject: $profile,
+                oldValues: ['verification_status' => 'verified'],
+                newValues: ['verification_status' => 'pending'],
+                context: ['material_fields' => $materialReviewChanges],
+            );
+        }
         $freshUser = $this->onboardingProgressService->syncTrainerProgress(
             $request->user(),
             $request->validated('trainer_onboarding_step'),
@@ -62,7 +98,7 @@ class TrainerProfileController extends Controller
 
         return $this->success([
             'trainer_profile' => TrainerProfileResource::make($profile->fresh()->load(['user', 'gym', 'branch', 'assignedMembers'])),
-            'trainer_user' => \App\Http\Resources\User\UserResource::make($freshUser),
+            'trainer_user' => UserResource::make($freshUser),
         ]);
     }
 

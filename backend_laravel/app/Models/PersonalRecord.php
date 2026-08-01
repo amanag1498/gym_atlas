@@ -13,6 +13,7 @@ class PersonalRecord extends Model
     protected $fillable = [
         'gym_id',
         'branch_id',
+        'coaching_scope_key',
         'member_id',
         'exercise_id',
         'workout_session_id',
@@ -29,6 +30,30 @@ class PersonalRecord extends Model
             'best_volume' => 'decimal:2',
             'achieved_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (PersonalRecord $record): void {
+            $independentRelationshipId = null;
+            if ($record->gym_id === null
+                && preg_match('/^independent:(\d+)$/', (string) $record->coaching_scope_key, $matches) === 1) {
+                $independentRelationshipId = (int) $matches[1];
+            }
+
+            $record->coaching_scope_key = self::coachingScopeKey(
+                $record->gym_id !== null ? (int) $record->gym_id : null,
+                $record->branch_id !== null ? (int) $record->branch_id : null,
+                $independentRelationshipId,
+            );
+        });
+    }
+
+    public static function coachingScopeKey(?int $gymId, ?int $branchId, ?int $independentRelationshipId = null): string
+    {
+        return $gymId === null
+            ? ($independentRelationshipId !== null ? 'independent:'.$independentRelationshipId : 'independent:self')
+            : 'gym:'.$gymId.':branch:'.($branchId ?? 0);
     }
 
     public function gym(): BelongsTo

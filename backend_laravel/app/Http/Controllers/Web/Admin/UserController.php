@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Audit\AdminActivityFeedService;
 use App\Services\Audit\AuditLogService;
 use App\Services\Platform\PlatformAuditLogService;
+use App\Services\Users\ManagedUserService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,8 +23,8 @@ class UserController extends Controller
         private readonly AuditLogService $auditLogService,
         private readonly AdminActivityFeedService $adminActivityFeedService,
         private readonly PlatformAuditLogService $platformAuditLogService,
-    ) {
-    }
+        private readonly ManagedUserService $managedUserService,
+    ) {}
 
     public function index(Request $request): View
     {
@@ -81,6 +82,10 @@ class UserController extends Controller
             'memberProfile.workoutSessions.gym',
             'memberProfile.workoutSessions.branch',
             'memberProfile.workoutSessions.trainer',
+            'memberProfiles.gym',
+            'memberProfiles.branch',
+            'memberProfiles.assignedTrainer',
+            'memberProfiles.fitnessGoals',
             'ownedGyms.currentPlatformSubscription.plan',
             'staffAssignments.gym',
             'staffAssignments.branch',
@@ -198,7 +203,7 @@ class UserController extends Controller
         }
 
         $oldValues = $user->only(['is_active']);
-        $user->forceFill(['is_active' => true])->save();
+        $user = $this->managedUserService->setPlatformUserActive($user, true);
 
         $this->auditLogService->log(
             event: 'web.platform.user.activated',
@@ -225,7 +230,7 @@ class UserController extends Controller
         }
 
         $oldValues = $user->only(['is_active']);
-        $user->forceFill(['is_active' => false])->save();
+        $user = $this->managedUserService->setPlatformUserActive($user, false);
 
         $this->auditLogService->log(
             event: 'web.platform.user.deactivated',

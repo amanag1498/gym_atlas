@@ -9,11 +9,12 @@ use App\Http\Requests\Workout\StoreWeightLogRequest;
 use App\Http\Resources\Workout\BodyMeasurementResource;
 use App\Http\Resources\Workout\ProgressPhotoResource;
 use App\Http\Resources\Workout\WeightLogResource;
-use App\Models\MemberProfile;
 use App\Models\BodyMeasurement;
+use App\Models\MemberProfile;
 use App\Models\ProgressPhoto;
 use App\Models\WeightLog;
 use App\Services\Audit\AuditLogService;
+use App\Services\Member\MemberAppService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -21,8 +22,8 @@ class ProgressController extends Controller
 {
     public function __construct(
         private readonly AuditLogService $auditLogService,
-    ) {
-    }
+        private readonly MemberAppService $memberAppService,
+    ) {}
 
     public function summary(Request $request)
     {
@@ -151,6 +152,6 @@ class ProgressController extends Controller
 
     private function resolveMemberProfile(Request $request): ?MemberProfile
     {
-        return $request->user()->loadMissing('memberProfile.gym', 'memberProfile.branch')->memberProfile;
+        return $this->memberAppService->memberProfileFor($request->user());
     }
 }

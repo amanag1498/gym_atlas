@@ -17,6 +17,10 @@ class EnsureActiveRole
             return ApiResponse::error('Unauthenticated.', 401);
         }
 
+        if ($user->is_active === false) {
+            return ApiResponse::error('This account is inactive. Please contact support.', 403);
+        }
+
         if (! $user->active_role || ! $user->hasRole($user->active_role)) {
             return ApiResponse::error('No valid active role is set for this account.', 403);
         }

@@ -30,7 +30,10 @@ class AttendanceManagementFeatureTest extends TestCase
                 'member_id' => $member->id,
                 'source_device' => 'feature-test',
             ])
-            ->assertRedirect(route('web.gym.attendance.index'));
+            ->assertRedirect(route('web.gym.attendance.index', [
+                'gym' => $gym->id,
+                'branch' => $branch->id,
+            ]));
 
         $this->assertDatabaseHas('attendance_logs', [
             'gym_id' => $gym->id,
@@ -364,6 +367,39 @@ class AttendanceManagementFeatureTest extends TestCase
             'membership_status' => $membershipStatus,
             'is_active' => true,
         ]);
+
+        if ($membershipStatus === 'active') {
+            $plan = MembershipPlan::query()->create([
+                'gym_id' => $gym->id,
+                'branch_id' => $branch->id,
+                'name' => 'Active Attendance Plan',
+                'duration_days' => 30,
+                'plan_price' => 1000,
+                'joining_fee' => 0,
+                'status' => 'active',
+            ]);
+            MemberMembership::query()->create([
+                'gym_id' => $gym->id,
+                'branch_id' => $branch->id,
+                'member_id' => $member->id,
+                'membership_plan_id' => $plan->id,
+                'start_date' => now()->toDateString(),
+                'expiry_date' => now()->addDays(30)->toDateString(),
+                'status' => 'active',
+                'default_plan_price' => 1000,
+                'default_joining_fee' => 0,
+                'discount_type' => 'none',
+                'discount_amount' => 0,
+                'custom_fee_enabled' => false,
+                'joining_fee_waived' => false,
+                'partial_month_fee' => 0,
+                'pt_custom_fee' => 0,
+                'final_payable_amount' => 1000,
+                'amount_paid' => 1000,
+                'due_amount' => 0,
+                'payment_status' => 'paid',
+            ]);
+        }
 
         return [$actor, $member, $gym, $branch];
     }

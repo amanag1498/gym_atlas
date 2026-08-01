@@ -4,15 +4,20 @@ namespace App\Http\Controllers\Api\PlatformAdmin;
 
 use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
-use App\Models\ActivityLog;
 use App\Http\Resources\User\UserResource;
+use App\Models\ActivityLog;
 use App\Models\User;
+use App\Services\Audit\AuditLogService;
+use App\Services\Users\ManagedUserService;
+use App\Support\Api\ApiResponse;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
 class UserController extends Controller
 {
+    public function __construct(private readonly ManagedUserService $managedUserService) {}
+
     public function index(Request $request)
     {
         $query = $this->baseQuery($request)->latest('id');
@@ -54,6 +59,10 @@ class UserController extends Controller
             'managedTrainerProfile.branch',
             'memberProfile.gym',
             'memberProfile.branch',
+            'memberProfiles.gym',
+            'memberProfiles.branch',
+            'memberProfiles.assignedTrainer',
+            'memberProfiles.fitnessGoals',
             'ownedGyms',
             'staffAssignments.gym',
             'staffAssignments.branch',
@@ -84,9 +93,9 @@ class UserController extends Controller
         }
 
         $oldValues = $user->only(['is_active']);
-        $user->forceFill(['is_active' => true])->save();
+        $user = $this->managedUserService->setPlatformUserActive($user, true);
 
-        app(\App\Services\Audit\AuditLogService::class)->log(
+        app(AuditLogService::class)->log(
             event: 'platform.user.activated',
             action: 'update',
             request: $request,
@@ -101,7 +110,7 @@ class UserController extends Controller
     public function deactivate(Request $request, User $user)
     {
         if ($request->user()->is($user)) {
-            return \App\Support\Api\ApiResponse::error('You cannot deactivate your own platform admin account.', 422);
+            return ApiResponse::error('You cannot deactivate your own platform admin account.', 422);
         }
 
         if (! $user->is_active) {
@@ -109,9 +118,9 @@ class UserController extends Controller
         }
 
         $oldValues = $user->only(['is_active']);
-        $user->forceFill(['is_active' => false])->save();
+        $user = $this->managedUserService->setPlatformUserActive($user, false);
 
-        app(\App\Services\Audit\AuditLogService::class)->log(
+        app(AuditLogService::class)->log(
             event: 'platform.user.deactivated',
             action: 'update',
             request: $request,
@@ -127,7 +136,17 @@ class UserController extends Controller
     {
         $hasPhoneColumn = Schema::hasColumn('users', 'phone');
         $query = User::query()
-            ->with(['gyms', 'branches', 'roles', 'permissions', 'managedTrainerProfile', 'memberProfile'])
+            ->with([
+                'gyms',
+                'branches',
+                'roles',
+                'permissions',
+                'managedTrainerProfile',
+                'memberProfile',
+                'memberProfiles.gym',
+                'memberProfiles.branch',
+                'memberProfiles.assignedTrainer',
+            ])
             ->withCount(['ownedGyms']);
 
         if ($request->filled('search')) {

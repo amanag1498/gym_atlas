@@ -17,8 +17,7 @@ class WebPanelContext
     public function __construct(
         private readonly ScopeResolver $scopeResolver,
         private readonly ActiveRoleManager $activeRoleManager,
-    ) {
-    }
+    ) {}
 
     /**
      * @return Collection<int, Gym>
@@ -168,7 +167,6 @@ class WebPanelContext
     public function allowedGymPanelRoles(): array
     {
         return [
-            RoleName::PlatformAdmin->value,
             RoleName::GymOwner->value,
             RoleName::BranchManager->value,
             RoleName::GymStaff->value,

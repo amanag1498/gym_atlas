@@ -13,6 +13,7 @@ class TrainerMemberNote extends Model
     protected $fillable = [
         'trainer_id',
         'member_id',
+        'independent_trainer_member_relationship_id',
         'note',
         'visibility',
         'follow_up_date',
@@ -35,5 +36,13 @@ class TrainerMemberNote extends Model
     public function member(): BelongsTo
     {
         return $this->belongsTo(User::class, 'member_id');
+    }
+
+    public function independentTrainerMemberRelationship(): BelongsTo
+    {
+        return $this->belongsTo(
+            IndependentTrainerMemberRelationship::class,
+            'independent_trainer_member_relationship_id',
+        );
     }
 }

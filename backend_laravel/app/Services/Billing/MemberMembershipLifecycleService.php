@@ -10,6 +10,7 @@ use App\Models\MemberProfile;
 use App\Models\Payment;
 use App\Models\ScheduledReminder;
 use App\Models\User;
+use App\Services\Member\MemberAppService;
 use App\Services\Notification\NotificationService;
 use App\Services\Notification\TransactionalEmailService;
 use Carbon\Carbon;
@@ -22,6 +23,7 @@ class MemberMembershipLifecycleService
         private readonly MembershipEnrollmentService $membershipEnrollmentService,
         private readonly NotificationService $notificationService,
         private readonly TransactionalEmailService $transactionalEmailService,
+        private readonly MemberAppService $memberAppService,
     ) {}
 
     /**
@@ -134,12 +136,75 @@ class MemberMembershipLifecycleService
 
     public function cancel(MemberMembership $membership): MemberMembership
     {
-        $membership->status = MembershipStatus::Cancelled->value;
-        $membership->save();
+        return DB::transaction(function () use ($membership): MemberMembership {
+            $membership = MemberMembership::query()->lockForUpdate()->findOrFail($membership->id);
+            $membership->status = MembershipStatus::Cancelled->value;
+            $membership->save();
 
-        $this->syncMemberProfileSummary($membership->member()->first(), $membership->gym_id);
+            $member = $membership->member()->first();
+            $memberProfile = $member instanceof User
+                ? $member->memberProfiles()->where('gym_id', $membership->gym_id)->first()
+                : null;
+            $previousTrainerId = $memberProfile?->assigned_trainer_user_id;
+            $this->syncMemberProfileSummary($member, $membership->gym_id);
+            if ($member instanceof User) {
+                $this->memberAppService->revokeGymAccess($member, $membership->gym_id);
+                $membership->loadMissing(['gym:id,name', 'branch:id,name', 'membershipPlan:id,name']);
+                $gymName = $membership->gym?->name ?? config('app.name');
+                $this->notificationService->create(
+                    user: $member,
+                    type: 'membership_cancelled',
+                    title: 'Gym membership cancelled',
+                    body: 'Your membership at '.$gymName.' has been cancelled. Gym staff and trainer access has ended.',
+                    gymId: $membership->gym_id,
+                    branchId: $membership->branch_id,
+                    membershipId: $membership->id,
+                    data: [
+                        'membership_id' => $membership->id,
+                        'status' => 'cancelled',
+                        'gym_name' => $gymName,
+                        'branch_name' => $membership->branch?->name,
+                        'plan_name' => $membership->membershipPlan?->name,
+                    ],
+                );
+                DB::afterCommit(fn () => $this->transactionalEmailService->send(
+                    $member,
+                    'Membership cancelled — '.$gymName,
+                    'Your membership at '.$gymName.' has been cancelled.',
+                    array_filter([
+                        $membership->branch ? 'Branch: '.$membership->branch->name : null,
+                        $membership->membershipPlan ? 'Plan: '.$membership->membershipPlan->name : null,
+                        'Gym staff and gym-assigned trainer access has ended.',
+                        'Any separate independent coaching relationship remains unchanged.',
+                    ]),
+                    $membership->gym_id,
+                    'membership_cancellation',
+                    ['branch_id' => $membership->branch_id, 'category_label' => 'Membership cancelled'],
+                ));
+            }
+            $previousTrainer = $previousTrainerId ? User::query()->find($previousTrainerId) : null;
+            if ($previousTrainer !== null) {
+                $this->notificationService->create(
+                    user: $previousTrainer,
+                    type: 'trainer_assignment_removed',
+                    title: 'Member gym access ended',
+                    body: ($member?->name ?? 'A member').' no longer has an active membership in this gym.',
+                    gymId: $membership->gym_id,
+                    branchId: $membership->branch_id,
+                    data: [
+                        'member_user_id' => $membership->member_id,
+                        'membership_id' => $membership->id,
+                        'source' => 'membership_cancelled',
+                    ],
+                );
+            }
+            $membership->scheduledReminders()
+                ->where('status', 'pending')
+                ->update(['status' => 'cancelled']);
+            $this->cancelAttendanceInactivityReminders($membership);
 
-        return $membership;
+            return $membership->fresh();
+        });
     }
 
     public function syncMemberProfileFromMembership(MemberMembership $membership): void
@@ -175,16 +240,28 @@ class MemberMembershipLifecycleService
 
         if (! $current) {
             $profile->forceFill([
+                'status' => 'inactive',
+                'is_active' => false,
                 'membership_status' => 'inactive',
                 'membership_expires_on' => null,
+                'assigned_trainer_user_id' => null,
+                'assigned_trainer_id' => null,
             ])->save();
 
             return;
         }
 
+        $isOperational = $current->status === MembershipStatus::Frozen->value
+            || ($current->status === MembershipStatus::Active->value && $current->expiry_date?->endOfDay()->isFuture());
         $profile->forceFill([
+            'status' => $isOperational ? 'active' : 'inactive',
+            'is_active' => $isOperational,
             'membership_status' => $current->status,
             'membership_expires_on' => $current->expiry_date,
+            ...($isOperational ? [] : [
+                'assigned_trainer_user_id' => null,
+                'assigned_trainer_id' => null,
+            ]),
         ])->save();
     }
 
@@ -202,7 +279,7 @@ class MemberMembershipLifecycleService
 
     private function notifyMemberOfPause(MemberMembership $membership): void
     {
-        $membership->loadMissing(['member', 'membershipPlan', 'gym']);
+        $membership->loadMissing(['member', 'membershipPlan', 'gym', 'branch']);
         $member = $membership->member;
 
         if (! $member instanceof User) {
@@ -226,7 +303,7 @@ class MemberMembershipLifecycleService
 
             $this->transactionalEmailService->send(
                 $member,
-                'Membership paused — '.config('app.name'),
+                'Membership paused — '.$gymName,
                 'Your membership at '.$gymName.' has been paused.',
                 array_filter([
                     $planName ? 'Plan: '.$planName : null,
@@ -235,13 +312,14 @@ class MemberMembershipLifecycleService
                 ]),
                 $membership->gym_id,
                 'membership_pause',
+                ['branch_id' => $membership->branch_id, 'category_label' => 'Membership update'],
             );
         });
     }
 
     private function notifyMemberOfResume(MemberMembership $membership, int $pausedDays): void
     {
-        $membership->loadMissing(['member', 'membershipPlan', 'gym']);
+        $membership->loadMissing(['member', 'membershipPlan', 'gym', 'branch']);
         $member = $membership->member;
 
         if (! $member instanceof User) {
@@ -269,7 +347,7 @@ class MemberMembershipLifecycleService
 
             $this->transactionalEmailService->send(
                 $member,
-                'Membership resumed — '.config('app.name'),
+                'Membership resumed — '.$gymName,
                 'Your membership at '.$gymName.' is active again.',
                 array_filter([
                     $planName ? 'Plan: '.$planName : null,
@@ -279,6 +357,7 @@ class MemberMembershipLifecycleService
                 ]),
                 $membership->gym_id,
                 'membership_resume',
+                ['branch_id' => $membership->branch_id, 'category_label' => 'Membership update'],
             );
         });
     }

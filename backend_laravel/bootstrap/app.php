@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\RoleName;
+use App\Http\Middleware\EnsureActiveAccount;
 use App\Http\Middleware\EnsureActiveRole;
 use App\Http\Middleware\EnsureBranchScope;
 use App\Http\Middleware\EnsureGymScope;
@@ -9,12 +10,12 @@ use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureWebGymPanelAccess;
 use App\Http\Middleware\EnsureWebPlatformAdmin;
 use App\Support\Api\ApiResponse;
-use Illuminate\Auth\AuthenticationException;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Exceptions\UnauthorizedException;
@@ -72,6 +73,7 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $middleware->alias([
+            'active_account' => EnsureActiveAccount::class,
             'active_role' => EnsureActiveRole::class,
             'branch_scope' => EnsureBranchScope::class,
             'gym_scope' => EnsureGymScope::class,
@@ -133,7 +135,7 @@ return Application::configure(basePath: dirname(__DIR__))
             );
         });
 
-        $exceptions->render(function (\Throwable $exception, Request $request) use ($renderJson) {
+        $exceptions->render(function (Throwable $exception, Request $request) use ($renderJson) {
             if (! $renderJson($request)) {
                 return null;
             }

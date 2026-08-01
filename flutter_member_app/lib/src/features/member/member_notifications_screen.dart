@@ -30,6 +30,7 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
   String? _error;
   List<Map<String, dynamic>> _notifications = const [];
   List<Map<String, dynamic>> _gymInvitations = const [];
+  List<Map<String, dynamic>> _independentInvitations = const [];
 
   @override
   void initState() {
@@ -50,6 +51,7 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
       final results = await Future.wait<Map<String, dynamic>>([
         widget.repository.fetchNotifications(),
         widget.repository.fetchGymInvitations(status: 'pending'),
+        widget.repository.fetchIndependentTrainerInvitations(),
       ]);
       _notifications = (results[0]['data'] as List<dynamic>? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map))
@@ -57,6 +59,10 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
       _gymInvitations = (results[1]['data'] as List<dynamic>? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map))
           .toList();
+      _independentInvitations =
+          (results[2]['data'] as List<dynamic>? ?? const [])
+              .map((item) => Map<String, dynamic>.from(item as Map))
+              .toList();
       await widget.onChanged();
     } catch (exception) {
       _error = exception.toString();
@@ -198,6 +204,53 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
     }
   }
 
+  Future<void> _respondToIndependentInvitation(
+    int invitationId, {
+    required Map<String, dynamic> invitation,
+    required bool accept,
+  }) async {
+    if (_respondingInvitationIds.contains(invitationId)) {
+      return;
+    }
+
+    setState(() => _respondingInvitationIds.add(invitationId));
+    try {
+      if (accept) {
+        await widget.repository.acceptIndependentTrainerInvitation(
+          invitationId,
+        );
+      } else {
+        await widget.repository.rejectIndependentTrainerInvitation(
+          invitationId,
+        );
+      }
+      if (!mounted) return;
+
+      invitation['status'] = accept ? 'accepted' : 'declined';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            accept
+                ? 'Independent coaching invitation accepted.'
+                : 'Independent coaching invitation declined.',
+          ),
+        ),
+      );
+      await widget.onChanged();
+      await _load();
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _respondingInvitationIds.remove(invitationId));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final unreadCount = _notifications
@@ -206,6 +259,39 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
     final pendingInvitations = _gymInvitations
         .where((item) => (item['status']?.toString() ?? '') == 'pending')
         .toList();
+    final pendingIndependentInvitations = _independentInvitations
+        .where(
+          (item) =>
+              (item['status']?.toString() ?? '') == 'pending' &&
+              item['actionable'] != false,
+        )
+        .toList();
+    final pendingGymInvitationIds = pendingInvitations
+        .map((item) => (item['id'] as num?)?.toInt())
+        .whereType<int>()
+        .toSet();
+    final pendingIndependentInvitationIds = pendingIndependentInvitations
+        .map((item) => (item['id'] as num?)?.toInt())
+        .whereType<int>()
+        .toSet();
+    final visibleNotifications = _notifications.where((notification) {
+      final type = notification['type']?.toString();
+      final invitationId = _gymInvitationId(notification);
+
+      if (invitationId == null) {
+        return true;
+      }
+      if (type == 'gym_member_invitation' &&
+          pendingGymInvitationIds.contains(invitationId)) {
+        return false;
+      }
+      if (type == 'independent_trainer_invitation' &&
+          pendingIndependentInvitationIds.contains(invitationId)) {
+        return false;
+      }
+
+      return true;
+    }).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFFFFF),
@@ -302,13 +388,56 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
                       ),
                     ),
                   ],
+                  if (pendingIndependentInvitations.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    _NotificationSectionTitle(
+                      title: 'Independent coaching invitations',
+                      action: '${pendingIndependentInvitations.length} pending',
+                    ),
+                    const SizedBox(height: 10),
+                    ...pendingIndependentInvitations.asMap().entries.map((
+                      entry,
+                    ) {
+                      final invitationId = (entry.value['id'] as num?)?.toInt();
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: RevealOnBuild(
+                          delay: Duration(milliseconds: 45 * entry.key),
+                          child: _IndependentInvitationInboxCard(
+                            invitation: entry.value,
+                            loading:
+                                invitationId != null &&
+                                _respondingInvitationIds.contains(invitationId),
+                            onAccept: () {
+                              if (invitationId != null) {
+                                _respondToIndependentInvitation(
+                                  invitationId,
+                                  invitation: entry.value,
+                                  accept: true,
+                                );
+                              }
+                            },
+                            onReject: () {
+                              if (invitationId != null) {
+                                _respondToIndependentInvitation(
+                                  invitationId,
+                                  invitation: entry.value,
+                                  accept: false,
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
                   const SizedBox(height: 18),
                   const _NotificationSectionTitle(
                     title: 'Updates',
                     action: 'Latest',
                   ),
                   const SizedBox(height: 2),
-                  if (_notifications.isEmpty)
+                  if (visibleNotifications.isEmpty)
                     const EmptyStateView(
                       title: 'No notifications yet',
                       message:
@@ -316,7 +445,7 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
                       icon: Icons.notifications_none_rounded,
                     )
                   else
-                    ..._notifications.asMap().entries.expand(
+                    ...visibleNotifications.asMap().entries.expand(
                       (entry) => [
                         RevealOnBuild(
                           delay: Duration(milliseconds: 35 * entry.key),
@@ -337,7 +466,7 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
                             ),
                           ),
                         ),
-                        if (entry.key < _notifications.length - 1)
+                        if (entry.key < visibleNotifications.length - 1)
                           Divider(
                             color: const Color(
                               0xFF786F72,
@@ -518,6 +647,121 @@ class _GymInvitationInboxCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          _GymInvitationActions(
+            loading: loading,
+            onAccept: onAccept,
+            onReject: onReject,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IndependentInvitationInboxCard extends StatelessWidget {
+  const _IndependentInvitationInboxCard({
+    required this.invitation,
+    required this.loading,
+    required this.onAccept,
+    required this.onReject,
+  });
+
+  final Map<String, dynamic> invitation;
+  final bool loading;
+  final VoidCallback onAccept;
+  final VoidCallback onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    final trainer = invitation['trainer'] is Map
+        ? Map<String, dynamic>.from(invitation['trainer'] as Map)
+        : const <String, dynamic>{};
+    final permissions = (invitation['sharing_permissions'] as List? ?? const [])
+        .map((item) => item.toString())
+        .where((item) => item.isNotEmpty)
+        .join(', ');
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFFFFF), Color(0xFFF4F7FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: const Color(0xFF92A3FD).withValues(alpha: 0.18),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF92A3FD).withValues(alpha: 0.12),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF9DCEFF), Color(0xFFC58BF2)],
+                  ),
+                ),
+                child: const Icon(
+                  Icons.verified_user_rounded,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      trainer['name']?.toString() ?? 'Independent trainer',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF1D1617),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Verified independent coaching request',
+                      style: TextStyle(
+                        color: Color(0xFF786F72),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            permissions.isEmpty
+                ? 'This coaching relationship stays separate from your gym membership and gym trainer.'
+                : 'Requested access: $permissions. Your gym membership and gym trainer will not change.',
+            style: const TextStyle(
+              color: Color(0xFF786F72),
+              fontWeight: FontWeight.w500,
+              fontSize: 11,
+              height: 1.4,
+            ),
           ),
           const SizedBox(height: 12),
           _GymInvitationActions(
@@ -731,6 +975,10 @@ class _NotificationCard extends StatelessWidget {
         return 'Trainer Assignment';
       case 'gym_member_invitation':
         return 'Gym Invitation';
+      case 'independent_trainer_invitation':
+        return 'Trainer Invitation';
+      case 'independent_coaching_revoked':
+        return 'Coaching Ended';
       case 'attendance_inactivity':
         return 'Attendance Inactivity';
       case 'trial_request_update':
@@ -765,6 +1013,10 @@ class _NotificationCard extends StatelessWidget {
         return const Color(0xFF34D399);
       case 'gym_member_invitation':
         return const Color(0xFF38BDF8);
+      case 'independent_trainer_invitation':
+        return const Color(0xFF8B5CF6);
+      case 'independent_coaching_revoked':
+        return const Color(0xFFFB7185);
       case 'attendance_inactivity':
         return AppColors.statusPending;
       case 'trial_request_update':
@@ -792,6 +1044,10 @@ class _NotificationCard extends StatelessWidget {
         return Icons.support_agent_rounded;
       case 'gym_member_invitation':
         return Icons.handshake_rounded;
+      case 'independent_trainer_invitation':
+        return Icons.verified_user_rounded;
+      case 'independent_coaching_revoked':
+        return Icons.link_off_rounded;
       case 'attendance_inactivity':
         return Icons.fact_check_outlined;
       case 'trial_request_update':

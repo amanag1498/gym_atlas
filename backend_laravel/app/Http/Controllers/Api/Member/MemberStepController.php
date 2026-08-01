@@ -18,8 +18,7 @@ class MemberStepController extends Controller
 {
     public function __construct(
         private readonly MemberAppService $memberAppService,
-    ) {
-    }
+    ) {}
 
     public function sync(SyncMemberDailyStepsRequest $request)
     {
@@ -148,6 +147,6 @@ class MemberStepController extends Controller
 
     private function resolveMemberProfile(Request $request): ?MemberProfile
     {
-        return $request->user()->loadMissing('memberProfile')->memberProfile;
+        return $this->memberAppService->memberProfileFor($request->user());
     }
 }

@@ -58,9 +58,18 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
   List<Map<String, dynamic>> _trialRequests = const [];
   List<Map<String, dynamic>> _exercises = const [];
   List<Map<String, dynamic>> _chatConversations = const [];
+  List<Map<String, dynamic>> _independentInvitations = const [];
   String? _chatError;
-  int? _workoutFocusMemberId;
+  String? _workoutFocusAssignmentKey;
   int _handledChatLaunchVersion = -1;
+
+  List<Map<String, dynamic>> get _coachingActionMembers => _members
+      .where(
+        (assignment) =>
+            assignment['relationship_type'] != 'independent' ||
+            assignment['access_active'] != false,
+      )
+      .toList();
 
   @override
   void initState() {
@@ -88,6 +97,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     _trialRequests = _mapList(previewData['trial_requests']);
     _exercises = _mapList(previewData['exercises']);
     _chatConversations = _mapList(previewData['chat_conversations']);
+    _independentInvitations = _mapList(previewData['independent_invitations']);
     _loading = false;
   }
 
@@ -161,7 +171,13 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     try {
       final contextResponse = await _repository.fetchContext();
       final contextData = _map(contextResponse['data']);
-      final hasTrainerProfile = _map(contextData['trainer_profile']).isNotEmpty;
+      final trainerProfile = _map(contextData['trainer_profile']);
+      final hasTrainerProfile = trainerProfile.isNotEmpty;
+      final isIndependent = _trainerGymId(trainerProfile) == null;
+      final isVerified =
+          (trainerProfile['verification_status']?.toString() ?? '')
+              .toLowerCase() ==
+          'verified';
 
       if (!hasTrainerProfile) {
         final notificationsResponse = await _repository.fetchNotifications();
@@ -178,20 +194,70 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         _trialRequests = const [];
         _exercises = const [];
         _chatConversations = const [];
+        _independentInvitations = const [];
         _tasks = const {};
         _chatError = null;
+        setState(() => _loading = false);
         return;
       }
 
+      Future<Map<String, dynamic>> coachingRequest(
+        Future<Map<String, dynamic>> Function() request,
+        String label,
+      ) async {
+        try {
+          return await request();
+        } catch (exception) {
+          if (!isIndependent) rethrow;
+          debugPrint('[trainer-home][warn] $label: $exception');
+          return const <String, dynamic>{'data': <dynamic>[]};
+        }
+      }
+
       final results = await Future.wait([
-        _repository.fetchAssignedMembers(),
-        _repository.fetchTodayClients(),
-        _repository.fetchWorkoutTemplates(),
-        _repository.fetchWorkoutPlans(),
-        _repository.fetchNotifications(),
-        _repository.fetchExercises(),
-        _repository.fetchTrialRequests(),
+        coachingRequest(_repository.fetchAssignedMembers, 'gym members'),
+        coachingRequest(_repository.fetchTodayClients, 'today clients'),
+        coachingRequest(_repository.fetchWorkoutTemplates, 'workout templates'),
+        coachingRequest(_repository.fetchWorkoutPlans, 'workout plans'),
+        coachingRequest(_repository.fetchNotifications, 'notifications'),
+        coachingRequest(_repository.fetchExercises, 'exercises'),
+        coachingRequest(_repository.fetchTrialRequests, 'trial requests'),
       ]);
+      List<Map<String, dynamic>> independentMembers = const [];
+      List<Map<String, dynamic>> independentInvitations = const [];
+      Map<String, dynamic> independentContext = const {};
+      try {
+        final response = await _repository.fetchIndependentContext();
+        independentContext = _map(response['data']);
+      } catch (exception) {
+        debugPrint('[trainer-home][warn] independent context: $exception');
+      }
+      if (isIndependent && isVerified) {
+        try {
+          final response = await _repository.fetchIndependentMembers();
+          independentMembers = _recordsFromResponse(
+            response,
+          ).map(_normalizeIndependentAssignment).toList();
+        } catch (exception) {
+          debugPrint('[trainer-home][warn] independent members: $exception');
+        }
+        try {
+          final response = await _repository
+              .fetchIndependentMemberInvitations();
+          independentInvitations = _recordsFromResponse(response);
+        } catch (exception) {
+          debugPrint('[trainer-home][warn] independent invites: $exception');
+        }
+      } else {
+        independentMembers = _mapList(independentContext['relationships'])
+            .where(
+              (relationship) =>
+                  relationship['status']?.toString().toLowerCase() == 'active',
+            )
+            .map(_normalizeIndependentAssignment)
+            .toList();
+        independentInvitations = _mapList(independentContext['invitations']);
+      }
       Map<String, dynamic> tasks = const {};
       List<Map<String, dynamic>> followUps = const [];
       List<Map<String, dynamic>> chatConversations = const [];
@@ -206,9 +272,10 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         followUps = _mapList(response['data']);
       } catch (exception) {
         final message = exception.toString().toLowerCase();
-        if (!(message.contains('404') ||
-            message.contains('not found') ||
-            message.contains('endpoint'))) {
+        if (!isIndependent &&
+            !(message.contains('404') ||
+                message.contains('not found') ||
+                message.contains('endpoint'))) {
           rethrow;
         }
         followUps = const [];
@@ -225,7 +292,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         return;
       }
       _contextData = _normalizeTrainerContext(contextData);
-      _members = _mapList(results[0]['data']);
+      _members = [..._mapList(results[0]['data']), ...independentMembers];
       _todayClients = _mapList(results[1]['data']);
       _templates = _mapList(results[2]['data']);
       _plans = _mapList(results[3]['data']);
@@ -235,6 +302,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       _tasks = tasks;
       _followUps = followUps;
       _chatConversations = chatConversations;
+      _independentInvitations = independentInvitations;
     } catch (exception) {
       _error = exception.toString();
     }
@@ -286,6 +354,16 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     final onboardingCompleted =
         (contextUser['trainer_onboarding_completed'] as bool?) ?? false;
     final hasTrainerProfile = _map(_contextData['trainer_profile']).isNotEmpty;
+    final trainerProfile = _map(_contextData['trainer_profile']);
+    final isIndependentTrainer = _trainerGymId(trainerProfile) == null;
+    final verificationStatus =
+        trainerProfile['verification_status']?.toString().toLowerCase() ??
+        'pending';
+    final verificationReason = trainerProfile['verification_rejection_reason']
+        ?.toString()
+        .trim();
+    final canInviteIndependent =
+        isIndependentTrainer && verificationStatus == 'verified';
 
     final pages = <Widget>[
       _DashboardPage(
@@ -325,20 +403,33 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         onManageWorkouts: _openWorkoutManagerForMember,
         onSendMessage: _openChatWithMember,
         onAddFollowUp: _openQuickNoteSheet,
-        onAddMember: _openMemberInvitationSheet,
+        onAddMember: () => _openMemberInvitationSheet(
+          independent: isIndependentTrainer,
+          allowed: !isIndependentTrainer || canInviteIndependent,
+        ),
+        isIndependentTrainer: isIndependentTrainer,
+        verificationStatus: verificationStatus,
+        verificationReason: verificationReason,
+        pendingInvitationCount: _independentInvitations
+            .where(
+              (item) =>
+                  (item['status']?.toString() ?? '').toLowerCase() == 'pending',
+            )
+            .length,
+        onManageInvitations: _openIndependentInvitationsSheet,
       ),
       _WorkoutPage(
         contextData: _contextData,
-        members: _members,
+        members: _coachingActionMembers,
         templates: _templates,
         plans: _plans,
         exercises: _exercises,
         repository: _repository,
-        initialMemberId: _workoutFocusMemberId,
+        initialAssignmentKey: _workoutFocusAssignmentKey,
         onRefresh: _load,
       ),
       _ChatPage(
-        members: _members,
+        members: _coachingActionMembers,
         conversations: _chatConversations,
         error: _chatError,
         loading: _loading,
@@ -616,6 +707,10 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     if (memberId == null) {
       return;
     }
+    if (assignment['relationship_type'] == 'independent') {
+      await _openIndependentMemberSheet(assignment);
+      return;
+    }
 
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
@@ -631,13 +726,314 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     );
   }
 
-  Future<void> _openDietBuilder({int? preselectedMemberId}) async {
+  Future<void> _openIndependentMemberSheet(
+    Map<String, dynamic> assignment,
+  ) async {
+    final relationshipId = _intValue(
+      assignment['relationship_id'] ?? assignment['id'],
+    );
+    if (relationshipId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This coaching connection is invalid.')),
+      );
+      return;
+    }
+    final member = _map(assignment['member']);
+    final name = member['name']?.toString() ?? 'Member';
+    final permissions = (assignment['sharing_permissions'] as List? ?? const [])
+        .map((value) => value.toString())
+        .toSet();
+    final accessActive = assignment['access_active'] != false;
+
+    Future<List<Map<String, dynamic>>> loadRecords(
+      Future<Map<String, dynamic>> Function() request,
+    ) async {
+      try {
+        return _recordsFromResponse(await request());
+      } catch (exception) {
+        debugPrint('[independent-member][warn] $exception');
+        return const [];
+      }
+    }
+
+    final results = await Future.wait([
+      if (accessActive && permissions.contains('workouts'))
+        loadRecords(
+          () => _repository.fetchIndependentMemberWorkoutPlans(relationshipId),
+        )
+      else
+        Future.value(const <Map<String, dynamic>>[]),
+      if (accessActive && permissions.contains('workouts'))
+        loadRecords(
+          () =>
+              _repository.fetchIndependentMemberWorkoutLogbook(relationshipId),
+        )
+      else
+        Future.value(const <Map<String, dynamic>>[]),
+      if (accessActive && permissions.contains('profile'))
+        loadRecords(
+          () => _repository.fetchIndependentMemberNotes(relationshipId),
+        )
+      else
+        Future.value(const <Map<String, dynamic>>[]),
+    ]);
+    if (!mounted) return;
+    final workoutPlans = results[0];
+    final workoutSessions = results[1];
+    final notes = results[2];
+    Map<String, dynamic> progress = const {};
+    if (accessActive && permissions.contains('progress')) {
+      try {
+        final response = await _repository.fetchIndependentMemberProgress(
+          relationshipId,
+        );
+        progress = _map(response['data']);
+      } catch (exception) {
+        debugPrint('[independent-member][warn] progress: $exception');
+      }
+    }
+    if (!mounted) return;
+    final weightLogs = _mapList(progress['weight_logs']);
+    final measurements = _mapList(progress['body_measurements']);
+    final personalRecords = _mapList(progress['personal_records']);
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surfaceOverlay,
+      builder: (sheetContext) => SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.verified_user_outlined,
+                  color: AppColors.primaryBright,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    name,
+                    style: Theme.of(sheetContext).textTheme.headlineSmall,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              accessActive
+                  ? 'Independent coaching relationship. Gym subscriptions, attendance, billing, and gym trainer assignment are not shared here.'
+                  : 'Independent coaching access is paused because trainer eligibility or verification changed. Coaching data and chat are locked; the relationship can still be ended below.',
+              style: Theme.of(sheetContext).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textSecondary,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _MemberMetaChip(
+                  label: '${workoutPlans.length} workout plans',
+                  icon: Icons.fitness_center_rounded,
+                ),
+                _MemberMetaChip(
+                  label: '${workoutSessions.length} logged sessions',
+                  icon: Icons.history_rounded,
+                ),
+                _MemberMetaChip(
+                  label: '${notes.length} private notes',
+                  icon: Icons.note_alt_outlined,
+                ),
+                if (accessActive && permissions.contains('progress'))
+                  _MemberMetaChip(
+                    label:
+                        '${weightLogs.length + measurements.length + personalRecords.length} progress records',
+                    icon: Icons.insights_rounded,
+                  ),
+              ],
+            ),
+            if (workoutPlans.isNotEmpty || notes.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              if (workoutPlans.isNotEmpty) ...[
+                Text(
+                  'Independent workout plans',
+                  style: Theme.of(
+                    sheetContext,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 6),
+                ...workoutPlans
+                    .take(3)
+                    .map(
+                      (plan) => ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.fitness_center_rounded),
+                        title: Text(plan['name']?.toString() ?? 'Workout plan'),
+                        subtitle: Text(
+                          _titleCase(plan['status']?.toString() ?? 'active'),
+                        ),
+                      ),
+                    ),
+              ],
+              if (notes.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Recent private notes',
+                  style: Theme.of(
+                    sheetContext,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 6),
+                ...notes
+                    .take(3)
+                    .map(
+                      (note) => ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.lock_outline_rounded),
+                        title: Text(
+                          note['note']?.toString() ?? 'Private coaching note',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+              ],
+            ],
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                FilledButton.icon(
+                  onPressed: accessActive && permissions.contains('chat')
+                      ? () {
+                          Navigator.of(sheetContext).pop();
+                          _openChatWithMember(assignment);
+                        }
+                      : null,
+                  icon: const Icon(Icons.chat_bubble_outline_rounded),
+                  label: const Text('Message'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: accessActive && permissions.contains('workouts')
+                      ? () {
+                          Navigator.of(sheetContext).pop();
+                          _openQuickAssignSheet(assignment);
+                        }
+                      : null,
+                  icon: const Icon(Icons.fitness_center_rounded),
+                  label: const Text('Assign workout'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: accessActive && permissions.contains('diets')
+                      ? () {
+                          Navigator.of(sheetContext).pop();
+                          _openDietBuilder(
+                            preselectedMemberId: _intValue(
+                              assignment['member_id'],
+                            ),
+                            preselectedRelationshipId: relationshipId,
+                          );
+                        }
+                      : null,
+                  icon: const Icon(Icons.restaurant_menu_rounded),
+                  label: const Text('Diet plan'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: accessActive && permissions.contains('profile')
+                      ? () {
+                          Navigator.of(sheetContext).pop();
+                          _openQuickNoteSheet(assignment);
+                        }
+                      : null,
+                  icon: const Icon(Icons.note_add_outlined),
+                  label: const Text('Private note'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton.icon(
+                onPressed: () async {
+                  final rootMessenger = ScaffoldMessenger.of(context);
+                  final confirmed =
+                      await showDialog<bool>(
+                        context: sheetContext,
+                        builder: (dialogContext) => AlertDialog(
+                          title: const Text('End independent coaching?'),
+                          content: Text(
+                            'This immediately removes independent plan, progress, and chat access for $name. Their gym membership and gym trainer remain unchanged.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.of(dialogContext).pop(false),
+                              child: const Text('Keep coaching'),
+                            ),
+                            FilledButton(
+                              onPressed: () =>
+                                  Navigator.of(dialogContext).pop(true),
+                              child: const Text('End coaching'),
+                            ),
+                          ],
+                        ),
+                      ) ??
+                      false;
+                  if (!confirmed) return;
+                  try {
+                    await _repository.revokeIndependentMemberRelationship(
+                      relationshipId,
+                    );
+                    if (!mounted || !sheetContext.mounted) return;
+                    Navigator.of(sheetContext).pop();
+                    rootMessenger.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Independent coaching with $name has ended.',
+                        ),
+                      ),
+                    );
+                    await _load();
+                  } catch (exception) {
+                    if (sheetContext.mounted) {
+                      ScaffoldMessenger.of(sheetContext).showSnackBar(
+                        SnackBar(content: Text(exception.toString())),
+                      );
+                    }
+                  }
+                },
+                icon: const Icon(
+                  Icons.link_off_rounded,
+                  color: AppColors.error,
+                ),
+                label: const Text('End independent coaching'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openDietBuilder({
+    int? preselectedMemberId,
+    int? preselectedRelationshipId,
+  }) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => TrainerDietPlanScreen(
           repository: _repository,
-          members: _members,
+          members: _coachingActionMembers,
           preselectedMemberId: preselectedMemberId,
+          preselectedRelationshipId: preselectedRelationshipId,
         ),
       ),
     );
@@ -730,12 +1126,25 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                           setModalState(() => submitting = true);
                           try {
                             final followUpDate = followUpController.text.trim();
-                            await _repository.createNote(memberId, {
+                            final relationshipId = _intValue(
+                              assignment['relationship_id'],
+                            );
+                            final payload = <String, dynamic>{
                               'note': noteController.text.trim(),
                               'visibility': 'private_to_trainer',
                               if (followUpDate.isNotEmpty)
                                 'follow_up_date': followUpDate,
-                            });
+                            };
+                            if (assignment['relationship_type'] ==
+                                    'independent' &&
+                                relationshipId != null) {
+                              await _repository.createIndependentMemberNote(
+                                relationshipId,
+                                payload,
+                              );
+                            } else {
+                              await _repository.createNote(memberId, payload);
+                            }
                             if (!mounted) {
                               return;
                             }
@@ -772,7 +1181,29 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     );
   }
 
-  Future<void> _openMemberInvitationSheet() async {
+  Future<void> _openMemberInvitationSheet({
+    required bool independent,
+    required bool allowed,
+  }) async {
+    if (!allowed) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          icon: const Icon(Icons.verified_user_outlined),
+          title: const Text('Verification required'),
+          content: const Text(
+            'Independent trainers can invite members after Atlas verifies their account. Your gym assignments are not affected.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Understood'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     final nameController = TextEditingController();
     final emailController = TextEditingController();
     final phoneController = TextEditingController();
@@ -802,7 +1233,9 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Existing app users approve in the app. Everyone else receives an email approval link.',
+                  independent
+                      ? 'This creates a separate coaching invitation. It never replaces the member’s gym trainer.'
+                      : 'Existing app users approve in the app. Everyone else receives an email approval link.',
                   style: Theme.of(modalContext).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 16),
@@ -847,14 +1280,19 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                             final rootMessenger = ScaffoldMessenger.of(context);
                             setModalState(() => submitting = true);
                             try {
-                              final response = await _repository.inviteMember({
+                              final payload = <String, dynamic>{
                                 'name': nameController.text.trim(),
                                 'email': emailController.text.trim(),
                                 if (phoneController.text.trim().isNotEmpty)
                                   'phone': phoneController.text.trim(),
                                 if (goalController.text.trim().isNotEmpty)
                                   'fitness_goal': goalController.text.trim(),
-                              });
+                              };
+                              final response = independent
+                                  ? await _repository.inviteIndependentMember(
+                                      payload,
+                                    )
+                                  : await _repository.inviteMember(payload);
                               if (!modalContext.mounted) {
                                 return;
                               }
@@ -898,6 +1336,203 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     goalController.dispose();
   }
 
+  Future<void> _openIndependentInvitationsSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surfaceOverlay,
+      builder: (sheetContext) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.68,
+        minChildSize: 0.4,
+        maxChildSize: 0.92,
+        builder: (context, controller) => ListView(
+          controller: controller,
+          padding: const EdgeInsets.all(20),
+          children: [
+            Text(
+              'Independent invitations',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Track consent requests or resend an invitation. Resending safely supersedes the previous pending link.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            if (_independentInvitations.isEmpty)
+              const EmptyStateView(
+                title: 'No invitations yet',
+                message: 'Invite a member to begin independent coaching.',
+                icon: Icons.mark_email_unread_outlined,
+              )
+            else
+              ..._independentInvitations.map((invitation) {
+                final status = invitation['status']?.toString() ?? 'pending';
+                final canResend = status != 'accepted';
+                final invitationId = _intValue(invitation['id']);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: PremiumCard(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.mail_outline_rounded),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                invitation['invited_name']?.toString() ??
+                                    'Invited member',
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w900),
+                              ),
+                              Text(
+                                invitation['invited_email']?.toString() ?? '',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              Text(
+                                '${_titleCase(status)} · ${_titleCase(invitation['approval_channel']?.toString() ?? 'app')} approval',
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(color: AppColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (canResend)
+                          Wrap(
+                            spacing: 4,
+                            children: [
+                              if (status == 'pending' && invitationId != null)
+                                TextButton(
+                                  onPressed: () async {
+                                    final rootMessenger = ScaffoldMessenger.of(
+                                      this.context,
+                                    );
+                                    final confirmed =
+                                        await showDialog<bool>(
+                                          context: sheetContext,
+                                          builder: (dialogContext) => AlertDialog(
+                                            title: const Text(
+                                              'Withdraw invitation?',
+                                            ),
+                                            content: const Text(
+                                              'The member will no longer be able to accept this coaching invitation. You can send a fresh invitation later.',
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.of(
+                                                  dialogContext,
+                                                ).pop(false),
+                                                child: const Text('Keep'),
+                                              ),
+                                              FilledButton(
+                                                onPressed: () => Navigator.of(
+                                                  dialogContext,
+                                                ).pop(true),
+                                                child: const Text('Withdraw'),
+                                              ),
+                                            ],
+                                          ),
+                                        ) ??
+                                        false;
+                                    if (!confirmed) return;
+                                    try {
+                                      await _repository
+                                          .cancelIndependentMemberInvitation(
+                                            invitationId,
+                                          );
+                                      if (!mounted || !sheetContext.mounted) {
+                                        return;
+                                      }
+                                      Navigator.of(sheetContext).pop();
+                                      rootMessenger.showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Invitation withdrawn.',
+                                          ),
+                                        ),
+                                      );
+                                      await _load();
+                                    } catch (exception) {
+                                      if (sheetContext.mounted) {
+                                        ScaffoldMessenger.of(
+                                          sheetContext,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text(exception.toString()),
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  },
+                                  child: const Text('Withdraw'),
+                                ),
+                              TextButton(
+                                onPressed: () async {
+                                  final rootMessenger = ScaffoldMessenger.of(
+                                    this.context,
+                                  );
+                                  try {
+                                    await _repository.inviteIndependentMember({
+                                      'name':
+                                          invitation['invited_name']
+                                              ?.toString() ??
+                                          'Member',
+                                      'email': invitation['invited_email']
+                                          ?.toString(),
+                                      if ((invitation['message']?.toString() ??
+                                              '')
+                                          .isNotEmpty)
+                                        'message': invitation['message']
+                                            .toString(),
+                                      if (invitation['sharing_permissions']
+                                          is List)
+                                        'sharing_permissions':
+                                            invitation['sharing_permissions'],
+                                    });
+                                    if (!mounted || !sheetContext.mounted) {
+                                      return;
+                                    }
+                                    Navigator.of(sheetContext).pop();
+                                    rootMessenger.showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Invitation resent.'),
+                                      ),
+                                    );
+                                    await _load();
+                                  } catch (exception) {
+                                    if (sheetContext.mounted) {
+                                      ScaffoldMessenger.of(
+                                        sheetContext,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(exception.toString()),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                                child: const Text('Resend'),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _openQuickAssignSheet(Map<String, dynamic> assignment) async {
     final memberId = (assignment['member_id'] as num?)?.toInt();
     if (memberId == null) {
@@ -927,16 +1562,17 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
               orElse: () => const <String, dynamic>{},
             );
             final existingPlans = _plans
-                .where(
-                  (plan) => (plan['member_id'] as num?)?.toInt() == memberId,
-                )
+                .where((plan) => _planMatchesAssignment(plan, assignment))
                 .toList();
 
             Future<void> assignTemplate() async {
               final templateId = selectedTemplateId;
               final gymId = (assignment['gym_id'] as num?)?.toInt();
               final branchId = (assignment['branch_id'] as num?)?.toInt();
-              if (templateId == null || gymId == null || branchId == null) {
+              final relationshipId = _intValue(assignment['relationship_id']);
+              if (templateId == null ||
+                  (relationshipId == null &&
+                      (gymId == null || branchId == null))) {
                 ScaffoldMessenger.of(modalContext).showSnackBar(
                   const SnackBar(
                     content: Text('Select a library workout first.'),
@@ -966,8 +1602,11 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
               setModalState(() => submitting = true);
               try {
                 await _repository.assignWorkoutTemplate(templateId, {
-                  'gym_id': gymId,
-                  'branch_id': branchId,
+                  if (gymId != null) 'gym_id': gymId,
+                  if (branchId != null) 'branch_id': branchId,
+                  if (relationshipId != null)
+                    'independent_trainer_member_relationship_id':
+                        relationshipId,
                   'member_ids': <int>[memberId],
                   'notes': notesController.text.trim().isEmpty
                       ? null
@@ -1180,7 +1819,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
 
   Future<void> _openWorkoutManagerForMember(Map<String, dynamic> assignment) {
     setState(() {
-      _workoutFocusMemberId = (assignment['member_id'] as num?)?.toInt();
+      _workoutFocusAssignmentKey = _assignmentKey(assignment);
       _index = 2;
     });
     return Future<void>.value();
@@ -4591,6 +5230,11 @@ class _MemberPage extends StatefulWidget {
     required this.onSendMessage,
     required this.onAddFollowUp,
     required this.onAddMember,
+    required this.isIndependentTrainer,
+    required this.verificationStatus,
+    required this.verificationReason,
+    required this.pendingInvitationCount,
+    required this.onManageInvitations,
   });
 
   final List<Map<String, dynamic>> members;
@@ -4603,6 +5247,11 @@ class _MemberPage extends StatefulWidget {
   final Future<void> Function(Map<String, dynamic>) onSendMessage;
   final Future<void> Function(Map<String, dynamic>) onAddFollowUp;
   final Future<void> Function() onAddMember;
+  final bool isIndependentTrainer;
+  final String verificationStatus;
+  final String? verificationReason;
+  final int pendingInvitationCount;
+  final Future<void> Function() onManageInvitations;
 
   @override
   State<_MemberPage> createState() => _MemberPageState();
@@ -4631,9 +5280,7 @@ class _MemberPageState extends State<_MemberPage> {
       final goalLower = goal.toLowerCase();
       final membershipSummary = _map(assignment['membership_summary']);
       final memberPlans = widget.plans.where(
-        (plan) =>
-            (plan['member_id'] as num?)?.toInt() ==
-            (assignment['member_id'] as num?)?.toInt(),
+        (plan) => _planMatchesAssignment(plan, assignment),
       );
 
       if (query.isNotEmpty &&
@@ -4660,6 +5307,15 @@ class _MemberPageState extends State<_MemberPage> {
           padding: const EdgeInsets.fromLTRB(18, 10, 18, 104),
           children: [
             _MembersPageHeader(totalCount: 0, onInvite: widget.onAddMember),
+            if (widget.isIndependentTrainer) ...[
+              const SizedBox(height: 12),
+              _IndependentTrainerStatusCard(
+                verificationStatus: widget.verificationStatus,
+                verificationReason: widget.verificationReason,
+                pendingInvitationCount: widget.pendingInvitationCount,
+                onTap: widget.onManageInvitations,
+              ),
+            ],
             const SizedBox(height: 16),
             _MembersSearchCard(
               controller: _searchController,
@@ -4703,7 +5359,11 @@ class _MemberPageState extends State<_MemberPage> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Members assigned by your gym will appear here.',
+                    widget.isIndependentTrainer
+                        ? widget.verificationStatus == 'verified'
+                              ? 'Invite a member to start a coaching relationship. Their gym subscription stays separate.'
+                              : 'Complete Atlas verification before inviting independent members.'
+                        : 'Members assigned by your gym will appear here.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppColors.textSecondary,
@@ -4727,6 +5387,15 @@ class _MemberPageState extends State<_MemberPage> {
             totalCount: widget.members.length,
             onInvite: widget.onAddMember,
           ),
+          if (widget.isIndependentTrainer) ...[
+            const SizedBox(height: 12),
+            _IndependentTrainerStatusCard(
+              verificationStatus: widget.verificationStatus,
+              verificationReason: widget.verificationReason,
+              pendingInvitationCount: widget.pendingInvitationCount,
+              onTap: widget.onManageInvitations,
+            ),
+          ],
           const SizedBox(height: 16),
           _MembersSearchCard(
             controller: _searchController,
@@ -4780,7 +5449,7 @@ class _WorkoutPage extends StatefulWidget {
     required this.plans,
     required this.exercises,
     required this.repository,
-    required this.initialMemberId,
+    required this.initialAssignmentKey,
     required this.onRefresh,
   });
 
@@ -4790,7 +5459,7 @@ class _WorkoutPage extends StatefulWidget {
   final List<Map<String, dynamic>> plans;
   final List<Map<String, dynamic>> exercises;
   final TrainerRepository repository;
-  final int? initialMemberId;
+  final String? initialAssignmentKey;
   final Future<void> Function() onRefresh;
 
   @override
@@ -4821,7 +5490,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   );
   final _newExerciseInstructionsController = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  int? _selectedMemberId;
+  String? _selectedAssignmentKey;
   int? _selectedTemplateId;
   int? _selectedExerciseId;
   bool _savingPlan = false;
@@ -4858,9 +5527,11 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   @override
   void initState() {
     super.initState();
-    _selectedMemberId =
-        _validMemberId(widget.initialMemberId) ??
-        (widget.members.firstOrNull?['member_id'] as num?)?.toInt();
+    _selectedAssignmentKey =
+        _validAssignmentKey(widget.initialAssignmentKey) ??
+        (widget.members.firstOrNull == null
+            ? null
+            : _assignmentKey(widget.members.first));
     _selectedTemplateId = (widget.templates.firstOrNull?['id'] as num?)
         ?.toInt();
     _selectedExerciseId = (widget.exercises.firstOrNull?['id'] as num?)
@@ -4879,10 +5550,12 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   @override
   void didUpdateWidget(covariant _WorkoutPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.initialMemberId != oldWidget.initialMemberId) {
-      final focusedMemberId = _validMemberId(widget.initialMemberId);
-      if (focusedMemberId != null) {
-        setState(() => _selectedMemberId = focusedMemberId);
+    if (widget.initialAssignmentKey != oldWidget.initialAssignmentKey) {
+      final focusedAssignmentKey = _validAssignmentKey(
+        widget.initialAssignmentKey,
+      );
+      if (focusedAssignmentKey != null) {
+        setState(() => _selectedAssignmentKey = focusedAssignmentKey);
       }
     }
   }
@@ -4912,14 +5585,14 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     super.dispose();
   }
 
-  int? _validMemberId(int? memberId) {
-    if (memberId == null) {
+  String? _validAssignmentKey(String? assignmentKey) {
+    if (assignmentKey == null) {
       return null;
     }
     final exists = widget.members.any(
-      (member) => (member['member_id'] as num?)?.toInt() == memberId,
+      (member) => _assignmentKey(member) == assignmentKey,
     );
-    return exists ? memberId : null;
+    return exists ? assignmentKey : null;
   }
 
   @override
@@ -4940,7 +5613,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     }
 
     final selectedMember = widget.members.firstWhere(
-      (item) => (item['member_id'] as num?)?.toInt() == _selectedMemberId,
+      (item) => _assignmentKey(item) == _selectedAssignmentKey,
       orElse: () => widget.members.firstOrNull ?? const <String, dynamic>{},
     );
     final filteredExercises = widget.exercises.where((exercise) {
@@ -4961,9 +5634,9 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     final canUseTemplate = widget.templates.isNotEmpty;
     final memberName =
         _map(selectedMember['member'])['name']?.toString() ?? 'Assigned member';
-    final selectedMemberPlans = widget.plans.where((plan) {
-      return (plan['member_id'] as num?)?.toInt() == _selectedMemberId;
-    }).toList();
+    final selectedMemberPlans = widget.plans
+        .where((plan) => _planMatchesAssignment(plan, selectedMember))
+        .toList();
 
     return ListView(
       physics: const BouncingScrollPhysics(),
@@ -5001,26 +5674,24 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        DropdownButtonFormField<int>(
-                          key: ValueKey('member-$_selectedMemberId'),
-                          initialValue: _selectedMemberId,
+                        DropdownButtonFormField<String>(
+                          key: ValueKey('member-$_selectedAssignmentKey'),
+                          initialValue: _selectedAssignmentKey,
                           isExpanded: true,
                           items: widget.members
                               .map(
-                                (member) => DropdownMenuItem<int>(
-                                  value: (member['member_id'] as num?)?.toInt(),
+                                (member) => DropdownMenuItem<String>(
+                                  value: _assignmentKey(member),
                                   child: Text(
-                                    _map(
-                                          member['member'],
-                                        )['name']?.toString() ??
-                                        'Member',
+                                    '${_map(member['member'])['name']?.toString() ?? 'Member'} · '
+                                    '${_assignmentScopeLabel(member)}',
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                               )
                               .toList(),
                           onChanged: (value) =>
-                              setState(() => _selectedMemberId = value),
+                              setState(() => _selectedAssignmentKey = value),
                           decoration: _workoutInputDecoration(
                             'Member',
                             icon: Icons.person_search_rounded,
@@ -5710,7 +6381,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
 
   Map<String, dynamic> _selectedMember() {
     return widget.members.firstWhere(
-      (item) => (item['member_id'] as num?)?.toInt() == _selectedMemberId,
+      (item) => _assignmentKey(item) == _selectedAssignmentKey,
       orElse: () => widget.members.firstOrNull ?? const <String, dynamic>{},
     );
   }
@@ -5825,7 +6496,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
 
   Future<void> _openCreateExerciseSheet() async {
     final selectedMember = widget.members.firstWhere(
-      (item) => (item['member_id'] as num?)?.toInt() == _selectedMemberId,
+      (item) => _assignmentKey(item) == _selectedAssignmentKey,
       orElse: () => widget.members.firstOrNull ?? const <String, dynamic>{},
     );
     final gymId = _activeGymId(selectedMember);
@@ -6191,14 +6862,14 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   }
 
   Map<String, dynamic> _templatePayload({
-    required int gymId,
+    int? gymId,
     int? branchId,
     required int durationWeeks,
     required List<String> days,
     required List<Map<String, dynamic>> payloadDays,
   }) {
     return <String, dynamic>{
-      'gym_id': gymId,
+      if (gymId != null) 'gym_id': gymId,
       if (branchId != null) 'branch_id': branchId,
       'name': _planNameController.text.trim(),
       'goal': _goalController.text.trim().isEmpty
@@ -6279,9 +6950,11 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     final memberId = (selectedMember['member_id'] as num?)?.toInt();
     final gymId = (selectedMember['gym_id'] as num?)?.toInt();
     final branchId = (selectedMember['branch_id'] as num?)?.toInt();
+    final relationshipId = _intValue(selectedMember['relationship_id']);
     final templateId = (selectedTemplate['id'] as num?)?.toInt();
 
-    if (memberId == null || gymId == null || branchId == null) {
+    if (memberId == null ||
+        (relationshipId == null && (gymId == null || branchId == null))) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Select a valid assigned member.')),
       );
@@ -6297,8 +6970,10 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     setState(() => _savingPlan = true);
     try {
       await widget.repository.assignWorkoutTemplate(templateId, {
-        'gym_id': gymId,
-        'branch_id': branchId,
+        if (gymId != null) 'gym_id': gymId,
+        if (branchId != null) 'branch_id': branchId,
+        if (relationshipId != null)
+          'independent_trainer_member_relationship_id': relationshipId,
         'member_ids': <int>[memberId],
         'starts_on': DateTime.now().toIso8601String().split('T').first,
       });
@@ -6630,6 +7305,8 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     final selectedMember = _selectedMember();
     final gymId = _activeGymId(selectedMember);
     final branchId = _activeBranchId(selectedMember);
+    final relationshipId = _intValue(selectedMember['relationship_id']);
+    final memberId = _intValue(selectedMember['member_id']);
     final days = _selectedWeekDays.toList()
       ..sort((a, b) => _dayNumbers[a]!.compareTo(_dayNumbers[b]!));
     if (days.isEmpty) {
@@ -6638,10 +7315,10 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       );
       return;
     }
-    if (gymId == null) {
+    if (gymId == null && relationshipId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('A trainer gym assignment is required to save.'),
+          content: Text('Select a valid coaching member before saving.'),
         ),
       );
       return;
@@ -6654,21 +7331,33 @@ class __WorkoutPageState extends State<_WorkoutPage> {
 
     setState(() => _savingPlan = true);
     try {
-      final response = await widget.repository.createWorkoutTemplate(
-        _templatePayload(
-          gymId: gymId,
-          branchId: branchId,
-          durationWeeks: durationWeeks,
-          days: days,
-          payloadDays: payloadDays,
-        ),
+      final payload = _templatePayload(
+        gymId: gymId,
+        branchId: branchId,
+        durationWeeks: durationWeeks,
+        days: days,
+        payloadDays: payloadDays,
       );
+      final response = relationshipId != null && memberId != null
+          ? await widget.repository.createWorkoutPlan({
+              ...payload,
+              'independent_trainer_member_relationship_id': relationshipId,
+              'member_ids': <int>[memberId],
+              'starts_on': DateTime.now().toIso8601String().split('T').first,
+            })
+          : await widget.repository.createWorkoutTemplate(payload);
       final createdTemplateId = (_map(response['data'])['id'] as num?)?.toInt();
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Workout saved to your library.')),
+        SnackBar(
+          content: Text(
+            relationshipId != null
+                ? 'Independent workout assigned to the member.'
+                : 'Workout saved to your library.',
+          ),
+        ),
       );
       _resetBuilder();
       await widget.onRefresh();
@@ -7424,7 +8113,19 @@ class _ChatPageState extends State<_ChatPage> {
 
   @override
   Widget build(BuildContext context) {
-    final filteredMembers = widget.members.where((assignment) {
+    final assignmentsByMember = <int, Map<String, dynamic>>{};
+    for (final assignment in widget.members) {
+      final memberId = _intValue(assignment['member_id']);
+      if (memberId == null) continue;
+      final current = assignmentsByMember.putIfAbsent(
+        memberId,
+        () => {...assignment, 'chat_scope_labels': <String>[]},
+      );
+      final labels = (current['chat_scope_labels'] as List<String>);
+      final label = _assignmentScopeLabel(assignment);
+      if (!labels.contains(label)) labels.add(label);
+    }
+    final filteredMembers = assignmentsByMember.values.where((assignment) {
       if (_query.isEmpty) {
         return true;
       }
@@ -7662,6 +8363,9 @@ class _TrainerChatInboxList extends StatelessWidget {
 
         return _ChatInboxCard(
           name: member['name']?.toString() ?? 'Member',
+          scope: (assignment['chat_scope_labels'] as List? ?? const [])
+              .map((value) => value.toString())
+              .join(' + '),
           avatarUrl:
               member['avatar']?.toString() ??
               member['profile_photo_url']?.toString(),
@@ -7686,6 +8390,7 @@ class _ChatInboxCard extends StatelessWidget {
   const _ChatInboxCard({
     required this.name,
     required this.preview,
+    required this.scope,
     required this.time,
     required this.unreadCount,
     required this.isSelected,
@@ -7695,6 +8400,7 @@ class _ChatInboxCard extends StatelessWidget {
 
   final String name;
   final String preview;
+  final String scope;
   final String time;
   final int unreadCount;
   final bool isSelected;
@@ -7788,6 +8494,16 @@ class _ChatInboxCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 5),
+                    Text(
+                      scope,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
                     Row(
                       children: [
                         Expanded(
@@ -9251,10 +9967,18 @@ class _TrainerSendUpdateSheetHostState
   int? _selectedMemberId;
   bool _saving = false;
 
+  List<Map<String, dynamic>> get _gymMembers => widget.members
+      .where(
+        (assignment) =>
+            assignment['relationship_type'] != 'independent' &&
+            assignment['gym_id'] != null,
+      )
+      .toList();
+
   @override
   void initState() {
     super.initState();
-    _selectedMemberId = (widget.members.firstOrNull?['member_id'] as num?)
+    _selectedMemberId = (_gymMembers.firstOrNull?['member_id'] as num?)
         ?.toInt();
   }
 
@@ -9266,7 +9990,7 @@ class _TrainerSendUpdateSheetHostState
   }
 
   Future<void> _send() async {
-    final selectedAssignment = widget.members.firstWhere(
+    final selectedAssignment = _gymMembers.firstWhere(
       (item) => (item['member_id'] as num?)?.toInt() == _selectedMemberId,
       orElse: () => const <String, dynamic>{},
     );
@@ -9308,7 +10032,7 @@ class _TrainerSendUpdateSheetHostState
 
   @override
   Widget build(BuildContext context) {
-    final selectedAssignment = widget.members.firstWhere(
+    final selectedAssignment = _gymMembers.firstWhere(
       (item) => (item['member_id'] as num?)?.toInt() == _selectedMemberId,
       orElse: () => const <String, dynamic>{},
     );
@@ -9326,7 +10050,7 @@ class _TrainerSendUpdateSheetHostState
       titleController: _titleController,
       messageController: _messageController,
       selectedMemberId: _selectedMemberId,
-      members: widget.members,
+      members: _gymMembers,
       saving: _saving,
       onMemberChanged: (value) => setState(() => _selectedMemberId = value),
       onSend: _send,
@@ -9949,6 +10673,71 @@ class _MembersPageHeader extends StatelessWidget {
   }
 }
 
+class _IndependentTrainerStatusCard extends StatelessWidget {
+  const _IndependentTrainerStatusCard({
+    required this.verificationStatus,
+    required this.verificationReason,
+    required this.pendingInvitationCount,
+    this.onTap,
+  });
+
+  final String verificationStatus;
+  final String? verificationReason;
+  final int pendingInvitationCount;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final verified = verificationStatus == 'verified';
+    return PremiumCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          Icon(
+            verified ? Icons.verified_rounded : Icons.hourglass_top_rounded,
+            color: verified ? AppColors.success : AppColors.warning,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  verified
+                      ? 'Verified independent trainer'
+                      : 'Verification ${_titleCase(verificationStatus)}',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  verified
+                      ? '$pendingInvitationCount pending invitation${pendingInvitationCount == 1 ? '' : 's'} · gym assignments remain separate'
+                      : verificationReason?.isNotEmpty == true
+                      ? verificationReason!
+                      : 'Member invitations unlock only after Atlas approval.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (onTap != null)
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.textSecondary,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MemberMetaChip extends StatelessWidget {
   const _MemberMetaChip({
     required this.label,
@@ -10106,9 +10895,8 @@ class _FitnessMemberRow extends StatelessWidget {
     final member = _map(assignment['member']);
     final progressSummary = _map(assignment['progress_summary']);
     final membershipSummary = _map(assignment['membership_summary']);
-    final memberId = (assignment['member_id'] as num?)?.toInt();
     final memberPlans = plans
-        .where((plan) => (plan['member_id'] as num?)?.toInt() == memberId)
+        .where((plan) => _planMatchesAssignment(plan, assignment))
         .toList();
     final avatar = member['avatar']?.toString() ?? '';
     final name = member['name']?.toString() ?? 'Member';
@@ -10116,6 +10904,8 @@ class _FitnessMemberRow extends StatelessWidget {
     final completionLabel = memberPlans.isEmpty
         ? 'Workout needed'
         : '${memberPlans.length} workout${memberPlans.length == 1 ? '' : 's'}';
+    final independent = assignment['relationship_type'] == 'independent';
+    final accessActive = !independent || assignment['access_active'] != false;
 
     return Material(
       color: AppColors.surface,
@@ -10186,6 +10976,23 @@ class _FitnessMemberRow extends StatelessWidget {
                       runSpacing: 6,
                       children: [
                         _MemberMetaChip(
+                          label: independent
+                              ? accessActive
+                                    ? 'Independent coaching'
+                                    : 'Independent access paused'
+                              : 'Gym assigned',
+                          icon: independent
+                              ? accessActive
+                                    ? Icons.verified_user_outlined
+                                    : Icons.lock_outline_rounded
+                              : Icons.apartment_rounded,
+                        ),
+                        if (!independent)
+                          _MemberMetaChip(
+                            label: _assignmentScopeLabel(assignment),
+                            icon: Icons.location_on_outlined,
+                          ),
+                        _MemberMetaChip(
                           label: completionLabel,
                           icon: Icons.fitness_center_rounded,
                           emphasized: memberPlans.isEmpty,
@@ -10201,65 +11008,73 @@ class _FitnessMemberRow extends StatelessWidget {
                   ],
                 ),
               ),
-              PopupMenuButton<String>(
-                tooltip: 'Member actions',
-                icon: const Icon(
-                  Icons.more_vert_rounded,
-                  color: AppColors.textSecondary,
-                ),
-                onSelected: (value) {
-                  switch (value) {
-                    case 'message':
-                      onSendMessage();
-                    case 'workout':
-                      memberPlans.isEmpty
-                          ? onQuickAssign()
-                          : onManageWorkouts();
-                    case 'note':
-                      onQuickNote();
-                    case 'follow_up':
-                      onAddFollowUp();
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'message',
-                    child: ListTile(
-                      dense: true,
-                      leading: Icon(Icons.chat_bubble_outline_rounded),
-                      title: Text('Message'),
-                    ),
+              if (accessActive)
+                PopupMenuButton<String>(
+                  tooltip: 'Member actions',
+                  icon: const Icon(
+                    Icons.more_vert_rounded,
+                    color: AppColors.textSecondary,
                   ),
-                  PopupMenuItem(
-                    value: 'workout',
-                    child: ListTile(
-                      dense: true,
-                      leading: const Icon(Icons.fitness_center_rounded),
-                      title: Text(
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'message':
+                        onSendMessage();
+                      case 'workout':
                         memberPlans.isEmpty
-                            ? 'Assign workout'
-                            : 'Manage workouts',
+                            ? onQuickAssign()
+                            : onManageWorkouts();
+                      case 'note':
+                        onQuickNote();
+                      case 'follow_up':
+                        onAddFollowUp();
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'message',
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(Icons.chat_bubble_outline_rounded),
+                        title: Text('Message'),
                       ),
                     ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'note',
-                    child: ListTile(
-                      dense: true,
-                      leading: Icon(Icons.edit_note_rounded),
-                      title: Text('Add note'),
+                    PopupMenuItem(
+                      value: 'workout',
+                      child: ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.fitness_center_rounded),
+                        title: Text(
+                          memberPlans.isEmpty
+                              ? 'Assign workout'
+                              : 'Manage workouts',
+                        ),
+                      ),
                     ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'follow_up',
-                    child: ListTile(
-                      dense: true,
-                      leading: Icon(Icons.event_available_rounded),
-                      title: Text('Add follow-up'),
-                    ),
-                  ),
-                ],
-              ),
+                    if (!independent)
+                      const PopupMenuItem(
+                        value: 'note',
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.edit_note_rounded),
+                          title: Text('Add note'),
+                        ),
+                      ),
+                    if (!independent)
+                      const PopupMenuItem(
+                        value: 'follow_up',
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.event_available_rounded),
+                          title: Text('Add follow-up'),
+                        ),
+                      ),
+                  ],
+                )
+              else
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.textSecondary,
+                ),
             ],
           ),
         ),
@@ -10564,6 +11379,95 @@ String _titleCase(String value) {
       .join(' ');
 }
 
+int? _trainerGymId(Map<String, dynamic> profile) {
+  final value = _map(profile['assigned_gym'])['id'] ?? profile['gym_id'];
+  return _intValue(value);
+}
+
+List<Map<String, dynamic>> _recordsFromResponse(Map<String, dynamic> response) {
+  final data = response['data'];
+  if (data is List) {
+    return data.whereType<Map>().map((item) => _map(item)).toList();
+  }
+  final envelope = _map(data);
+  for (final key in const ['data', 'members', 'relationships', 'invitations']) {
+    final records = envelope[key];
+    if (records is List) {
+      return records.whereType<Map>().map((item) => _map(item)).toList();
+    }
+  }
+  return const [];
+}
+
+Map<String, dynamic> _normalizeIndependentAssignment(
+  Map<String, dynamic> relationship,
+) {
+  final member = _map(relationship['member']);
+  final memberId = _intValue(
+    relationship['member_id'] ?? member['id'] ?? member['user_id'],
+  );
+  return <String, dynamic>{
+    ...relationship,
+    'member_id': memberId,
+    'member': member,
+    'gym_id': null,
+    'branch_id': null,
+    'relationship_id': _intValue(relationship['id']),
+    'relationship_type': 'independent',
+    'membership_summary': const <String, dynamic>{'status': 'independent'},
+  };
+}
+
+String _assignmentKey(Map<String, dynamic> assignment) {
+  final relationshipId = _intValue(
+    assignment['relationship_id'] ??
+        assignment['independent_trainer_member_relationship_id'],
+  );
+  if (relationshipId != null) {
+    return 'independent:$relationshipId';
+  }
+  return 'gym:${_intValue(assignment['gym_id']) ?? 0}:'
+      '${_intValue(assignment['branch_id']) ?? 0}:'
+      '${_intValue(assignment['member_id']) ?? 0}';
+}
+
+bool _planMatchesAssignment(
+  Map<String, dynamic> plan,
+  Map<String, dynamic> assignment,
+) {
+  if (_intValue(plan['member_id']) != _intValue(assignment['member_id'])) {
+    return false;
+  }
+  final relationshipId = _intValue(
+    assignment['relationship_id'] ??
+        assignment['independent_trainer_member_relationship_id'],
+  );
+  if (relationshipId != null) {
+    return _intValue(plan['independent_trainer_member_relationship_id']) ==
+        relationshipId;
+  }
+  if (plan['independent_trainer_member_relationship_id'] != null) {
+    return false;
+  }
+  return _intValue(plan['gym_id']) == _intValue(assignment['gym_id']) &&
+      _intValue(plan['branch_id']) == _intValue(assignment['branch_id']);
+}
+
+String _assignmentScopeLabel(Map<String, dynamic> assignment) {
+  if (assignment['relationship_type'] == 'independent') {
+    return 'Independent coaching';
+  }
+  final gym = _map(assignment['gym']);
+  final branch = _map(assignment['branch']);
+  final gymLabel = gym['name']?.toString().trim().isNotEmpty == true
+      ? gym['name'].toString()
+      : 'Gym ${_intValue(assignment['gym_id']) ?? '--'}';
+  final branchLabel = branch['name']?.toString().trim().isNotEmpty == true
+      ? branch['name'].toString()
+      : 'Branch ${_intValue(assignment['branch_id']) ?? '--'}';
+  return '$gymLabel · $branchLabel';
+}
+
 Color _notificationColor(BuildContext context, String? type) {
   switch (type) {
     case 'new_member_assigned':
@@ -10581,6 +11485,12 @@ Color _notificationColor(BuildContext context, String? type) {
       return const Color(0xFF34D399);
     case 'gym_announcement':
       return const Color(0xFFA78BFA);
+    case 'independent_trainer_verification':
+      return const Color(0xFF8B5CF6);
+    case 'independent_coaching_response':
+      return const Color(0xFF34D399);
+    case 'independent_coaching_revoked':
+      return const Color(0xFFFB7185);
     default:
       return Theme.of(context).colorScheme.secondary;
   }
@@ -10603,6 +11513,12 @@ IconData _notificationIcon(String? type) {
       return Icons.insights_rounded;
     case 'gym_announcement':
       return Icons.campaign_rounded;
+    case 'independent_trainer_verification':
+      return Icons.verified_user_rounded;
+    case 'independent_coaching_response':
+      return Icons.handshake_rounded;
+    case 'independent_coaching_revoked':
+      return Icons.link_off_rounded;
     default:
       return Icons.notifications_rounded;
   }
@@ -10627,6 +11543,12 @@ String _notificationLabel(String? type) {
       return 'Trial assigned';
     case 'gym_announcement':
       return 'Gym announcement';
+    case 'independent_trainer_verification':
+      return 'Verification';
+    case 'independent_coaching_response':
+      return 'Coaching response';
+    case 'independent_coaching_revoked':
+      return 'Coaching ended';
     default:
       return _titleCase(type ?? 'update');
   }
@@ -10651,6 +11573,12 @@ String _notificationFallbackBody(String? type) {
       return 'A trial lead has been assigned to you for follow-up.';
     case 'gym_announcement':
       return 'Your gym sent an announcement that may affect today’s coaching work.';
+    case 'independent_trainer_verification':
+      return 'Your independent trainer verification status has changed.';
+    case 'independent_coaching_response':
+      return 'A member responded to your independent coaching invitation.';
+    case 'independent_coaching_revoked':
+      return 'An independent coaching connection is no longer active.';
     default:
       return 'A new trainer update is available.';
   }

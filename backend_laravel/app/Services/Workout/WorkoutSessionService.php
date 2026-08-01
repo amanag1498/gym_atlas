@@ -16,8 +16,7 @@ class WorkoutSessionService
 {
     public function __construct(
         private readonly MemberAppService $memberAppService,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<string, mixed>  $payload
@@ -51,6 +50,11 @@ class WorkoutSessionService
                 throw ValidationException::withMessages([
                     'workout_plan_id' => ['You do not have access to this workout plan.'],
                 ]);
+            }
+
+            if ($plan?->independent_trainer_member_relationship_id !== null) {
+                $gymId = null;
+                $branchId = null;
             }
 
             if ($plan && $plan->gym_id !== null && $plan->branch_id !== null) {
@@ -208,6 +212,13 @@ class WorkoutSessionService
                 $record = PersonalRecord::query()->firstOrNew([
                     'member_id' => $session->member_id,
                     'exercise_id' => $exercise->exercise_id,
+                    'coaching_scope_key' => PersonalRecord::coachingScopeKey(
+                        $session->gym_id !== null ? (int) $session->gym_id : null,
+                        $session->branch_id !== null ? (int) $session->branch_id : null,
+                        $session->plan?->independent_trainer_member_relationship_id !== null
+                            ? (int) $session->plan->independent_trainer_member_relationship_id
+                            : null,
+                    ),
                 ]);
 
                 $record->fill([

@@ -57,6 +57,7 @@ class MemberSessionController extends ChangeNotifier {
     token = storedToken;
     user = storedUser;
     _apiClient.setBearerToken(storedToken);
+    _apiClient.setGymContext(await _storage.readSelectedGymId());
 
     try {
       var me = await _authService.fetchMe();
@@ -225,6 +226,11 @@ class MemberSessionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> selectGymContext(int? gymId) async {
+    _apiClient.setGymContext(gymId);
+    await _storage.saveSelectedGymId(gymId);
+  }
+
   Future<void> _handleUnauthorized() async {
     await logout(remote: false);
   }
@@ -263,6 +269,7 @@ class MemberSessionController extends ChangeNotifier {
   Future<void> _clearLocalState({required bool notify}) async {
     await _storage.clear();
     _apiClient.clearBearerToken();
+    _apiClient.setGymContext(null);
     token = null;
     user = null;
     if (notify) {

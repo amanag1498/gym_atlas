@@ -12,14 +12,14 @@ class EnsureWebPlatformAdmin
 {
     public function __construct(
         private readonly WebPanelContext $webPanelContext,
-    ) {
-    }
+    ) {}
 
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
 
         abort_unless($user !== null, 401);
+        abort_if($user->is_active === false, 403, 'This account is inactive. Please contact support.');
         abort_unless($user->hasRole(RoleName::PlatformAdmin->value), 403);
 
         $this->webPanelContext->activateRole($user, RoleName::PlatformAdmin->value);

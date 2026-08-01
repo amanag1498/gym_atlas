@@ -6,13 +6,15 @@ use App\Enums\PermissionName;
 use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Web\Gym\UpdateGymSettingsRequest;
-use App\Models\NotificationPreference;
 use App\Models\EmailDelivery;
+use App\Models\NotificationPreference;
 use App\Services\Audit\AuditLogService;
+use App\Services\Authorization\ScopedPermissionResolver;
 use App\Services\Gym\GymSettingService;
 use App\Services\Notification\NotificationPreferenceCatalogService;
 use App\Services\Web\GymWebPanelService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class SettingController extends Controller
@@ -22,10 +24,9 @@ class SettingController extends Controller
         private readonly GymSettingService $gymSettingService,
         private readonly NotificationPreferenceCatalogService $notificationPreferenceCatalogService,
         private readonly AuditLogService $auditLogService,
-    ) {
-    }
+    ) {}
 
-    public function index(\Illuminate\Http\Request $request): View
+    public function index(Request $request): View
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
         $branchScopeId = $request->filled('branch') ? (int) $request->integer('branch') : null;
@@ -87,7 +88,7 @@ class SettingController extends Controller
         return back()->with('status', 'Gym settings updated successfully.');
     }
 
-    private function assertGymStaffSettingsAccess(\Illuminate\Http\Request $request, int $gymId, ?int $branchId): void
+    private function assertGymStaffSettingsAccess(Request $request, int $gymId, ?int $branchId): void
     {
         $user = $request->user();
 
@@ -96,10 +97,8 @@ class SettingController extends Controller
         }
 
         abort_unless(
-            app(\App\Services\Authorization\ScopedPermissionResolver::class)->hasAnyPermission($user, [
-                PermissionName::GymDashboardView->value,
-                PermissionName::StaffManage->value,
-            ], $gymId, $branchId),
+            app(ScopedPermissionResolver::class)
+                ->hasCustomPermission($user, 'view_reports', $gymId, $branchId),
             403,
             'You do not have permission to manage settings.'
         );

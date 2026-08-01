@@ -26,6 +26,7 @@ use App\Services\Billing\MemberMembershipLifecycleService;
 use App\Services\Billing\MembershipEnrollmentService;
 use App\Services\Member\EngagementScoreService;
 use App\Services\Member\MemberAppService;
+use App\Services\Members\GymMemberAccessService;
 use App\Services\Members\MemberEmailInvitationService;
 use App\Services\Members\MemberGymInvitationService;
 use App\Services\Notification\ReminderService;
@@ -43,6 +44,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class MemberController extends Controller
 {
@@ -62,6 +64,7 @@ class MemberController extends Controller
         private readonly MemberGymInvitationService $memberGymInvitationService,
         private readonly MemberEmailInvitationService $memberEmailInvitationService,
         private readonly MemberAppService $memberAppService,
+        private readonly GymMemberAccessService $gymMemberAccessService,
     ) {}
 
     public function index(Request $request): View|StreamedResponse
@@ -145,19 +148,42 @@ class MemberController extends Controller
             ->where('gym_id', $gym->id)
             ->currentFirst()
             ->get();
-        $timeline = $this->memberTimelineService->build($member, $gym->id, $branchIds);
-        $this->engagementScoreService->enrichMemberProfiles([$memberProfile]);
+        $timeline = [
+            'activity_timeline' => [],
+            'status_timeline' => [],
+            'member_timeline' => [],
+        ];
 
-        $memberProfile->loadMissing(['branch', 'assignedTrainer']);
+        try {
+            $timeline = array_replace(
+                $timeline,
+                $this->memberTimelineService->build($member, $gym->id, $branchIds),
+            );
+        } catch (Throwable $exception) {
+            report($exception);
+        }
+
+        try {
+            $this->engagementScoreService->enrichMemberProfiles([$memberProfile]);
+        } catch (Throwable $exception) {
+            report($exception);
+        }
+
+        $memberProfile->loadMissing(['branch', 'assignedTrainer.managedTrainerProfile.branch']);
         $member->setRelation('memberProfile', $memberProfile);
-        $member->load(['attendanceLogs', 'weightLogs', 'bodyMeasurements', 'progressPhotos']);
 
         return view('web.gym.members.show', [
             'pageTitle' => $member->name,
             'breadcrumbs' => ['Gym', 'Members', $member->name],
             'member' => $member,
             'memberProfile' => $memberProfile,
-            'attendanceHistory' => AttendanceLog::query()->where('member_id', $member->id)->where('gym_id', $gym->id)->latest('checked_in_at')->take(12)->get(),
+            'attendanceHistory' => AttendanceLog::query()
+                ->with(['branch', 'checkedInByUser'])
+                ->where('member_id', $member->id)
+                ->where('gym_id', $gym->id)
+                ->latest('checked_in_at')
+                ->take(12)
+                ->get(),
             'paymentHistory' => Payment::query()
                 ->with(['membership.membershipPlan', 'collector', 'receipt'])
                 ->where('member_id', $member->id)
@@ -560,7 +586,10 @@ class MemberController extends Controller
                     ->currentFirst()
                     ->limit(1),
             ])
-            ->whereHas('memberProfile', fn ($builder) => $builder->where('gym_id', $gym->id))
+            ->whereHas('memberProfile', function ($builder) use ($gym): void {
+                $builder->where('gym_id', $gym->id);
+                $this->gymMemberAccessService->scopeAccessibleProfiles($builder);
+            })
             ->latest('id');
 
         if ($branch = $this->gymWebPanelService->resolveBranch($request, $gym)) {
@@ -586,39 +615,39 @@ class MemberController extends Controller
             $status = $request->string('status')->toString();
 
             if ($status === 'due_payment') {
-                $query->whereHas('memberMemberships', fn ($builder) => $builder->where('due_amount', '>', 0));
+                $query->whereHas('memberMemberships', fn ($builder) => $builder->where('gym_id', $gym->id)->where('due_amount', '>', 0));
             } elseif ($status === 'overdue') {
-                $query->whereHas('memberMemberships', fn ($builder) => $builder->where('payment_status', 'overdue'));
+                $query->whereHas('memberMemberships', fn ($builder) => $builder->where('gym_id', $gym->id)->where('payment_status', 'overdue'));
             } elseif ($status === 'expiring_soon') {
-                $query->whereHas('memberProfile', fn ($builder) => $builder->whereBetween('membership_expires_on', [now()->toDateString(), now()->addDays(7)->toDateString()]));
+                $query->whereHas('memberProfile', fn ($builder) => $builder->where('gym_id', $gym->id)->whereBetween('membership_expires_on', [now()->toDateString(), now()->addDays(7)->toDateString()]));
             } else {
-                $query->whereHas('memberProfile', fn ($builder) => $builder->where('membership_status', $status));
+                $query->whereHas('memberProfile', fn ($builder) => $builder->where('gym_id', $gym->id)->where('membership_status', $status));
             }
         }
 
         if ($request->filled('trainer_id')) {
-            $query->whereHas('memberProfile', fn ($builder) => $builder->where('assigned_trainer_user_id', $request->integer('trainer_id')));
+            $query->whereHas('memberProfile', fn ($builder) => $builder->where('gym_id', $gym->id)->where('assigned_trainer_user_id', $request->integer('trainer_id')));
         }
 
         if ($request->filled('branch_id')) {
-            $query->whereHas('memberProfile', fn ($builder) => $builder->where('branch_id', $request->integer('branch_id')));
+            $query->whereHas('memberProfile', fn ($builder) => $builder->where('gym_id', $gym->id)->where('branch_id', $request->integer('branch_id')));
         }
 
         if ($request->filled('plan_id')) {
-            $query->whereHas('memberMemberships', fn ($builder) => $builder->where('membership_plan_id', $request->integer('plan_id')));
+            $query->whereHas('memberMemberships', fn ($builder) => $builder->where('gym_id', $gym->id)->where('membership_plan_id', $request->integer('plan_id')));
         }
 
         if ($request->filled('gender')) {
-            $query->whereHas('memberProfile', fn ($builder) => $builder->where('gender', $request->string('gender')));
+            $query->whereHas('memberProfile', fn ($builder) => $builder->where('gym_id', $gym->id)->where('gender', $request->string('gender')));
         }
 
         if ($request->filled('goal')) {
             $goal = '%'.$request->string('goal').'%';
-            $query->whereHas('memberProfile', fn ($builder) => $builder->where('fitness_goal', 'like', $goal));
+            $query->whereHas('memberProfile', fn ($builder) => $builder->where('gym_id', $gym->id)->where('fitness_goal', 'like', $goal));
         }
 
         if ($request->boolean('no_trainer_assigned')) {
-            $query->whereHas('memberProfile', fn ($builder) => $builder->whereNull('assigned_trainer_user_id'));
+            $query->whereHas('memberProfile', fn ($builder) => $builder->where('gym_id', $gym->id)->whereNull('assigned_trainer_user_id'));
         }
 
         if ($request->boolean('inactive_7_days')) {
@@ -690,7 +719,10 @@ class MemberController extends Controller
             ->with('memberProfile')
             ->role(RoleName::Member->value)
             ->where('is_active', true)
-            ->whereDoesntHave('memberProfile', fn ($builder) => $builder->where('gym_id', $gym->id));
+            ->whereDoesntHave('memberProfile', function ($builder) use ($gym): void {
+                $builder->where('gym_id', $gym->id);
+                $this->gymMemberAccessService->scopeAccessibleProfiles($builder);
+            });
     }
 
     /**
@@ -868,6 +900,8 @@ class MemberController extends Controller
 
     private function assertMemberBranchScope(Request $request, $gym, MemberProfile $profile): void
     {
+        $this->gymMemberAccessService->assertAccessible($profile);
+
         if ($request->user()?->active_role === RoleName::GymOwner->value) {
             return;
         }
@@ -882,7 +916,12 @@ class MemberController extends Controller
         }
 
         if ($trainerId !== null) {
-            $trainerQuery = TrainerProfile::query()->where('gym_id', $gym->id)->where('user_id', $trainerId);
+            $trainerQuery = TrainerProfile::query()
+                ->where('gym_id', $gym->id)
+                ->where('user_id', $trainerId)
+                ->where('is_active', true)
+                ->where('status', 'active')
+                ->whereHas('user', fn ($trainer) => $trainer->where('is_active', true));
 
             if ($branchId !== null) {
                 $trainerQuery->where('branch_id', $branchId);

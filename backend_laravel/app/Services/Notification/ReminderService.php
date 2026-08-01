@@ -9,6 +9,7 @@ use App\Models\AttendanceLog;
 use App\Models\MemberMembership;
 use App\Models\MemberProfile;
 use App\Models\ScheduledReminder;
+use App\Services\Members\GymMemberAccessService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -19,6 +20,7 @@ class ReminderService
     public function __construct(
         private readonly NotificationService $notificationService,
         private readonly TransactionalEmailService $transactionalEmailService,
+        private readonly GymMemberAccessService $gymMemberAccessService,
     ) {}
 
     public function syncMembershipReminders(MemberMembership $membership): void
@@ -74,15 +76,13 @@ class ReminderService
 
     public function scheduleAttendanceInactivityReminders(?int $gymId = null, ?int $branchId = null): void
     {
-        $profiles = MemberProfile::query()
+        $profilesQuery = MemberProfile::query()
+            ->with(['user:id,name,email', 'gym:id,name', 'branch:id,name'])
+            ->whereNotNull('gym_id')
             ->when($gymId, fn (Builder $query) => $query->where('gym_id', $gymId))
             ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId))
-            ->where('is_active', true)
-            ->where(function (Builder $query): void {
-                $query->whereNull('membership_status')
-                    ->orWhere('membership_status', '!=', 'frozen');
-            })
-            ->get();
+            ->where('membership_status', '!=', 'frozen');
+        $profiles = $this->gymMemberAccessService->scopeAccessibleProfiles($profilesQuery)->get();
 
         $lastAttendanceByMember = AttendanceLog::query()
             ->select('member_id', DB::raw('MAX(checked_in_at) as last_checked_in_at'))
@@ -95,6 +95,7 @@ class ReminderService
             $lastAttendanceAt = $lastAttendanceByMember->get($profile->user_id);
 
             if (! $lastAttendanceAt || Carbon::parse($lastAttendanceAt)->lt(now()->subDays(7))) {
+                $gymName = $profile->gym?->name ?? config('app.name');
                 ScheduledReminder::query()->firstOrCreate([
                     'user_id' => $profile->user_id,
                     'gym_id' => $profile->gym_id,
@@ -103,11 +104,15 @@ class ReminderService
                     'type' => ReminderType::AttendanceInactivity->value,
                     'status' => 'pending',
                 ], [
-                    'title' => 'Attendance Inactivity Reminder',
-                    'body' => 'We have not seen you at the gym recently.',
+                    'title' => 'We miss you at '.$gymName,
+                    'body' => 'It has been a while since your last check-in at '.$gymName.'. We are ready when you are.',
                     'scheduled_for' => now(),
                     'payload' => [
                         'last_attendance_at' => $lastAttendanceAt ? Carbon::parse($lastAttendanceAt)->toIso8601String() : null,
+                        'member_name' => $profile->user?->name,
+                        'gym_name' => $gymName,
+                        'branch_name' => $profile->branch?->name,
+                        'source' => 'gym',
                     ],
                 ]);
             }
@@ -119,7 +124,7 @@ class ReminderService
         $this->scheduleAttendanceInactivityReminders($gymId, $branchId);
 
         $query = ScheduledReminder::query()
-            ->with('user')
+            ->with(['user', 'gym:id,name', 'branch:id,name', 'membership.membershipPlan:id,name'])
             ->where('status', 'pending')
             ->where('scheduled_for', '<=', now())
             ->when($type, fn (Builder $builder) => $builder->where('type', $type))
@@ -129,6 +134,12 @@ class ReminderService
         $processed = collect();
 
         foreach ($query->get() as $reminder) {
+            if (! $this->isStillDeliverable($reminder)) {
+                $reminder->forceFill(['status' => 'cancelled'])->save();
+
+                continue;
+            }
+
             $notificationType = match ($reminder->type) {
                 ReminderType::MembershipExpiry->value => NotificationType::MembershipExpiry->value,
                 ReminderType::PaymentDue->value => NotificationType::PaymentDue->value,
@@ -164,6 +175,11 @@ class ReminderService
                     $reminder->payload['expiry_date'] ?? null ? 'Expiry date: '.$reminder->payload['expiry_date'] : null,
                 ]),
                 $reminder->gym_id,
+                'scheduled_reminder',
+                [
+                    'branch_id' => $reminder->branch_id,
+                    'category_label' => str_replace('_', ' ', $reminder->type),
+                ],
             );
 
             $processed->push([
@@ -182,6 +198,10 @@ class ReminderService
         string $title,
         string $body,
     ): void {
+        $membership->loadMissing(['member:id,name,email', 'gym:id,name', 'branch:id,name', 'membershipPlan:id,name']);
+        $gymName = $membership->gym?->name ?? config('app.name');
+        $planName = $membership->membershipPlan?->name;
+
         ScheduledReminder::query()->updateOrCreate([
             'user_id' => $membership->member_id,
             'gym_id' => $membership->gym_id,
@@ -189,17 +209,48 @@ class ReminderService
             'member_membership_id' => $membership->id,
             'type' => $type,
         ], [
-            'title' => $title,
-            'body' => $body,
+            'title' => $title.' — '.$gymName,
+            'body' => $body.' This reminder is from '.$gymName.'.',
             'payload' => [
                 'membership_id' => $membership->id,
+                'member_name' => $membership->member?->name,
+                'gym_name' => $gymName,
+                'branch_name' => $membership->branch?->name,
+                'plan_name' => $planName,
+                'membership_status' => $membership->status,
                 'due_amount' => (float) $membership->due_amount,
                 'expiry_date' => $membership->expiry_date?->toDateString(),
                 'due_date' => $membership->due_date?->toDateString(),
+                'source' => 'gym',
             ],
             'scheduled_for' => $scheduledFor,
             'status' => 'pending',
             'sent_at' => null,
         ]);
+    }
+
+    private function isStillDeliverable(ScheduledReminder $reminder): bool
+    {
+        if (! $reminder->user || ! $reminder->gym_id) {
+            return false;
+        }
+
+        if ($reminder->member_membership_id) {
+            $membership = $reminder->membership;
+
+            return $membership !== null
+                && (int) $membership->member_id === (int) $reminder->user_id
+                && (int) $membership->gym_id === (int) $reminder->gym_id
+                && $membership->status === 'active'
+                && $membership->start_date?->startOfDay()->lte(today())
+                && $membership->expiry_date?->endOfDay()->gte(today());
+        }
+
+        $profileQuery = MemberProfile::query()
+            ->where('user_id', $reminder->user_id)
+            ->where('gym_id', $reminder->gym_id)
+            ->when($reminder->branch_id, fn (Builder $query) => $query->where('branch_id', $reminder->branch_id));
+
+        return $this->gymMemberAccessService->scopeAccessibleProfiles($profileQuery)->exists();
     }
 }

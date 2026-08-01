@@ -8,8 +8,10 @@ use App\Http\Requests\Trainer\StoreTrainerMemberNoteRequest;
 use App\Http\Requests\Trainer\UpdateTrainerMemberNoteRequest;
 use App\Http\Resources\Trainer\TrainerMemberNoteResource;
 use App\Models\TrainerMemberNote;
+use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Services\Audit\AuditLogService;
+use App\Services\Trainer\IndependentCoachingAccessService;
 use App\Services\Trainer\TrainerScopeService;
 use Illuminate\Http\Request;
 
@@ -18,8 +20,8 @@ class TrainerMemberNoteController extends Controller
     public function __construct(
         private readonly TrainerScopeService $trainerScopeService,
         private readonly AuditLogService $auditLogService,
-    ) {
-    }
+        private readonly IndependentCoachingAccessService $independentCoachingAccessService,
+    ) {}
 
     public function index(Request $request, User $member)
     {
@@ -67,9 +69,13 @@ class TrainerMemberNoteController extends Controller
         abort_unless($request->user()->active_role === RoleName::Trainer->value, 403);
 
         $trainerProfile = $this->trainerScopeService->resolveTrainerProfile($request);
-        $note = $this->trainerScopeService->resolveTrainerNote($trainerProfile, $trainerMemberNote);
+        $note = $this->resolveNote($request, $trainerMemberNote, $trainerProfile);
         $oldValues = $note->toArray();
-        $note->update($request->validated());
+        $payload = $request->validated();
+        if ($note->independent_trainer_member_relationship_id !== null) {
+            $payload['visibility'] = 'private_to_trainer';
+        }
+        $note->update($payload);
 
         $this->auditLogService->log(
             event: 'trainer.note.updated',
@@ -90,7 +96,7 @@ class TrainerMemberNoteController extends Controller
         abort_unless($request->user()->active_role === RoleName::Trainer->value, 403);
 
         $trainerProfile = $this->trainerScopeService->resolveTrainerProfile($request);
-        $note = $this->trainerScopeService->resolveTrainerNote($trainerProfile, $trainerMemberNote);
+        $note = $this->resolveNote($request, $trainerMemberNote, $trainerProfile);
         $oldValues = $note->toArray();
         $note->update(['completed_at' => now()]);
 
@@ -106,5 +112,24 @@ class TrainerMemberNoteController extends Controller
         );
 
         return $this->success(TrainerMemberNoteResource::make($note->fresh(['member', 'trainer'])), 'Trainer note marked completed successfully.');
+    }
+
+    private function resolveNote(Request $request, TrainerMemberNote $note, TrainerProfile $trainerProfile): TrainerMemberNote
+    {
+        if ($note->independent_trainer_member_relationship_id === null) {
+            return $this->trainerScopeService->resolveTrainerNote($trainerProfile, $note);
+        }
+
+        if ((int) $note->trainer_id !== (int) $request->user()->id) {
+            abort(404);
+        }
+        $this->independentCoachingAccessService->resolveActiveRelationship(
+            $request->user(),
+            $note->member()->firstOrFail(),
+            (int) $note->independent_trainer_member_relationship_id,
+            'profile',
+        );
+
+        return $note;
     }
 }

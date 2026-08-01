@@ -6,6 +6,7 @@ enum AttendanceCheckInMethod: string
 {
     case Biometric = 'biometric';
     case Manual = 'manual';
+    case Qr = 'qr';
 
     public static function values(): array
     {

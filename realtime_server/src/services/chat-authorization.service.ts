@@ -24,7 +24,7 @@ export class ChatAuthorizationService {
     }
 
     if (user.activeRole === 'member') {
-      if (user.assignedTrainerId !== recipientId) {
+      if (!user.assignedTrainerIds.includes(recipientId)) {
         throw new Error('Member can chat only with the assigned trainer.');
       }
 

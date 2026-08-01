@@ -8,8 +8,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Gym\Admin\UpdateGymSettingsRequest;
 use App\Models\NotificationPreference;
 use App\Services\Audit\AuditLogService;
-use App\Services\Authorization\ScopeResolver;
 use App\Services\Authorization\ScopedPermissionResolver;
+use App\Services\Authorization\ScopeResolver;
 use App\Services\Gym\GymSettingService;
 use App\Services\Notification\NotificationPreferenceCatalogService;
 use Illuminate\Http\Request;
@@ -22,8 +22,7 @@ class SettingController extends Controller
         private readonly GymSettingService $gymSettingService,
         private readonly NotificationPreferenceCatalogService $notificationPreferenceCatalogService,
         private readonly AuditLogService $auditLogService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {
@@ -93,10 +92,12 @@ class SettingController extends Controller
 
         if ($request->user()->hasRole(RoleName::GymStaff->value)) {
             abort_unless(
-                $this->scopedPermissionResolver->hasAnyPermission($request->user(), [
-                    PermissionName::GymDashboardView->value,
-                    PermissionName::StaffManage->value,
-                ], $gymId, $branchId),
+                $this->scopedPermissionResolver->hasCustomPermission(
+                    $request->user(),
+                    'view_reports',
+                    $gymId,
+                    $branchId,
+                ),
                 403,
                 'You do not have permission to manage settings.'
             );

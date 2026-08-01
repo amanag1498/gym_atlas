@@ -8,12 +8,15 @@ use App\Http\Requests\Workout\StoreWorkoutTemplateRequest;
 use App\Http\Requests\Workout\UpdateWorkoutTemplateRequest;
 use App\Http\Resources\Workout\WorkoutPlanResource;
 use App\Http\Resources\Workout\WorkoutTemplateResource;
+use App\Models\User;
 use App\Models\WorkoutTemplate;
 use App\Services\Audit\AuditLogService;
+use App\Services\Trainer\IndependentCoachingAccessService;
+use App\Services\Trainer\TrainerScopeService;
 use App\Services\Workout\WorkoutAccessService;
 use App\Services\Workout\WorkoutPlanService;
-use App\Services\Trainer\TrainerScopeService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class WorkoutTemplateController extends Controller
 {
@@ -22,26 +25,29 @@ class WorkoutTemplateController extends Controller
         private readonly WorkoutAccessService $workoutAccessService,
         private readonly AuditLogService $auditLogService,
         private readonly TrainerScopeService $trainerScopeService,
-    ) {
-    }
+        private readonly IndependentCoachingAccessService $independentCoachingAccessService,
+    ) {}
 
     public function index(Request $request)
     {
         $trainer = $request->user();
+        $profile = $this->trainerScopeService->resolveTrainerProfile($request);
 
         $paginator = WorkoutTemplate::query()
             ->with('days.exercises.exercise')
-            ->where(function ($query) use ($trainer): void {
+            ->where(function ($query) use ($trainer, $profile): void {
                 $query->where('is_public_catalog', true)
                     ->where('status', 'active')
-                    ->orWhere('created_by_user_id', $trainer->id)
-                    ->orWhere(function ($builder) use ($trainer): void {
-                        $builder->where('gym_id', optional($trainer->managedTrainerProfile)->gym_id)
-                            ->where(function ($scope) use ($trainer): void {
+                    ->orWhere('created_by_user_id', $trainer->id);
+                if ($profile->gym_id !== null) {
+                    $query->orWhere(function ($builder) use ($profile): void {
+                        $builder->where('gym_id', $profile->gym_id)
+                            ->where(function ($scope) use ($profile): void {
                                 $scope->whereNull('branch_id')
-                                    ->orWhere('branch_id', optional($trainer->managedTrainerProfile)->branch_id);
+                                    ->orWhere('branch_id', $profile->branch_id);
                             });
                     });
+                }
             })
             ->orderByDesc('id')
             ->paginate((int) $request->integer('per_page', 15));
@@ -102,14 +108,32 @@ class WorkoutTemplateController extends Controller
     {
         $profile = $this->trainerScopeService->resolveTrainerProfile($request);
         $this->workoutAccessService->assertTemplateAccess($request->user(), $workoutTemplate);
-        foreach ($request->validated('member_ids') as $memberId) {
-            $member = \App\Models\User::query()->findOrFail($memberId);
-            $this->workoutAccessService->assertTrainerCanAccessMember($request->user(), $member);
-        }
-
         $data = $request->validated();
         $data['gym_id'] = $profile->gym_id;
         $data['branch_id'] = $profile->branch_id;
+        if ($profile->gym_id === null) {
+            if (count($data['member_ids']) !== 1) {
+                throw ValidationException::withMessages([
+                    'member_ids' => ['Assign an independent workout template to one member at a time.'],
+                ]);
+            }
+            $member = User::query()->findOrFail((int) $data['member_ids'][0]);
+            $relationship = $this->independentCoachingAccessService->resolveActiveRelationship(
+                $request->user(),
+                $member,
+                isset($data['independent_trainer_member_relationship_id'])
+                    ? (int) $data['independent_trainer_member_relationship_id']
+                    : null,
+                'workouts',
+            );
+            $data['independent_trainer_member_relationship_id'] = $relationship->id;
+        } else {
+            $data['independent_trainer_member_relationship_id'] = null;
+            foreach ($data['member_ids'] as $memberId) {
+                $member = User::query()->findOrFail($memberId);
+                $this->workoutAccessService->assertTrainerCanAccessMember($request->user(), $member);
+            }
+        }
         $plans = $this->workoutPlanService->assignTemplateToMembers(
             $request->user(),
             $workoutTemplate->load('days.exercises'),

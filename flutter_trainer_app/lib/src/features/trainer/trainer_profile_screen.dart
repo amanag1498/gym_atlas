@@ -204,6 +204,11 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
   Widget build(BuildContext context) {
     final completion =
         (_profile['profile_completion_percentage'] as num?)?.toDouble() ?? 0;
+    final verificationStatus =
+        _profile['verification_status']?.toString().toLowerCase() ?? 'pending';
+    final verificationReason = _profile['verification_rejection_reason']
+        ?.toString()
+        .trim();
     final displayName = _trainerUser['name']?.toString() ?? 'Trainer';
     final specialization = _profile['primary_specialization']
         ?.toString()
@@ -359,6 +364,18 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
                         ],
                       ),
                     ),
+                    if (verificationReason?.isNotEmpty == true) ...[
+                      const SizedBox(height: 14),
+                      _FitProfileCard(
+                        title: verificationStatus == 'suspended'
+                            ? 'Independent coaching suspended'
+                            : 'Verification changes required',
+                        subtitle: verificationReason!,
+                        child: const Text(
+                          'Update your professional details or certification evidence, then save the profile to return it to the platform review queue.',
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 20),
                     _FitProfileCard(
                       title: 'Identity',

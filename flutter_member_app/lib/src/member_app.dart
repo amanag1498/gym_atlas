@@ -38,6 +38,9 @@ class _MemberAppState extends State<MemberApp> {
   StreamSubscription<RemoteMessage>? _notificationOpenSubscription;
   int _chatLaunchSequence = 0;
   bool _pendingChatLaunch = false;
+  int? _pendingChatGymId;
+  int? _pendingChatTrainerId;
+  bool _openingPendingChat = false;
 
   @override
   void initState() {
@@ -80,6 +83,9 @@ class _MemberAppState extends State<MemberApp> {
                     state.uri.queryParameters['launch']?.toString() ?? '',
                   ) ??
                   0,
+              chatTargetTrainerId: int.tryParse(
+                state.uri.queryParameters['trainer']?.toString() ?? '',
+              ),
             ),
           ),
         ),
@@ -167,19 +173,41 @@ class _MemberAppState extends State<MemberApp> {
     }
 
     _chatLaunchSequence++;
+    _pendingChatGymId = _notificationInt(data['gym_id']);
+    _pendingChatTrainerId = _notificationInt(
+      data['trainer_id'] ?? data['sender_id'] ?? data['senderId'],
+    );
     _pendingChatLaunch = true;
-    _openPendingChatIfReady();
+    unawaited(_openPendingChatIfReady());
   }
 
-  void _openPendingChatIfReady() {
+  Future<void> _openPendingChatIfReady() async {
     if (!_pendingChatLaunch ||
+        _openingPendingChat ||
         sessionController.initializing ||
         !sessionController.isAuthenticated) {
       return;
     }
 
+    _openingPendingChat = true;
     _pendingChatLaunch = false;
-    router.go('/home?section=chat&launch=$_chatLaunchSequence');
+    final gymId = _pendingChatGymId;
+    final trainerId = _pendingChatTrainerId;
+    final launchSequence = _chatLaunchSequence;
+    _pendingChatGymId = null;
+    _pendingChatTrainerId = null;
+    try {
+      if (gymId != null) {
+        await sessionController.selectGymContext(gymId);
+      }
+      final trainerQuery = trainerId == null ? '' : '&trainer=$trainerId';
+      router.go('/home?section=chat&launch=$launchSequence$trainerQuery');
+    } finally {
+      _openingPendingChat = false;
+      if (_pendingChatLaunch) {
+        unawaited(_openPendingChatIfReady());
+      }
+    }
   }
 
   @override
@@ -236,4 +264,9 @@ class _MemberAppState extends State<MemberApp> {
       },
     );
   }
+}
+
+int? _notificationInt(dynamic value) {
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '');
 }

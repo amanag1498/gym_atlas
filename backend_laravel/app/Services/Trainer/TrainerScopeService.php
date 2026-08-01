@@ -10,6 +10,7 @@ use App\Models\TrainerMemberNote;
 use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Services\Authorization\ScopeResolver;
+use App\Services\Members\GymMemberAccessService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -18,6 +19,7 @@ class TrainerScopeService
 {
     public function __construct(
         private readonly ScopeResolver $scopeResolver,
+        private readonly GymMemberAccessService $gymMemberAccessService,
     ) {}
 
     public function resolveTrainerProfile(Request $request): TrainerProfile
@@ -29,9 +31,15 @@ class TrainerScopeService
         if ($actor->active_role === RoleName::Trainer->value) {
             $profile = $actor->managedTrainerProfile;
 
-            if (! $profile) {
+            if (! $profile || ! $profile->is_active || $profile->status !== 'active') {
                 throw ValidationException::withMessages([
-                    'trainer_user_id' => ['No trainer profile is configured for this account.'],
+                    'trainer_user_id' => ['No active trainer profile is configured for this account.'],
+                ]);
+            }
+
+            if ($profile->gym_id !== null && ! $this->scopeResolver->canAccessGym($actor, $profile->gym_id)) {
+                throw ValidationException::withMessages([
+                    'trainer_user_id' => ['This trainer profile belongs to a gym that is not operational.'],
                 ]);
             }
 
@@ -73,12 +81,19 @@ class TrainerScopeService
                 'user',
                 'branch',
                 'gym',
-                'memberships' => fn ($query) => $query->latest('start_date'),
+                'memberships' => fn ($query) => $query
+                    ->where('gym_id', $trainerProfile->gym_id)
+                    ->when($trainerProfile->branch_id, fn ($membership) => $membership->where('branch_id', $trainerProfile->branch_id))
+                    ->latest('start_date'),
                 'trainerNotes' => fn ($query) => $query->where('trainer_id', $trainerProfile->user_id)->latest('created_at'),
-                'attendanceLogs' => fn ($query) => $query->latest('checked_in_at'),
+                'attendanceLogs' => fn ($query) => $query
+                    ->where('gym_id', $trainerProfile->gym_id)
+                    ->when($trainerProfile->branch_id, fn ($attendance) => $attendance->where('branch_id', $trainerProfile->branch_id))
+                    ->latest('checked_in_at'),
             ])
             ->where('assigned_trainer_user_id', $trainerProfile->user_id)
             ->where('gym_id', $trainerProfile->gym_id)
+            ->tap(fn (Builder $query) => $this->gymMemberAccessService->scopeAccessibleProfiles($query))
             ->when($trainerProfile->branch_id, fn ($query) => $query->where('branch_id', $trainerProfile->branch_id));
     }
 
@@ -89,13 +104,20 @@ class TrainerScopeService
                 'user',
                 'branch',
                 'gym',
-                'memberships' => fn ($query) => $query->latest('start_date'),
+                'memberships' => fn ($query) => $query
+                    ->where('gym_id', $trainerProfile->gym_id)
+                    ->when($trainerProfile->branch_id, fn ($membership) => $membership->where('branch_id', $trainerProfile->branch_id))
+                    ->latest('start_date'),
                 'trainerNotes' => fn ($query) => $query->where('trainer_id', $trainerProfile->user_id)->latest('created_at'),
-                'attendanceLogs' => fn ($query) => $query->latest('checked_in_at'),
+                'attendanceLogs' => fn ($query) => $query
+                    ->where('gym_id', $trainerProfile->gym_id)
+                    ->when($trainerProfile->branch_id, fn ($attendance) => $attendance->where('branch_id', $trainerProfile->branch_id))
+                    ->latest('checked_in_at'),
             ])
             ->where('user_id', $member->id)
             ->where('assigned_trainer_user_id', $trainerProfile->user_id)
             ->where('gym_id', $trainerProfile->gym_id)
+            ->tap(fn (Builder $query) => $this->gymMemberAccessService->scopeAccessibleProfiles($query))
             ->when($trainerProfile->branch_id, fn ($query) => $query->where('branch_id', $trainerProfile->branch_id))
             ->first();
 

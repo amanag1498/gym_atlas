@@ -15,6 +15,7 @@ use App\Services\Audit\AuditLogService;
 use App\Services\Diet\DietPlanService;
 use App\Services\Diet\DietPlanTemplateService;
 use App\Services\Member\MemberAppService;
+use App\Services\Trainer\IndependentCoachingAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -25,13 +26,26 @@ class DietPlanController extends Controller
         private readonly DietPlanTemplateService $dietPlanTemplateService,
         private readonly AuditLogService $auditLogService,
         private readonly MemberAppService $memberAppService,
+        private readonly IndependentCoachingAccessService $independentCoachingAccessService,
     ) {}
 
     public function index(Request $request)
     {
         $profile = $this->memberAppService->memberProfileFor($request->user());
-        if (! $profile?->gym_id) {
-            return $this->success([], 'No active gym space is available.');
+        $relationshipIds = $this->independentCoachingAccessService
+            ->activeRelationshipIdsForMember($request->user(), 'diets');
+        $requestedRelationshipId = $request->filled('independent_trainer_member_relationship_id')
+            ? (int) $request->integer('independent_trainer_member_relationship_id')
+            : null;
+        if ($requestedRelationshipId !== null) {
+            $this->independentCoachingAccessService->resolveForMember(
+                $request->user(),
+                $requestedRelationshipId,
+                'diets',
+            );
+        }
+        if (! $profile?->gym_id && $relationshipIds->isEmpty()) {
+            return $this->success([], 'No active diet coaching space is available.');
         }
         $plans = DietPlan::query()
             ->with([
@@ -39,8 +53,20 @@ class DietPlanController extends Controller
                 'meals.logs' => fn ($query) => $query->where('member_id', $request->user()->id)->whereDate('logged_for', today()),
             ])
             ->where('member_id', $request->user()->id)
-            ->where('gym_id', $profile->gym_id)
-            ->when($profile->branch_id, fn ($query) => $query->where(fn ($scope) => $scope->whereNull('branch_id')->orWhere('branch_id', $profile->branch_id)))
+            ->where(function ($query) use ($profile, $relationshipIds): void {
+                if ($profile?->gym_id) {
+                    $query->where(function ($gymQuery) use ($profile): void {
+                        $gymQuery->where('gym_id', $profile->gym_id)
+                            ->whereNull('independent_trainer_member_relationship_id')
+                            ->when($profile->branch_id, fn ($branchQuery) => $branchQuery->where(fn ($scope) => $scope->whereNull('branch_id')->orWhere('branch_id', $profile->branch_id)));
+                    });
+                }
+                if ($relationshipIds->isNotEmpty()) {
+                    $method = $profile?->gym_id ? 'orWhereIn' : 'whereIn';
+                    $query->{$method}('independent_trainer_member_relationship_id', $relationshipIds);
+                }
+            })
+            ->when($requestedRelationshipId !== null, fn ($query) => $query->where('independent_trainer_member_relationship_id', $requestedRelationshipId))
             ->availableOn()
             ->latest()
             ->get();
@@ -175,8 +201,26 @@ class DietPlanController extends Controller
 
     private function assertOwner(Request $request, DietPlan $plan): void
     {
+        if ((int) $plan->member_id !== (int) $request->user()->id) {
+            throw ValidationException::withMessages(['diet_plan_id' => ['You do not have access to this diet plan.']]);
+        }
+        if ($plan->independent_trainer_member_relationship_id !== null) {
+            $this->independentCoachingAccessService->resolveForMember(
+                $request->user(),
+                (int) $plan->independent_trainer_member_relationship_id,
+                'diets',
+            );
+
+            return;
+        }
+        if ($plan->status !== 'active') {
+            throw ValidationException::withMessages([
+                'diet_plan_id' => ['This gym diet plan is historical and is no longer available as a current assignment.'],
+            ]);
+        }
         $profile = $this->memberAppService->memberProfileFor($request->user());
-        if ((int) $plan->member_id !== (int) $request->user()->id || ! $profile?->gym_id || (int) $plan->gym_id !== (int) $profile->gym_id || ($plan->branch_id && (int) $plan->branch_id !== (int) $profile->branch_id)) {
+        $membership = $this->memberAppService->currentMembershipFor($request->user());
+        if (! $this->memberAppService->hasActiveMembership($membership, $profile) || ! $profile?->gym_id || (int) $plan->gym_id !== (int) $profile->gym_id || ($plan->branch_id && (int) $plan->branch_id !== (int) $profile->branch_id)) {
             throw ValidationException::withMessages(['diet_plan_id' => ['You do not have access to this diet plan.']]);
         }
     }

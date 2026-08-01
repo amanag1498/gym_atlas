@@ -4,18 +4,14 @@ import 'package:flutter/foundation.dart';
 import 'config.dart';
 
 class MemberApiClient {
-  MemberApiClient({
-    String? token,
-    Future<void> Function()? onUnauthorized,
-  }) : _dio = Dio(
-         BaseOptions(
-           baseUrl: MemberConfig.apiBaseUrl,
-           headers: const <String, Object?>{
-             'Accept': 'application/json',
-           },
-         ),
-       ),
-       _onUnauthorized = onUnauthorized {
+  MemberApiClient({String? token, Future<void> Function()? onUnauthorized})
+    : _dio = Dio(
+        BaseOptions(
+          baseUrl: MemberConfig.apiBaseUrl,
+          headers: const <String, Object?>{'Accept': 'application/json'},
+        ),
+      ),
+      _onUnauthorized = onUnauthorized {
     setBearerToken(token);
     _dio.interceptors.add(
       InterceptorsWrapper(
@@ -71,6 +67,15 @@ class MemberApiClient {
 
   void clearBearerToken() {
     _dio.options.headers.remove('Authorization');
+  }
+
+  void setGymContext(int? gymId) {
+    if (gymId == null) {
+      _dio.options.headers.remove('X-Gym-Id');
+      return;
+    }
+
+    _dio.options.headers['X-Gym-Id'] = gymId.toString();
   }
 
   Future<Map<String, dynamic>> get(

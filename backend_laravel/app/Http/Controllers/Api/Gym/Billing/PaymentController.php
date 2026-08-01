@@ -12,13 +12,15 @@ use App\Http\Requests\Billing\StorePaymentRequest;
 use App\Http\Resources\Billing\MemberMembershipResource;
 use App\Http\Resources\Billing\PaymentResource;
 use App\Models\MemberMembership;
+use App\Models\MemberProfile;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Authorization\ScopedPermissionResolver;
+use App\Services\Authorization\ScopeResolver;
 use App\Services\Billing\BillingAccessService;
 use App\Services\Billing\PaymentService;
-use App\Services\Authorization\ScopeResolver;
+use App\Services\Members\GymMemberAccessService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
@@ -30,8 +32,8 @@ class PaymentController extends Controller
         private readonly AuditLogService $auditLogService,
         private readonly ScopeResolver $scopeResolver,
         private readonly ScopedPermissionResolver $scopedPermissionResolver,
-    ) {
-    }
+        private readonly GymMemberAccessService $gymMemberAccessService,
+    ) {}
 
     public function index(Request $request)
     {
@@ -65,6 +67,12 @@ class PaymentController extends Controller
 
     public function memberPayments(User $member, Request $request)
     {
+        $profileQuery = MemberProfile::query()
+            ->where('user_id', $member->id)
+            ->whereIn('gym_id', $this->scopeResolver->gymsQuery($request->user())->pluck('gyms.id'))
+            ->when($request->filled('gym_id'), fn (Builder $query) => $query->where('gym_id', $request->integer('gym_id')));
+        $this->gymMemberAccessService->scopeAccessibleProfiles($profileQuery);
+        abort_unless($profileQuery->exists(), 404);
         $this->assertBillingViewAccess($request, $request->integer('gym_id'), $request->integer('branch_id'));
         $payments = $this->basePaymentsQuery($request)
             ->where('member_id', $member->id)

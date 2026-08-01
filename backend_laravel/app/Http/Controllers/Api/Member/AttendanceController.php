@@ -7,14 +7,36 @@ use App\Http\Resources\Attendance\AttendanceLogResource;
 use App\Models\AttendanceLog;
 use App\Services\Attendance\AttendanceService;
 use App\Services\Member\MemberAppService;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class AttendanceController extends Controller
 {
     public function __construct(
         private readonly MemberAppService $memberAppService,
-    ) {
+        private readonly AttendanceService $attendanceService,
+    ) {}
+
+    public function qrCode(Request $request)
+    {
+        $user = $request->user();
+        $profile = $this->memberAppService->memberProfileFor($user);
+        $attendanceStatus = $this->memberAppService->attendanceStatusFor($user, $profile);
+
+        if (($attendanceStatus['enabled'] ?? false) !== true || ! $profile?->gym || ! $profile->branch) {
+            return $this->success([
+                'enabled' => false,
+                'qr_payload' => null,
+                'expires_at' => null,
+                'check_in_status' => $attendanceStatus,
+            ], 'Attendance QR code is unavailable until an active gym membership is assigned.');
+        }
+
+        return $this->success([
+            'enabled' => true,
+            ...$this->attendanceService->buildQrPayload($user, $profile->gym, $profile->branch),
+            'check_in_status' => $attendanceStatus,
+        ], 'Member QR code payload generated successfully.');
     }
 
     public function biometricProfile(Request $request)
@@ -63,6 +85,8 @@ class AttendanceController extends Controller
         $query = AttendanceLog::query()
             ->with(['gym', 'branch'])
             ->where('member_id', $request->user()->id)
+            ->where('gym_id', $profile->gym_id)
+            ->when($profile->branch_id, fn ($builder) => $builder->where('branch_id', $profile->branch_id))
             ->latest('checked_in_at');
 
         $paginator = $query->paginate((int) $request->integer('per_page', 15));

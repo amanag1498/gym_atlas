@@ -12,14 +12,17 @@ class MemberGymInvitationController extends Controller
 {
     public function __construct(
         private readonly MemberGymInvitationService $memberGymInvitationService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {
         $paginator = MemberGymInvitation::query()
             ->with(['gym', 'branch', 'assignedTrainer'])
             ->where('invited_user_id', $request->user()->id)
+            ->whereHas('gym', fn ($gym) => $gym
+                ->where('is_active', true)
+                ->where('status', 'active')
+                ->where('operational_access_enabled', true))
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->query('status')))
             ->latest('id')
             ->paginate((int) $request->integer('per_page', 15));

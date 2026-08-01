@@ -13,7 +13,9 @@ use App\Models\MemberProfile;
 use App\Models\Notification;
 use App\Models\User;
 use App\Services\Authorization\ScopeResolver;
+use App\Services\Members\GymMemberAccessService;
 use App\Services\Notification\NotificationService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -22,9 +24,9 @@ class AnnouncementService
 {
     public function __construct(
         private readonly ScopeResolver $scopeResolver,
+        private readonly GymMemberAccessService $gymMemberAccessService,
         private readonly NotificationService $notificationService,
-    ) {
-    }
+    ) {}
 
     public function createAnnouncement(User $actor, array $data): Announcement
     {
@@ -65,6 +67,9 @@ class AnnouncementService
                     data: [
                         'audience_type' => $data['audience_type'],
                         'member_ids' => $data['member_ids'] ?? [],
+                        'source' => $gym ? 'gym' : 'platform',
+                        'gym_name' => $gym?->name,
+                        'branch_name' => $branch?->name,
                     ],
                     scheduledFor: $data['send_at'] ?? now(),
                 );
@@ -87,8 +92,7 @@ class AnnouncementService
         ?int $gymId = null,
         ?int $branchId = null,
         array $filters = [],
-    )
-    {
+    ) {
         return Announcement::query()
             ->when($actor->active_role !== RoleName::PlatformAdmin->value, function ($query) use ($actor): void {
                 $gymIds = $this->scopeResolver->gymsQuery($actor)->pluck('gyms.id');
@@ -199,6 +203,26 @@ class AnnouncementService
             ]);
         }
 
+        if ($branch && (int) $branch->gym_id !== (int) $gym->id) {
+            throw ValidationException::withMessages([
+                'branch_id' => ['The selected branch does not belong to the announcement gym.'],
+            ]);
+        }
+
+        if ($memberIds !== []) {
+            $accessibleMemberIds = $this->accessibleMemberProfiles($gym, $branch)
+                ->whereIn('user_id', $memberIds)
+                ->pluck('user_id')
+                ->map(fn ($id): int => (int) $id)
+                ->all();
+
+            if (array_diff(array_map('intval', $memberIds), $accessibleMemberIds) !== []) {
+                throw ValidationException::withMessages([
+                    'member_ids' => ['Selected members must have current access to this gym and branch.'],
+                ]);
+            }
+        }
+
         if ($actor->active_role === RoleName::BranchManager->value && ! $branch) {
             throw ValidationException::withMessages([
                 'branch_id' => ['Branch managers can notify only their own branch.'],
@@ -206,9 +230,8 @@ class AnnouncementService
         }
 
         if ($actor->active_role === RoleName::Trainer->value) {
-            $assignedMemberIds = MemberProfile::query()
+            $assignedMemberIds = $this->accessibleMemberProfiles($gym, $branch)
                 ->where('assigned_trainer_user_id', $actor->id)
-                ->where('gym_id', $gym->id)
                 ->pluck('user_id')
                 ->map(fn ($id): int => (int) $id)
                 ->all();
@@ -227,16 +250,36 @@ class AnnouncementService
             AnnouncementAudienceType::PlatformWide->value => User::query()->get(),
             AnnouncementAudienceType::GymWide->value,
             AnnouncementAudienceType::Offer->value => User::query()
-                ->whereHas('memberProfile', fn ($query) => $query->where('gym_id', $gym?->id))
+                ->whereHas('memberProfiles', function (Builder $query) use ($gym): void {
+                    $query->where('gym_id', $gym?->id);
+                    $this->gymMemberAccessService->scopeAccessibleProfiles($query);
+                })
                 ->get(),
             AnnouncementAudienceType::BranchSpecific->value => User::query()
-                ->whereHas('memberProfile', fn ($query) => $query->where('branch_id', $branch?->id))
+                ->whereHas('memberProfiles', function (Builder $query) use ($gym, $branch): void {
+                    $query->where('gym_id', $gym?->id)->where('branch_id', $branch?->id);
+                    $this->gymMemberAccessService->scopeAccessibleProfiles($query);
+                })
                 ->get(),
             AnnouncementAudienceType::SelectedMembers->value,
             AnnouncementAudienceType::TrainerAssignment->value => User::query()
                 ->whereIn('id', $memberIds)
+                ->whereHas('memberProfiles', function (Builder $query) use ($gym, $branch): void {
+                    $query->where('gym_id', $gym?->id)
+                        ->when($branch, fn (Builder $builder) => $builder->where('branch_id', $branch->id));
+                    $this->gymMemberAccessService->scopeAccessibleProfiles($query);
+                })
                 ->get(),
             default => collect(),
         };
+    }
+
+    private function accessibleMemberProfiles(Gym $gym, ?Branch $branch): Builder
+    {
+        $query = MemberProfile::query()
+            ->where('gym_id', $gym->id)
+            ->when($branch, fn (Builder $builder) => $builder->where('branch_id', $branch->id));
+
+        return $this->gymMemberAccessService->scopeAccessibleProfiles($query);
     }
 }

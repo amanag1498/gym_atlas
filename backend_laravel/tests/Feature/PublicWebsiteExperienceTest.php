@@ -95,8 +95,8 @@ class PublicWebsiteExperienceTest extends TestCase
             ->assertSee('value="Atlas Strength"', false)
             ->assertSee('<option value="Bengaluru" selected>Bengaluru</option>', false)
             ->assertSee('name="distance" type="number" min="1" step="1" value="5"', false)
-            ->assertSee('name="trial_available" value="1" class="sr-only" checked', false)
-            ->assertSee('1 live public listing')
+            ->assertSee('name="trial_available" value="1" checked', false)
+            ->assertSee('1 gym found')
             ->assertSee(asset('images/public-site/editorial/trainer-member-coaching.webp'))
             ->assertDontSee('images.unsplash.com');
     }

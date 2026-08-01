@@ -28,6 +28,14 @@ class GymReportManagementFeatureTest extends TestCase
 
         $this->withoutVite();
         $this->seed(PermissionSeeder::class);
+        $this->travelTo(now()->startOfMonth()->addDays(10)->setTime(12, 0));
+    }
+
+    protected function tearDown(): void
+    {
+        $this->travelBack();
+
+        parent::tearDown();
     }
 
     public function test_gym_reports_load_filters_work_and_exports_are_scoped(): void

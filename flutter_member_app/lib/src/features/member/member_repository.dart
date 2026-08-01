@@ -19,12 +19,47 @@ class MemberRepository {
       _client.post('/member/membership/leave');
   Future<Map<String, dynamic>> fetchMemberTrainer() async =>
       _client.get('/member/trainer');
-  Future<Map<String, dynamic>> fetchWorkoutPlans() async =>
-      _client.get('/member/workout-plans');
+  Future<Map<String, dynamic>> removeGymTrainerAssignment() =>
+      _client.delete('/member/trainer-assignment');
+  Future<Map<String, dynamic>> fetchIndependentTrainerInvitations({
+    String? status,
+  }) => _client.get(
+    '/member/independent-trainer-invitations',
+    queryParameters: {if (status != null) 'status': status},
+  );
+  Future<Map<String, dynamic>> acceptIndependentTrainerInvitation(
+    int invitationId,
+  ) => _client.post(
+    '/member/independent-trainer-invitations/$invitationId/accept',
+  );
+  Future<Map<String, dynamic>> rejectIndependentTrainerInvitation(
+    int invitationId,
+  ) => _client.post(
+    '/member/independent-trainer-invitations/$invitationId/reject',
+  );
+  Future<Map<String, dynamic>> fetchIndependentTrainers() =>
+      _client.get('/member/independent-trainers');
+  Future<Map<String, dynamic>> revokeIndependentTrainerRelationship(
+    int relationshipId,
+  ) => _client.post('/member/independent-trainers/$relationshipId/revoke');
+  Future<Map<String, dynamic>> fetchWorkoutPlans({int? relationshipId}) async =>
+      _client.get(
+        '/member/workout-plans',
+        queryParameters: {
+          if (relationshipId != null)
+            'independent_trainer_member_relationship_id': relationshipId,
+        },
+      );
   Future<Map<String, dynamic>> fetchWorkoutPlan(int workoutPlanId) async =>
       _client.get('/member/workout-plans/$workoutPlanId');
-  Future<Map<String, dynamic>> fetchDietPlans() =>
-      _client.get('/member/diet-plans');
+  Future<Map<String, dynamic>> fetchDietPlans({int? relationshipId}) =>
+      _client.get(
+        '/member/diet-plans',
+        queryParameters: {
+          if (relationshipId != null)
+            'independent_trainer_member_relationship_id': relationshipId,
+        },
+      );
   Future<Map<String, dynamic>> fetchDietTemplates() =>
       _client.get('/member/diet-templates');
   Future<Map<String, dynamic>> adoptDietTemplate(

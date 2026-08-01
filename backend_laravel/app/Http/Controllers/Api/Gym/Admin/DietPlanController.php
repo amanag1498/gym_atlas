@@ -15,6 +15,7 @@ use App\Services\Audit\AuditLogService;
 use App\Services\Authorization\ScopeResolver;
 use App\Services\Diet\DietPlanService;
 use App\Services\Diet\DietPlanTemplateService;
+use App\Services\Members\GymMemberAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -25,6 +26,7 @@ class DietPlanController extends Controller
         private readonly DietPlanService $dietPlanService,
         private readonly DietPlanTemplateService $dietPlanTemplateService,
         private readonly AuditLogService $auditLogService,
+        private readonly GymMemberAccessService $gymMemberAccessService,
     ) {}
 
     public function index(Request $request)
@@ -35,6 +37,10 @@ class DietPlanController extends Controller
         $paginator = DietPlan::query()
             ->with(['member', 'trainer', 'meals.items'])
             ->where('gym_id', $gymId)
+            ->whereHas('member.memberProfiles', function ($profile) use ($gymId): void {
+                $profile->where('gym_id', $gymId);
+                $this->gymMemberAccessService->scopeAccessibleProfiles($profile);
+            })
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->when($request->filled('member_id'), fn ($q) => $q->where('member_id', $request->integer('member_id')))
             ->latest()
@@ -135,6 +141,7 @@ class DietPlanController extends Controller
     public function show(Request $request, DietPlan $dietPlan)
     {
         $this->assertScope($request, $dietPlan->gym_id, $dietPlan->branch_id);
+        $this->assertMember($dietPlan->member_id, $dietPlan->gym_id, $dietPlan->branch_id);
 
         return $this->success(DietPlanResource::make($dietPlan->load(['member', 'trainer', 'meals.items'])));
     }
@@ -142,6 +149,7 @@ class DietPlanController extends Controller
     public function update(UpdateDietPlanRequest $request, DietPlan $dietPlan)
     {
         $this->assertScope($request, $dietPlan->gym_id, $dietPlan->branch_id);
+        $this->assertMember($dietPlan->member_id, $dietPlan->gym_id, $dietPlan->branch_id);
 
         $oldValues = $dietPlan->load('meals.items')->toArray();
         $plan = $this->dietPlanService->update($dietPlan, $request->user(), $request->validated());
@@ -153,6 +161,7 @@ class DietPlanController extends Controller
     public function destroy(Request $request, DietPlan $dietPlan)
     {
         $this->assertScope($request, $dietPlan->gym_id, $dietPlan->branch_id);
+        $this->assertMember($dietPlan->member_id, $dietPlan->gym_id, $dietPlan->branch_id);
         $this->auditLogService->log(event: 'diet_plan.deleted', action: 'delete', request: $request, subject: $dietPlan, gym: $dietPlan->gym, branch: $dietPlan->branch, oldValues: $dietPlan->load('meals.items')->toArray());
         $dietPlan->delete();
 
@@ -173,7 +182,9 @@ class DietPlanController extends Controller
 
     private function assertMember(int $memberId, int $gymId, mixed $branchId): void
     {
-        if (! MemberProfile::query()->where('user_id', $memberId)->where('gym_id', $gymId)->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->exists()) {
+        $query = MemberProfile::query()->where('user_id', $memberId)->where('gym_id', $gymId)->when($branchId, fn ($q) => $q->where('branch_id', $branchId));
+        $this->gymMemberAccessService->scopeAccessibleProfiles($query);
+        if (! $query->exists()) {
             throw ValidationException::withMessages(['member_ids' => ['Each member must belong to the selected gym and branch.']]);
         }
     }

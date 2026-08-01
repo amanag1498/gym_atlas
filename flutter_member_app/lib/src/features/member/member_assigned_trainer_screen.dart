@@ -108,20 +108,28 @@ class MemberAssignedTrainerScreen extends StatefulWidget {
     required this.socket,
     required this.chatEventVersion,
     required this.chatLaunchVersion,
+    required this.selectedGymId,
+    required this.selectedGymName,
     required this.userState,
     required this.currentUserName,
     required this.fallbackTrainerConnection,
     required this.onOpenAssignedWorkout,
+    this.onCoachingChanged,
+    this.chatTargetTrainerId,
   });
 
   final MemberRepository repository;
   final io.Socket? socket;
   final int chatEventVersion;
   final int chatLaunchVersion;
+  final int? chatTargetTrainerId;
+  final int? selectedGymId;
+  final String selectedGymName;
   final String userState;
   final String currentUserName;
   final Map<String, dynamic> fallbackTrainerConnection;
   final VoidCallback onOpenAssignedWorkout;
+  final Future<void> Function()? onCoachingChanged;
 
   @override
   State<MemberAssignedTrainerScreen> createState() =>
@@ -135,6 +143,8 @@ class _MemberAssignedTrainerScreenState
   String? _error;
   String? _chatError;
   Map<String, dynamic> _trainerResponse = const {};
+  List<Map<String, dynamic>> _independentTrainers = const [];
+  List<Map<String, dynamic>> _pendingInvitations = const [];
   final List<Map<String, dynamic>> _messages = <Map<String, dynamic>>[];
   dynamic _chatMessageHandler;
   int _unreadCount = 0;
@@ -169,6 +179,15 @@ class _MemberAssignedTrainerScreenState
     }
     if (oldWidget.chatLaunchVersion != widget.chatLaunchVersion) {
       _openNotificationChatIfReady();
+    }
+    if (oldWidget.userState != widget.userState ||
+        oldWidget.selectedGymId != widget.selectedGymId) {
+      if (!_hasActiveGymMembership) {
+        _trainerResponse = const {};
+      }
+      _messages.clear();
+      _unreadCount = 0;
+      unawaited(_load());
     }
   }
 
@@ -208,10 +227,9 @@ class _MemberAssignedTrainerScreenState
   }
 
   int? get _assignedTrainerId {
+    if (!_hasActiveGymMembership) return null;
     final assignedTrainer = Map<String, dynamic>.from(
-      _trainerResponse['assigned_trainer'] as Map? ??
-          widget.fallbackTrainerConnection['assigned_trainer'] as Map? ??
-          const {},
+      _effectiveTrainerConnection['assigned_trainer'] as Map? ?? const {},
     );
     return _memberIntValue(
       assignedTrainer['id'] ??
@@ -220,6 +238,15 @@ class _MemberAssignedTrainerScreenState
     );
   }
 
+  Map<String, dynamic> get _effectiveTrainerConnection =>
+      _trainerResponse.isNotEmpty
+      ? _trainerResponse
+      : widget.fallbackTrainerConnection;
+
+  bool get _hasActiveGymMembership =>
+      widget.userState == 'gym_member' ||
+      widget.userState == 'gym_member_with_trainer';
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -227,10 +254,20 @@ class _MemberAssignedTrainerScreenState
     });
 
     try {
-      final response = await widget.repository.fetchMemberTrainer();
-      _trainerResponse = Map<String, dynamic>.from(
-        response['data'] as Map? ?? const {},
-      );
+      if (_hasActiveGymMembership) {
+        try {
+          final response = await widget.repository.fetchMemberTrainer();
+          _trainerResponse = Map<String, dynamic>.from(
+            response['data'] as Map? ?? const {},
+          );
+        } catch (exception) {
+          debugPrint('[member-chat][warn] gym trainer: $exception');
+          _trainerResponse = const {};
+        }
+      } else {
+        _trainerResponse = const {};
+      }
+      await _loadIndependentCoaching();
       final trainerId = _assignedTrainerId;
       if (trainerId != null) {
         await _loadChat(trainerId);
@@ -245,6 +282,179 @@ class _MemberAssignedTrainerScreenState
     }
   }
 
+  Future<void> _loadIndependentCoaching() async {
+    try {
+      final response = await widget.repository.fetchIndependentTrainers();
+      _independentTrainers = _memberRecordsFromResponse(
+        response,
+        keys: const ['relationships', 'trainers'],
+      );
+    } catch (exception) {
+      debugPrint('[member-chat][warn] independent trainers: $exception');
+      _independentTrainers = const [];
+    }
+    try {
+      final response = await widget.repository
+          .fetchIndependentTrainerInvitations(status: 'pending');
+      _pendingInvitations =
+          _memberRecordsFromResponse(
+            response,
+            keys: const ['invitations'],
+          ).where((item) {
+            final status = item['status']?.toString().toLowerCase();
+            final pending =
+                status == null || status.isEmpty || status == 'pending';
+            return pending && item['actionable'] != false;
+          }).toList();
+    } catch (exception) {
+      debugPrint('[member-chat][warn] independent invitations: $exception');
+      _pendingInvitations = const [];
+    }
+  }
+
+  Future<void> _respondIndependentInvitation(
+    int invitationId,
+    bool accept,
+  ) async {
+    try {
+      if (accept) {
+        await widget.repository.acceptIndependentTrainerInvitation(
+          invitationId,
+        );
+      } else {
+        await widget.repository.rejectIndependentTrainerInvitation(
+          invitationId,
+        );
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            accept
+                ? 'Independent trainer connected. Your gym trainer is unchanged.'
+                : 'Trainer invitation declined.',
+          ),
+        ),
+      );
+      await _load();
+      await widget.onCoachingChanged?.call();
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    }
+  }
+
+  Future<void> _endIndependentCoaching(
+    Map<String, dynamic> relationship,
+  ) async {
+    final relationshipId = _memberIntValue(
+      relationship['relationship_id'] ?? relationship['id'],
+    );
+    final trainer = _trainerFromRelationship(relationship);
+    final trainerName = trainer['name']?.toString() ?? 'this trainer';
+    if (relationshipId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This coaching connection is invalid.')),
+      );
+      return;
+    }
+    final confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('End independent coaching?'),
+            content: Text(
+              'You will lose independent plan, progress, and chat access with $trainerName. Your gym, subscription, and gym trainer will not change.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Keep coaching'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('End coaching'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !mounted) return;
+    setState(() => _loading = true);
+    try {
+      await widget.repository.revokeIndependentTrainerRelationship(
+        relationshipId,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Independent coaching with $trainerName ended.'),
+        ),
+      );
+      await _load();
+      await widget.onCoachingChanged?.call();
+    } catch (exception) {
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    }
+  }
+
+  Future<void> _removeGymTrainerAssignment() async {
+    if (!_hasActiveGymMembership || _assignedTrainerId == null) return;
+    final confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Remove gym trainer?'),
+            content: Text(
+              'This removes only the trainer assigned through ${widget.selectedGymName}. Your membership, other gym trainers, and every independent trainer connection stay unchanged.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Keep trainer'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Remove trainer'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !mounted) return;
+    setState(() => _loading = true);
+    try {
+      await widget.repository.removeGymTrainerAssignment();
+      _trainerResponse = const {'enabled': false, 'assigned_trainer': null};
+      _messages.clear();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${widget.selectedGymName} trainer removed. Your other gym and independent trainer relationships are unchanged.',
+          ),
+        ),
+      );
+      await _load();
+      await widget.onCoachingChanged?.call();
+    } catch (exception) {
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    }
+  }
+
   void _openNotificationChatIfReady() {
     if (!mounted ||
         _loading ||
@@ -254,11 +464,18 @@ class _MemberAssignedTrainerScreenState
     }
 
     final assignedTrainer = Map<String, dynamic>.from(
-      _trainerResponse['assigned_trainer'] as Map? ??
-          widget.fallbackTrainerConnection['assigned_trainer'] as Map? ??
-          const {},
+      _effectiveTrainerConnection['assigned_trainer'] as Map? ?? const {},
     );
-    if (_assignedTrainerId == null || assignedTrainer.isEmpty) {
+    final targetTrainerId = widget.chatTargetTrainerId;
+    Map<String, dynamic> target = assignedTrainer;
+    if (targetTrainerId != null && _assignedTrainerId != targetTrainerId) {
+      target = _independentTrainers.firstWhere((relationship) {
+        final trainer = _trainerFromRelationship(relationship);
+        return _memberIntValue(trainer['id'] ?? trainer['user_id']) ==
+            targetTrainerId;
+      }, orElse: () => const <String, dynamic>{});
+    }
+    if (target.isEmpty) {
       return;
     }
 
@@ -268,7 +485,7 @@ class _MemberAssignedTrainerScreenState
       if (!mounted) {
         return;
       }
-      await _openTrainerChatThread(assignedTrainer);
+      await _openTrainerChatThread(target);
       _openingNotificationChat = false;
     });
   }
@@ -360,7 +577,12 @@ class _MemberAssignedTrainerScreenState
   }
 
   Future<void> _openTrainerChatThread(Map<String, dynamic> trainer) async {
-    final trainerId = _assignedTrainerId;
+    final trainerRecord = _trainerFromRelationship(trainer);
+    final trainerId = _memberIntValue(
+      trainerRecord['id'] ??
+          trainerRecord['user_id'] ??
+          trainerRecord['trainer_user_id'],
+    );
     if (trainerId == null) {
       return;
     }
@@ -377,7 +599,7 @@ class _MemberAssignedTrainerScreenState
             repository: widget.repository,
             socket: widget.socket,
             trainerId: trainerId,
-            trainer: trainer,
+            trainer: trainerRecord,
           ),
         ),
       );
@@ -398,11 +620,9 @@ class _MemberAssignedTrainerScreenState
   @override
   Widget build(BuildContext context) {
     final assignedTrainer = Map<String, dynamic>.from(
-      _trainerResponse['assigned_trainer'] as Map? ??
-          widget.fallbackTrainerConnection['assigned_trainer'] as Map? ??
-          const {},
+      _effectiveTrainerConnection['assigned_trainer'] as Map? ?? const {},
     );
-    final hasTrainer = (assignedTrainer['id'] as num?)?.toInt() != null;
+    final hasTrainer = _assignedTrainerId != null;
     final trainerId = _assignedTrainerId;
     final trainerName = assignedTrainer['name']?.toString() ?? 'Your trainer';
     final trainerAvatarUrl =
@@ -474,7 +694,50 @@ class _MemberAssignedTrainerScreenState
                         color: AppColors.primaryBright,
                       ),
                     ),
+                  if (_pendingInvitations.isNotEmpty) ...[
+                    Text(
+                      'Coaching invitations',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ..._pendingInvitations.map((invitation) {
+                      final trainer = _trainerFromRelationship(invitation);
+                      final invitationId = _memberIntValue(invitation['id']);
+                      final expired = _independentInvitationExpired(invitation);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _IndependentInvitationCard(
+                          trainer: trainer,
+                          expired: expired,
+                          onAccept: invitationId == null || expired
+                              ? null
+                              : () => _respondIndependentInvitation(
+                                  invitationId,
+                                  true,
+                                ),
+                          onReject: invitationId == null || expired
+                              ? null
+                              : () => _respondIndependentInvitation(
+                                  invitationId,
+                                  false,
+                                ),
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 8),
+                  ],
                   if (hasTrainer) ...[
+                    Text(
+                      'Gym trainer · ${widget.selectedGymName}',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     RevealOnBuild(
                       child: _MemberConversationCard(
                         trainerName: trainerName,
@@ -486,6 +749,9 @@ class _MemberAssignedTrainerScreenState
                         enabled: trainerId != null,
                         unreadCount: _unreadCount,
                         loading: _chatLoading,
+                        onMore: trainerId == null
+                            ? null
+                            : _removeGymTrainerAssignment,
                         onTap: trainerId == null
                             ? null
                             : () => _openTrainerChatThread(assignedTrainer),
@@ -510,7 +776,54 @@ class _MemberAssignedTrainerScreenState
                         ),
                       ),
                     ],
-                  ] else ...[
+                  ],
+                  if (_independentTrainers.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    Text(
+                      'Independent trainers',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Separate from your gym membership and gym-assigned trainer.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ..._independentTrainers.map((relationship) {
+                      final trainer = _trainerFromRelationship(relationship);
+                      final trainerId = _memberIntValue(
+                        trainer['id'] ?? trainer['user_id'],
+                      );
+                      final accessActive =
+                          relationship['access_active'] != false;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _MemberConversationCard(
+                          trainerName:
+                              trainer['name']?.toString() ?? 'Verified trainer',
+                          trainerAvatarUrl:
+                              trainer['profile_photo_url']?.toString() ??
+                              trainer['avatar']?.toString(),
+                          preview: accessActive
+                              ? 'Independent coaching · tap to message'
+                              : 'Coaching access paused · manage connection',
+                          time: accessActive ? 'Verified' : 'Paused',
+                          enabled: trainerId != null && accessActive,
+                          onMore: () => _endIndependentCoaching(relationship),
+                          onTap: trainerId == null || !accessActive
+                              ? null
+                              : () => _openTrainerChatThread(relationship),
+                        ),
+                      );
+                    }),
+                  ],
+                  if (!hasTrainer && _independentTrainers.isEmpty) ...[
                     RevealOnBuild(
                       child: _MemberChatNoTrainerCard(onRefresh: _load),
                     ),
@@ -518,6 +831,108 @@ class _MemberAssignedTrainerScreenState
                 ],
               ),
             ),
+    );
+  }
+}
+
+List<Map<String, dynamic>> _memberRecordsFromResponse(
+  Map<String, dynamic> response, {
+  required List<String> keys,
+}) {
+  final data = response['data'];
+  if (data is List) {
+    return data.whereType<Map>().map(_trainerRecordMap).toList();
+  }
+  final envelope = _trainerRecordMap(data);
+  for (final key in <String>['data', ...keys]) {
+    final records = envelope[key];
+    if (records is List) {
+      return records.whereType<Map>().map(_trainerRecordMap).toList();
+    }
+  }
+  return const [];
+}
+
+Map<String, dynamic> _trainerFromRelationship(Map<String, dynamic> record) {
+  final trainer = _trainerRecordMap(record['trainer']);
+  if (trainer.isNotEmpty) return trainer;
+  final user = _trainerRecordMap(record['trainer_user'] ?? record['user']);
+  if (user.isNotEmpty) return user;
+  return record;
+}
+
+bool _independentInvitationExpired(Map<String, dynamic> invitation) {
+  final expiresAt = DateTime.tryParse(
+    invitation['expires_at']?.toString() ?? '',
+  );
+  return expiresAt != null &&
+      expiresAt.toUtc().isBefore(DateTime.now().toUtc());
+}
+
+class _IndependentInvitationCard extends StatelessWidget {
+  const _IndependentInvitationCard({
+    required this.trainer,
+    required this.onAccept,
+    required this.onReject,
+    required this.expired,
+  });
+
+  final Map<String, dynamic> trainer;
+  final VoidCallback? onAccept;
+  final VoidCallback? onReject;
+  final bool expired;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = trainer['name']?.toString() ?? 'Verified trainer';
+    return PremiumCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.verified_user_outlined,
+                color: AppColors.primaryBright,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '$name invited you',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            expired
+                ? 'This invitation has expired. Ask the trainer to send a fresh consent request.'
+                : 'Accepting creates independent coaching access. It does not change your gym, subscription, or gym trainer.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (expired)
+                const Chip(label: Text('Expired'))
+              else ...[
+                TextButton(onPressed: onReject, child: const Text('Decline')),
+                const SizedBox(width: 8),
+                FilledButton(onPressed: onAccept, child: const Text('Accept')),
+              ],
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -585,7 +1000,7 @@ class _MemberChatNoTrainerCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Once your gym assigns a trainer, this page becomes your private WhatsApp-style conversation.',
+            'A gym can assign its trainer, or a verified independent trainer can invite you. Both relationships stay separate.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: AppColors.textSecondary,
               fontWeight: FontWeight.w600,
@@ -614,7 +1029,7 @@ class _MemberChatNoTrainerCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Check assignment',
+                    'Check connections',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w700,
@@ -640,6 +1055,7 @@ class _MemberConversationCard extends StatelessWidget {
     this.trainerAvatarUrl,
     this.unreadCount = 0,
     this.loading = false,
+    this.onMore,
   });
 
   final String trainerName;
@@ -650,6 +1066,7 @@ class _MemberConversationCard extends StatelessWidget {
   final String? trainerAvatarUrl;
   final int unreadCount;
   final bool loading;
+  final VoidCallback? onMore;
 
   @override
   Widget build(BuildContext context) {
@@ -754,6 +1171,12 @@ class _MemberConversationCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
+          if (onMore != null)
+            IconButton(
+              tooltip: 'Manage coaching connection',
+              onPressed: onMore,
+              icon: const Icon(Icons.more_vert_rounded),
+            ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [

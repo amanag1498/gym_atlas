@@ -23,6 +23,7 @@ use App\Services\Authorization\ScopedPermissionResolver;
 use App\Services\Billing\PaymentInvoicePdfService;
 use App\Services\Billing\PaymentService;
 use App\Services\Gym\GymLedgerService;
+use App\Services\Members\GymMemberAccessService;
 use App\Services\Web\CsvStreamService;
 use App\Services\Web\GymWebPanelService;
 use Illuminate\Database\Eloquent\Builder;
@@ -43,6 +44,7 @@ class PaymentController extends Controller
         private readonly CsvStreamService $csvStreamService,
         private readonly ScopedPermissionResolver $scopedPermissionResolver,
         private readonly GymLedgerService $gymLedgerService,
+        private readonly GymMemberAccessService $gymMemberAccessService,
     ) {}
 
     public function index(Request $request): View|StreamedResponse
@@ -62,6 +64,7 @@ class PaymentController extends Controller
             ->where('user_id', $member->id)
             ->where('gym_id', $gym->id)
             ->firstOrFail();
+        $this->gymMemberAccessService->assertAccessible($memberProfile);
         $member->setRelation('memberProfile', $memberProfile);
         $this->gymWebPanelService->assertAnyPermission($request, [
             PermissionName::PaymentsView->value,

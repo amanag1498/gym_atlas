@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Models\MemberEmailInvitation;
+use App\Models\MembershipPlan;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
@@ -11,7 +12,11 @@ class MemberEnrollmentInvitationMail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public readonly MemberEmailInvitation $invitation, public readonly string $reviewUrl) {}
+    public function __construct(
+        public readonly MemberEmailInvitation $invitation,
+        public readonly string $reviewUrl,
+        public readonly ?MembershipPlan $membershipPlan = null,
+    ) {}
 
     public function build(): self
     {

@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api\Member;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Workout\AdoptWorkoutBookPlanRequest;
 use App\Http\Requests\Workout\AddWorkoutExerciseRequest;
+use App\Http\Requests\Workout\AdoptWorkoutBookPlanRequest;
 use App\Http\Requests\Workout\CompleteWorkoutSessionRequest;
 use App\Http\Requests\Workout\DuplicateMemberWorkoutPlanRequest;
 use App\Http\Requests\Workout\StartWorkoutSessionRequest;
@@ -23,6 +23,7 @@ use App\Models\WorkoutSession;
 use App\Models\WorkoutTemplate;
 use App\Services\Audit\AuditLogService;
 use App\Services\Member\MemberAppService;
+use App\Services\Trainer\IndependentCoachingAccessService;
 use App\Services\Workout\WorkoutAccessService;
 use App\Services\Workout\WorkoutPlanService;
 use App\Services\Workout\WorkoutSessionService;
@@ -38,8 +39,8 @@ class WorkoutController extends Controller
         private readonly WorkoutSessionService $workoutSessionService,
         private readonly AuditLogService $auditLogService,
         private readonly MemberAppService $memberAppService,
-    ) {
-    }
+        private readonly IndependentCoachingAccessService $independentCoachingAccessService,
+    ) {}
 
     public function books(Request $request)
     {
@@ -84,8 +85,8 @@ class WorkoutController extends Controller
 
     public function recommendedBooks(Request $request)
     {
-        $request->user()->loadMissing('memberProfile.fitnessGoals');
-        $profile = $request->user()->memberProfile;
+        $profile = $this->memberAppService->memberProfileFor($request->user());
+        $profile?->loadMissing('fitnessGoals');
         $goalNames = $profile?->fitnessGoals?->pluck('name')->filter()->values() ?? collect();
         $experience = str($profile?->experience_level ?? 'beginner')->lower()->toString();
 
@@ -121,13 +122,14 @@ class WorkoutController extends Controller
 
     public function exercises(Request $request)
     {
+        $profile = $this->memberAppService->memberProfileFor($request->user());
         $query = Exercise::query()
             ->where('is_active', true)
-            ->where(function ($builder) use ($request): void {
+            ->where(function ($builder) use ($profile): void {
                 $builder->where('is_global', true)
-                    ->orWhere(function ($scoped) use ($request): void {
-                        $gymId = $request->user()->memberProfile?->gym_id;
-                        $branchId = $request->user()->memberProfile?->branch_id;
+                    ->orWhere(function ($scoped) use ($profile): void {
+                        $gymId = $profile?->gym_id;
+                        $branchId = $profile?->branch_id;
 
                         if ($gymId) {
                             $scoped->where('gym_id', $gymId);
@@ -191,13 +193,39 @@ class WorkoutController extends Controller
     public function plans(Request $request)
     {
         $profile = $this->memberAppService->memberProfileFor($request->user());
-        if (! $profile?->gym_id) {
-            return $this->success([], 'No active gym space is available.');
+        $relationshipIds = $this->independentCoachingAccessService
+            ->activeRelationshipIdsForMember($request->user(), 'workouts');
+        $requestedRelationshipId = $request->filled('independent_trainer_member_relationship_id')
+            ? (int) $request->integer('independent_trainer_member_relationship_id')
+            : null;
+        if ($requestedRelationshipId !== null) {
+            $this->independentCoachingAccessService->resolveForMember(
+                $request->user(),
+                $requestedRelationshipId,
+                'workouts',
+            );
+        }
+        if (! $profile?->gym_id && $relationshipIds->isEmpty()) {
+            return $this->success([], 'No active workout coaching space is available.');
         }
         $paginator = $request->user()->workoutPlansAsMember()
             ->with(['trainer', 'creator', 'template.workoutBook', 'sourceWorkoutBook', 'days.exercises.exercise'])
-            ->where('gym_id', $profile->gym_id)
-            ->when($profile->branch_id, fn ($query) => $query->where(fn ($scope) => $scope->whereNull('branch_id')->orWhere('branch_id', $profile->branch_id)))
+            ->where(function ($query) use ($profile, $relationshipIds): void {
+                if ($profile?->gym_id) {
+                    $query->where(function ($gymQuery) use ($profile): void {
+                        $gymQuery->where('gym_id', $profile->gym_id)
+                            ->where('status', 'active')
+                            ->whereNull('independent_trainer_member_relationship_id')
+                            ->when($profile->branch_id, fn ($branchQuery) => $branchQuery->where(fn ($scope) => $scope->whereNull('branch_id')->orWhere('branch_id', $profile->branch_id)));
+                    });
+                }
+
+                if ($relationshipIds->isNotEmpty()) {
+                    $method = $profile?->gym_id ? 'orWhereIn' : 'whereIn';
+                    $query->{$method}('independent_trainer_member_relationship_id', $relationshipIds);
+                }
+            })
+            ->when($requestedRelationshipId !== null, fn ($query) => $query->where('independent_trainer_member_relationship_id', $requestedRelationshipId))
             ->orderByDesc('id')
             ->paginate((int) $request->integer('per_page', 15));
 
@@ -331,6 +359,12 @@ class WorkoutController extends Controller
 
     public function start(StartWorkoutSessionRequest $request)
     {
+        if ($request->filled('workout_plan_id')) {
+            $this->workoutAccessService->assertPlanAccess(
+                $request->user(),
+                WorkoutPlan::query()->findOrFail($request->integer('workout_plan_id')),
+            );
+        }
         $session = $this->workoutSessionService->startSession($request->user(), $request->validated());
 
         $this->auditLogService->log(
@@ -391,9 +425,19 @@ class WorkoutController extends Controller
 
     public function history(Request $request)
     {
+        $profile = $this->memberAppService->memberProfileFor($request->user());
         $paginator = WorkoutSession::query()
             ->with('exercises.exercise', 'exercises.sets')
             ->where('member_id', $request->user()->id)
+            ->where(function ($query) use ($profile): void {
+                $query->whereNull('gym_id');
+                if ($profile?->gym_id) {
+                    $query->orWhere(function ($gymQuery) use ($profile): void {
+                        $gymQuery->where('gym_id', $profile->gym_id)
+                            ->when($profile->branch_id, fn ($branchQuery) => $branchQuery->where('branch_id', $profile->branch_id));
+                    });
+                }
+            })
             ->orderByDesc('session_date')
             ->paginate((int) $request->integer('per_page', 15));
 
@@ -402,9 +446,19 @@ class WorkoutController extends Controller
 
     public function exerciseHistory(Request $request, int $exerciseId)
     {
+        $profile = $this->memberAppService->memberProfileFor($request->user());
         $sessions = WorkoutSession::query()
             ->with(['exercises' => fn ($query) => $query->where('exercise_id', $exerciseId)->with('exercise', 'sets')])
             ->where('member_id', $request->user()->id)
+            ->where(function ($query) use ($profile): void {
+                $query->whereNull('gym_id');
+                if ($profile?->gym_id) {
+                    $query->orWhere(function ($gymQuery) use ($profile): void {
+                        $gymQuery->where('gym_id', $profile->gym_id)
+                            ->when($profile->branch_id, fn ($branchQuery) => $branchQuery->where('branch_id', $profile->branch_id));
+                    });
+                }
+            })
             ->whereHas('exercises', fn ($query) => $query->where('exercise_id', $exerciseId))
             ->orderByDesc('session_date')
             ->paginate((int) $request->integer('per_page', 15));

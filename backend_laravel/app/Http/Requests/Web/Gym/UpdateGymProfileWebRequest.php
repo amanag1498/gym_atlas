@@ -11,17 +11,29 @@ class UpdateGymProfileWebRequest extends UpdateGymProfileRequest
 
     protected function prepareForValidation(): void
     {
+        parent::prepareForValidation();
+
         $timings = $this->parseJsonArray($this->input('timings_json'));
+        $weeklyOff = collect($this->parseDelimitedString($this->input('weekly_off_text')))
+            ->map(fn (mixed $value): string => strtolower(trim((string) $value)))
+            ->filter()
+            ->values()
+            ->all();
+
+        if (is_array($timings) && array_key_exists('all_days', $timings)) {
+            $allDays = $timings['all_days'];
+            $timings = collect(OperatingHours::DAYS)
+                ->mapWithKeys(fn (string $day): array => [
+                    $day => in_array($day, $weeklyOff, true) ? [] : $allDays,
+                ])
+                ->all();
+        }
 
         $payload = [
             'timings' => $timings,
             'weekly_off' => is_array($timings)
                 ? OperatingHours::weeklyOffFromTimings(OperatingHours::normalize($timings))
-                : collect($this->parseDelimitedString($this->input('weekly_off_text')))
-                    ->map(fn (mixed $value): string => strtolower(trim((string) $value)))
-                    ->filter()
-                    ->values()
-                    ->all(),
+                : $weeklyOff,
             'remove_logo' => $this->boolean('remove_logo'),
             'remove_cover_image' => $this->boolean('remove_cover_image'),
             'remove_gallery_photo_ids' => collect((array) $this->input('remove_gallery_photo_ids', []))

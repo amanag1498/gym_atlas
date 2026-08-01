@@ -3,6 +3,7 @@
 namespace App\Services\Members;
 
 use App\Enums\RoleName;
+use App\Mail\TrainerEnrollmentInvitationMail;
 use App\Models\ActivityLog;
 use App\Models\Gym;
 use App\Models\Notification;
@@ -83,7 +84,7 @@ class TrainerEmailInvitationService
                 ],
             );
         } else {
-            $invitation->load('gym');
+            $invitation->load(['gym', 'branch', 'invitedBy']);
             $url = URL::temporarySignedRoute(
                 'trainer-email-invitations.review',
                 $invitation->expires_at,
@@ -93,11 +94,10 @@ class TrainerEmailInvitationService
                 ],
             );
 
-            $this->transactionalEmailService->sendTo(
+            $this->transactionalEmailService->sendMailableTo(
                 $email,
-                'Approve your trainer invitation for '.$invitation->gym->name,
-                $invitation->gym->name.' has invited you to join as a trainer.',
-                ['Review your invitation: '.$url],
+                new TrainerEnrollmentInvitationMail($invitation, $url),
+                'Review your trainer invitation from '.$invitation->gym->name,
                 $gym->id,
                 'trainer_enrollment_invitation',
             );
@@ -135,6 +135,13 @@ class TrainerEmailInvitationService
             $trainer = null;
 
             if ($accept) {
+                $gym = Gym::query()->findOrFail($invitation->gym_id);
+                if (! $gym->is_active || $gym->status !== 'active' || ! $gym->operational_access_enabled) {
+                    throw ValidationException::withMessages([
+                        'invitation' => ['This gym is not currently operational, so the invitation cannot be accepted.'],
+                    ]);
+                }
+
                 $trainer = User::query()
                     ->where('email', $invitation->invited_email)
                     ->first();
@@ -168,6 +175,7 @@ class TrainerEmailInvitationService
                     [],
                     $invitation->gym_id,
                     'trainer_enrollment_confirmation',
+                    ['branch_id' => $invitation->branch_id, 'category_label' => 'Trainer enrollment confirmed'],
                 ));
             } else {
                 $invitation->update([

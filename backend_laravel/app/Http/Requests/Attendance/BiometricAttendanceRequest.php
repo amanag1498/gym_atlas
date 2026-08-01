@@ -16,7 +16,8 @@ class BiometricAttendanceRequest extends FormRequest
         return [
             'gym_id' => ['required', 'integer', 'exists:gyms,id'],
             'branch_id' => ['required', 'integer', 'exists:branches,id'],
-            'biometric_identifier' => ['required', 'string', 'max:255'],
+            'biometric_identifier' => ['required_without:qr_payload', 'nullable', 'string', 'max:255'],
+            'qr_payload' => ['required_without:biometric_identifier', 'nullable', 'string', 'max:4096'],
             'notes' => ['nullable', 'string'],
             'source_device' => ['nullable', 'string', 'max:255'],
         ];

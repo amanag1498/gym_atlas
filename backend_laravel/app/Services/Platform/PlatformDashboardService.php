@@ -22,6 +22,7 @@ class PlatformDashboardService
         return [
             'stats' => $this->buildStats(),
             'pending_gym_approvals' => $this->pendingGymApprovals(),
+            'pending_independent_trainer_verifications' => $this->pendingIndependentTrainerVerifications(),
             'recently_added_gyms' => $this->recentlyAddedGyms(),
             'recent_frontend_enquiries' => $this->recentFrontendEnquiries(),
             'platform_activity' => [
@@ -59,6 +60,16 @@ class PlatformDashboardService
             'total_gyms' => Gym::query()->count(),
             'active_gyms' => Gym::query()->where('is_active', true)->count(),
             'pending_gym_approvals' => Gym::query()->where('approval_status', 'pending')->count(),
+            'pending_independent_trainer_verifications' => TrainerProfile::query()
+                ->whereNull('gym_id')
+                ->whereNull('branch_id')
+                ->where('verification_status', 'pending')
+                ->count(),
+            'verified_independent_trainers' => TrainerProfile::query()
+                ->whereNull('gym_id')
+                ->whereNull('branch_id')
+                ->where('verification_status', 'verified')
+                ->count(),
             'inactive_gyms' => Gym::query()->where('is_active', false)->count(),
             'total_members' => MemberProfile::query()->count(),
             'total_trainers' => TrainerProfile::query()->count(),
@@ -93,6 +104,33 @@ class PlatformDashboardService
                 'city' => $gym->city ?: 'N/A',
                 'submitted_at' => $gym->created_at,
                 'status' => $gym->approval_status ?: 'pending',
+            ])
+            ->all();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function pendingIndependentTrainerVerifications(): array
+    {
+        return TrainerProfile::query()
+            ->with('user:id,name,email')
+            ->whereNull('gym_id')
+            ->whereNull('branch_id')
+            ->where('verification_status', 'pending')
+            ->latest('created_at')
+            ->latest('id')
+            ->limit(6)
+            ->get()
+            ->map(fn (TrainerProfile $profile): array => [
+                'id' => $profile->id,
+                'trainer_user_id' => $profile->user_id,
+                'name' => $profile->user?->name ?? 'Unknown trainer',
+                'email' => $profile->user?->email,
+                'specialization' => $profile->specialization,
+                'experience_years' => $profile->experience_years,
+                'submitted_at' => $profile->created_at,
+                'status' => $profile->verification_status,
             ])
             ->all();
     }

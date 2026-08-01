@@ -30,9 +30,11 @@ export class RoomService {
       }
     }
 
-    if (user.activeRole === 'member' && user.assignedTrainerId) {
-      joinTargets.add(resolveTrainerMemberRoom(user.assignedTrainerId, user.id));
-      joinTargets.add(rooms.userPresence(user.assignedTrainerId));
+    if (user.activeRole === 'member') {
+      for (const trainerId of user.assignedTrainerIds) {
+        joinTargets.add(resolveTrainerMemberRoom(trainerId, user.id));
+        joinTargets.add(rooms.userPresence(trainerId));
+      }
     }
 
     await socket.join([...joinTargets]);

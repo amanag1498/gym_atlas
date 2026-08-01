@@ -6,6 +6,7 @@ use App\Enums\RoleName;
 use App\Models\Branch;
 use App\Models\FitnessGoal;
 use App\Models\Gym;
+use App\Models\IndependentTrainerMemberRelationship;
 use App\Models\MemberProfile;
 use App\Models\TrainerProfile;
 use App\Models\User;
@@ -22,8 +23,7 @@ class ManagedUserService
         private readonly ActiveRoleManager $activeRoleManager,
         private readonly NotificationService $notificationService,
         private readonly MemberFitnessGoalService $memberFitnessGoalService,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<string, mixed>  $data
@@ -69,8 +69,6 @@ class ManagedUserService
     public function setTrainerActive(User $user, Gym $gym, bool $isActive): User
     {
         return DB::transaction(function () use ($user, $gym, $isActive): User {
-            $user->update(['is_active' => $isActive]);
-
             TrainerProfile::query()
                 ->where('user_id', $user->id)
                 ->where('gym_id', $gym->id)
@@ -79,17 +77,71 @@ class ManagedUserService
                     'status' => $isActive ? 'active' : 'inactive',
                 ]);
 
+            if ($user->gyms()->where('gyms.id', $gym->id)->exists()) {
+                $user->gyms()->updateExistingPivot($gym->id, [
+                    'status' => $isActive ? 'active' : 'inactive',
+                ]);
+            }
+
+            if (! $isActive) {
+                $this->clearGymTrainerAssignments($user, $gym);
+            }
+
+            $hasAnotherActiveMemberProfile = MemberProfile::query()
+                ->where('user_id', $user->id)
+                ->where('is_active', true)
+                ->exists();
+            $hasAnotherRole = $user->roles()
+                ->where('name', '!=', RoleName::Trainer->value)
+                ->exists();
+            $globalIsActive = $isActive || $hasAnotherActiveMemberProfile || $hasAnotherRole;
+
+            if ((bool) $user->is_active !== $globalIsActive) {
+                $user->update(['is_active' => $globalIsActive]);
+            }
+            if (! $globalIsActive) {
+                $user->tokens()->delete();
+            }
+
             $this->activeRoleManager->ensureValidActiveRole($user);
 
             return $user->fresh(['gyms', 'branches', 'roles', 'permissions', 'managedTrainerProfile']);
         });
     }
 
+    public function setPlatformUserActive(User $user, bool $isActive): User
+    {
+        return DB::transaction(function () use ($user, $isActive): User {
+            if (! $isActive) {
+                $assignedProfiles = MemberProfile::query()
+                    ->with(['user', 'gym'])
+                    ->where('assigned_trainer_user_id', $user->id)
+                    ->lockForUpdate()
+                    ->get();
+
+                foreach ($assignedProfiles as $profile) {
+                    $profile->forceFill([
+                        'assigned_trainer_user_id' => null,
+                        'assigned_trainer_id' => null,
+                    ])->save();
+                    $this->notifyTrainerAssignmentEnded($profile, $user);
+                }
+            }
+
+            $user->forceFill(['is_active' => $isActive])->save();
+            if (! $isActive) {
+                $user->tokens()->delete();
+            }
+
+            $this->activeRoleManager->ensureValidActiveRole($user);
+
+            return $user->fresh(['roles', 'permissions', 'gyms', 'branches', 'managedTrainerProfile']);
+        });
+    }
+
     public function setMemberActive(User $user, Gym $gym, bool $isActive): User
     {
         return DB::transaction(function () use ($user, $gym, $isActive): User {
-            $user->update(['is_active' => $isActive]);
-
             MemberProfile::query()
                 ->where('user_id', $user->id)
                 ->where('gym_id', $gym->id)
@@ -99,9 +151,35 @@ class ManagedUserService
                     'membership_status' => $isActive ? 'active' : 'inactive',
                 ]);
 
+            // A gym controls only its own relationship. Keep the shared login
+            // active while another member profile (or another platform role) is
+            // active; preserve the legacy single-gym deactivate behaviour.
+            $hasAnotherActiveProfile = MemberProfile::query()
+                ->where('user_id', $user->id)
+                ->where('is_active', true)
+                ->exists();
+            $hasAnotherRole = $user->roles()
+                ->where('name', '!=', RoleName::Member->value)
+                ->exists();
+            $globalIsActive = $isActive || $hasAnotherActiveProfile || $hasAnotherRole;
+
+            if ((bool) $user->is_active !== $globalIsActive) {
+                $user->update(['is_active' => $globalIsActive]);
+            }
+            if (! $globalIsActive) {
+                $user->tokens()->delete();
+            }
+
             $this->activeRoleManager->ensureValidActiveRole($user);
 
-            return $user->fresh(['gyms', 'branches', 'roles', 'permissions', 'memberProfile']);
+            $freshUser = $user->fresh(['gyms', 'branches', 'roles', 'permissions']);
+            $freshUser->setRelation('memberProfile', MemberProfile::query()
+                ->with('fitnessGoals')
+                ->where('user_id', $user->id)
+                ->where('gym_id', $gym->id)
+                ->first());
+
+            return $freshUser;
         });
     }
 
@@ -111,6 +189,9 @@ class ManagedUserService
     public function upsertTrainer(?User $user, Gym $gym, array $data): User
     {
         return DB::transaction(function () use ($user, $gym, $data): User {
+            $existingUser = $user ?? User::query()->firstWhere('email', $data['email']);
+            $this->assertNoActiveIndependentCoaching($existingUser);
+
             $user = $this->persistUser($user, $data);
             $user->assignRole(RoleName::Trainer->value);
 
@@ -148,19 +229,45 @@ class ManagedUserService
         });
     }
 
+    private function assertNoActiveIndependentCoaching(?User $user): void
+    {
+        if ($user === null) {
+            return;
+        }
+
+        $hasActiveRelationships = IndependentTrainerMemberRelationship::query()
+            ->where('trainer_user_id', $user->id)
+            ->where('status', 'active')
+            ->exists();
+
+        if ($hasActiveRelationships) {
+            throw ValidationException::withMessages([
+                'email' => [
+                    'This trainer has active independent coaching relationships. End those relationships before assigning the trainer to a gym.',
+                ],
+            ]);
+        }
+    }
+
     /**
      * @param  array<string, mixed>  $data
      */
-    public function upsertMember(?User $user, Gym $gym, array $data): User
-    {
-        return DB::transaction(function () use ($user, $gym, $data): User {
+    public function upsertMember(
+        ?User $user,
+        Gym $gym,
+        array $data,
+        bool $notifyMemberOfTrainerAssignment = true,
+    ): User {
+        return DB::transaction(function () use ($user, $gym, $data, $notifyMemberOfTrainerAssignment): User {
             $previousTrainerId = $user
                 ? MemberProfile::query()
                     ->where('user_id', $user->id)
                     ->where('gym_id', $gym->id)
                     ->value('assigned_trainer_user_id')
                 : null;
-            $user = $this->persistUser($user, $data);
+            // Profile activity belongs to this gym relationship, not to the
+            // member's shared platform identity.
+            $user = $this->persistUser($user, Arr::except($data, ['is_active']));
             $user->assignRole(RoleName::Member->value);
 
             $branchId = $data['branch_id'] ?? null;
@@ -170,11 +277,14 @@ class ManagedUserService
                 $validTrainer = TrainerProfile::query()
                     ->where('gym_id', $gym->id)
                     ->where('user_id', $trainerId)
+                    ->where('is_active', true)
+                    ->where('status', 'active')
+                    ->whereHas('user', fn ($trainer) => $trainer->where('is_active', true))
                     ->exists();
 
                 if (! $validTrainer) {
                     throw ValidationException::withMessages([
-                        'assigned_trainer_user_id' => ['Assigned trainer must belong to the same gym.'],
+                        'assigned_trainer_user_id' => ['Assigned trainer must be active and belong to the same gym.'],
                     ]);
                 }
             }
@@ -226,15 +336,17 @@ class ManagedUserService
             if ($trainerId && $trainerId !== $previousTrainerId) {
                 $trainer = User::query()->find($trainerId);
 
-                $this->notificationService->create(
-                    user: $user,
-                    type: 'trainer_assignment',
-                    title: 'Trainer Assigned',
-                    body: 'A trainer has been assigned to your member profile.',
-                    gymId: $gym->id,
-                    branchId: $branchId,
-                    data: ['trainer_user_id' => $trainerId],
-                );
+                if ($notifyMemberOfTrainerAssignment) {
+                    $this->notificationService->create(
+                        user: $user,
+                        type: 'trainer_assignment',
+                        title: 'Trainer Assigned',
+                        body: 'A trainer has been assigned to your member profile.',
+                        gymId: $gym->id,
+                        branchId: $branchId,
+                        data: ['trainer_user_id' => $trainerId],
+                    );
+                }
 
                 if ($trainer) {
                     $this->notificationService->create(
@@ -249,8 +361,51 @@ class ManagedUserService
                 }
             }
 
-            return $user->fresh(['gyms', 'branches', 'roles', 'permissions', 'memberProfile.fitnessGoals']);
+            $freshUser = $user->fresh(['gyms', 'branches', 'roles', 'permissions']);
+            $freshUser->setRelation('memberProfile', $memberProfile->fresh(['fitnessGoals']));
+
+            return $freshUser;
         });
+    }
+
+    private function clearGymTrainerAssignments(User $trainer, Gym $gym): void
+    {
+        $profiles = MemberProfile::query()
+            ->with(['user', 'gym'])
+            ->where('gym_id', $gym->id)
+            ->where('assigned_trainer_user_id', $trainer->id)
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($profiles as $profile) {
+            $profile->forceFill([
+                'assigned_trainer_user_id' => null,
+                'assigned_trainer_id' => null,
+            ])->save();
+            $this->notifyTrainerAssignmentEnded($profile, $trainer);
+        }
+    }
+
+    private function notifyTrainerAssignmentEnded(MemberProfile $profile, User $trainer): void
+    {
+        if (! $profile->user) {
+            return;
+        }
+
+        $this->notificationService->create(
+            user: $profile->user,
+            type: 'trainer_assignment_removed',
+            title: 'Trainer assignment ended',
+            body: $trainer->name.' is no longer assigned to your profile at '.($profile->gym?->name ?? 'your gym').'.',
+            gymId: $profile->gym_id,
+            branchId: $profile->branch_id,
+            data: [
+                'previous_trainer_user_id' => $trainer->id,
+                'member_user_id' => $profile->user_id,
+                'source' => 'gym',
+                'reason' => 'trainer_deactivated',
+            ],
+        );
     }
 
     /**
@@ -340,7 +495,7 @@ class ManagedUserService
      */
     private function persistUser(?User $user, array $data): User
     {
-        $user ??= User::query()->firstWhere('email', $data['email']) ?? new User();
+        $user ??= User::query()->firstWhere('email', $data['email']) ?? new User;
 
         $payload = [
             'name' => $data['name'],

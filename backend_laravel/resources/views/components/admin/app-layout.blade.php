@@ -64,15 +64,15 @@
             <main class="flex-1">
                 <div class="mx-auto flex w-full max-w-[1680px] flex-col gap-6 px-4 py-4 sm:px-6 lg:px-8">
                     @if (session('web_panel.platform_admin_impersonator_id'))
-                        <div class="flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900 shadow-theme-xs md:flex-row md:items-center md:justify-between dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100">
+                        <div class="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-slate-700 shadow-theme-xs md:flex-row md:items-center md:justify-between dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
                             <div>
-                                <div class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Impersonation Active</div>
-                                <div class="mt-1 text-sm text-amber-800 dark:text-amber-100">You are inside the gym owner workspace. Actions here run with this owner's gym scope.</div>
+                                <div class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-700 dark:text-slate-200">Gym workspace preview</div>
+                                <div class="mt-1 text-sm text-slate-500 dark:text-slate-400">This session uses the selected gym owner's permissions and gym scope.</div>
                             </div>
                             <form method="POST" action="{{ route('web.admin.impersonation.stop') }}">
                                 @csrf
                                 <button type="submit" class="inline-flex items-center justify-center rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-black dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100">
-                                    Back to Platform Admin
+                                    Exit Preview
                                 </button>
                             </form>
                         </div>

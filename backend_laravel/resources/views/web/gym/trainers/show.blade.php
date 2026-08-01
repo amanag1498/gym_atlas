@@ -28,10 +28,11 @@
                 <div class="flex flex-wrap gap-3">
                     @if ($canManageTrainer)
                         <a href="{{ route('web.gym.trainers.edit', ['trainer' => $trainer->id] + request()->query()) }}" class="panel-btn-secondary">Edit Trainer</a>
-                        <form action="{{ route('web.gym.trainers.' . ($trainer->is_active ? 'deactivate' : 'activate'), ['trainer' => $trainer->id] + request()->query()) }}" method="POST">
+                        @php($trainerRelationshipActive = (bool) $trainerProfile?->is_active)
+                        <form action="{{ route('web.gym.trainers.' . ($trainerRelationshipActive ? 'deactivate' : 'activate'), ['trainer' => $trainer->id] + request()->query()) }}" method="POST">
                             @csrf
-                            <x-action-button type="submit" :variant="$trainer->is_active ? 'danger' : 'primary'">
-                                {{ $trainer->is_active ? 'Deactivate' : 'Activate' }}
+                            <x-action-button type="submit" :variant="$trainerRelationshipActive ? 'danger' : 'primary'">
+                                {{ $trainerRelationshipActive ? 'Deactivate' : 'Activate' }}
                             </x-action-button>
                         </form>
                     @endif

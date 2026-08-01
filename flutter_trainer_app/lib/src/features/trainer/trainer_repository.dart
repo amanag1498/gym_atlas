@@ -26,8 +26,55 @@ class TrainerRepository {
 
   Future<Map<String, dynamic>> fetchContext() async =>
       _client.get('/trainer/context');
+  Future<Map<String, dynamic>> fetchIndependentContext() =>
+      _client.get('/trainer/independent-context');
   Future<Map<String, dynamic>> inviteMember(Map<String, dynamic> payload) =>
       _client.post('/trainer/member-invitations', data: payload);
+  Future<Map<String, dynamic>> inviteIndependentMember(
+    Map<String, dynamic> payload,
+  ) => _client.post('/trainer/independent-member-invitations', data: payload);
+  Future<Map<String, dynamic>> fetchIndependentMemberInvitations() =>
+      _client.get('/trainer/independent-member-invitations');
+  Future<Map<String, dynamic>> cancelIndependentMemberInvitation(
+    int invitationId,
+  ) => _client.post(
+    '/trainer/independent-member-invitations/$invitationId/cancel',
+  );
+  Future<Map<String, dynamic>> fetchIndependentMembers() =>
+      _client.get('/trainer/independent-members');
+  Future<Map<String, dynamic>> revokeIndependentMemberRelationship(
+    int relationshipId, {
+    String? reason,
+  }) => _client.post(
+    '/trainer/independent-members/$relationshipId/revoke',
+    data: {
+      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+    },
+  );
+  Future<Map<String, dynamic>> fetchIndependentMember(int relationshipId) =>
+      _client.get('/trainer/independent-members/$relationshipId');
+  Future<Map<String, dynamic>> fetchIndependentMemberProgress(
+    int relationshipId,
+  ) => _client.get('/trainer/independent-members/$relationshipId/progress');
+  Future<Map<String, dynamic>> fetchIndependentMemberNotes(
+    int relationshipId,
+  ) => _client.get('/trainer/independent-members/$relationshipId/notes');
+  Future<Map<String, dynamic>> createIndependentMemberNote(
+    int relationshipId,
+    Map<String, dynamic> payload,
+  ) => _client.post(
+    '/trainer/independent-members/$relationshipId/notes',
+    data: payload,
+  );
+  Future<Map<String, dynamic>> fetchIndependentMemberWorkoutPlans(
+    int relationshipId,
+  ) =>
+      _client.get('/trainer/independent-members/$relationshipId/workout-plans');
+  Future<Map<String, dynamic>> fetchIndependentMemberWorkoutLogbook(
+    int relationshipId,
+  ) => _client.get(
+    '/trainer/independent-members/$relationshipId/workout-logbook',
+  );
   Future<Map<String, dynamic>> respondToGymInvitation(
     int invitationId,
     String decision,

@@ -8,6 +8,11 @@ class StoreTrainerDietPlanRequest extends StoreDietPlanRequest
     {
         $rules = parent::rules();
         unset($rules['gym_id'], $rules['branch_id']);
+        $rules['independent_trainer_member_relationship_id'] = [
+            'nullable',
+            'integer',
+            'exists:independent_trainer_member_relationships,id',
+        ];
 
         return $rules;
     }

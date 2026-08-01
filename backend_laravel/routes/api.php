@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\Gym\GymContextController;
 use App\Http\Controllers\Api\Member\AttendanceController as MemberAttendanceController;
 use App\Http\Controllers\Api\Member\DietPlanController as MemberDietPlanController;
 use App\Http\Controllers\Api\Member\FavoriteGymController;
+use App\Http\Controllers\Api\Member\IndependentTrainerController;
 use App\Http\Controllers\Api\Member\MemberContextController;
 use App\Http\Controllers\Api\Member\MemberGymInvitationController;
 use App\Http\Controllers\Api\Member\MemberMembershipController as MemberAppMembershipController;
@@ -41,6 +42,7 @@ use App\Http\Controllers\Api\PlatformAdmin\DietPlanTemplateController as Platfor
 use App\Http\Controllers\Api\PlatformAdmin\ExerciseController as PlatformExerciseController;
 use App\Http\Controllers\Api\PlatformAdmin\GymController as PlatformGymController;
 use App\Http\Controllers\Api\PlatformAdmin\GymOwnerController as PlatformGymOwnerController;
+use App\Http\Controllers\Api\PlatformAdmin\IndependentTrainerVerificationController as PlatformIndependentTrainerVerificationController;
 use App\Http\Controllers\Api\PlatformAdmin\ListingController as PlatformListingController;
 use App\Http\Controllers\Api\PlatformAdmin\PlatformAdminContextController;
 use App\Http\Controllers\Api\PlatformAdmin\ReportController as PlatformReportController;
@@ -58,6 +60,8 @@ use App\Http\Controllers\Api\Trainer\AnnouncementController as TrainerAnnounceme
 use App\Http\Controllers\Api\Trainer\AssignedMemberController as TrainerAssignedMemberController;
 use App\Http\Controllers\Api\Trainer\DietPlanController as TrainerDietPlanController;
 use App\Http\Controllers\Api\Trainer\ExerciseController as TrainerExerciseController;
+use App\Http\Controllers\Api\Trainer\IndependentMemberCoachingController;
+use App\Http\Controllers\Api\Trainer\IndependentMemberController;
 use App\Http\Controllers\Api\Trainer\TaskController as TrainerTaskController;
 use App\Http\Controllers\Api\Trainer\TrainerContextController;
 use App\Http\Controllers\Api\Trainer\TrainerGymInvitationController;
@@ -80,7 +84,7 @@ Route::prefix('public')->group(function (): void {
     Route::get('discovery/gyms/{slug}', [DiscoveryController::class, 'show']);
     Route::post('trial-requests', [PublicTrialRequestController::class, 'store']);
 
-    Route::middleware('auth:sanctum')->group(function (): void {
+    Route::middleware(['auth:sanctum', 'active_account'])->group(function (): void {
         Route::get('me', [AuthController::class, 'me']);
         Route::get('realtime/context', RealtimeContextController::class)->middleware('throttle:60,1');
         Route::post('auth/logout', [AuthController::class, 'logout']);
@@ -96,7 +100,7 @@ Route::prefix('public')->group(function (): void {
     });
 });
 
-Route::middleware('auth:sanctum')->group(function (): void {
+Route::middleware(['auth:sanctum', 'active_account'])->group(function (): void {
     Route::get('notifications', [PublicNotificationController::class, 'index']);
     Route::post('notifications/{notification}/read', [PublicNotificationController::class, 'markRead']);
     Route::post('notifications/read-all', [PublicNotificationController::class, 'markAllRead']);
@@ -125,6 +129,7 @@ Route::prefix('internal')
 Route::prefix('platform-admin')
     ->middleware([
         'auth:sanctum',
+        'active_account',
         'role:platform_admin',
         'active_role:platform_admin',
         'permission:platform.access|platform_admins.view',
@@ -206,6 +211,12 @@ Route::prefix('platform-admin')
         Route::post('gym-owners/{user}/deactivate', [PlatformGymOwnerController::class, 'deactivate'])
             ->middleware('permission:platform.users.view');
         Route::get('users', [PlatformUserController::class, 'index'])
+            ->middleware('permission:platform.users.view');
+        Route::get('trainer-verifications', [PlatformIndependentTrainerVerificationController::class, 'index'])
+            ->middleware('permission:platform.users.view');
+        Route::get('trainer-verifications/{trainerProfile}', [PlatformIndependentTrainerVerificationController::class, 'show'])
+            ->middleware('permission:platform.users.view');
+        Route::patch('trainer-verifications/{trainerProfile}', [PlatformIndependentTrainerVerificationController::class, 'update'])
             ->middleware('permission:platform.users.view');
         Route::get('trainers', [PlatformUserController::class, 'trainers'])
             ->middleware('permission:platform.users.view');
@@ -302,6 +313,7 @@ Route::prefix('platform-admin')
 Route::prefix('gym')
     ->middleware([
         'auth:sanctum',
+        'active_account',
         'role:platform_admin|gym_owner|branch_manager|gym_staff',
         'active_role:platform_admin,gym_owner,branch_manager,gym_staff',
         'permission:gym.view',
@@ -403,6 +415,8 @@ Route::prefix('gym')
         Route::post('attendance/scan', [AttendanceController::class, 'biometricScan'])
             ->middleware('permission:attendance.manage');
         Route::post('attendance/biometric-scan', [AttendanceController::class, 'biometricScan'])
+            ->middleware('permission:attendance.manage');
+        Route::post('attendance/qr-scan', [AttendanceController::class, 'biometricScan'])
             ->middleware('permission:attendance.manage');
         Route::get('membership-plans', [MembershipPlanController::class, 'index'])
             ->middleware('permission:membership_plan.view|membership_plan.manage');
@@ -519,6 +533,7 @@ Route::prefix('gym')
 Route::prefix('trainer')
     ->middleware([
         'auth:sanctum',
+        'active_account',
         'role:platform_admin|gym_owner|branch_manager|trainer',
         'active_role:platform_admin,gym_owner,branch_manager,trainer',
         'permission:trainer.view',
@@ -539,6 +554,27 @@ Route::prefix('trainer')
             ->middleware('permission:trainer.view|member.view');
         Route::post('member-invitations', [TrainerMemberInvitationController::class, 'store'])
             ->middleware('permission:trainer.view|member.view');
+        Route::get('independent-context', [IndependentMemberController::class, 'context']);
+        Route::get('independent-member-invitations', [IndependentMemberController::class, 'invitations']);
+        Route::post('independent-member-invitations', [IndependentMemberController::class, 'store'])
+            ->middleware('permission:trainer.view|member.view');
+        Route::post('independent-member-invitations/{invitation}/cancel', [IndependentMemberController::class, 'cancel'])
+            ->middleware('permission:trainer.self.manage');
+        Route::get('independent-members', [IndependentMemberController::class, 'members']);
+        Route::post('independent-members/{relationship}/revoke', [IndependentMemberController::class, 'revoke'])
+            ->middleware('permission:trainer.self.manage');
+        Route::get('independent-members/{relationship}', [IndependentMemberCoachingController::class, 'show'])
+            ->middleware('permission:trainer.view|member.view');
+        Route::get('independent-members/{relationship}/progress', [IndependentMemberCoachingController::class, 'progress'])
+            ->middleware('permission:progress.view|member.view');
+        Route::get('independent-members/{relationship}/notes', [IndependentMemberCoachingController::class, 'notes'])
+            ->middleware('permission:trainer.view|member.view');
+        Route::post('independent-members/{relationship}/notes', [IndependentMemberCoachingController::class, 'storeNote'])
+            ->middleware('permission:trainer.self.manage');
+        Route::get('independent-members/{relationship}/workout-plans', [IndependentMemberCoachingController::class, 'workoutPlans'])
+            ->middleware('permission:workout_plan.view|workout_plan.manage');
+        Route::get('independent-members/{relationship}/workout-logbook', [IndependentMemberCoachingController::class, 'workoutLogbook'])
+            ->middleware('permission:workout_session.view|progress.view');
         Route::get('assigned-members/{member}', [TrainerAssignedMemberController::class, 'show'])
             ->middleware('permission:trainer.view|member.view');
         Route::get('assigned-members/{member}/attendance', [TrainerAssignedMemberController::class, 'attendance'])
@@ -611,13 +647,14 @@ Route::prefix('trainer')
             ->middleware('permission:trial_request.manage');
     });
 
-Route::prefix('trainer-invitations')->middleware(['auth:sanctum', 'role:trainer', 'active_role:trainer'])->group(function (): void {
+Route::prefix('trainer-invitations')->middleware(['auth:sanctum', 'active_account', 'role:trainer', 'active_role:trainer'])->group(function (): void {
     Route::post('{invitation}/respond', [TrainerGymInvitationController::class, 'respond']);
 });
 
 Route::prefix('member')
     ->middleware([
         'auth:sanctum',
+        'active_account',
         'role:member',
         'active_role:member',
         'permission:member.view',
@@ -627,11 +664,18 @@ Route::prefix('member')
         Route::get('gym-invitations', [MemberGymInvitationController::class, 'index']);
         Route::post('gym-invitations/{invitation}/accept', [MemberGymInvitationController::class, 'accept']);
         Route::post('gym-invitations/{invitation}/reject', [MemberGymInvitationController::class, 'reject']);
+        Route::get('independent-trainer-invitations', [IndependentTrainerController::class, 'invitations']);
+        Route::post('independent-trainer-invitations/{invitation}/accept', [IndependentTrainerController::class, 'accept']);
+        Route::post('independent-trainer-invitations/{invitation}/reject', [IndependentTrainerController::class, 'reject']);
+        Route::get('independent-trainers', [IndependentTrainerController::class, 'trainers']);
+        Route::post('independent-trainers/{relationship}/revoke', [IndependentTrainerController::class, 'revoke']);
+        Route::get('context', MemberContextController::class);
     });
 
 Route::prefix('member')
     ->middleware([
         'auth:sanctum',
+        'active_account',
         'role:member',
         'active_role:member',
         'permission:member.view',
@@ -639,7 +683,6 @@ Route::prefix('member')
         'branch_scope',
     ])
     ->group(function (): void {
-        Route::get('context', MemberContextController::class);
         Route::get('profile', [MemberProfileController::class, 'show']);
         Route::put('profile', [MemberProfileController::class, 'update']);
         Route::post('profile/photo', [MemberProfileController::class, 'uploadPhoto']);
@@ -649,9 +692,12 @@ Route::prefix('member')
         Route::get('membership', [MemberAppMembershipController::class, 'show']);
         Route::post('membership/leave', [MemberAppMembershipController::class, 'leave']);
         Route::get('trainer', [MemberTrainerController::class, 'show']);
+        Route::delete('trainer-assignment', [MemberTrainerController::class, 'destroy']);
         Route::get('attendance/biometric-profile', [MemberAttendanceController::class, 'biometricProfile']);
         Route::get('attendance', [MemberAttendanceController::class, 'history']);
         Route::get('attendance/status', [MemberAttendanceController::class, 'status']);
+        Route::get('attendance/qr-code', [MemberAttendanceController::class, 'qrCode']);
+        Route::get('qr-code', [MemberAttendanceController::class, 'qrCode']);
         Route::get('attendance/history', [MemberAttendanceController::class, 'history']);
         Route::get('workout-plans', [MemberWorkoutController::class, 'plans'])
             ->middleware('permission:workout_plan.view');

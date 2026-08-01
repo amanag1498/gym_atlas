@@ -16,6 +16,7 @@ class TrainerDietPlanScreen extends StatefulWidget {
     required this.repository,
     this.members = const [],
     this.preselectedMemberId,
+    this.preselectedRelationshipId,
     this.embedded = false,
     this.plannerNavigation,
   });
@@ -23,6 +24,7 @@ class TrainerDietPlanScreen extends StatefulWidget {
   final TrainerRepository repository;
   final List<Map<String, dynamic>> members;
   final int? preselectedMemberId;
+  final int? preselectedRelationshipId;
   final bool embedded;
   final Widget? plannerNavigation;
 
@@ -81,12 +83,47 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
       _error = null;
     });
     try {
-      final response = await widget.repository.createDietTemplate({
+      final independentMembers = widget.members
+          .where((assignment) => _assignmentRelationshipId(assignment) != null)
+          .toList();
+      Map<String, dynamic>? independentTarget;
+      if (widget.preselectedRelationshipId != null) {
+        independentTarget = independentMembers.firstWhere(
+          (assignment) =>
+              _assignmentRelationshipId(assignment) ==
+              widget.preselectedRelationshipId,
+          orElse: () => const <String, dynamic>{},
+        );
+        if (independentTarget.isEmpty) {
+          throw Exception(
+            'This independent coaching relationship is no longer available.',
+          );
+        }
+      } else if (independentMembers.length == 1 &&
+          widget.members.every(
+            (assignment) => _assignmentRelationshipId(assignment) != null,
+          )) {
+        independentTarget = independentMembers.first;
+      }
+      final payload = <String, dynamic>{
         ..._draftDetails,
         'name': name,
         'status': 'active',
         'meals': _draftMeals,
-      });
+      };
+      final relationshipId = independentTarget == null
+          ? null
+          : _assignmentRelationshipId(independentTarget);
+      final memberId = independentTarget == null
+          ? null
+          : _assignmentMemberId(independentTarget);
+      final response = relationshipId != null && memberId != null
+          ? await widget.repository.createDietPlan({
+              ...payload,
+              'member_ids': <int>[memberId],
+              'independent_trainer_member_relationship_id': relationshipId,
+            })
+          : await widget.repository.createDietTemplate(payload);
       final created = response['data'] is Map
           ? Map<String, dynamic>.from(response['data'] as Map)
           : <String, dynamic>{};
@@ -102,9 +139,15 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Diet plan saved to your library.')),
+          SnackBar(
+            content: Text(
+              relationshipId != null
+                  ? 'Independent diet plan assigned to the member.'
+                  : 'Diet plan saved to your library.',
+            ),
+          ),
         );
-        if (assignAfterSave && created.isNotEmpty) {
+        if (assignAfterSave && relationshipId == null && created.isNotEmpty) {
           await _assign(created);
         }
       }
@@ -289,13 +332,27 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
       return;
     }
 
-    final selectedMemberIds = <int>{};
+    final selectedAssignmentKeys = <String>{};
     if (widget.preselectedMemberId != null &&
-        eligibleMembers.any(
-          (assignment) =>
-              _assignmentMemberId(assignment) == widget.preselectedMemberId,
-        )) {
-      selectedMemberIds.add(widget.preselectedMemberId!);
+        eligibleMembers.any((assignment) {
+          if (_assignmentMemberId(assignment) != widget.preselectedMemberId) {
+            return false;
+          }
+          final relationshipId = _assignmentRelationshipId(assignment);
+          return widget.preselectedRelationshipId == null
+              ? relationshipId == null
+              : relationshipId == widget.preselectedRelationshipId;
+        })) {
+      final assignment = eligibleMembers.firstWhere((assignment) {
+        if (_assignmentMemberId(assignment) != widget.preselectedMemberId) {
+          return false;
+        }
+        final relationshipId = _assignmentRelationshipId(assignment);
+        return widget.preselectedRelationshipId == null
+            ? relationshipId == null
+            : relationshipId == widget.preselectedRelationshipId;
+      });
+      selectedAssignmentKeys.add(_assignmentKey(assignment));
     }
     var customName = '';
     DateTime? startsOn;
@@ -376,9 +433,11 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
                 ),
                 const SizedBox(height: 8),
                 ...eligibleMembers.map((assignment) {
-                  final memberId = _assignmentMemberId(assignment)!;
                   final member = _assignmentMember(assignment);
-                  final selected = selectedMemberIds.contains(memberId);
+                  final assignmentKey = _assignmentKey(assignment);
+                  final selected = selectedAssignmentKeys.contains(
+                    assignmentKey,
+                  );
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 7),
                     child: CheckboxListTile(
@@ -387,16 +446,29 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
                           ? null
                           : (value) => setSheetState(() {
                               if (value == true) {
-                                selectedMemberIds.add(memberId);
+                                if (_assignmentRelationshipId(assignment) !=
+                                    null) {
+                                  // Independent coaching assignments are
+                                  // consent-scoped and must be created one
+                                  // relationship at a time.
+                                  selectedAssignmentKeys
+                                    ..clear()
+                                    ..add(assignmentKey);
+                                } else {
+                                  selectedAssignmentKeys.removeWhere(
+                                    (key) => key.startsWith('independent:'),
+                                  );
+                                  selectedAssignmentKeys.add(assignmentKey);
+                                }
                               } else {
-                                selectedMemberIds.remove(memberId);
+                                selectedAssignmentKeys.remove(assignmentKey);
                               }
                             }),
                       title: Text(
                         member['name']?.toString() ?? 'Assigned member',
                         style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
-                      subtitle: Text(member['email']?.toString() ?? ''),
+                      subtitle: Text(_assignmentScopeLabel(assignment, member)),
                       secondary: const CircleAvatar(
                         child: Icon(Icons.person_outline_rounded),
                       ),
@@ -476,23 +548,51 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
                 GradientButton(
                   label: assigning
                       ? 'Assigning...'
-                      : 'Assign to ${selectedMemberIds.length} member${selectedMemberIds.length == 1 ? '' : 's'}',
+                      : 'Assign to ${selectedAssignmentKeys.length} member${selectedAssignmentKeys.length == 1 ? '' : 's'}',
                   icon: Icons.assignment_turned_in_rounded,
                   expanded: true,
-                  onPressed: assigning || selectedMemberIds.isEmpty
+                  onPressed: assigning || selectedAssignmentKeys.isEmpty
                       ? null
                       : () async {
                           setSheetState(() => assigning = true);
                           try {
-                            await widget.repository
-                                .assignDietTemplate(templateId, {
-                                  'member_ids': selectedMemberIds.toList(),
-                                  if (customName.isNotEmpty) 'name': customName,
-                                  if (startsOn != null)
-                                    'starts_on': _dateValue(startsOn!),
-                                  if (endsOn != null)
-                                    'ends_on': _dateValue(endsOn!),
-                                });
+                            final selectedAssignments = eligibleMembers
+                                .where(
+                                  (assignment) => selectedAssignmentKeys
+                                      .contains(_assignmentKey(assignment)),
+                                )
+                                .toList();
+                            final selectedAssignment =
+                                selectedAssignments.first;
+                            final relationshipId = _assignmentRelationshipId(
+                              selectedAssignment,
+                            );
+                            final gymId = _intValue(
+                              selectedAssignment['gym_id'],
+                            );
+                            final branchId = _intValue(
+                              selectedAssignment['branch_id'],
+                            );
+                            await widget.repository.assignDietTemplate(
+                              templateId,
+                              {
+                                'member_ids': selectedAssignments
+                                    .map(_assignmentMemberId)
+                                    .whereType<int>()
+                                    .toSet()
+                                    .toList(),
+                                if (relationshipId != null)
+                                  'independent_trainer_member_relationship_id':
+                                      relationshipId,
+                                if (gymId != null) 'gym_id': gymId,
+                                if (branchId != null) 'branch_id': branchId,
+                                if (customName.isNotEmpty) 'name': customName,
+                                if (startsOn != null)
+                                  'starts_on': _dateValue(startsOn!),
+                                if (endsOn != null)
+                                  'ends_on': _dateValue(endsOn!),
+                              },
+                            );
                             if (context.mounted) {
                               Navigator.of(context).pop(true);
                             }
@@ -519,7 +619,7 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Diet plan assigned to ${selectedMemberIds.length} member${selectedMemberIds.length == 1 ? '' : 's'}.',
+            'Diet plan assigned to ${selectedAssignmentKeys.length} member${selectedAssignmentKeys.length == 1 ? '' : 's'}.',
           ),
         ),
       );
@@ -1063,6 +1163,38 @@ List<Map<String, dynamic>> _defaultMeals() => [
 int? _assignmentMemberId(Map<String, dynamic> assignment) =>
     (assignment['member_id'] as num?)?.toInt() ??
     (_assignmentMember(assignment)['id'] as num?)?.toInt();
+
+int? _assignmentRelationshipId(Map<String, dynamic> assignment) =>
+    (assignment['relationship_id'] as num?)?.toInt() ??
+    (assignment['independent_trainer_member_relationship_id'] as num?)?.toInt();
+
+String _assignmentKey(Map<String, dynamic> assignment) {
+  final relationshipId = _assignmentRelationshipId(assignment);
+  if (relationshipId != null) {
+    return 'independent:$relationshipId';
+  }
+  return 'gym:${_intValue(assignment['gym_id']) ?? 0}:'
+      '${_intValue(assignment['branch_id']) ?? 0}:'
+      '${_assignmentMemberId(assignment) ?? 0}';
+}
+
+String _assignmentScopeLabel(
+  Map<String, dynamic> assignment,
+  Map<String, dynamic> member,
+) {
+  final email = member['email']?.toString().trim() ?? '';
+  final relationshipId = _assignmentRelationshipId(assignment);
+  final scope = relationshipId != null
+      ? 'Independent coaching'
+      : 'Gym ${_intValue(assignment['gym_id']) ?? '--'}'
+            ' · Branch ${_intValue(assignment['branch_id']) ?? '--'}';
+  return email.isEmpty ? scope : '$scope · $email';
+}
+
+int? _intValue(dynamic value) {
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '');
+}
 
 Map<String, dynamic> _assignmentMember(Map<String, dynamic> assignment) {
   final member = assignment['member'];

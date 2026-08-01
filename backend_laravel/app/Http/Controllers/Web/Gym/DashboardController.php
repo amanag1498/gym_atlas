@@ -2,23 +2,24 @@
 
 namespace App\Http\Controllers\Web\Gym;
 
-use App\Enums\PermissionName;
 use App\Enums\PaymentRecordStatus;
 use App\Enums\PaymentStatus;
+use App\Enums\PermissionName;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Announcement;
 use App\Models\AttendanceLog;
 use App\Models\Branch;
+use App\Models\Gym;
 use App\Models\MemberMembership;
 use App\Models\MemberProfile;
 use App\Models\Payment;
 use App\Models\TrainerProfile;
 use App\Models\TrialRequest;
-use Illuminate\Database\Eloquent\Builder;
 use App\Services\Member\EngagementScoreService;
 use App\Services\Onboarding\OnboardingProgressService;
 use App\Services\Web\GymWebPanelService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -28,8 +29,7 @@ class DashboardController extends Controller
         private readonly GymWebPanelService $gymWebPanelService,
         private readonly OnboardingProgressService $onboardingProgressService,
         private readonly EngagementScoreService $engagementScoreService,
-    ) {
-    }
+    ) {}
 
     public function __invoke(Request $request): View
     {
@@ -298,7 +298,7 @@ class DashboardController extends Controller
         ]);
     }
 
-    private function buildVisibility(Request $request, \App\Models\Gym $gym, ?int $branchId): array
+    private function buildVisibility(Request $request, Gym $gym, ?int $branchId): array
     {
         return [
             'manage_members_action' => $this->gymWebPanelService->canPermission($request, PermissionName::MembersManage->value, $gym, $branchId),

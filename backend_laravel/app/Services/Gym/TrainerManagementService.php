@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class TrainerManagementService
 {
@@ -117,6 +118,14 @@ class TrainerManagementService
      */
     public function scopedMemberProfilesForAssignment(Gym $gym, ?TrainerProfile $trainerProfile, array $memberIds, array $accessibleBranchIds): Collection
     {
+        if ($trainerProfile !== null && (! $trainerProfile->is_active
+            || $trainerProfile->status !== 'active'
+            || ! $trainerProfile->user?->is_active)) {
+            throw ValidationException::withMessages([
+                'trainer' => ['Only an active trainer can be assigned to members.'],
+            ]);
+        }
+
         $query = MemberProfile::query()
             ->where('gym_id', $gym->id)
             ->whereIn('user_id', $memberIds)

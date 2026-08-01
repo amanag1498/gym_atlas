@@ -117,6 +117,16 @@ class User extends Authenticatable
         return $this->hasMany(MemberProfile::class, 'assigned_trainer_user_id');
     }
 
+    public function independentTrainerRelationships(): HasMany
+    {
+        return $this->hasMany(IndependentTrainerMemberRelationship::class, 'trainer_user_id');
+    }
+
+    public function independentMemberRelationships(): HasMany
+    {
+        return $this->hasMany(IndependentTrainerMemberRelationship::class, 'member_user_id');
+    }
+
     public function trainerMemberNotes(): HasMany
     {
         return $this->hasMany(TrainerMemberNote::class, 'trainer_id');

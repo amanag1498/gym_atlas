@@ -2,20 +2,22 @@
 
 namespace App\Http\Controllers\Api\Gym\Admin;
 
-use App\Models\AttendanceLog;
 use App\Enums\PaymentRecordStatus;
 use App\Enums\PaymentStatus;
+use App\Enums\PermissionName;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Gym\GymResource;
+use App\Models\AttendanceLog;
 use App\Models\MemberMembership;
 use App\Models\MemberProfile;
 use App\Models\Payment;
 use App\Models\TrainerProfile;
 use App\Models\TrialRequest;
 use App\Models\WorkoutSession;
-use App\Services\Member\EngagementScoreService;
-use App\Services\Onboarding\OnboardingProgressService;
 use App\Services\Authorization\ScopedPermissionResolver;
 use App\Services\Authorization\ScopeResolver;
+use App\Services\Member\EngagementScoreService;
+use App\Services\Onboarding\OnboardingProgressService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
@@ -26,8 +28,7 @@ class DashboardController extends Controller
         private readonly ScopedPermissionResolver $scopedPermissionResolver,
         private readonly OnboardingProgressService $onboardingProgressService,
         private readonly EngagementScoreService $engagementScoreService,
-    ) {
-    }
+    ) {}
 
     public function __invoke(Request $request)
     {
@@ -124,7 +125,7 @@ class DashboardController extends Controller
             ->sum('due_amount');
 
         return $this->success([
-            'gym' => \App\Http\Resources\Gym\GymResource::make($gym),
+            'gym' => GymResource::make($gym),
             'visibility' => $visibility,
             'total_members' => $memberCount,
             'active_members' => (clone $memberQuery)->where('is_active', true)->count(),
@@ -207,38 +208,38 @@ class DashboardController extends Controller
         $user = $request->user();
 
         return [
-            'manage_members_action' => $this->scopedPermissionResolver->hasPermission($user, \App\Enums\PermissionName::MembersManage->value, $gymId, $branchId),
-            'members_view' => $this->scopedPermissionResolver->hasPermission($user, \App\Enums\PermissionName::MembersView->value, $gymId, $branchId),
+            'manage_members_action' => $this->scopedPermissionResolver->hasPermission($user, PermissionName::MembersManage->value, $gymId, $branchId),
+            'members_view' => $this->scopedPermissionResolver->hasPermission($user, PermissionName::MembersView->value, $gymId, $branchId),
             'billing' => $this->scopedPermissionResolver->hasAnyPermission($user, [
-                \App\Enums\PermissionName::PaymentsView->value,
-                \App\Enums\PermissionName::PaymentsManage->value,
-                \App\Enums\PermissionName::MembershipsView->value,
-                \App\Enums\PermissionName::MembershipsManage->value,
+                PermissionName::PaymentsView->value,
+                PermissionName::PaymentsManage->value,
+                PermissionName::MembershipsView->value,
+                PermissionName::MembershipsManage->value,
             ], $gymId, $branchId),
-            'collect_payment_action' => $this->scopedPermissionResolver->hasPermission($user, \App\Enums\PermissionName::PaymentsManage->value, $gymId, $branchId),
+            'collect_payment_action' => $this->scopedPermissionResolver->hasPermission($user, PermissionName::PaymentsManage->value, $gymId, $branchId),
             'attendance' => $this->scopedPermissionResolver->hasAnyPermission($user, [
-                \App\Enums\PermissionName::AttendanceView->value,
-                \App\Enums\PermissionName::AttendanceManage->value,
+                PermissionName::AttendanceView->value,
+                PermissionName::AttendanceManage->value,
             ], $gymId, $branchId),
-            'manage_attendance_action' => $this->scopedPermissionResolver->hasPermission($user, \App\Enums\PermissionName::AttendanceManage->value, $gymId, $branchId),
+            'manage_attendance_action' => $this->scopedPermissionResolver->hasPermission($user, PermissionName::AttendanceManage->value, $gymId, $branchId),
             'announcements' => $this->scopedPermissionResolver->hasAnyPermission($user, [
-                \App\Enums\PermissionName::AnnouncementsView->value,
-                \App\Enums\PermissionName::AnnouncementsManage->value,
+                PermissionName::AnnouncementsView->value,
+                PermissionName::AnnouncementsManage->value,
             ], $gymId, $branchId),
-            'send_announcements_action' => $this->scopedPermissionResolver->hasPermission($user, \App\Enums\PermissionName::AnnouncementsManage->value, $gymId, $branchId),
+            'send_announcements_action' => $this->scopedPermissionResolver->hasPermission($user, PermissionName::AnnouncementsManage->value, $gymId, $branchId),
             'trainers' => $this->scopedPermissionResolver->hasAnyPermission($user, [
-                \App\Enums\PermissionName::TrainersView->value,
-                \App\Enums\PermissionName::TrainersManage->value,
+                PermissionName::TrainersView->value,
+                PermissionName::TrainersManage->value,
             ], $gymId, $branchId),
-            'manage_trainers_action' => $this->scopedPermissionResolver->hasPermission($user, \App\Enums\PermissionName::TrainersManage->value, $gymId, $branchId),
+            'manage_trainers_action' => $this->scopedPermissionResolver->hasPermission($user, PermissionName::TrainersManage->value, $gymId, $branchId),
             'plans' => $this->scopedPermissionResolver->hasAnyPermission($user, [
-                \App\Enums\PermissionName::MembershipPlansView->value,
-                \App\Enums\PermissionName::MembershipPlansManage->value,
+                PermissionName::MembershipPlansView->value,
+                PermissionName::MembershipPlansManage->value,
             ], $gymId, $branchId),
-            'manage_plans_action' => $this->scopedPermissionResolver->hasPermission($user, \App\Enums\PermissionName::MembershipPlansManage->value, $gymId, $branchId),
+            'manage_plans_action' => $this->scopedPermissionResolver->hasPermission($user, PermissionName::MembershipPlansManage->value, $gymId, $branchId),
             'trials' => $this->scopedPermissionResolver->hasAnyPermission($user, [
-                \App\Enums\PermissionName::TrialRequestsView->value,
-                \App\Enums\PermissionName::TrialRequestsManage->value,
+                PermissionName::TrialRequestsView->value,
+                PermissionName::TrialRequestsManage->value,
             ], $gymId, $branchId),
         ];
     }

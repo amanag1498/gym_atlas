@@ -151,7 +151,7 @@ class TrainerController extends Controller
     {
         $gym = $this->resolveGym($request);
         $profile = $this->assertTrainerAccessible($request, $gym, $trainer);
-        $oldValues = ['is_active' => $trainer->is_active];
+        $oldValues = ['is_active' => $profile->is_active, 'status' => $profile->status];
         $user = $this->managedUserService->setTrainerActive($trainer, $gym, true);
 
         $this->auditLogService->log(
@@ -162,7 +162,7 @@ class TrainerController extends Controller
             gym: $gym,
             branch: $profile->branch,
             oldValues: $oldValues,
-            newValues: ['is_active' => $user->is_active],
+            newValues: $user->managedTrainerProfile?->only(['is_active', 'status']),
         );
 
         return $this->success(UserResource::make($user->load(['managedTrainerProfile.branch'])), 'Trainer activated successfully.');
@@ -172,7 +172,7 @@ class TrainerController extends Controller
     {
         $gym = $this->resolveGym($request);
         $profile = $this->assertTrainerAccessible($request, $gym, $trainer);
-        $oldValues = ['is_active' => $trainer->is_active];
+        $oldValues = ['is_active' => $profile->is_active, 'status' => $profile->status];
         $user = $this->managedUserService->setTrainerActive($trainer, $gym, false);
 
         $this->auditLogService->log(
@@ -183,7 +183,7 @@ class TrainerController extends Controller
             gym: $gym,
             branch: $profile->branch,
             oldValues: $oldValues,
-            newValues: ['is_active' => $user->is_active],
+            newValues: $user->managedTrainerProfile?->only(['is_active', 'status']),
         );
 
         return $this->success(UserResource::make($user->load(['managedTrainerProfile.branch'])), 'Trainer deactivated successfully.');

@@ -261,8 +261,9 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                                       (item) => DropdownMenuItem(
                                         value: (item['id'] as num?)?.toInt(),
                                         child: Text(
-                                          item['name']?.toString() ??
-                                              'Diet plan',
+                                          '${item['name']?.toString() ?? 'Diet plan'} · ${_dietPlanSourceLabel(item)}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                     )
@@ -272,6 +273,22 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                               ),
                               const SizedBox(height: AppSpacing.lg),
                             ],
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Chip(
+                                avatar: Icon(
+                                  plan['independent_trainer_member_relationship_id'] !=
+                                          null
+                                      ? Icons.verified_user_outlined
+                                      : plan['is_member_owned'] == true
+                                      ? Icons.person_outline_rounded
+                                      : Icons.apartment_rounded,
+                                  size: 17,
+                                ),
+                                label: Text(_dietPlanSourceLabel(plan)),
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
                             _Hero(plan: plan),
                             const SizedBox(height: AppSpacing.sm),
                             SizedBox(
@@ -1056,6 +1073,16 @@ String _dietErrorMessage(Object error) {
     }
   }
   return 'Could not save the diet plan. Please review the meals and try again.';
+}
+
+String _dietPlanSourceLabel(Map<String, dynamic> plan) {
+  final scope = plan['coaching_scope']?.toString().toLowerCase();
+  if (scope == 'independent' ||
+      plan['independent_trainer_member_relationship_id'] != null) {
+    return 'Independent trainer plan';
+  }
+  if (plan['is_member_owned'] == true) return 'My personal plan';
+  return 'Gym trainer plan';
 }
 
 bool _hasGuidance(Map<String, dynamic> plan) => [

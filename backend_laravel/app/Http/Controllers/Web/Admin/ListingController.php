@@ -17,7 +17,7 @@ class ListingController extends Controller
             ->latest('id');
 
         return view('web.admin.listings.index', [
-            'pageTitle' => 'Listings',
+            'pageTitle' => 'Public Listings',
             'breadcrumbs' => ['Platform', 'Listings'],
             'gyms' => $query->paginate(20)->withQueryString(),
             'listingStats' => [

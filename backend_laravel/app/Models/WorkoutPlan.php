@@ -16,6 +16,7 @@ class WorkoutPlan extends Model
         'branch_id',
         'member_id',
         'trainer_id',
+        'independent_trainer_member_relationship_id',
         'created_by_user_id',
         'source_workout_book_id',
         'plan_origin',
@@ -64,6 +65,14 @@ class WorkoutPlan extends Model
     public function trainer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'trainer_id');
+    }
+
+    public function independentTrainerMemberRelationship(): BelongsTo
+    {
+        return $this->belongsTo(
+            IndependentTrainerMemberRelationship::class,
+            'independent_trainer_member_relationship_id',
+        );
     }
 
     public function creator(): BelongsTo

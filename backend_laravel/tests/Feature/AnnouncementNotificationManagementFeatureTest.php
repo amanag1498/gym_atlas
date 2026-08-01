@@ -8,7 +8,7 @@ use App\Models\Announcement;
 use App\Models\Branch;
 use App\Models\Gym;
 use App\Models\MemberProfile;
-use App\Models\NotificationPreference;
+use App\Models\Notification;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -75,7 +75,7 @@ class AnnouncementNotificationManagementFeatureTest extends TestCase
             'send_at' => now(),
         ]);
 
-        \App\Models\Notification::query()->create([
+        Notification::query()->create([
             'user_id' => $member->id,
             'gym_id' => $gym->id,
             'branch_id' => $branch->id,
@@ -212,6 +212,68 @@ class AnnouncementNotificationManagementFeatureTest extends TestCase
                 'message' => 'Now allowed',
             ], $headers)
             ->assertCreated();
+    }
+
+    public function test_gym_announcements_exclude_independent_and_inactive_gym_members(): void
+    {
+        [$owner, $gym, $branch, $activeMember] = $this->makeGymScope();
+
+        $independentMember = User::factory()->create(['active_role' => RoleName::Member->value, 'is_active' => true]);
+        $independentMember->assignRole(RoleName::Member->value);
+        MemberProfile::query()->create([
+            'user_id' => $independentMember->id,
+            'gym_id' => null,
+            'branch_id' => null,
+            'membership_status' => 'independent',
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+
+        $formerMember = User::factory()->create(['active_role' => RoleName::Member->value, 'is_active' => true]);
+        $formerMember->assignRole(RoleName::Member->value);
+        MemberProfile::query()->create([
+            'user_id' => $formerMember->id,
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'membership_status' => 'cancelled',
+            'status' => 'inactive',
+            'is_active' => false,
+        ]);
+
+        $headers = ['X-Gym-Id' => (string) $gym->id, 'X-Branch-Id' => (string) $branch->id];
+        $announcementId = $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/gym/announcements', [
+                'gym_id' => $gym->id,
+                'audience_type' => 'gym_wide',
+                'title' => 'Active members only',
+                'message' => 'This is scoped to current gym members.',
+            ], $headers)
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->assertDatabaseHas('announcement_recipients', [
+            'announcement_id' => $announcementId,
+            'user_id' => $activeMember->id,
+        ]);
+        $this->assertDatabaseMissing('announcement_recipients', [
+            'announcement_id' => $announcementId,
+            'user_id' => $independentMember->id,
+        ]);
+        $this->assertDatabaseMissing('announcement_recipients', [
+            'announcement_id' => $announcementId,
+            'user_id' => $formerMember->id,
+        ]);
+
+        $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/gym/announcements', [
+                'gym_id' => $gym->id,
+                'audience_type' => 'selected_members',
+                'title' => 'Invalid target',
+                'message' => 'Should not reach an independent account.',
+                'member_ids' => [$independentMember->id],
+            ], $headers)
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.member_ids.0', 'Selected members must have current access to this gym and branch.');
     }
 
     /**

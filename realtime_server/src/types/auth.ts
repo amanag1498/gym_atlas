@@ -28,4 +28,5 @@ export interface SocketUserContext {
   }>;
   assignedMemberIds: number[];
   assignedTrainerId: number | null;
+  assignedTrainerIds: number[];
 }

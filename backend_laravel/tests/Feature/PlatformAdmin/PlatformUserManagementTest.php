@@ -98,6 +98,32 @@ class PlatformUserManagementTest extends TestCase
             'is_active' => true,
         ]);
 
+        $secondGym = Gym::query()->create([
+            'owner_user_id' => $gymOwner->id,
+            'name' => 'Second Owner Gym',
+            'slug' => 'second-owner-gym',
+            'city' => 'Pune',
+            'status' => 'active',
+            'approval_status' => 'approved',
+            'is_active' => true,
+        ]);
+        $secondBranch = Branch::query()->create([
+            'gym_id' => $secondGym->id,
+            'name' => 'Second Branch',
+            'slug' => 'second-branch',
+            'city' => 'Pune',
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+        MemberProfile::query()->create([
+            'user_id' => $member->id,
+            'gym_id' => $secondGym->id,
+            'branch_id' => $secondBranch->id,
+            'membership_status' => 'active',
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+
         GymStaff::query()->create([
             'gym_id' => $gym->id,
             'user_id' => $gymOwner->id,
@@ -133,6 +159,19 @@ class PlatformUserManagementTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.email', 'owner-search@example.com')
             ->assertJsonPath('data.owned_gyms.0.name', 'Owner Gym');
+
+        $this->get(route('web.admin.users.show', $member))
+            ->assertOk()
+            ->assertSee('Member Relationships')
+            ->assertSee('Owner Gym')
+            ->assertSee('Second Owner Gym');
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/platform-admin/users/'.$member->id)
+            ->assertOk()
+            ->assertJsonCount(2, 'data.member_profiles')
+            ->assertJsonPath('data.member_profiles.0.gym_id', $gym->id)
+            ->assertJsonPath('data.member_profiles.1.gym_id', $secondGym->id);
     }
 
     public function test_platform_admin_can_activate_deactivate_users_but_not_self(): void

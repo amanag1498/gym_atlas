@@ -10,6 +10,7 @@ use App\Models\MemberProfile;
 use App\Services\Audit\AuditLogService;
 use App\Services\Diet\DietPlanService;
 use App\Services\Diet\DietPlanTemplateService;
+use App\Services\Members\GymMemberAccessService;
 use App\Services\Web\GymWebPanelService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ class DietPlanController extends Controller
         private readonly DietPlanService $dietPlanService,
         private readonly DietPlanTemplateService $dietPlanTemplateService,
         private readonly AuditLogService $auditLogService,
+        private readonly GymMemberAccessService $gymMemberAccessService,
     ) {}
 
     public function index(Request $request): View
@@ -34,6 +36,10 @@ class DietPlanController extends Controller
         $plans = DietPlan::query()
             ->with(['member', 'trainer', 'branch', 'meals.items'])
             ->where('gym_id', $gym->id)
+            ->whereHas('member.memberProfiles', function ($profile) use ($gym): void {
+                $profile->where('gym_id', $gym->id);
+                $this->gymMemberAccessService->scopeAccessibleProfiles($profile);
+            })
             ->when($branch, fn ($query) => $query->where('branch_id', $branch->id))
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
             ->latest()
@@ -44,7 +50,7 @@ class DietPlanController extends Controller
             ->with('user')
             ->where('gym_id', $gym->id)
             ->when($branch, fn ($query) => $query->where('branch_id', $branch->id))
-            ->where('is_active', true)
+            ->tap(fn ($query) => $this->gymMemberAccessService->scopeAccessibleProfiles($query))
             ->orderBy('user_id')
             ->get();
 
@@ -92,8 +98,9 @@ class DietPlanController extends Controller
         $memberExists = MemberProfile::query()
             ->where('gym_id', $gym->id)
             ->when($branch, fn ($query) => $query->where('branch_id', $branch->id))
-            ->where('user_id', $data['member_id'])
-            ->exists();
+            ->where('user_id', $data['member_id']);
+        $this->gymMemberAccessService->scopeAccessibleProfiles($memberExists);
+        $memberExists = $memberExists->exists();
         abort_unless($memberExists, 404);
 
         $plans = $this->dietPlanService->create($request->user(), $data + [
@@ -113,6 +120,7 @@ class DietPlanController extends Controller
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
         abort_unless((int) $dietPlan->gym_id === (int) $gym->id, 404);
+        $this->assertActivePlanMember($dietPlan);
         $this->gymWebPanelService->assertPermission(
             $request,
             PermissionName::DietPlansManage->value,
@@ -133,6 +141,7 @@ class DietPlanController extends Controller
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
         abort_unless((int) $dietPlan->gym_id === (int) $gym->id, 404);
+        $this->assertActivePlanMember($dietPlan);
         $this->gymWebPanelService->assertPermission(
             $request,
             PermissionName::DietPlansManage->value,
@@ -176,6 +185,7 @@ class DietPlanController extends Controller
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
         abort_unless($dietPlan->gym_id === $gym->id, 404);
+        $this->assertActivePlanMember($dietPlan);
         $this->gymWebPanelService->assertPermission($request, PermissionName::DietPlansManage->value, $gym, $dietPlan->branch_id);
         $status = $request->validate(['status' => ['required', Rule::in(['active', 'inactive'])]])['status'];
         $oldValues = $dietPlan->only(['status']);
@@ -183,6 +193,15 @@ class DietPlanController extends Controller
         $this->auditLogService->log(event: 'web.gym.diet_plan.status_updated', action: 'update', request: $request, subject: $dietPlan, gym: $gym, branch: $dietPlan->branch, oldValues: $oldValues, newValues: $dietPlan->only(['status']));
 
         return back()->with('status', 'Diet plan status updated.');
+    }
+
+    private function assertActivePlanMember(DietPlan $dietPlan): void
+    {
+        $profile = MemberProfile::query()
+            ->where('user_id', $dietPlan->member_id)
+            ->where('gym_id', $dietPlan->gym_id)
+            ->firstOrFail();
+        $this->gymMemberAccessService->assertAccessible($profile);
     }
 
     private function normalizeMeals(Request $request): void

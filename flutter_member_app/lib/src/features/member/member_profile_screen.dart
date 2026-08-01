@@ -34,6 +34,8 @@ class _MemberProfileScreenState extends State<MemberProfileScreen> {
   bool _leavingGym = false;
   String? _error;
   Map<String, dynamic> _profile = const <String, dynamic>{};
+  bool _hasCurrentGymMembership = false;
+  int _activeGymRelationshipCount = 0;
 
   @override
   void initState() {
@@ -52,6 +54,18 @@ class _MemberProfileScreenState extends State<MemberProfileScreen> {
       _profile = Map<String, dynamic>.from(
         response['data'] as Map? ?? const <String, dynamic>{},
       );
+      final contextResponse = await widget.repository.fetchContext();
+      final contextData = Map<String, dynamic>.from(
+        contextResponse['data'] as Map? ?? const <String, dynamic>{},
+      );
+      final membership = contextData['current_membership'];
+      _activeGymRelationshipCount =
+          (contextData['gym_relationships'] as List? ?? const []).length;
+      _hasCurrentGymMembership =
+          membership is Map &&
+          membership['current_gym'] is Map &&
+          (membership['status'] == 'active' ||
+              membership['status'] == 'frozen');
     } catch (exception) {
       _error = exception.toString();
     }
@@ -112,12 +126,15 @@ class _MemberProfileScreenState extends State<MemberProfileScreen> {
   }
 
   Future<void> _confirmLeaveGym(String gymName) async {
+    final hasOtherGyms = _activeGymRelationshipCount > 1;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Leave gym?'),
         content: Text(
-          'You will become an independent member. Your gym membership, payment, attendance, and workout history will remain with $gymName for audit.',
+          hasOtherGyms
+              ? 'This removes only your active access to $gymName. Your other gym memberships, their trainers, and every independent trainer relationship stay unchanged. Historical records remain available for audit.'
+              : 'This removes your active access to $gymName and makes your account independent. Membership, payment, attendance, and workout history remain available for audit.',
         ),
         actions: <Widget>[
           TextButton(
@@ -139,14 +156,24 @@ class _MemberProfileScreenState extends State<MemberProfileScreen> {
     setState(() => _leavingGym = true);
 
     try {
-      await widget.repository.leaveCurrentGym();
+      final response = await widget.repository.leaveCurrentGym();
+      final result = response['data'] is Map
+          ? Map<String, dynamic>.from(response['data'] as Map)
+          : const <String, dynamic>{};
+      final remainsGymMember = result['status'] == 'gym_member';
       await _loadProfile();
       await widget.onProfileUpdated();
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You are now an independent member.')),
+        SnackBar(
+          content: Text(
+            remainsGymMember
+                ? 'You left $gymName. Your other gym access remains active.'
+                : 'You left $gymName and are now an independent member.',
+          ),
+        ),
       );
     } catch (exception) {
       if (!mounted) {
@@ -167,13 +194,16 @@ class _MemberProfileScreenState extends State<MemberProfileScreen> {
     final completion = _completionData(_profile);
     final completionPercent = completion.percent;
     final photoUrl = _stringValue(_profile['photo']);
-    final currentGym = _profile['current_gym'] is Map
+    final currentGym =
+        _hasCurrentGymMembership && _profile['current_gym'] is Map
         ? Map<String, dynamic>.from(_profile['current_gym'] as Map)
         : const <String, dynamic>{};
-    final currentBranch = _profile['current_branch'] is Map
+    final currentBranch =
+        _hasCurrentGymMembership && _profile['current_branch'] is Map
         ? Map<String, dynamic>.from(_profile['current_branch'] as Map)
         : const <String, dynamic>{};
-    final assignedTrainer = _profile['assigned_trainer'] is Map
+    final assignedTrainer =
+        _hasCurrentGymMembership && _profile['assigned_trainer'] is Map
         ? Map<String, dynamic>.from(_profile['assigned_trainer'] as Map)
         : const <String, dynamic>{};
     final currentGymName = _stringValue(currentGym['name']);
@@ -348,6 +378,13 @@ class _MemberProfileScreenState extends State<MemberProfileScreen> {
                             title: 'Current Gym',
                             value: currentGymName,
                           ),
+                          if (_activeGymRelationshipCount > 1)
+                            _OverviewValueRow(
+                              icon: Icons.account_tree_outlined,
+                              title: 'Active Gym Relationships',
+                              value:
+                                  '$_activeGymRelationshipCount gyms · switch from Home',
+                            ),
                           _OverviewValueRow(
                             icon: Icons.location_on_outlined,
                             title: 'Current Branch',

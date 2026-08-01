@@ -15,8 +15,10 @@ use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Services\Firebase\FcmNotificationService;
 use App\Services\Member\MemberAppService;
+use App\Services\Members\GymMemberAccessService;
 use App\Services\Notification\NotificationService;
 use App\Services\Realtime\RealtimePublisher;
+use App\Services\Trainer\IndependentCoachingAccessService;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -29,6 +31,8 @@ class TrainerMemberChatController extends Controller
         private readonly NotificationService $notificationService,
         private readonly MemberAppService $memberAppService,
         private readonly RealtimePublisher $realtimePublisher,
+        private readonly IndependentCoachingAccessService $independentCoachingAccessService,
+        private readonly GymMemberAccessService $gymMemberAccessService,
     ) {}
 
     public function conversations(Request $request)
@@ -36,15 +40,28 @@ class TrainerMemberChatController extends Controller
         $user = $request->user();
 
         if ($user->active_role === RoleName::Trainer->value) {
-            $trainerProfile = TrainerProfile::query()->where('user_id', $user->id)->firstOrFail();
-            $profiles = MemberProfile::query()
+            $trainerProfile = $this->activeTrainerProfileForChat($user);
+            $profileQuery = MemberProfile::query()
                 ->with('user')
                 ->where('assigned_trainer_user_id', $user->id)
                 ->where('gym_id', $trainerProfile->gym_id)
-                ->when($trainerProfile->branch_id, fn ($query) => $query->where('branch_id', $trainerProfile->branch_id))
+                ->when($trainerProfile->branch_id, fn ($query) => $query->where('branch_id', $trainerProfile->branch_id));
+            $profiles = $this->gymMemberAccessService
+                ->scopeAccessibleProfiles($profileQuery)
                 ->get();
 
-            $memberIds = $profiles->pluck('user_id')->all();
+            $independentMemberIds = collect();
+            if ($trainerProfile->gym_id === null) {
+                $independentMemberIds = $this->independentCoachingAccessService
+                    ->activeMemberIdsForTrainer($user, 'chat');
+            }
+            $memberIds = $profiles->pluck('user_id')
+                ->merge($independentMemberIds)
+                ->filter()
+                ->map(fn ($id): int => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
             $this->ensureTrainerConversations($user->id, $memberIds);
 
             $conversations = ChatConversation::query()
@@ -60,19 +77,26 @@ class TrainerMemberChatController extends Controller
         if ($user->active_role === RoleName::Member->value) {
             $profile = $this->memberAppService->memberProfileForChat($user);
 
-            if (! $profile?->assigned_trainer_user_id) {
+            $trainerIds = collect([$profile?->assigned_trainer_user_id])
+                ->merge($this->independentCoachingAccessService->activeTrainerIdsForMember($user, 'chat'))
+                ->filter()
+                ->map(fn ($id): int => (int) $id)
+                ->unique()
+                ->values();
+
+            if ($trainerIds->isEmpty()) {
                 return $this->success([], 'No assigned trainer conversation found.');
             }
 
-            $trainer = User::query()->find($profile->assigned_trainer_user_id);
-            if (! $trainer) {
-                return $this->success([], 'No assigned trainer conversation found.');
-            }
+            $this->ensureMemberConversations($user->id, $trainerIds->all());
+            $conversations = ChatConversation::query()
+                ->with(['trainer', 'member', 'lastMessage'])
+                ->where('member_id', $user->id)
+                ->whereIn('trainer_id', $trainerIds)
+                ->orderByDesc(DB::raw('COALESCE(last_message_at, updated_at)'))
+                ->get();
 
-            $conversation = $this->ensureConversation($trainer->id, $user->id)
-                ->load(['trainer', 'member', 'lastMessage']);
-
-            return $this->success(ChatConversationResource::collection(collect([$conversation])), 'Chat conversations fetched successfully.');
+            return $this->success(ChatConversationResource::collection($conversations), 'Chat conversations fetched successfully.');
         }
 
         abort(403, 'This role cannot access trainer-member chat.');
@@ -483,6 +507,13 @@ class TrainerMemberChatController extends Controller
         ChatConversation::query()->insertOrIgnore($rows);
     }
 
+    private function ensureMemberConversations(int $memberId, array $trainerIds): void
+    {
+        foreach ($trainerIds as $trainerId) {
+            $this->ensureConversation((int) $trainerId, $memberId);
+        }
+    }
+
     private function updateConversationForMessage(ChatMessage $message): void
     {
         $conversation = $this->lockConversation($message->trainer_id, $message->member_id);
@@ -546,12 +577,18 @@ class TrainerMemberChatController extends Controller
         }
 
         $member = User::query()->find($message->member_id);
-        $scope = $member ? $this->memberAppService->memberProfileForChat($member) : null;
+        $scope = $member
+            ? $this->memberAppService->gymProfileForTrainer($member, (int) $message->trainer_id)
+            : null;
+        $trainer = User::query()->find($message->trainer_id);
+        $isIndependentRelationship = $trainer && $member
+            ? $this->independentCoachingAccessService->hasActiveRelationship($trainer, $member, 'chat')
+            : false;
         if (! $this->notificationService->isEnabled(
             $recipient->id,
             NotificationType::TrainerMessage->value,
-            $scope?->gym_id,
-            $scope?->branch_id,
+            $isIndependentRelationship ? null : $scope?->gym_id,
+            $isIndependentRelationship ? null : $scope?->branch_id,
         )) {
             return;
         }
@@ -572,6 +609,9 @@ class TrainerMemberChatController extends Controller
                 'trainer_id' => $message->trainer_id,
                 'member_id' => $message->member_id,
                 'message_id' => $message->id,
+                'coaching_scope' => $isIndependentRelationship ? 'independent' : 'gym',
+                'gym_id' => $isIndependentRelationship ? null : $scope?->gym_id,
+                'branch_id' => $isIndependentRelationship ? null : $scope?->branch_id,
                 'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
             ],
             appRole: $appRole,
@@ -592,15 +632,17 @@ class TrainerMemberChatController extends Controller
         $user = $request->user();
 
         if ($user->active_role === RoleName::Trainer->value) {
-            $trainerProfile = TrainerProfile::query()->where('user_id', $user->id)->firstOrFail();
-            $memberProfile = MemberProfile::query()
+            $trainerProfile = $this->activeTrainerProfileForChat($user);
+            $memberProfileQuery = MemberProfile::query()
                 ->where('user_id', $recipientId)
                 ->where('assigned_trainer_user_id', $user->id)
                 ->where('gym_id', $trainerProfile->gym_id)
-                ->when($trainerProfile->branch_id, fn ($query) => $query->where('branch_id', $trainerProfile->branch_id))
+                ->when($trainerProfile->branch_id, fn ($query) => $query->where('branch_id', $trainerProfile->branch_id));
+            $memberProfile = $this->gymMemberAccessService
+                ->scopeAccessibleProfiles($memberProfileQuery)
                 ->first();
 
-            if (! $memberProfile) {
+            if (! $memberProfile && ! $this->independentCoachingAccessService->hasActiveRelationship($user, User::query()->findOrFail($recipientId), 'chat')) {
                 throw ValidationException::withMessages(['recipient_id' => ['Trainer can chat only with assigned members.']]);
             }
 
@@ -608,9 +650,12 @@ class TrainerMemberChatController extends Controller
         }
 
         if ($user->active_role === RoleName::Member->value) {
-            $memberProfile = $this->memberAppService->memberProfileForChat($user);
+            $gymAssignment = $this->memberAppService->gymProfileForTrainer($user, $recipientId) !== null;
+            $independentAssignment = $this->independentCoachingAccessService
+                ->activeTrainerIdsForMember($user, 'chat')
+                ->contains($recipientId);
 
-            if (! $memberProfile || (int) $memberProfile->assigned_trainer_user_id !== $recipientId) {
+            if (! $gymAssignment && ! $independentAssignment) {
                 throw ValidationException::withMessages(['recipient_id' => ['Member can chat only with the assigned trainer.']]);
             }
 
@@ -668,24 +713,62 @@ class TrainerMemberChatController extends Controller
     {
         $member = User::query()->find($memberId);
         abort_unless($member, 422, 'Member account is not available.');
-        $memberProfile = $this->memberAppService->memberProfileForChat($member);
-        abort_unless(
-            $memberProfile && (int) $memberProfile->assigned_trainer_user_id === $trainerId,
-            422,
-            'Trainer-member assignment is no longer active.'
-        );
+        $memberProfile = $this->memberAppService->gymProfileForTrainer($member, $trainerId);
+        $gymAssignment = $memberProfile && (int) $memberProfile->assigned_trainer_user_id === $trainerId;
+        $trainer = User::query()->find($trainerId);
+        $independentAssignment = $trainer
+            ? $this->independentCoachingAccessService->hasActiveRelationship($trainer, $member, 'chat')
+            : false;
+        abort_unless($gymAssignment || $independentAssignment, 422, 'Trainer-member assignment is no longer active.');
 
         $trainerProfile = TrainerProfile::query()
             ->where('user_id', $trainerId)
+            ->where('is_active', true)
+            ->where('status', 'active')
+            ->whereHas('user', fn ($user) => $user->where('is_active', true))
+            ->where(function ($scope): void {
+                $scope->whereNull('gym_id')
+                    ->orWhereHas('gym', fn ($gym) => $gym
+                        ->where('is_active', true)
+                        ->where('status', 'active')
+                        ->where('operational_access_enabled', true));
+            })
             ->first();
         abort_unless($trainerProfile, 422, 'Trainer profile is not available.');
 
-        abort_unless(
-            (int) $memberProfile->gym_id === (int) $trainerProfile->gym_id
-                && ($trainerProfile->branch_id === null || (int) $memberProfile->branch_id === (int) $trainerProfile->branch_id),
-            422,
-            'Trainer-member assignment is outside the trainer scope.'
-        );
+        if (! $independentAssignment) {
+            abort_unless(
+                $memberProfile
+                    && (int) $memberProfile->gym_id === (int) $trainerProfile->gym_id
+                    && ($trainerProfile->branch_id === null || (int) $memberProfile->branch_id === (int) $trainerProfile->branch_id),
+                422,
+                'Trainer-member assignment is outside the trainer scope.'
+            );
+        }
+    }
+
+    private function activeTrainerProfileForChat(User $trainer): TrainerProfile
+    {
+        $profile = TrainerProfile::query()
+            ->where('user_id', $trainer->id)
+            ->where('is_active', true)
+            ->where('status', 'active')
+            ->where(function ($scope): void {
+                $scope->whereNull('gym_id')
+                    ->orWhereHas('gym', fn ($gym) => $gym
+                        ->where('is_active', true)
+                        ->where('status', 'active')
+                        ->where('operational_access_enabled', true));
+            })
+            ->first();
+
+        if (! $profile) {
+            throw ValidationException::withMessages([
+                'trainer' => ['Trainer chat is unavailable while the trainer or gym is inactive.'],
+            ]);
+        }
+
+        return $profile;
     }
 
     private function assertMessageParticipants(int $trainerId, int $memberId, int $senderId, int $recipientId): void

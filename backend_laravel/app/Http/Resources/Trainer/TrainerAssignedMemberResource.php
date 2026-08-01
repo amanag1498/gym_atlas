@@ -19,6 +19,18 @@ class TrainerAssignedMemberResource extends JsonResource
             'member_id' => $this->user_id,
             'gym_id' => $this->gym_id,
             'branch_id' => $this->branch_id,
+            'gym_name' => $this->relationLoaded('gym') ? $this->gym?->name : null,
+            'branch_name' => $this->relationLoaded('branch') ? $this->branch?->name : null,
+            'gym' => $this->whenLoaded('gym', fn () => $this->gym ? [
+                'id' => $this->gym->id,
+                'name' => $this->gym->name,
+                'slug' => $this->gym->slug,
+            ] : null),
+            'branch' => $this->whenLoaded('branch', fn () => $this->branch ? [
+                'id' => $this->branch->id,
+                'name' => $this->branch->name,
+                'slug' => $this->branch->slug,
+            ] : null),
             'member' => UserResource::make($this->whenLoaded('user')),
             'member_profile' => MemberProfileResource::make($this),
             'membership_summary' => $latestMembership ? [

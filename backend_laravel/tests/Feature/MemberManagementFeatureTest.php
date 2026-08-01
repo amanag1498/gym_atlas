@@ -10,6 +10,7 @@ use App\Models\MemberGymInvitation;
 use App\Models\MemberMembership;
 use App\Models\MemberProfile;
 use App\Models\MembershipPlan;
+use App\Models\Payment;
 use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Services\Members\MemberEmailInvitationService;
@@ -251,6 +252,24 @@ class MemberManagementFeatureTest extends TestCase
             'branch_id' => $branch->id,
             'status' => 'pending',
         ]);
+        $this->assertSame(1, $existingUser->notifications()
+            ->where('type', 'gym_member_invitation')
+            ->count());
+
+        $this->post(route('web.gym.members.store', ['gym' => $gym->id]), [
+            'existing_user_id' => $existingUser->id,
+            'branch_id' => $branch->id,
+            'assigned_trainer_user_id' => $trainer->id,
+            'status' => 'active',
+            'membership_plan_id' => $plan->id,
+            'start_date' => now()->toDateString(),
+            'due_date' => now()->toDateString(),
+            'amount_paid' => 2000,
+        ])->assertRedirect();
+
+        $this->assertSame(1, $existingUser->notifications()
+            ->where('type', 'gym_member_invitation')
+            ->count(), 'Re-sending a pending gym invitation must refresh its notification instead of duplicating it.');
 
         $invitation = MemberGymInvitation::query()
             ->where('invited_user_id', $existingUser->id)
@@ -261,6 +280,20 @@ class MemberManagementFeatureTest extends TestCase
             ->postJson('/api/member/gym-invitations/'.$invitation->id.'/accept')
             ->assertOk()
             ->assertJsonPath('data.status', 'accepted');
+
+        $invitationNotification = $existingUser->notifications()
+            ->where('type', 'gym_member_invitation')
+            ->sole();
+        $this->assertSame('accepted', $invitationNotification->data['status']);
+        $this->assertSame('Membership activated', $invitationNotification->title);
+        $this->assertNotNull($invitationNotification->read_at);
+        $this->assertSame(0, $existingUser->notifications()
+            ->where('type', 'trainer_assignment')
+            ->count(), 'Accepting a trainer-bearing gym invitation must not create a second member notification.');
+        $this->assertSame(1, $trainer->notifications()
+            ->where('type', 'trainer_assignment')
+            ->where('data->member_user_id', $existingUser->id)
+            ->count(), 'The assigned trainer must still receive the new-member notification.');
 
         $this->assertDatabaseHas('member_profiles', [
             'user_id' => $existingUser->id,
@@ -490,13 +523,58 @@ class MemberManagementFeatureTest extends TestCase
             'user_id' => $member->id,
             'gym_id' => $gym->id,
             'branch_id' => $branch->id,
+            'assigned_trainer_user_id' => $trainer->id,
             'membership_status' => 'active',
+            'membership_expires_on' => now()->addMonth()->toDateString(),
             'is_active' => true,
         ]);
 
+        $plan = MembershipPlan::query()->create([
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'name' => 'Member Detail Monthly',
+            'duration_days' => 30,
+            'plan_price' => 1800,
+            'joining_fee' => 200,
+            'pt_included' => true,
+            'status' => 'active',
+            'created_by_user_id' => $owner->id,
+        ]);
+        $membership = MemberMembership::query()->create([
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_id' => $member->id,
+            'membership_plan_id' => $plan->id,
+            'start_date' => now()->subDay()->toDateString(),
+            'expiry_date' => now()->addMonth()->toDateString(),
+            'status' => 'active',
+            'default_plan_price' => 1800,
+            'default_joining_fee' => 200,
+            'final_payable_amount' => 2000,
+            'amount_paid' => 500,
+            'due_amount' => 1500,
+            'due_date' => now()->addWeek()->toDateString(),
+            'payment_status' => 'partial',
+        ]);
+        Payment::query()->create([
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_membership_id' => $membership->id,
+            'member_id' => $member->id,
+            'received_by_user_id' => $owner->id,
+            'collected_by' => $owner->id,
+            'amount' => 500,
+            'payment_mode' => 'cash',
+            'status' => 'recorded',
+            'payment_status' => 'partial',
+            'paid_at' => now(),
+        ]);
+
         $this->loginGymUser($owner);
-        $this->get(route('web.gym.members.show', ['gym' => $gym->id, 'branch' => $branch->id, 'member' => $member->id]))
-            ->assertOk();
+        $this->get(route('web.gym.members.show', ['gym' => $gym->id, 'member' => $member->id]))
+            ->assertOk()
+            ->assertSee('Member Detail Monthly')
+            ->assertSee('Invoice PDF');
 
         $headers = [
             'X-Gym-Id' => (string) $gym->id,

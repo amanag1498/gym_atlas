@@ -6,13 +6,16 @@ use App\Enums\PermissionName;
 use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Communication\StoreAnnouncementRequest;
-use App\Models\Branch;
 use App\Models\Announcement;
+use App\Models\Branch;
+use App\Models\Notification;
 use App\Models\User;
-use App\Services\Communication\AnnouncementService;
 use App\Services\Authorization\ScopedPermissionResolver;
+use App\Services\Communication\AnnouncementService;
+use App\Services\Members\GymMemberAccessService;
 use App\Services\Notification\NotificationService;
 use App\Services\Web\GymWebPanelService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -24,8 +27,8 @@ class AnnouncementController extends Controller
         private readonly ScopedPermissionResolver $scopedPermissionResolver,
         private readonly AnnouncementService $announcementService,
         private readonly NotificationService $notificationService,
-    ) {
-    }
+        private readonly GymMemberAccessService $gymMemberAccessService,
+    ) {}
 
     public function index(Request $request): View
     {
@@ -48,9 +51,10 @@ class AnnouncementController extends Controller
             'notifications' => $this->notificationQuery($request, $gym, $branch?->id)->paginate(12, ['*'], 'notifications_page')->withQueryString(),
             'unreadNotificationsCount' => (clone $this->notificationQuery($request, $gym, $branch?->id))->whereNull('read_at')->count(),
             'members' => User::query()
-                ->whereHas('memberProfile', function ($builder) use ($gym, $branch): void {
+                ->whereHas('memberProfiles', function (Builder $builder) use ($gym, $branch): void {
                     $builder->where('gym_id', $gym->id)
                         ->when($branch, fn ($query) => $query->where('branch_id', $branch->id));
+                    $this->gymMemberAccessService->scopeAccessibleProfiles($builder);
                 })
                 ->orderBy('name')
                 ->get(),
@@ -148,7 +152,7 @@ class AnnouncementController extends Controller
 
     private function notificationQuery(Request $request, $gym, ?int $branchId = null)
     {
-        return \App\Models\Notification::query()
+        return Notification::query()
             ->where('user_id', $request->user()->id)
             ->where('gym_id', $gym->id)
             ->when($branchId !== null, fn ($query) => $query->where(function ($builder) use ($branchId): void {

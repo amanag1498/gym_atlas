@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Gym\Admin;
 
+use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Gym\Admin\AssignMemberTrainerRequest;
 use App\Http\Requests\Gym\Admin\StoreMemberRequest;
@@ -10,16 +11,17 @@ use App\Http\Resources\Audit\ActivityLogResource;
 use App\Http\Resources\User\UserResource;
 use App\Models\Gym;
 use App\Models\MemberProfile;
+use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Audit\MemberTimelineService;
+use App\Services\Authorization\ScopeResolver;
 use App\Services\Member\EngagementScoreService;
 use App\Services\Member\MemberAppService;
-use App\Services\Authorization\ScopeResolver;
-use App\Services\Users\ManagedUserService;
-use App\Services\Members\MemberGymInvitationService;
+use App\Services\Members\GymMemberAccessService;
 use App\Services\Members\MemberEmailInvitationService;
-use App\Enums\RoleName;
+use App\Services\Members\MemberGymInvitationService;
+use App\Services\Users\ManagedUserService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
@@ -34,17 +36,27 @@ class MemberController extends Controller
         private readonly MemberAppService $memberAppService,
         private readonly MemberGymInvitationService $memberGymInvitationService,
         private readonly MemberEmailInvitationService $memberEmailInvitationService,
-    ) {
-    }
+        private readonly GymMemberAccessService $gymMemberAccessService,
+    ) {}
 
     public function index(Request $request)
     {
         $gym = $this->resolveGym($request);
         $branchIds = $this->accessibleBranchIds($request, $gym);
         $query = User::query()
-            ->with(['gyms', 'branches', 'roles', 'permissions', 'memberProfile', 'memberMemberships.membershipPlan'])
+            ->with([
+                'gyms',
+                'branches',
+                'roles',
+                'permissions',
+                'memberProfile' => fn ($builder) => $builder->where('gym_id', $gym->id),
+                'memberMemberships' => fn ($builder) => $builder
+                    ->where('gym_id', $gym->id)
+                    ->with('membershipPlan'),
+            ])
             ->whereHas('memberProfile', function ($builder) use ($gym): void {
                 $builder->where('gym_id', $gym->id);
+                $this->gymMemberAccessService->scopeAccessibleProfiles($builder);
             })
             ->latest('id');
 
@@ -64,28 +76,40 @@ class MemberController extends Controller
         }
 
         if ($request->filled('branch_id')) {
-            $query->whereHas('memberProfile', fn ($builder) => $builder->where('branch_id', $request->integer('branch_id')));
+            $query->whereHas('memberProfile', fn ($builder) => $builder
+                ->where('gym_id', $gym->id)
+                ->where('branch_id', $request->integer('branch_id')));
         }
 
         if ($request->filled('trainer_id')) {
-            $query->whereHas('memberProfile', fn ($builder) => $builder->where('assigned_trainer_user_id', $request->integer('trainer_id')));
+            $query->whereHas('memberProfile', fn ($builder) => $builder
+                ->where('gym_id', $gym->id)
+                ->where('assigned_trainer_user_id', $request->integer('trainer_id')));
         }
 
         if ($request->filled('plan_id')) {
-            $query->whereHas('memberMemberships', fn ($builder) => $builder->where('membership_plan_id', $request->integer('plan_id')));
+            $query->whereHas('memberMemberships', fn ($builder) => $builder
+                ->where('gym_id', $gym->id)
+                ->where('membership_plan_id', $request->integer('plan_id')));
         }
 
         if ($request->filled('gender')) {
-            $query->whereHas('memberProfile', fn ($builder) => $builder->where('gender', $request->string('gender')));
+            $query->whereHas('memberProfile', fn ($builder) => $builder
+                ->where('gym_id', $gym->id)
+                ->where('gender', $request->string('gender')));
         }
 
         if ($request->filled('goal')) {
             $goal = '%'.$request->string('goal').'%';
-            $query->whereHas('memberProfile', fn ($builder) => $builder->where('fitness_goal', 'like', $goal));
+            $query->whereHas('memberProfile', fn ($builder) => $builder
+                ->where('gym_id', $gym->id)
+                ->where('fitness_goal', 'like', $goal));
         }
 
         if ($request->boolean('no_trainer_assigned')) {
-            $query->whereHas('memberProfile', fn ($builder) => $builder->whereNull('assigned_trainer_user_id'));
+            $query->whereHas('memberProfile', fn ($builder) => $builder
+                ->where('gym_id', $gym->id)
+                ->whereNull('assigned_trainer_user_id'));
         }
 
         if ($request->boolean('inactive_7_days')) {
@@ -99,11 +123,11 @@ class MemberController extends Controller
             $status = $request->string('status')->toString();
 
             match ($status) {
-                'due_amount' => $query->whereHas('memberMemberships', fn ($builder) => $builder->where('due_amount', '>', 0)),
-                'due_payment' => $query->whereHas('memberMemberships', fn ($builder) => $builder->where('due_amount', '>', 0)),
-                'overdue' => $query->whereHas('memberMemberships', fn ($builder) => $builder->where('payment_status', 'overdue')),
-                'expiring_soon' => $query->whereHas('memberProfile', fn ($builder) => $builder->whereBetween('membership_expires_on', [now()->toDateString(), now()->addDays(7)->toDateString()])),
-                default => $query->whereHas('memberProfile', fn ($builder) => $builder->where('membership_status', $status)),
+                'due_amount' => $query->whereHas('memberMemberships', fn ($builder) => $builder->where('gym_id', $gym->id)->where('due_amount', '>', 0)),
+                'due_payment' => $query->whereHas('memberMemberships', fn ($builder) => $builder->where('gym_id', $gym->id)->where('due_amount', '>', 0)),
+                'overdue' => $query->whereHas('memberMemberships', fn ($builder) => $builder->where('gym_id', $gym->id)->where('payment_status', 'overdue')),
+                'expiring_soon' => $query->whereHas('memberProfile', fn ($builder) => $builder->where('gym_id', $gym->id)->whereBetween('membership_expires_on', [now()->toDateString(), now()->addDays(7)->toDateString()])),
+                default => $query->whereHas('memberProfile', fn ($builder) => $builder->where('gym_id', $gym->id)->where('membership_status', $status)),
             };
         }
 
@@ -125,9 +149,11 @@ class MemberController extends Controller
                 return response()->json(['message' => 'Only individual member users can be invited to join a gym.'], 422);
             }
             $invitation = $this->memberGymInvitationService->invite($request->user(), $existingUser, $gym, $payload);
+
             return $this->success(['invitation_id' => $invitation->id, 'approval_channel' => 'app'], 'Membership invitation sent. The member must approve it in the app.', 202);
         }
         $emailInvitation = $this->memberEmailInvitationService->invite($request->user(), $gym, $payload);
+
         return $this->success(['invitation_id' => $emailInvitation->id, 'approval_channel' => 'email'], 'Enrollment approval email sent. The member will be created after approval.', 202);
     }
 
@@ -142,10 +168,12 @@ class MemberController extends Controller
             : $this->accessibleBranchIds($request, $gym);
         $timeline = $this->memberTimelineService->build($member, $gym->id, $branchIds);
         $this->engagementScoreService->enrichUsers([$member], $gym->id);
+        $member->load(['gyms', 'branches', 'roles', 'permissions']);
+        $member->setRelation('memberProfile', $profile->loadMissing(['branch', 'assignedTrainer', 'fitnessGoals']));
 
         return $this->success(
             [
-                'member' => UserResource::make($member->load(['gyms', 'branches', 'roles', 'permissions', 'memberProfile'])),
+                'member' => UserResource::make($member),
                 'activity_logs' => ActivityLogResource::collection($timeline['activity_logs']),
                 'activity_timeline' => $timeline['activity_timeline'],
                 'member_timeline' => $timeline['member_timeline'],
@@ -159,7 +187,8 @@ class MemberController extends Controller
         $profile = MemberProfile::query()->where('user_id', $member->id)->where('gym_id', $gym->id)->firstOrFail();
         $this->assertMemberAccessible($request, $gym, $profile);
 
-        $member->load(['gyms', 'branches', 'roles', 'permissions', 'memberProfile']);
+        $member->load(['gyms', 'branches', 'roles', 'permissions']);
+        $member->setRelation('memberProfile', $profile);
         $payload = $this->normalizedPayload($request, $member, $profile);
         $this->assertBranchAndTrainerInScope($request, $gym, $payload['branch_id'] ?? null, $payload['assigned_trainer_user_id'] ?? null);
         $oldValues = $member->toArray();
@@ -233,7 +262,8 @@ class MemberController extends Controller
         $trainerId = $request->validated('assigned_trainer_user_id');
         $this->assertBranchAndTrainerInScope($request, $gym, $profile->branch_id, $trainerId);
 
-        $oldValues = $member->load('memberProfile')->toArray();
+        $member->setRelation('memberProfile', $profile);
+        $oldValues = $member->toArray();
         $user = $this->managedUserService->upsertMember($member, $gym, [
             'name' => $member->name,
             'email' => $member->email,
@@ -262,7 +292,7 @@ class MemberController extends Controller
             gym: $gym,
             branch: $profile->branch,
             oldValues: $oldValues,
-            newValues: $user->fresh(['memberProfile'])->toArray(),
+            newValues: $user->toArray(),
         );
 
         return $this->success(UserResource::make($user), 'Trainer assignment updated successfully.');
@@ -274,7 +304,12 @@ class MemberController extends Controller
         abort_unless(MemberProfile::query()->where('user_id', $member->id)->where('gym_id', $gym->id)->exists(), 404);
         $this->authorize('manage', $gym);
 
-        $oldValues = $member->load(['gyms', 'branches', 'roles', 'permissions', 'memberProfile'])->toArray();
+        $member->load(['gyms', 'branches', 'roles', 'permissions']);
+        $member->setRelation('memberProfile', MemberProfile::query()
+            ->where('user_id', $member->id)
+            ->where('gym_id', $gym->id)
+            ->first());
+        $oldValues = $member->toArray();
         $result = $this->memberAppService->removeFromGym($member, $gym);
 
         $this->auditLogService->log(
@@ -312,6 +347,7 @@ class MemberController extends Controller
 
     private function assertMemberAccessible(Request $request, Gym $gym, MemberProfile $profile): void
     {
+        $this->gymMemberAccessService->assertAccessible($profile);
         abort_unless(in_array((int) $profile->branch_id, $this->accessibleBranchIds($request, $gym), true), 403);
     }
 
@@ -324,7 +360,12 @@ class MemberController extends Controller
         }
 
         if ($trainerId !== null) {
-            $trainerQuery = \App\Models\TrainerProfile::query()->where('gym_id', $gym->id)->where('user_id', $trainerId);
+            $trainerQuery = TrainerProfile::query()
+                ->where('gym_id', $gym->id)
+                ->where('user_id', $trainerId)
+                ->where('is_active', true)
+                ->where('status', 'active')
+                ->whereHas('user', fn ($trainer) => $trainer->where('is_active', true));
 
             if ($branchId !== null) {
                 $trainerQuery->where('branch_id', $branchId);

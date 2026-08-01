@@ -21,12 +21,12 @@ use App\Models\Payment;
 use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Audit\AuditTimelineService;
+use App\Services\Authorization\ScopeResolver;
 use App\Services\Billing\BillingAccessService;
 use App\Services\Billing\CustomFeeAuditService;
 use App\Services\Billing\MemberMembershipLifecycleService;
 use App\Services\Billing\MembershipEnrollmentService;
 use App\Services\Billing\MembershipPricingService;
-use App\Services\Authorization\ScopeResolver;
 use App\Services\Notification\ReminderService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -45,8 +45,7 @@ class MemberMembershipController extends Controller
         private readonly AuditTimelineService $auditTimelineService,
         private readonly ScopeResolver $scopeResolver,
         private readonly ReminderService $reminderService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {
@@ -414,9 +413,11 @@ class MemberMembershipController extends Controller
             ]);
         }
 
-        $memberProfile = $member->memberProfile;
+        $memberProfile = $member->memberProfiles()
+            ->where('gym_id', $validated['gym_id'])
+            ->first();
 
-        if (! $memberProfile || (int) $memberProfile->gym_id !== (int) $validated['gym_id']) {
+        if (! $memberProfile) {
             throw ValidationException::withMessages([
                 'member_id' => ['The selected member must belong to the same gym.'],
             ]);

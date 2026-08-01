@@ -115,6 +115,19 @@ class PlatformDashboardTest extends TestCase
             'is_active' => true,
         ]);
 
+        $independentTrainer = User::factory()->create(['is_active' => true, 'name' => 'Pending Independent Coach']);
+        $independentTrainer->assignRole(RoleName::Trainer->value);
+        TrainerProfile::query()->create([
+            'user_id' => $independentTrainer->id,
+            'gym_id' => null,
+            'branch_id' => null,
+            'specialization' => 'Mobility',
+            'experience_years' => 4,
+            'status' => 'active',
+            'is_active' => true,
+            'verification_status' => 'pending',
+        ]);
+
         TrialRequest::query()->create([
             'gym_id' => $gymActive->id,
             'branch_id' => $activeBranch->id,
@@ -180,6 +193,8 @@ class PlatformDashboardTest extends TestCase
             ->assertOk()
             ->assertSee('Pending Fitness')
             ->assertSee('Active Arena')
+            ->assertSee('Pending Independent Coach')
+            ->assertSee('Independent Trainer Reviews')
             ->assertSee('Gym approval updated')
             ->assertSee('Facility updated');
 
@@ -194,13 +209,16 @@ class PlatformDashboardTest extends TestCase
             ->assertJsonPath('data.stats.pending_gym_approvals', 1)
             ->assertJsonPath('data.stats.inactive_gyms', 1)
             ->assertJsonPath('data.stats.total_members', 1)
-            ->assertJsonPath('data.stats.total_trainers', 1)
+            ->assertJsonPath('data.stats.total_trainers', 2)
+            ->assertJsonPath('data.stats.pending_independent_trainer_verifications', 1)
+            ->assertJsonPath('data.stats.verified_independent_trainers', 0)
             ->assertJsonPath('data.stats.total_branches', 2)
             ->assertJsonPath('data.stats.total_trial_requests', 1)
             ->assertJsonPath('data.stats.featured_gyms', 1)
             ->assertJsonPath('data.stats.promoted_gyms', 1)
             ->assertJsonPath('data.pending_gym_approvals.0.name', 'Pending Fitness')
             ->assertJsonPath('data.pending_gym_approvals.0.owner_name', 'Owner Alpha')
+            ->assertJsonPath('data.pending_independent_trainer_verifications.0.name', 'Pending Independent Coach')
             ->assertJsonPath('data.recently_added_gyms.0.name', 'Active Arena');
     }
 

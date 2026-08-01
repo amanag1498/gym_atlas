@@ -59,6 +59,8 @@ class CustomFeeManagementFeatureTest extends TestCase
         ])->assertRedirect(route('web.gym.members.custom-fee', [
             'member' => $member->id,
             'member_membership_id' => $membership->id,
+            'gym' => $gym->id,
+            'branch' => $branch->id,
         ]));
 
         $membership->refresh();

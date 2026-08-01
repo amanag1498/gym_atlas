@@ -26,6 +26,14 @@ class PlatformReportTest extends TestCase
 
         $this->withoutVite();
         $this->seed(PermissionSeeder::class);
+        $this->travelTo(now()->startOfMonth()->addDays(10)->setTime(12, 0));
+    }
+
+    protected function tearDown(): void
+    {
+        $this->travelBack();
+
+        parent::tearDown();
     }
 
     public function test_platform_reports_pages_api_filters_and_exports_work(): void

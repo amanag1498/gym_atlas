@@ -47,11 +47,14 @@ class MemberEmailInvitationService
             'invited_name' => $payload['name'], 'invited_email' => $email, 'status' => 'pending', 'payload' => $payload,
             'expires_at' => now()->addDays(7),
         ]);
-        $invitation->load('gym');
+        $invitation->load(['gym', 'branch', 'assignedTrainer', 'invitedBy']);
+        $membershipPlan = ! empty($payload['membership_plan_id'])
+            ? MembershipPlan::query()->find($payload['membership_plan_id'])
+            : null;
         $reviewUrl = URL::temporarySignedRoute('member-email-invitations.review', $invitation->expires_at, ['invitation' => $invitation->id, 'token' => $invitation->token]);
         $this->transactionalEmailService->sendMailableTo(
             $invitation->invited_email,
-            new MemberEnrollmentInvitationMail($invitation, $reviewUrl),
+            new MemberEnrollmentInvitationMail($invitation, $reviewUrl, $membershipPlan),
             'Approve your gym enrollment for '.$invitation->gym->name,
             $gym->id,
             'member_enrollment_invitation',
@@ -63,12 +66,13 @@ class MemberEmailInvitationService
     public function accept(MemberEmailInvitation $invitation): MemberEmailInvitation
     {
         $this->assertActionable($invitation);
+
         return DB::transaction(function () use ($invitation): MemberEmailInvitation {
             $payload = $invitation->payload;
             $payload['email'] = $invitation->invited_email;
             $payload['name'] = $invitation->invited_name;
             $user = $this->managedUserService->upsertMember(null, $invitation->gym, $payload);
-            if (!empty($payload['membership_plan_id'])) {
+            if (! empty($payload['membership_plan_id'])) {
                 $plan = MembershipPlan::query()->findOrFail($payload['membership_plan_id']);
                 $this->billingAccessService->assertPlanBelongsToScope($plan, $invitation->gym_id, (int) $payload['branch_id']);
                 ['membership' => $membership] = $this->membershipEnrollmentService->enroll($plan, $invitation->invitedBy ?: $user, [...$payload, 'gym_id' => $invitation->gym_id, 'branch_id' => $payload['branch_id'], 'member_id' => $user->id, 'start_date' => $payload['start_date'] ?? now()->toDateString(), 'due_date' => $payload['due_date'] ?? ($payload['start_date'] ?? now()->toDateString())]);
@@ -83,7 +87,9 @@ class MemberEmailInvitationService
                 array_filter([$invitation->branch ? 'Branch: '.$invitation->branch->name : null]),
                 $invitation->gym_id,
                 'enrollment_confirmation',
+                ['branch_id' => $invitation->branch_id, 'category_label' => 'Membership confirmed'],
             ));
+
             return $invitation;
         });
     }
@@ -92,11 +98,14 @@ class MemberEmailInvitationService
     {
         $this->assertActionable($invitation);
         $invitation->forceFill(['status' => 'rejected', 'responded_at' => now()])->save();
+
         return $invitation;
     }
 
     private function assertActionable(MemberEmailInvitation $invitation): void
     {
-        if ($invitation->status !== 'pending' || $invitation->expires_at->isPast()) throw ValidationException::withMessages(['invitation' => ['This enrollment invitation is no longer active.']]);
+        if ($invitation->status !== 'pending' || $invitation->expires_at->isPast()) {
+            throw ValidationException::withMessages(['invitation' => ['This enrollment invitation is no longer active.']]);
+        }
     }
 }

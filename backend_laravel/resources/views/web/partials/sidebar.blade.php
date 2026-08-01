@@ -38,6 +38,7 @@
                     ['label' => 'Users', 'icon' => 'ti-users', 'route' => 'web.admin.users.index', 'active' => ['web.admin.users.*']],
                     ['label' => 'Gym Owners', 'icon' => 'ti-building-store', 'route' => 'web.admin.gym-owners.index', 'active' => ['web.admin.gym-owners.*']],
                     ['label' => 'Trainers', 'icon' => 'ti-star', 'route' => 'web.admin.users.trainers', 'active' => ['web.admin.users.trainers']],
+                    ['label' => 'Trainer Verification', 'icon' => 'ti-user-check', 'route' => 'web.admin.trainer-verifications.index', 'active' => ['web.admin.trainer-verifications.*']],
                     ['label' => 'Members', 'icon' => 'ti-users', 'route' => 'web.admin.users.members', 'active' => ['web.admin.users.members']],
                 ],
             ],
@@ -112,13 +113,6 @@
     </div>
 
     <div class="flex min-h-0 flex-1 flex-col overflow-y-auto no-scrollbar">
-        @if ($panel === 'gym' && $user?->hasRole(\App\Enums\RoleName::PlatformAdmin->value))
-            <a href="{{ route('web.admin.gym-owners.index') }}" class="sidebar-widget-shell mb-6 inline-flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 transition hover:border-brand-300 hover:text-brand-600 dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-200 dark:hover:border-brand-500/40 dark:hover:text-brand-300">
-                <i class="ti ti-arrow-left text-lg"></i>
-                <span class="sidebar-label">Back to Platform Admin</span>
-            </a>
-        @endif
-
         <nav class="mb-6">
             <div class="flex flex-col gap-4">
                 @foreach ($groups as $group)

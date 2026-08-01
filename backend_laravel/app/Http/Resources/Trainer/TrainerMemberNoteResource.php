@@ -14,6 +14,7 @@ class TrainerMemberNoteResource extends JsonResource
             'id' => $this->id,
             'trainer_id' => $this->trainer_id,
             'member_id' => $this->member_id,
+            'independent_trainer_member_relationship_id' => $this->independent_trainer_member_relationship_id,
             'note' => $this->note,
             'visibility' => $this->visibility,
             'follow_up_date' => $this->follow_up_date?->toDateString(),

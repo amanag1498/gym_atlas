@@ -7,13 +7,19 @@ use App\Models\WorkoutPlan;
 use App\Models\WorkoutPlanDay;
 use App\Models\WorkoutPlanExercise;
 use App\Models\WorkoutTemplate;
+use App\Services\Member\MemberAppService;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class WorkoutPlanService
 {
+    public function __construct(
+        private readonly MemberAppService $memberAppService,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $payload
-     * @return \Illuminate\Support\Collection<int, WorkoutPlan>
+     * @return Collection<int, WorkoutPlan>
      */
     public function createPlans(User $trainer, array $payload)
     {
@@ -26,6 +32,7 @@ class WorkoutPlanService
                     'branch_id' => $payload['branch_id'],
                     'member_id' => $memberId,
                     'trainer_id' => $trainer->id,
+                    'independent_trainer_member_relationship_id' => $payload['independent_trainer_member_relationship_id'] ?? null,
                     'created_by_user_id' => $trainer->id,
                     'source_workout_book_id' => $payload['source_workout_book_id'] ?? null,
                     'plan_origin' => $payload['plan_origin'] ?? 'trainer_assigned',
@@ -177,6 +184,7 @@ class WorkoutPlanService
         $planPayload = [
             'gym_id' => $payload['gym_id'],
             'branch_id' => $payload['branch_id'],
+            'independent_trainer_member_relationship_id' => $payload['independent_trainer_member_relationship_id'] ?? null,
             'member_ids' => $payload['member_ids'],
             'workout_template_id' => $template->id,
             'name' => $payload['name'] ?? $template->name,
@@ -214,13 +222,12 @@ class WorkoutPlanService
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      */
     public function createMemberPlan(User $member, array $payload): WorkoutPlan
     {
         return DB::transaction(function () use ($member, $payload) {
-            $member->loadMissing('memberProfile');
-            $profile = $member->memberProfile;
+            $profile = $this->memberAppService->memberProfileFor($member);
 
             $plan = WorkoutPlan::query()->create([
                 'gym_id' => $profile?->gym_id,

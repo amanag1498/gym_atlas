@@ -124,6 +124,14 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
     final weightLogs = _mapList(_progress['weight_logs']);
     final bodyMeasurements = _mapList(_progress['body_measurements']);
     final displayName = member['name']?.toString() ?? 'Assigned member detail';
+    final gym = _map(_detail['gym']);
+    final branch = _map(_detail['branch']);
+    final gymLabel = gym['name']?.toString().trim().isNotEmpty == true
+        ? gym['name'].toString()
+        : 'Gym ${_detail['gym_id'] ?? widget.assignment['gym_id'] ?? '--'}';
+    final branchLabel = branch['name']?.toString().trim().isNotEmpty == true
+        ? branch['name'].toString()
+        : 'Branch ${_detail['branch_id'] ?? widget.assignment['branch_id'] ?? '--'}';
 
     return AppGradientScaffold(
       title: displayName,
@@ -133,7 +141,7 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
             padding: const EdgeInsets.fromLTRB(18, 10, 18, 8),
             child: _MemberDetailPageHeader(
               name: displayName,
-              subtitle: member['email']?.toString() ?? 'Assigned member',
+              subtitle: '$gymLabel · $branchLabel',
               onBack: () => Navigator.of(context).maybePop(),
             ),
           ),

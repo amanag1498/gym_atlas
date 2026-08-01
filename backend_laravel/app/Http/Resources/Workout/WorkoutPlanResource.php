@@ -23,6 +23,10 @@ class WorkoutPlanResource extends JsonResource
             'branch_id' => $this->branch_id,
             'member_id' => $this->member_id,
             'trainer_id' => $this->trainer_id,
+            'independent_trainer_member_relationship_id' => $this->independent_trainer_member_relationship_id,
+            'coaching_scope' => $this->independent_trainer_member_relationship_id !== null
+                ? 'independent'
+                : ($this->gym_id !== null ? 'gym' : 'personal'),
             'created_by_user_id' => $this->created_by_user_id,
             'source_workout_book_id' => $this->source_workout_book_id,
             'plan_origin' => $this->plan_origin,

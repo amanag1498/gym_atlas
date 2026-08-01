@@ -3,6 +3,8 @@
 namespace App\Services\Notification;
 
 use App\Enums\NotificationType;
+use App\Models\Branch;
+use App\Models\Gym;
 use App\Models\Notification;
 use App\Models\NotificationPreference;
 use App\Models\User;
@@ -27,6 +29,14 @@ class NotificationService
             return null;
         }
 
+        $gymName = $data['gym_name'] ?? ($gymId ? Gym::query()->whereKey($gymId)->value('name') : null);
+        $branchName = $data['branch_name'] ?? ($branchId ? Branch::query()->whereKey($branchId)->value('name') : null);
+        $context = array_filter([
+            'source' => $gymId ? 'gym' : 'platform',
+            'gym_name' => $gymName,
+            'branch_name' => $branchName,
+        ], fn (mixed $value): bool => $value !== null);
+
         return Notification::query()->create([
             'user_id' => $user->id,
             'gym_id' => $gymId,
@@ -37,7 +47,7 @@ class NotificationService
             'title' => $title,
             'message' => $body,
             'body' => $body,
-            'data' => $data,
+            'data' => [...$context, ...($data ?? [])],
             'created_by_user_id' => $createdByUserId,
             'scheduled_for' => $scheduledFor,
         ]);
@@ -113,6 +123,10 @@ class NotificationService
             NotificationType::PaymentDue->value,
             NotificationType::CustomDue->value,
             'trainer_gym_invitation',
+            'independent_trainer_invitation',
+            'independent_coaching_response',
+            'independent_coaching_revoked',
+            'independent_trainer_verification',
         ], true);
     }
 }

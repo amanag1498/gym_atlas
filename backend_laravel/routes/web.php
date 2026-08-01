@@ -10,6 +10,7 @@ use App\Http\Controllers\Web\Admin\EnquiryController as AdminEnquiryController;
 use App\Http\Controllers\Web\Admin\GymController as AdminGymController;
 use App\Http\Controllers\Web\Admin\GymOwnerController as AdminGymOwnerController;
 use App\Http\Controllers\Web\Admin\GymPlatformSubscriptionController as AdminGymPlatformSubscriptionController;
+use App\Http\Controllers\Web\Admin\IndependentTrainerVerificationController as AdminIndependentTrainerVerificationController;
 use App\Http\Controllers\Web\Admin\ListingController as AdminListingController;
 use App\Http\Controllers\Web\Admin\PlatformSubscriptionPlanController as AdminPlatformSubscriptionPlanController;
 use App\Http\Controllers\Web\Admin\ReportController as AdminReportController;
@@ -35,6 +36,7 @@ use App\Http\Controllers\Web\Gym\SettingController as WebGymSettingController;
 use App\Http\Controllers\Web\Gym\StaffController as WebGymStaffController;
 use App\Http\Controllers\Web\Gym\TrainerController as WebGymTrainerController;
 use App\Http\Controllers\Web\Gym\TrialRequestController as WebGymTrialRequestController;
+use App\Http\Controllers\Web\IndependentTrainerMemberInvitationController;
 use App\Http\Controllers\Web\MemberEmailInvitationController;
 use App\Http\Controllers\Web\TrainerEmailInvitationController;
 use App\Http\Requests\Web\Public\StoreContactSubmissionRequest;
@@ -362,6 +364,9 @@ Route::prefix('admin')
         Route::post('/gym-owners/{user}/deactivate', [AdminGymOwnerController::class, 'deactivate'])->name('gym-owners.deactivate');
 
         Route::get('/users', [AdminUserController::class, 'index'])->name('users.index');
+        Route::get('/trainer-verifications', [AdminIndependentTrainerVerificationController::class, 'index'])->name('trainer-verifications.index');
+        Route::get('/trainer-verifications/{trainerProfile}', [AdminIndependentTrainerVerificationController::class, 'show'])->name('trainer-verifications.show');
+        Route::patch('/trainer-verifications/{trainerProfile}', [AdminIndependentTrainerVerificationController::class, 'update'])->name('trainer-verifications.update');
         Route::get('/trainers', [AdminUserController::class, 'trainers'])->name('trainers.index');
         Route::get('/members', [AdminUserController::class, 'members'])->name('members.index');
         Route::get('/users/trainers', [AdminUserController::class, 'trainers'])->name('users.trainers');
@@ -605,6 +610,8 @@ Route::prefix('gym')
         Route::put('/public-listing-settings', [WebGymPublicListingController::class, 'update'])->name('public-listing.update');
     });
 Route::middleware('signed')->group(function (): void {
+    Route::get('/independent-trainer-member-invitations/{invitation}/review', [IndependentTrainerMemberInvitationController::class, 'review'])->name('independent-trainer-member-invitations.review');
+    Route::post('/independent-trainer-member-invitations/{invitation}/review', [IndependentTrainerMemberInvitationController::class, 'respond'])->name('independent-trainer-member-invitations.respond');
     Route::get('/member-email-invitations/{invitation}/review', [MemberEmailInvitationController::class, 'review'])->name('member-email-invitations.review');
     Route::post('/member-email-invitations/{invitation}/review', [MemberEmailInvitationController::class, 'respond'])->name('member-email-invitations.respond');
     Route::get('/trainer-email-invitations/{invitation}/review', [TrainerEmailInvitationController::class, 'review'])->name('trainer-email-invitations.review');

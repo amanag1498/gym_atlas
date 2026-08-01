@@ -270,7 +270,7 @@ class TrainerController extends Controller
         $profile = $this->trainerManagementService->assertTrainerAccessible($request, $gym, $trainer, $this->gymWebPanelService);
         $this->gymWebPanelService->assertPermission($request, PermissionName::TrainersManage->value, $gym, $profile->branch_id);
 
-        $oldValues = ['is_active' => $trainer->is_active];
+        $oldValues = ['is_active' => $profile->is_active, 'status' => $profile->status];
         $user = $this->managedUserService->setTrainerActive($trainer, $gym, true);
 
         $this->auditLogService->log(
@@ -281,7 +281,7 @@ class TrainerController extends Controller
             gym: $gym,
             branch: $profile->branch,
             oldValues: $oldValues,
-            newValues: ['is_active' => $user->is_active],
+            newValues: $user->managedTrainerProfile?->only(['is_active', 'status']),
         );
 
         return back()->with('status', 'Trainer activated successfully.');
@@ -293,7 +293,7 @@ class TrainerController extends Controller
         $profile = $this->trainerManagementService->assertTrainerAccessible($request, $gym, $trainer, $this->gymWebPanelService);
         $this->gymWebPanelService->assertPermission($request, PermissionName::TrainersManage->value, $gym, $profile->branch_id);
 
-        $oldValues = ['is_active' => $trainer->is_active];
+        $oldValues = ['is_active' => $profile->is_active, 'status' => $profile->status];
         $user = $this->managedUserService->setTrainerActive($trainer, $gym, false);
 
         $this->auditLogService->log(
@@ -304,7 +304,7 @@ class TrainerController extends Controller
             gym: $gym,
             branch: $profile->branch,
             oldValues: $oldValues,
-            newValues: ['is_active' => $user->is_active],
+            newValues: $user->managedTrainerProfile?->only(['is_active', 'status']),
         );
 
         return back()->with('status', 'Trainer deactivated successfully.');
