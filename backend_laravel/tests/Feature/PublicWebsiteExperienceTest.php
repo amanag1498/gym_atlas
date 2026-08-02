@@ -477,7 +477,14 @@ class PublicWebsiteExperienceTest extends TestCase
 
         $this->assertSame('Schema Fitness Club', $structuredData->firstWhere('@type', 'HealthClub')['name'] ?? null);
         $this->assertCount(3, $structuredData->firstWhere('@type', 'BreadcrumbList')['itemListElement'] ?? []);
-        $response->assertSee('og:image:alt', false);
+        $response
+            ->assertSee('og:image:alt', false)
+            ->assertSee(asset('css/public-gyms.css').'?v=', false);
+
+        $this->assertStringContainsString(
+            '.gym-profile-v3',
+            file_get_contents(public_path('css/public-gyms.css')),
+        );
     }
 
     public function test_contact_form_does_not_honor_an_external_redirect_target(): void

@@ -38,6 +38,10 @@
     ]];
 @endphp
 
+@push('public-head')
+    <link rel="stylesheet" href="{{ asset('css/public-gyms.css') }}?v={{ filemtime(public_path('css/public-gyms.css')) }}">
+@endpush
+
 <x-public.layouts.app :page-title="$gym->name" :page-description="$gym->description ?: $gym->name.' public profile'" :social-image="$heroImage" :social-image-alt="$gym->name.' gym profile'" :schemas="[$gymSchema, $breadcrumbSchema]">
     <div class="gym-profile-v3">
         <div class="public-container-wide">
