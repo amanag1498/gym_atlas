@@ -51,7 +51,10 @@ class TrainerMemberChatController extends Controller
                 ->pluck('user_id');
 
             $independentMemberIds = collect();
-            if ($trainerProfile->gym_id === null) {
+            if (
+                $trainerProfile->gym_id === null
+                && $trainerProfile->verification_status === 'verified'
+            ) {
                 $independentMemberIds = $this->independentCoachingAccessService
                     ->activeMemberIdsForTrainer($user, 'chat');
             }

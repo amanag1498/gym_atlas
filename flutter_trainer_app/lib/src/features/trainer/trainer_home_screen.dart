@@ -742,11 +742,25 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
 
   Future<void> _openTrainerChatThread(int memberId) async {
     Map<String, dynamic> selectedAssignment = const {};
-    for (final assignment in _members) {
+    for (final assignment in _coachingActionMembers) {
       if ((assignment['member_id'] as num?)?.toInt() == memberId) {
         selectedAssignment = assignment;
         break;
       }
+    }
+
+    if (selectedAssignment.isEmpty) {
+      if (mounted) {
+        setState(() => _index = 3);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'This coaching relationship is no longer active. Start or accept an active coaching relationship before opening chat.',
+            ),
+          ),
+        );
+      }
+      return;
     }
 
     await Navigator.of(context).push<void>(

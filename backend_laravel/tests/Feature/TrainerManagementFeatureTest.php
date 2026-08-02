@@ -448,6 +448,16 @@ class TrainerManagementFeatureTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.0.type', 'trainer_gym_assignment_removed');
 
+        $this->actingAs($trainer->refresh(), 'sanctum')
+            ->getJson('/api/chat/conversations')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->actingAs($trainer->refresh(), 'sanctum')
+            ->getJson('/api/chat/messages?recipient_id='.$member->id)
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.recipient_id.0', 'Trainer can chat only with assigned members.');
+
         $this->actingAs($member, 'sanctum')
             ->getJson('/api/member/trainer', ['X-Gym-Id' => (string) $gym->id])
             ->assertOk()
