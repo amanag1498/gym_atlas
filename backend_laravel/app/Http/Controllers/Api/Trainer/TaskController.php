@@ -36,6 +36,7 @@ class TaskController extends Controller
         $paginator = $this->pendingNotesQuery($trainerProfile)
             ->with(['member', 'trainer'])
             ->latest('follow_up_date')
+            ->latest('id')
             ->paginate((int) $request->integer('per_page', 20));
 
         return $this->paginated($paginator, TrainerMemberNoteResource::collection($paginator->getCollection()), 'Pending follow-ups fetched successfully.');

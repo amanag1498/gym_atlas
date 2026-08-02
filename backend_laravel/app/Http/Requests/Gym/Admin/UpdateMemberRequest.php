@@ -16,9 +16,10 @@ class UpdateMemberRequest extends FormRequest
     public function rules(): array
     {
         $memberId = $this->route('member')?->id ?? $this->route('member');
+        $gymId = $this->resolvedGymId();
         $memberProfileId = MemberProfile::query()
             ->where('user_id', $memberId)
-            ->when($this->integer('gym'), fn ($query, int $gymId) => $query->where('gym_id', $gymId))
+            ->when($gymId, fn ($query, int $resolvedGymId) => $query->where('gym_id', $resolvedGymId))
             ->value('id');
 
         return [
@@ -39,7 +40,14 @@ class UpdateMemberRequest extends FormRequest
             'injury_notes' => ['nullable', 'string', 'max:5000'],
             'emergency_contact_name' => ['nullable', 'string', 'max:160'],
             'emergency_contact_phone' => ['nullable', 'string', 'max:40'],
-            'biometric_identifier' => ['nullable', 'string', 'max:255', Rule::unique('member_profiles', 'biometric_identifier')->ignore($memberProfileId)],
+            'biometric_identifier' => [
+                'nullable',
+                'string',
+                'max:255',
+                Rule::unique('member_profiles', 'biometric_identifier')
+                    ->where(fn ($query) => $query->where('gym_id', $gymId))
+                    ->ignore($memberProfileId),
+            ],
             'biometric_enabled' => ['sometimes', 'boolean'],
             'status' => ['nullable', Rule::in(['active', 'inactive', 'expired'])],
             'membership_status' => ['nullable', 'string', 'max:80'],
@@ -50,6 +58,12 @@ class UpdateMemberRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $this->merge([
+            'biometric_identifier' => filled($this->input('biometric_identifier'))
+                ? trim((string) $this->input('biometric_identifier'))
+                : null,
+        ]);
+
         $status = $this->input('status');
 
         if ($status !== null) {
@@ -64,5 +78,16 @@ class UpdateMemberRequest extends FormRequest
                 'biometric_enabled' => false,
             ]);
         }
+    }
+
+    private function resolvedGymId(): ?int
+    {
+        $routeGym = $this->route('gym');
+        $value = is_object($routeGym) ? $routeGym->id : $routeGym;
+        $value ??= $this->input('gym_id');
+        $value ??= $this->query('gym');
+        $value ??= $this->header('X-Gym-Id');
+
+        return filter_var($value, FILTER_VALIDATE_INT) ?: null;
     }
 }

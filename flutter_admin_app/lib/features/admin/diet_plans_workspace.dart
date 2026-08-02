@@ -29,6 +29,10 @@ class _DietPlansWorkspaceState extends State<DietPlansWorkspace> {
   List<Map<String, dynamic>> _records = const [];
   List<Map<String, dynamic>> _templates = const [];
   List<Map<String, dynamic>> _members = const [];
+  int _page = 1;
+  int _lastPage = 1;
+
+  bool get _hasMore => _page < _lastPage;
 
   bool get _isPlatform => widget.appUser.activeRole == 'platform_admin';
 
@@ -73,14 +77,21 @@ class _DietPlansWorkspaceState extends State<DietPlansWorkspace> {
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool reset = true}) async {
     setState(() {
       _loading = true;
       _error = null;
+      if (reset) {
+        _page = 1;
+        _lastPage = 1;
+      }
     });
     try {
+      PaginatedResponse<Map<String, dynamic>> response;
       if (_isPlatform) {
-        _records = await widget.repository.fetchPlatformDietTemplates();
+        response = await widget.repository.fetchPlatformDietTemplates(
+          page: _page,
+        );
       } else {
         final gymId = _gymId;
         if (gymId == null) {
@@ -90,6 +101,7 @@ class _DietPlansWorkspaceState extends State<DietPlansWorkspace> {
           widget.repository.fetchGymDietPlans(
             gymId: gymId,
             branchId: _branchId,
+            page: _page,
           ),
           widget.repository.fetchGymDietTemplates(
             gymId: gymId,
@@ -100,10 +112,16 @@ class _DietPlansWorkspaceState extends State<DietPlansWorkspace> {
             branchId: _branchId,
           ),
         ]);
-        _records = results[0];
-        _templates = results[1];
-        _members = results[2];
+        response = results[0] as PaginatedResponse<Map<String, dynamic>>;
+        _templates = results[1] as List<Map<String, dynamic>>;
+        _members = results[2] as List<Map<String, dynamic>>;
       }
+      if (!mounted) return;
+      setState(() {
+        _records = reset ? response.items : [..._records, ...response.items];
+        _page = response.currentPage;
+        _lastPage = response.lastPage;
+      });
     } catch (error) {
       _error = error.toString();
     }
@@ -391,14 +409,29 @@ class _DietPlansWorkspaceState extends State<DietPlansWorkspace> {
                   icon: Icons.restaurant_menu_rounded,
                 )
               : RefreshIndicator(
-                  onRefresh: _load,
+                  onRefresh: () => _load(),
                   child: ListView.separated(
                     padding: const EdgeInsets.only(bottom: AppSpacing.xl),
-                    itemCount: _records.length,
+                    itemCount: _records.length + (_hasMore ? 1 : 0),
                     separatorBuilder: (_, _) =>
                         const SizedBox(height: AppSpacing.sm),
-                    itemBuilder: (context, index) =>
-                        _recordCard(_records[index]),
+                    itemBuilder: (context, index) {
+                      if (index == _records.length) {
+                        return Center(
+                          child: OutlinedButton.icon(
+                            onPressed: _loading
+                                ? null
+                                : () {
+                                    setState(() => _page += 1);
+                                    _load(reset: false);
+                                  },
+                            icon: const Icon(Icons.expand_more_rounded),
+                            label: const Text('Load more'),
+                          ),
+                        );
+                      }
+                      return _recordCard(_records[index]);
+                    },
                   ),
                 ),
         ),

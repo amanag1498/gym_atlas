@@ -86,18 +86,19 @@ class AttendanceController extends Controller
         $selectedMember = $request->filled('member_id')
             ? (clone $membersQuery)->find($request->integer('member_id'))
             : null;
+        [$todayStart, $todayEnd] = $this->attendanceService->localDayBounds($gym);
 
         return view('web.gym.attendance.index', [
             'pageTitle' => 'Attendance',
             'breadcrumbs' => ['Gym', 'Attendance'],
             'gym' => $gym,
             'logs' => (clone $query)->latest('checked_in_at')->paginate(15)->withQueryString(),
-            'todayCount' => AttendanceLog::query()->where('gym_id', $gym->id)->whereIn('branch_id', $branchIds)->whereDate('checked_in_at', now()->toDateString())->count(),
+            'todayCount' => AttendanceLog::query()->where('gym_id', $gym->id)->whereIn('branch_id', $branchIds)->whereBetween('checked_in_at', [$todayStart, $todayEnd])->count(),
             'todayLogs' => AttendanceLog::query()
                 ->with(['member', 'checkedInByUser', 'branch'])
                 ->where('gym_id', $gym->id)
                 ->whereIn('branch_id', $branchIds)
-                ->whereDate('checked_in_at', now()->toDateString())
+                ->whereBetween('checked_in_at', [$todayStart, $todayEnd])
                 ->latest('checked_in_at')
                 ->take(6)
                 ->get(),
@@ -148,8 +149,18 @@ class AttendanceController extends Controller
             ->firstOrFail();
         $this->gymMemberAccessService->assertAccessible($memberProfile);
         $member->setRelation('memberProfile', $memberProfile);
+        $accessibleBranchIds = $this->gymWebPanelService->accessibleBranchIds($request, $gym);
+        $profileIntersectsScope = $memberProfile->branch_id !== null
+            ? in_array((int) $memberProfile->branch_id, $accessibleBranchIds, true)
+            : $member->memberMemberships()
+                ->where('gym_id', $gym->id)
+                ->where('status', 'active')
+                ->where(fn ($membership) => $membership
+                    ->whereNull('branch_id')
+                    ->orWhereIn('branch_id', $accessibleBranchIds))
+                ->exists();
         abort_unless(
-            in_array((int) $memberProfile->branch_id, $this->gymWebPanelService->accessibleBranchIds($request, $gym), true),
+            $profileIntersectsScope,
             404
         );
 
@@ -391,7 +402,8 @@ class AttendanceController extends Controller
         }
 
         if ($request->boolean('today')) {
-            $query->whereDate('checked_in_at', now()->toDateString());
+            [$dayStart, $dayEnd] = $this->attendanceService->localDayBounds($gym);
+            $query->whereBetween('checked_in_at', [$dayStart, $dayEnd]);
         } elseif ($request->boolean('this_week')) {
             $query->whereBetween('checked_in_at', [now()->startOfWeek(), now()->endOfWeek()]);
         } elseif ($request->boolean('this_month')) {
@@ -448,10 +460,23 @@ class AttendanceController extends Controller
             ->with(['memberProfiles' => fn ($builder) => $builder
                 ->with('branch')
                 ->where('gym_id', $gym->id)
-                ->whereIn('branch_id', $branchIds)])
+                ->where(fn ($scope) => $scope
+                    ->whereNull('branch_id')
+                    ->orWhereIn('branch_id', $branchIds))])
             ->whereHas('memberProfiles', fn ($builder) => $builder
                 ->where('gym_id', $gym->id)
-                ->whereIn('branch_id', $branchIds));
+                ->where('is_active', true)
+                ->where(fn ($status) => $status->whereNull('status')->orWhere('status', 'active'))
+                ->where('membership_status', 'active')
+                ->where(fn ($scope) => $scope
+                    ->whereNull('branch_id')
+                    ->orWhereIn('branch_id', $branchIds)))
+            ->whereHas('memberMemberships', fn ($membership) => $membership
+                ->where('gym_id', $gym->id)
+                ->where('status', 'active')
+                ->where(fn ($scope) => $scope
+                    ->whereNull('branch_id')
+                    ->orWhereIn('branch_id', $branchIds)));
     }
 
     /**

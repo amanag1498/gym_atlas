@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/premium_card.dart';
+import '../../core/pagination.dart';
 import 'member_repository.dart';
 
 class MemberLogbookScreen extends StatefulWidget {
@@ -23,9 +24,14 @@ class MemberLogbookScreen extends StatefulWidget {
 
 class _MemberLogbookScreenState extends State<MemberLogbookScreen> {
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _loadingMoreRecords = false;
   String? _error;
   List<Map<String, dynamic>> _history = const [];
   Map<String, dynamic> _summary = const {};
+  List<Map<String, dynamic>> _records = const [];
+  ApiPagination _historyPage = const ApiPagination.singlePage();
+  ApiPagination _recordPage = const ApiPagination.singlePage();
 
   @override
   void initState() {
@@ -45,12 +51,15 @@ class _MemberLogbookScreenState extends State<MemberLogbookScreen> {
         widget.repository.fetchPersonalRecords(),
       ]);
 
-      _history = (results[0]['data'] as List<dynamic>? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
+      _history = apiPageItems(results[0]);
+      _historyPage = ApiPagination.fromResponse(results[0]);
       _summary = Map<String, dynamic>.from(
         results[1]['data'] as Map? ?? const {},
       );
+      _records = (_summary['personal_records'] as List<dynamic>? ?? const [])
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList();
+      _recordPage = ApiPagination.fromResponse(results[1]);
     } catch (exception) {
       _error = exception.toString();
     }
@@ -60,11 +69,55 @@ class _MemberLogbookScreenState extends State<MemberLogbookScreen> {
     }
   }
 
+  Future<void> _loadMoreRecords() async {
+    if (_loadingMoreRecords || !_recordPage.hasMore) return;
+    setState(() => _loadingMoreRecords = true);
+    try {
+      final response = await widget.repository.fetchPersonalRecords(
+        page: _recordPage.nextPage,
+      );
+      final data = Map<String, dynamic>.from(
+        response['data'] as Map? ?? const {},
+      );
+      final incoming = (data['personal_records'] as List<dynamic>? ?? const [])
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList();
+      _records = mergeApiPageItems(_records, incoming);
+      _recordPage = ApiPagination.fromResponse(response);
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMoreRecords = false);
+    }
+  }
+
+  Future<void> _loadMoreHistory() async {
+    if (_loadingMore || !_historyPage.hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final response = await widget.repository.fetchWorkoutHistory(
+        page: _historyPage.nextPage,
+      );
+      _history = mergeApiPageItems(_history, apiPageItems(response));
+      _historyPage = ApiPagination.fromResponse(response);
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final records = (_summary['personal_records'] as List<dynamic>? ?? const [])
-        .map((item) => Map<String, dynamic>.from(item as Map))
-        .toList();
+    final records = _records;
     final firstName = firstNameFromFullName(widget.memberName);
 
     return DefaultTabController(
@@ -154,6 +207,58 @@ class _MemberLogbookScreenState extends State<MemberLogbookScreen> {
                       ],
                     ),
                   ),
+                  if (_historyPage.hasMore)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        8,
+                        AppSpacing.lg,
+                        AppSpacing.md,
+                      ),
+                      child: OutlinedButton.icon(
+                        onPressed: _loadingMore ? null : _loadMoreHistory,
+                        icon: _loadingMore
+                            ? const SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.expand_more_rounded),
+                        label: Text(
+                          _loadingMore
+                              ? 'Loading...'
+                              : 'Load more workout history',
+                        ),
+                      ),
+                    ),
+                  if (_recordPage.hasMore)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        0,
+                        AppSpacing.lg,
+                        AppSpacing.md,
+                      ),
+                      child: OutlinedButton.icon(
+                        onPressed: _loadingMoreRecords
+                            ? null
+                            : _loadMoreRecords,
+                        icon: _loadingMoreRecords
+                            ? const SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.emoji_events_rounded),
+                        label: Text(
+                          _loadingMoreRecords
+                              ? 'Loading...'
+                              : 'Load more personal records',
+                        ),
+                      ),
+                    ),
                 ],
               ),
       ),
@@ -1197,9 +1302,11 @@ class ExerciseHistoryScreen extends StatefulWidget {
 
 class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
   bool _loading = true;
+  bool _loadingMore = false;
   String? _error;
   Map<String, dynamic>? _record;
   List<Map<String, dynamic>> _history = const [];
+  ApiPagination _historyPage = const ApiPagination.singlePage();
 
   @override
   void initState() {
@@ -1226,12 +1333,40 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
       _history = (data['history'] as List<dynamic>? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map))
           .toList();
+      _historyPage = ApiPagination.fromResponse(response);
     } catch (exception) {
       _error = exception.toString();
     }
 
     if (mounted) {
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_historyPage.hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final response = await widget.repository.fetchExerciseHistory(
+        widget.exerciseId,
+        page: _historyPage.nextPage,
+      );
+      final data = Map<String, dynamic>.from(
+        response['data'] as Map? ?? const {},
+      );
+      final incoming = (data['history'] as List<dynamic>? ?? const [])
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList();
+      _history = mergeApiPageItems(_history, incoming);
+      _historyPage = ApiPagination.fromResponse(response);
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -1282,7 +1417,7 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
                             Expanded(
                               child: _LogbookDetailStatCard(
                                 label: 'Sessions',
-                                value: '${_history.length}',
+                                value: '${_historyPage.total}',
                                 icon: Icons.history_rounded,
                               ),
                             ),
@@ -1355,6 +1490,27 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
                               ),
                             ),
                           ),
+                        if (_historyPage.hasMore) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          Center(
+                            child: OutlinedButton.icon(
+                              onPressed: _loadingMore ? null : _loadMore,
+                              icon: _loadingMore
+                                  ? const SizedBox.square(
+                                      dimension: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.expand_more_rounded),
+                              label: Text(
+                                _loadingMore
+                                    ? 'Loading...'
+                                    : 'Load more exercise history',
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
             ),

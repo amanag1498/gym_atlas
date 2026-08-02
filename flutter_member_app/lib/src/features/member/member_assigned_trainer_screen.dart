@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/loading_state.dart';
+import '../../core/pagination.dart';
 import '../../../core/widgets/premium_card.dart';
 import 'member_repository.dart';
 
@@ -140,11 +141,14 @@ class _MemberAssignedTrainerScreenState
     extends State<MemberAssignedTrainerScreen> {
   bool _loading = true;
   bool _chatLoading = false;
+  bool _loadingMoreCoaching = false;
   String? _error;
   String? _chatError;
   Map<String, dynamic> _trainerResponse = const {};
   List<Map<String, dynamic>> _independentTrainers = const [];
   List<Map<String, dynamic>> _pendingInvitations = const [];
+  ApiPagination _trainerPage = const ApiPagination.singlePage();
+  ApiPagination _invitationPage = const ApiPagination.singlePage();
   final List<Map<String, dynamic>> _messages = <Map<String, dynamic>>[];
   dynamic _chatMessageHandler;
   int _unreadCount = 0;
@@ -289,6 +293,7 @@ class _MemberAssignedTrainerScreenState
         response,
         keys: const ['relationships', 'trainers'],
       );
+      _trainerPage = ApiPagination.fromResponse(response);
     } catch (exception) {
       debugPrint('[member-chat][warn] independent trainers: $exception');
       _independentTrainers = const [];
@@ -306,9 +311,55 @@ class _MemberAssignedTrainerScreenState
                 status == null || status.isEmpty || status == 'pending';
             return pending && item['actionable'] != false;
           }).toList();
+      _invitationPage = ApiPagination.fromResponse(response);
     } catch (exception) {
       debugPrint('[member-chat][warn] independent invitations: $exception');
       _pendingInvitations = const [];
+    }
+  }
+
+  Future<void> _loadMoreIndependentCoaching() async {
+    if (_loadingMoreCoaching ||
+        (!_trainerPage.hasMore && !_invitationPage.hasMore)) {
+      return;
+    }
+    setState(() => _loadingMoreCoaching = true);
+    try {
+      if (_trainerPage.hasMore) {
+        final response = await widget.repository.fetchIndependentTrainers(
+          page: _trainerPage.nextPage,
+        );
+        _independentTrainers = mergeApiPageItems(
+          _independentTrainers,
+          apiPageItems(response),
+        );
+        _trainerPage = ApiPagination.fromResponse(response);
+      }
+      if (_invitationPage.hasMore) {
+        final response = await widget.repository
+            .fetchIndependentTrainerInvitations(
+              status: 'pending',
+              page: _invitationPage.nextPage,
+            );
+        _pendingInvitations = mergeApiPageItems(
+          _pendingInvitations,
+          apiPageItems(response).where(
+            (item) =>
+                (item['status']?.toString().toLowerCase() ?? 'pending') ==
+                    'pending' &&
+                item['actionable'] != false,
+          ),
+        );
+        _invitationPage = ApiPagination.fromResponse(response);
+      }
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMoreCoaching = false);
     }
   }
 
@@ -502,7 +553,7 @@ class _MemberAssignedTrainerScreenState
     try {
       final responses = await Future.wait([
         widget.repository.fetchChatMessages(trainerId),
-        widget.repository.fetchChatConversations(),
+        _fetchAllChatConversations(),
       ]);
       final response = responses[0];
       final conversations = (responses[1]['data'] as List<dynamic>? ?? const [])
@@ -544,6 +595,22 @@ class _MemberAssignedTrainerScreenState
         setState(() => _chatLoading = false);
       }
     }
+  }
+
+  Future<Map<String, dynamic>> _fetchAllChatConversations() async {
+    var response = await widget.repository.fetchChatConversations();
+    var conversations = apiPageItems(response);
+    var pagination = ApiPagination.fromResponse(response);
+
+    while (pagination.hasMore) {
+      response = await widget.repository.fetchChatConversations(
+        page: pagination.nextPage,
+      );
+      conversations = mergeApiPageItems(conversations, apiPageItems(response));
+      pagination = ApiPagination.fromResponse(response);
+    }
+
+    return {'data': conversations};
   }
 
   bool _upsertMessage(Map<String, dynamic> message) {
@@ -826,6 +893,29 @@ class _MemberAssignedTrainerScreenState
                   if (!hasTrainer && _independentTrainers.isEmpty) ...[
                     RevealOnBuild(
                       child: _MemberChatNoTrainerCard(onRefresh: _load),
+                    ),
+                  ],
+                  if (_trainerPage.hasMore || _invitationPage.hasMore) ...[
+                    const SizedBox(height: 12),
+                    Center(
+                      child: OutlinedButton.icon(
+                        onPressed: _loadingMoreCoaching
+                            ? null
+                            : _loadMoreIndependentCoaching,
+                        icon: _loadingMoreCoaching
+                            ? const SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.expand_more_rounded),
+                        label: Text(
+                          _loadingMoreCoaching
+                              ? 'Loading...'
+                              : 'Load more coaching',
+                        ),
+                      ),
                     ),
                   ],
                 ],

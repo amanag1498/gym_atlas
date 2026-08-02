@@ -67,7 +67,7 @@
                         :initial-item="$selectedMemberSearchItem"
                         placeholder="Search members"
                     />
-                    <x-form-select name="check_in_method" label="Method" :selected="request('check_in_method')" :options="['' => 'All methods', 'biometric' => 'Biometric', 'manual' => 'Manual']" />
+                    <x-form-select name="check_in_method" label="Method" :selected="request('check_in_method')" :options="['' => 'All methods', 'biometric' => 'Biometric', 'qr' => 'QR', 'manual' => 'Manual']" />
                     <x-form-input name="start_date" label="Start Date" type="date" :value="request('start_date')" />
                     <x-form-input name="end_date" label="End Date" type="date" :value="request('end_date')" />
                     <div class="grid grid-cols-3 gap-2">
@@ -111,7 +111,7 @@
                                     <div class="text-xs text-slate-500 dark:text-slate-400">{{ $row->total_logs }} logs</div>
                                 </div>
                                 <div class="h-2.5 rounded-full bg-slate-100 dark:bg-slate-800">
-                                    <div class="h-2.5 rounded-full {{ $row->check_in_method === 'biometric' ? 'bg-sky-500' : 'bg-amber-500' }}" style="width: {{ $width }}%"></div>
+                                    <div class="h-2.5 rounded-full {{ $row->check_in_method === 'biometric' ? 'bg-sky-500' : ($row->check_in_method === 'qr' ? 'bg-emerald-500' : 'bg-amber-500') }}" style="width: {{ $width }}%"></div>
                                 </div>
                             </div>
                         @empty
@@ -136,7 +136,7 @@
                                         <div class="truncate font-medium text-slate-900 dark:text-slate-100">{{ $log->member?->name ?? 'Member' }}</div>
                                         <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $log->branch?->name ?? 'Branch not set' }} • {{ optional($log->checked_in_at)->format('d M, h:i A') }}</div>
                                     </div>
-                                    <x-status-badge :label="strtoupper((string) $log->check_in_method)" :tone="$log->check_in_method === 'biometric' ? 'info' : 'warning'" />
+                                    <x-status-badge :label="strtoupper((string) $log->check_in_method)" :tone="$log->check_in_method === 'biometric' ? 'info' : ($log->check_in_method === 'qr' ? 'success' : 'warning')" />
                                 </div>
                             </div>
                         @empty
@@ -157,7 +157,7 @@
                                 @if ($selectedMember)
                                     Full ledger for {{ $selectedMember->name }}.
                                 @else
-                                    Chronological manual and biometric entries across the current scope.
+                                    Chronological manual, QR, and biometric entries across the current scope.
                                 @endif
                             </p>
                         </div>
@@ -190,7 +190,7 @@
                                             <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ optional($log->checked_in_at)->format('h:i A') }}</div>
                                         </td>
                                         <td>{{ $log->branch?->name ?? 'N/A' }}</td>
-                                        <td><x-status-badge :label="strtoupper((string) $log->check_in_method)" :tone="$log->check_in_method === 'biometric' ? 'info' : 'warning'" /></td>
+                                        <td><x-status-badge :label="strtoupper((string) $log->check_in_method)" :tone="$log->check_in_method === 'biometric' ? 'info' : ($log->check_in_method === 'qr' ? 'success' : 'warning')" /></td>
                                         <td>{{ $log->checkedInByUser?->name ?? 'System' }}</td>
                                         <td class="text-sm text-slate-600 dark:text-slate-300">
                                             <div>{{ $log->source_device ?: 'No source device' }}</div>
@@ -219,7 +219,7 @@
                     </div>
                 @else
                     <div class="px-5 py-6">
-                        <x-empty-state title="No attendance recorded" message="Start with a manual or biometric check-in to build the ledger." :action-href="$canManageAttendance ? route('web.gym.attendance.manual', $scopeQuery) : null" :action-label="$canManageAttendance ? 'Manual Check-in' : null" />
+                        <x-empty-state title="No attendance recorded" message="Start with a manual, QR, or biometric check-in to build the ledger." :action-href="$canManageAttendance ? route('web.gym.attendance.manual', $scopeQuery) : null" :action-label="$canManageAttendance ? 'Manual Check-in' : null" />
                     </div>
                 @endif
 

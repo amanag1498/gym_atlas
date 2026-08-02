@@ -42,18 +42,37 @@ class IndependentMemberCoachingController extends Controller
     {
         $relationship = $this->relationship($request, $relationship, 'progress');
         $member = $relationship->member;
+        $perPage = (int) $request->integer('per_page', 15);
+        $weightLogs = $member->weightLogs()->whereNull('gym_id')->whereNull('branch_id')
+            ->latest('log_date')->latest('id')->paginate($perPage, ['*'], 'weight_page');
+        $measurements = $member->bodyMeasurements()->whereNull('gym_id')->whereNull('branch_id')
+            ->latest('measured_on')->latest('id')->paginate($perPage, ['*'], 'measurement_page');
+        $photos = $member->progressPhotos()->whereNull('gym_id')->whereNull('branch_id')
+            ->latest('captured_on')->latest('id')->paginate($perPage, ['*'], 'photo_page');
+        $records = $member->personalRecords()
+            ->with('exercise')
+            ->where('coaching_scope_key', PersonalRecord::coachingScopeKey(null, null, $relationship->id))
+            ->latest('best_volume')->latest('id')->paginate($perPage, ['*'], 'record_page');
+        $meta = static fn ($paginator): array => [
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+        ];
 
-        return $this->success([
+        return $this->successWithMeta([
             'relationship_id' => $relationship->id,
             'source' => 'independent',
             'member_id' => $member->id,
-            'weight_logs' => WeightLogResource::collection($member->weightLogs()->whereNull('gym_id')->whereNull('branch_id')->latest('log_date')->take(30)->get()),
-            'body_measurements' => BodyMeasurementResource::collection($member->bodyMeasurements()->whereNull('gym_id')->whereNull('branch_id')->latest('measured_on')->take(30)->get()),
-            'progress_photos' => ProgressPhotoResource::collection($member->progressPhotos()->whereNull('gym_id')->whereNull('branch_id')->latest('captured_on')->take(30)->get()),
-            'personal_records' => PersonalRecordResource::collection($member->personalRecords()
-                ->with('exercise')
-                ->where('coaching_scope_key', PersonalRecord::coachingScopeKey(null, null, $relationship->id))
-                ->get()),
+            'weight_logs' => WeightLogResource::collection($weightLogs->getCollection()),
+            'body_measurements' => BodyMeasurementResource::collection($measurements->getCollection()),
+            'progress_photos' => ProgressPhotoResource::collection($photos->getCollection()),
+            'personal_records' => PersonalRecordResource::collection($records->getCollection()),
+        ], [
+            'weight_logs_pagination' => $meta($weightLogs),
+            'body_measurements_pagination' => $meta($measurements),
+            'progress_photos_pagination' => $meta($photos),
+            'personal_records_pagination' => $meta($records),
         ]);
     }
 
@@ -83,6 +102,7 @@ class IndependentMemberCoachingController extends Controller
             ->where('member_id', $relationship->member_user_id)
             ->whereHas('plan', fn ($query) => $query->where('independent_trainer_member_relationship_id', $relationship->id))
             ->latest('session_date')
+            ->latest('id')
             ->paginate((int) $request->integer('per_page', 15));
 
         return $this->paginated(
@@ -100,6 +120,7 @@ class IndependentMemberCoachingController extends Controller
             ->where('independent_trainer_member_relationship_id', $relationship->id)
             ->where('trainer_id', $request->user()->id)
             ->latest('created_at')
+            ->latest('id')
             ->paginate((int) $request->integer('per_page', 20));
 
         return $this->paginated(

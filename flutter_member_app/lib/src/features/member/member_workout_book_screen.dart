@@ -5,6 +5,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/loading_state.dart';
 import '../../../core/widgets/premium_card.dart';
+import '../../core/pagination.dart';
 import 'member_repository.dart';
 
 class MemberWorkoutBookScreen extends StatefulWidget {
@@ -56,11 +57,22 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       TextEditingController();
   bool _loading = true;
   bool _saving = false;
+  bool _loadingMore = false;
   String? _error;
   List<Map<String, dynamic>> _books = const [];
   List<Map<String, dynamic>> _recommendedBooks = const [];
   List<Map<String, dynamic>> _plans = const [];
   List<Map<String, dynamic>> _exercises = const [];
+  ApiPagination _bookPage = const ApiPagination.singlePage();
+  ApiPagination _recommendedPage = const ApiPagination.singlePage();
+  ApiPagination _planPage = const ApiPagination.singlePage();
+  ApiPagination _exercisePage = const ApiPagination.singlePage();
+
+  bool get _hasMore =>
+      _bookPage.hasMore ||
+      _recommendedPage.hasMore ||
+      _planPage.hasMore ||
+      _exercisePage.hasMore;
   String? _catalogDifficulty;
   String? _catalogProgramType;
   bool _featuredOnly = false;
@@ -129,6 +141,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
 
     try {
       final catalogQuery = <String, dynamic>{
+        'page': 1,
         if (_catalogSearchController.text.trim().isNotEmpty)
           'search': _catalogSearchController.text.trim(),
         if (_catalogDifficulty != null) 'difficulty': _catalogDifficulty,
@@ -143,18 +156,14 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
         widget.repository.fetchWorkoutExercises(),
       ]);
 
-      _books = (responses[0]['data'] as List<dynamic>? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
-      _recommendedBooks = (responses[1]['data'] as List<dynamic>? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
-      _plans = (responses[2]['data'] as List<dynamic>? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
-      _exercises = (responses[3]['data'] as List<dynamic>? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
+      _books = apiPageItems(responses[0]);
+      _recommendedBooks = apiPageItems(responses[1]);
+      _plans = apiPageItems(responses[2]);
+      _exercises = apiPageItems(responses[3]);
+      _bookPage = ApiPagination.fromResponse(responses[0]);
+      _recommendedPage = ApiPagination.fromResponse(responses[1]);
+      _planPage = ApiPagination.fromResponse(responses[2]);
+      _exercisePage = ApiPagination.fromResponse(responses[3]);
       for (final day in _dayDrafts) {
         for (final exercise in day.exercises) {
           exercise.bodyPart ??= _exerciseGroups.isEmpty
@@ -180,6 +189,59 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
 
     if (mounted) {
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final catalogQuery = <String, dynamic>{
+        if (_catalogSearchController.text.trim().isNotEmpty)
+          'search': _catalogSearchController.text.trim(),
+        if (_catalogDifficulty != null) 'difficulty': _catalogDifficulty,
+        if (_catalogProgramType != null) 'program_type': _catalogProgramType,
+        if (_featuredOnly) 'featured': true,
+      };
+      if (_bookPage.hasMore) {
+        final response = await widget.repository.fetchWorkoutBooks(
+          queryParameters: {...catalogQuery, 'page': _bookPage.nextPage},
+        );
+        _books = mergeApiPageItems(_books, apiPageItems(response));
+        _bookPage = ApiPagination.fromResponse(response);
+      }
+      if (_recommendedPage.hasMore) {
+        final response = await widget.repository.fetchRecommendedWorkoutBooks(
+          queryParameters: {'page': _recommendedPage.nextPage},
+        );
+        _recommendedBooks = mergeApiPageItems(
+          _recommendedBooks,
+          apiPageItems(response),
+        );
+        _recommendedPage = ApiPagination.fromResponse(response);
+      }
+      if (_planPage.hasMore) {
+        final response = await widget.repository.fetchWorkoutPlans(
+          page: _planPage.nextPage,
+        );
+        _plans = mergeApiPageItems(_plans, apiPageItems(response));
+        _planPage = ApiPagination.fromResponse(response);
+      }
+      if (_exercisePage.hasMore) {
+        final response = await widget.repository.fetchWorkoutExercises(
+          queryParameters: {'page': _exercisePage.nextPage},
+        );
+        _exercises = mergeApiPageItems(_exercises, apiPageItems(response));
+        _exercisePage = ApiPagination.fromResponse(response);
+      }
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -1413,6 +1475,27 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                       ],
                     ),
             ),
+            if (_hasMore)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  8,
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                ),
+                child: OutlinedButton.icon(
+                  onPressed: _loadingMore ? null : _loadMore,
+                  icon: _loadingMore
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.expand_more_rounded),
+                  label: Text(
+                    _loadingMore ? 'Loading...' : 'Load more workout data',
+                  ),
+                ),
+              ),
           ],
         ),
       ),

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../core/pagination.dart';
 import '../../../core/widgets/premium_card.dart';
 import 'member_repository.dart';
 
@@ -313,9 +314,12 @@ class MemberAttendanceScreen extends StatefulWidget {
 
 class _MemberAttendanceScreenState extends State<MemberAttendanceScreen> {
   bool _loading = true;
+  bool _loadingMore = false;
   String? _error;
+  ApiPagination _pagination = const ApiPagination.singlePage();
   List<Map<String, dynamic>> _attendance = const <Map<String, dynamic>>[];
   Map<String, dynamic> _attendanceStatus = const <String, dynamic>{};
+  Map<String, dynamic> _biometricProfile = const <String, dynamic>{};
 
   @override
   void initState() {
@@ -323,29 +327,48 @@ class _MemberAttendanceScreenState extends State<MemberAttendanceScreen> {
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool append = false}) async {
+    if (append && (_loadingMore || !_pagination.hasMore)) return;
     setState(() {
-      _loading = true;
-      _error = null;
+      if (append) {
+        _loadingMore = true;
+      } else {
+        _loading = true;
+        _error = null;
+      }
     });
 
     try {
-      final results = await Future.wait(<Future<Map<String, dynamic>>>[
-        widget.repository.fetchAttendanceHistory(),
-        widget.repository.fetchAttendanceStatus(),
-      ]);
-      _attendance = (results[0]['data'] as List<dynamic>? ?? const <dynamic>[])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
-      _attendanceStatus = Map<String, dynamic>.from(
-        results[1]['data'] as Map? ?? const <String, dynamic>{},
-      );
+      if (append) {
+        final response = await widget.repository.fetchAttendanceHistory(
+          page: _pagination.nextPage,
+        );
+        _attendance = mergeApiPageItems(_attendance, apiPageItems(response));
+        _pagination = ApiPagination.fromResponse(response);
+      } else {
+        final results = await Future.wait(<Future<Map<String, dynamic>>>[
+          widget.repository.fetchAttendanceHistory(page: 1),
+          widget.repository.fetchAttendanceStatus(),
+          widget.repository.fetchBiometricAttendanceProfile(),
+        ]);
+        _attendance = apiPageItems(results[0]);
+        _pagination = ApiPagination.fromResponse(results[0]);
+        _attendanceStatus = Map<String, dynamic>.from(
+          results[1]['data'] as Map? ?? const <String, dynamic>{},
+        );
+        _biometricProfile = Map<String, dynamic>.from(
+          results[2]['data'] as Map? ?? const <String, dynamic>{},
+        );
+      }
     } catch (exception) {
       _error = exception.toString();
     }
 
     if (mounted) {
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _loadingMore = false;
+      });
     }
   }
 
@@ -393,9 +416,25 @@ class _MemberAttendanceScreenState extends State<MemberAttendanceScreen> {
                     _FitAnimatedSection(
                       child: _AttendanceHeader(
                         latestGym: latestGym,
-                        totalVisits: _attendance.length,
+                        totalVisits: _pagination.total,
                         checkedInToday: checkedInToday,
                         enabled: attendanceEnabled,
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    _FitAnimatedSection(
+                      delay: const Duration(milliseconds: 45),
+                      child: _BiometricAttendanceCard(
+                        attendanceEnabled: attendanceEnabled,
+                        biometricEnabled:
+                            _biometricProfile['biometric_enabled'] == true,
+                        biometricRegistered:
+                            _biometricProfile['biometric_registered'] == true,
+                        message: _stringValue(
+                          _biometricProfile['message'],
+                          fallback:
+                              'Ask your gym to enroll your biometric attendance profile.',
+                        ),
                       ),
                     ),
                     const SizedBox(height: 15),
@@ -405,7 +444,7 @@ class _MemberAttendanceScreenState extends State<MemberAttendanceScreen> {
                         children: <Widget>[
                           Expanded(
                             child: _FitInfoCell(
-                              title: '${_attendance.length}',
+                              title: '${_pagination.total}',
                               subtitle: 'Visits',
                             ),
                           ),
@@ -441,6 +480,27 @@ class _MemberAttendanceScreenState extends State<MemberAttendanceScreen> {
                                   .toList(),
                       ),
                     ),
+                    if (_pagination.hasMore) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      Center(
+                        child: OutlinedButton.icon(
+                          onPressed: _loadingMore
+                              ? null
+                              : () => _load(append: true),
+                          icon: _loadingMore
+                              ? const SizedBox.square(
+                                  dimension: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.expand_more_rounded),
+                          label: Text(
+                            _loadingMore ? 'Loading...' : 'Load more visits',
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -679,6 +739,69 @@ class _AttendanceHeader extends StatelessWidget {
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppColors.textSecondary,
                     fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BiometricAttendanceCard extends StatelessWidget {
+  const _BiometricAttendanceCard({
+    required this.attendanceEnabled,
+    required this.biometricEnabled,
+    required this.biometricRegistered,
+    required this.message,
+  });
+
+  final bool attendanceEnabled;
+  final bool biometricEnabled;
+  final bool biometricRegistered;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final ready = attendanceEnabled && biometricEnabled && biometricRegistered;
+
+    return PremiumCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceSoft,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.stroke),
+            ),
+            child: Icon(
+              ready ? Icons.fingerprint_rounded : Icons.fingerprint_outlined,
+              color: ready ? AppColors.primaryBright : AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  ready ? 'Biometric check-in ready' : 'Biometric setup',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  message,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.4,
                   ),
                 ),
               ],

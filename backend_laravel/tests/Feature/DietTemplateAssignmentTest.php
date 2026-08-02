@@ -196,7 +196,8 @@ class DietTemplateAssignmentTest extends TestCase
         $this->actingAs($owner, 'sanctum')
             ->getJson("/api/gym/diet-templates?gym_id={$gym->id}&branch_id={$branch->id}")
             ->assertOk()
-            ->assertJsonPath('data.0.id', $template->id);
+            ->assertJsonPath('data.0.id', $template->id)
+            ->assertJsonPath('meta.pagination.current_page', 1);
 
         $this->actingAs($owner, 'sanctum')
             ->postJson("/api/gym/diet-templates/{$template->id}/assign", [
@@ -291,6 +292,8 @@ class DietTemplateAssignmentTest extends TestCase
         $this->actingAs($trainer, 'sanctum')
             ->getJson('/api/trainer/diet-templates')
             ->assertOk()
+            ->assertJsonPath('meta.pagination.current_page', 1)
+            ->assertJsonPath('meta.pagination.per_page', 20)
             ->assertJsonFragment([
                 'id' => $globalTemplate->id,
                 'source' => 'atlas',
@@ -482,6 +485,7 @@ class DietTemplateAssignmentTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', $globalTemplate->id)
+            ->assertJsonPath('meta.pagination.current_page', 1)
             ->assertJsonMissing(['id' => $trainerTemplate->id]);
 
         $this->actingAs($assignedMember, 'sanctum')
@@ -497,6 +501,8 @@ class DietTemplateAssignmentTest extends TestCase
         $this->actingAs($assignedMember, 'sanctum')
             ->getJson('/api/member/diet-plans')
             ->assertOk()
+            ->assertJsonPath('meta.pagination.current_page', 1)
+            ->assertJsonPath('meta.pagination.per_page', 15)
             ->assertJsonFragment(['name' => 'Trainer Private Nutrition']);
 
         $this->actingAs($otherMember, 'sanctum')

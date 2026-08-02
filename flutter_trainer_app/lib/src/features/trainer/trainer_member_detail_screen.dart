@@ -5,6 +5,7 @@ import 'package:gym_flutter_core/diet_plan_summary_view.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/premium_card.dart';
+import '../../core/pagination.dart';
 import 'trainer_repository.dart';
 
 class TrainerMemberDetailScreen extends StatefulWidget {
@@ -32,6 +33,7 @@ class TrainerMemberDetailScreen extends StatefulWidget {
 
 class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
   bool _loading = true;
+  bool _loadingMore = false;
   String? _error;
   Map<String, dynamic> _detail = const {};
   Map<String, dynamic> _progress = const {};
@@ -41,6 +43,28 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
   List<Map<String, dynamic>> _notes = const [];
   List<Map<String, dynamic>> _workoutHistory = const [];
   List<Map<String, dynamic>> _personalRecords = const [];
+  ApiPagination _attendancePage = const ApiPagination.singlePage();
+  ApiPagination _planPage = const ApiPagination.singlePage();
+  ApiPagination _dietPage = const ApiPagination.singlePage();
+  ApiPagination _notePage = const ApiPagination.singlePage();
+  ApiPagination _logbookPage = const ApiPagination.singlePage();
+  ApiPagination _recordPage = const ApiPagination.singlePage();
+  ApiPagination _progressWeightPage = const ApiPagination.singlePage();
+  ApiPagination _progressMeasurementPage = const ApiPagination.singlePage();
+  ApiPagination _progressPhotoPage = const ApiPagination.singlePage();
+  ApiPagination _progressRecordPage = const ApiPagination.singlePage();
+
+  bool get _hasMore =>
+      _attendancePage.hasMore ||
+      _planPage.hasMore ||
+      _dietPage.hasMore ||
+      _notePage.hasMore ||
+      _logbookPage.hasMore ||
+      _recordPage.hasMore ||
+      _progressWeightPage.hasMore ||
+      _progressMeasurementPage.hasMore ||
+      _progressPhotoPage.hasMore ||
+      _progressRecordPage.hasMore;
 
   @override
   void initState() {
@@ -73,11 +97,13 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
         widget.repository.fetchMemberWorkoutLogbook(memberId),
       ]);
       List<Map<String, dynamic>> dietPlans = const [];
+      ApiPagination dietPage = const ApiPagination.singlePage();
       try {
         final dietResponse = await widget.repository.fetchDietPlans(
           memberId: memberId,
         );
         dietPlans = _mapList(dietResponse['data']);
+        dietPage = ApiPagination.fromResponse(dietResponse);
       } catch (_) {
         // Diet permissions may lag during deployment. Member access and the
         // rest of the coaching profile must remain available independently.
@@ -86,16 +112,48 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
       final detail = _map(responses[0]['data']);
       final notes = _mapList(responses[4]['data']);
       final logbook = _map(responses[5]['data']);
+      final logbookEnvelope = <String, dynamic>{
+        'data': logbook['history'],
+        'meta': logbook['meta'],
+      };
 
       setState(() {
         _detail = detail;
         _progress = _map(responses[2]['data']);
+        _progressWeightPage = _namedPagination(
+          responses[2],
+          'weight_logs_pagination',
+        );
+        _progressMeasurementPage = _namedPagination(
+          responses[2],
+          'body_measurements_pagination',
+        );
+        _progressPhotoPage = _namedPagination(
+          responses[2],
+          'progress_photos_pagination',
+        );
+        _progressRecordPage = _namedPagination(
+          responses[2],
+          'personal_records_pagination',
+        );
         _attendance = _mapList(responses[1]['data']);
+        _attendancePage = ApiPagination.fromResponse(responses[1]);
         _plans = _mapList(responses[3]['data']);
+        _planPage = ApiPagination.fromResponse(responses[3]);
         _notes = notes;
+        _notePage = ApiPagination.fromResponse(responses[4]);
         _workoutHistory = _mapList(logbook['history']);
+        _logbookPage = ApiPagination.fromResponse(logbookEnvelope);
         _personalRecords = _mapList(logbook['personal_records']);
+        _recordPage = ApiPagination.fromResponse({
+          'meta': {
+            'pagination': _map(
+              _map(logbook['meta'])['personal_records_pagination'],
+            ),
+          },
+        });
         _dietPlans = dietPlans;
+        _dietPage = dietPage;
         _loading = false;
       });
     } catch (exception) {
@@ -103,6 +161,144 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
         _loading = false;
         _error = exception.toString();
       });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    final memberId = (widget.assignment['member_id'] as num?)?.toInt();
+    if (memberId == null || _loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      if (_attendancePage.hasMore) {
+        final response = await widget.repository.fetchMemberAttendance(
+          memberId,
+          page: _attendancePage.nextPage,
+        );
+        _attendance = mergeApiPageItems(_attendance, apiPageItems(response));
+        _attendancePage = ApiPagination.fromResponse(response);
+      }
+      if (_planPage.hasMore) {
+        final response = await widget.repository.fetchMemberPlans(
+          memberId,
+          page: _planPage.nextPage,
+        );
+        _plans = mergeApiPageItems(_plans, apiPageItems(response));
+        _planPage = ApiPagination.fromResponse(response);
+      }
+      if (_dietPage.hasMore) {
+        final response = await widget.repository.fetchDietPlans(
+          memberId: memberId,
+          page: _dietPage.nextPage,
+        );
+        _dietPlans = mergeApiPageItems(_dietPlans, apiPageItems(response));
+        _dietPage = ApiPagination.fromResponse(response);
+      }
+      if (_notePage.hasMore) {
+        final response = await widget.repository.fetchMemberNotes(
+          memberId,
+          page: _notePage.nextPage,
+        );
+        _notes = mergeApiPageItems(_notes, apiPageItems(response));
+        _notePage = ApiPagination.fromResponse(response);
+      }
+      if (_logbookPage.hasMore) {
+        final response = await widget.repository.fetchMemberWorkoutLogbook(
+          memberId,
+          page: _logbookPage.nextPage,
+        );
+        final data = _map(response['data']);
+        _workoutHistory = mergeApiPageItems(
+          _workoutHistory,
+          _mapList(data['history']),
+        );
+        _logbookPage = ApiPagination.fromResponse({
+          'data': data['history'],
+          'meta': data['meta'],
+        });
+      }
+      if (_recordPage.hasMore) {
+        final response = await widget.repository.fetchMemberWorkoutLogbook(
+          memberId,
+          recordsPage: _recordPage.nextPage,
+        );
+        final data = _map(response['data']);
+        _personalRecords = mergeApiPageItems(
+          _personalRecords,
+          _mapList(data['personal_records']),
+        );
+        _recordPage = ApiPagination.fromResponse({
+          'meta': {
+            'pagination': _map(
+              _map(data['meta'])['personal_records_pagination'],
+            ),
+          },
+        });
+      }
+      if (_progressWeightPage.hasMore ||
+          _progressMeasurementPage.hasMore ||
+          _progressPhotoPage.hasMore ||
+          _progressRecordPage.hasMore) {
+        final response = await widget.repository.fetchMemberProgress(
+          memberId,
+          weightPage: _progressWeightPage.hasMore
+              ? _progressWeightPage.nextPage
+              : _progressWeightPage.currentPage,
+          measurementPage: _progressMeasurementPage.hasMore
+              ? _progressMeasurementPage.nextPage
+              : _progressMeasurementPage.currentPage,
+          photoPage: _progressPhotoPage.hasMore
+              ? _progressPhotoPage.nextPage
+              : _progressPhotoPage.currentPage,
+          recordPage: _progressRecordPage.hasMore
+              ? _progressRecordPage.nextPage
+              : _progressRecordPage.currentPage,
+        );
+        final data = _map(response['data']);
+        _progress = {
+          ..._progress,
+          ...data,
+          'weight_logs': mergeApiPageItems(
+            _mapList(_progress['weight_logs']),
+            _mapList(data['weight_logs']),
+          ),
+          'body_measurements': mergeApiPageItems(
+            _mapList(_progress['body_measurements']),
+            _mapList(data['body_measurements']),
+          ),
+          'progress_photos': mergeApiPageItems(
+            _mapList(_progress['progress_photos']),
+            _mapList(data['progress_photos']),
+          ),
+          'personal_records': mergeApiPageItems(
+            _mapList(_progress['personal_records']),
+            _mapList(data['personal_records']),
+          ),
+        };
+        _progressWeightPage = _namedPagination(
+          response,
+          'weight_logs_pagination',
+        );
+        _progressMeasurementPage = _namedPagination(
+          response,
+          'body_measurements_pagination',
+        );
+        _progressPhotoPage = _namedPagination(
+          response,
+          'progress_photos_pagination',
+        );
+        _progressRecordPage = _namedPagination(
+          response,
+          'personal_records_pagination',
+        );
+      }
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -257,6 +453,27 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
                           icon: Icons.edit_note_rounded,
                           child: _NotesTab(notes: _notes),
                         ),
+                        if (_hasMore) ...[
+                          const SizedBox(height: 18),
+                          Center(
+                            child: OutlinedButton.icon(
+                              onPressed: _loadingMore ? null : _loadMore,
+                              icon: _loadingMore
+                                  ? const SizedBox.square(
+                                      dimension: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.expand_more_rounded),
+                              label: Text(
+                                _loadingMore
+                                    ? 'Loading...'
+                                    : 'Load older coaching data',
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -1670,4 +1887,11 @@ String _measurementSummary(Map<String, dynamic> measurement) {
     return 'Body measurement updated';
   }
   return pairs.take(2).join(' • ');
+}
+
+ApiPagination _namedPagination(Map<String, dynamic> response, String key) {
+  final meta = _map(response['meta']);
+  return ApiPagination.fromResponse({
+    'meta': {'pagination': _map(meta[key])},
+  });
 }

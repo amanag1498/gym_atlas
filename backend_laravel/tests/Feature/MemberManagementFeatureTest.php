@@ -194,6 +194,8 @@ class MemberManagementFeatureTest extends TestCase
             'height_cm' => 178,
             'weight_kg' => 76,
             'medical_notes' => 'No restrictions',
+            'biometric_identifier' => 'source-gym-scanner-slot-9',
+            'biometric_enabled' => true,
             'membership_status' => 'active',
             'is_active' => true,
         ]);
@@ -227,7 +229,9 @@ class MemberManagementFeatureTest extends TestCase
         ]))
             ->assertOk()
             ->assertJsonPath('data.0.id', $existingUser->id)
-            ->assertJsonPath('data.0.email', $existingUser->email);
+            ->assertJsonPath('data.0.email', $existingUser->email)
+            ->assertJsonPath('data.0.biometric_identifier', null)
+            ->assertJsonPath('data.0.biometric_enabled', false);
 
         $this->post(route('web.gym.members.store', ['gym' => $gym->id]), [
             'existing_user_id' => $existingUser->id,
@@ -305,6 +309,8 @@ class MemberManagementFeatureTest extends TestCase
             'height_cm' => 178,
             'weight_kg' => 76,
             'medical_notes' => 'No restrictions',
+            'biometric_identifier' => null,
+            'biometric_enabled' => false,
         ]);
         $this->assertDatabaseHas('member_memberships', [
             'member_id' => $existingUser->id,

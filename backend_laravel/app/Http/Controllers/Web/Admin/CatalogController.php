@@ -2,19 +2,19 @@
 
 namespace App\Http\Controllers\Web\Admin;
 
-use App\Http\Controllers\Controller;
 use App\Enums\ExerciseStatus;
-use App\Http\Requests\PlatformAdmin\UpsertCityRequest;
-use App\Http\Requests\PlatformAdmin\UpsertFitnessGoalRequest;
-use App\Http\Requests\PlatformAdmin\UpsertFacilityRequest;
+use App\Http\Controllers\Controller;
 use App\Http\Requests\PlatformAdmin\StoreExerciseRequest;
 use App\Http\Requests\PlatformAdmin\UpdateExerciseRequest;
 use App\Http\Requests\PlatformAdmin\UpsertBannerRequest;
+use App\Http\Requests\PlatformAdmin\UpsertCityRequest;
+use App\Http\Requests\PlatformAdmin\UpsertFacilityRequest;
+use App\Http\Requests\PlatformAdmin\UpsertFitnessGoalRequest;
 use App\Http\Requests\PlatformAdmin\UpsertTrainerSpecializationRequest;
 use App\Models\City;
 use App\Models\Exercise;
-use App\Models\FitnessGoal;
 use App\Models\Facility;
+use App\Models\FitnessGoal;
 use App\Models\PlatformBanner;
 use App\Models\TrainerProfile;
 use App\Models\TrainerSpecialization;
@@ -30,8 +30,7 @@ class CatalogController extends Controller
     public function __construct(
         private readonly AuditLogService $auditLogService,
         private readonly PlatformFacilityManagementService $platformFacilityManagementService,
-    ) {
-    }
+    ) {}
 
     public function facilities(Request $request): View
     {
@@ -73,8 +72,7 @@ class CatalogController extends Controller
             ->where(function ($builder): void {
                 $builder->where('status', 'approved')
                     ->orWhere('is_active', true);
-            })
-            ->orderBy('name');
+            });
 
         if ($request->filled('search')) {
             $search = '%'.$request->string('search')->trim().'%';
@@ -86,22 +84,19 @@ class CatalogController extends Controller
         }
 
         if ($request->filled('body_part')) {
-            $requested = ExerciseBookCatalog::bodyPartForMuscleGroup(
-                $request->string('body_part')->toString()
-            );
-
-            $exercises = $query->get()->filter(
-                fn (Exercise $exercise) => ExerciseBookCatalog::bodyPartForMuscleGroup($exercise->muscle_group) === $requested
-            )->values();
-        } else {
-            $exercises = $query->get();
+            ExerciseBookCatalog::applyBodyPartFilter($query, $request->string('body_part')->toString());
         }
+
+        ExerciseBookCatalog::applyBodyPartOrder($query);
+
+        $exercises = $query->paginate(25)->withQueryString();
 
         return view('web.admin.exercises.index', [
             'pageTitle' => 'Exercise Book',
             'breadcrumbs' => ['Platform', 'Exercise Book'],
-            'groupedExercises' => ExerciseBookCatalog::grouped($exercises),
-            'totalExercises' => $exercises->count(),
+            'groupedExercises' => ExerciseBookCatalog::grouped($exercises->getCollection()),
+            'exercises' => $exercises,
+            'totalExercises' => $exercises->total(),
             'activeExercises' => Exercise::query()->where('is_global', true)->where('is_active', true)->count(),
             'videoReadyExercises' => Exercise::query()->where('is_global', true)->whereNotNull('video_url')->count(),
             'imageReadyExercises' => Exercise::query()->where('is_global', true)->whereNotNull('image_url')->count(),

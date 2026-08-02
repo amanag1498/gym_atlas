@@ -9,13 +9,20 @@ class TrainerRepository {
 
   Future<Map<String, dynamic>> _getMemberPath(
     int memberId,
-    String suffix,
-  ) async {
+    String suffix, {
+    Map<String, dynamic>? queryParameters,
+  }) async {
     try {
-      return await _client.get('/trainer/assigned-members/$memberId$suffix');
+      return await _client.get(
+        '/trainer/assigned-members/$memberId$suffix',
+        queryParameters: queryParameters,
+      );
     } on DioException catch (error) {
       if (error.response?.statusCode == 404) {
-        return _client.get('/trainer/assigned-members/$memberId$suffix');
+        return _client.get(
+          '/trainer/assigned-members/$memberId$suffix',
+          queryParameters: queryParameters,
+        );
       }
       if (error.response?.statusCode == 403) {
         throw Exception('You do not have permission to view this member.');
@@ -33,15 +40,25 @@ class TrainerRepository {
   Future<Map<String, dynamic>> inviteIndependentMember(
     Map<String, dynamic> payload,
   ) => _client.post('/trainer/independent-member-invitations', data: payload);
-  Future<Map<String, dynamic>> fetchIndependentMemberInvitations() =>
-      _client.get('/trainer/independent-member-invitations');
+  Future<Map<String, dynamic>> fetchIndependentMemberInvitations({
+    int page = 1,
+    int perPage = 15,
+  }) => _client.get(
+    '/trainer/independent-member-invitations',
+    queryParameters: {'page': page, 'per_page': perPage},
+  );
   Future<Map<String, dynamic>> cancelIndependentMemberInvitation(
     int invitationId,
   ) => _client.post(
     '/trainer/independent-member-invitations/$invitationId/cancel',
   );
-  Future<Map<String, dynamic>> fetchIndependentMembers() =>
-      _client.get('/trainer/independent-members');
+  Future<Map<String, dynamic>> fetchIndependentMembers({
+    int page = 1,
+    int perPage = 15,
+  }) => _client.get(
+    '/trainer/independent-members',
+    queryParameters: {'page': page, 'per_page': perPage},
+  );
   Future<Map<String, dynamic>> revokeIndependentMemberRelationship(
     int relationshipId, {
     String? reason,
@@ -54,11 +71,29 @@ class TrainerRepository {
   Future<Map<String, dynamic>> fetchIndependentMember(int relationshipId) =>
       _client.get('/trainer/independent-members/$relationshipId');
   Future<Map<String, dynamic>> fetchIndependentMemberProgress(
-    int relationshipId,
-  ) => _client.get('/trainer/independent-members/$relationshipId/progress');
+    int relationshipId, {
+    int weightPage = 1,
+    int measurementPage = 1,
+    int photoPage = 1,
+    int recordPage = 1,
+    int perPage = 15,
+  }) => _client.get(
+    '/trainer/independent-members/$relationshipId/progress',
+    queryParameters: {
+      'weight_page': weightPage,
+      'measurement_page': measurementPage,
+      'photo_page': photoPage,
+      'record_page': recordPage,
+      'per_page': perPage,
+    },
+  );
   Future<Map<String, dynamic>> fetchIndependentMemberNotes(
-    int relationshipId,
-  ) => _client.get('/trainer/independent-members/$relationshipId/notes');
+    int relationshipId, {
+    int page = 1,
+  }) => _client.get(
+    '/trainer/independent-members/$relationshipId/notes',
+    queryParameters: {'page': page},
+  );
   Future<Map<String, dynamic>> createIndependentMemberNote(
     int relationshipId,
     Map<String, dynamic> payload,
@@ -67,13 +102,18 @@ class TrainerRepository {
     data: payload,
   );
   Future<Map<String, dynamic>> fetchIndependentMemberWorkoutPlans(
-    int relationshipId,
-  ) =>
-      _client.get('/trainer/independent-members/$relationshipId/workout-plans');
+    int relationshipId, {
+    int page = 1,
+  }) => _client.get(
+    '/trainer/independent-members/$relationshipId/workout-plans',
+    queryParameters: {'page': page},
+  );
   Future<Map<String, dynamic>> fetchIndependentMemberWorkoutLogbook(
-    int relationshipId,
-  ) => _client.get(
+    int relationshipId, {
+    int page = 1,
+  }) => _client.get(
     '/trainer/independent-members/$relationshipId/workout-logbook',
+    queryParameters: {'page': page},
   );
   Future<Map<String, dynamic>> respondToGymInvitation(
     int invitationId,
@@ -152,8 +192,23 @@ class TrainerRepository {
     }
   }
 
-  Future<Map<String, dynamic>> fetchMemberProgress(int memberId) async =>
-      _getMemberPath(memberId, '/progress');
+  Future<Map<String, dynamic>> fetchMemberProgress(
+    int memberId, {
+    int weightPage = 1,
+    int measurementPage = 1,
+    int photoPage = 1,
+    int recordPage = 1,
+  }) async => _getMemberPath(
+    memberId,
+    '/progress',
+    queryParameters: {
+      'weight_page': weightPage,
+      'measurement_page': measurementPage,
+      'photo_page': photoPage,
+      'record_page': recordPage,
+      'per_page': 15,
+    },
+  );
   Future<Map<String, dynamic>> fetchMemberNotes(
     int memberId, {
     int page = 1,
@@ -177,10 +232,27 @@ class TrainerRepository {
     }
   }
 
-  Future<Map<String, dynamic>> fetchMemberPlans(int memberId) async =>
-      _getMemberPath(memberId, '/workout-plans');
-  Future<Map<String, dynamic>> fetchMemberWorkoutLogbook(int memberId) async =>
-      _getMemberPath(memberId, '/workout-logbook');
+  Future<Map<String, dynamic>> fetchMemberPlans(
+    int memberId, {
+    int page = 1,
+  }) async => _getMemberPath(
+    memberId,
+    '/workout-plans',
+    queryParameters: {'page': page, 'per_page': 15},
+  );
+  Future<Map<String, dynamic>> fetchMemberWorkoutLogbook(
+    int memberId, {
+    int page = 1,
+    int recordsPage = 1,
+  }) async => _getMemberPath(
+    memberId,
+    '/workout-logbook',
+    queryParameters: {
+      'page': page,
+      'records_page': recordsPage,
+      'per_page': 15,
+    },
+  );
   Future<Map<String, dynamic>> fetchExercises({
     int page = 1,
     String? search,
@@ -192,23 +264,29 @@ class TrainerRepository {
       if (search != null && search.trim().isNotEmpty) 'search': search,
     },
   );
-  Future<Map<String, dynamic>> fetchWorkoutTemplates() async => _client.get(
-    '/trainer/workout-templates',
-    queryParameters: {'per_page': 50},
-  );
+  Future<Map<String, dynamic>> fetchWorkoutTemplates({int page = 1}) async =>
+      _client.get(
+        '/trainer/workout-templates',
+        queryParameters: {'page': page, 'per_page': 20},
+      );
   Future<Map<String, dynamic>> fetchWorkoutTemplate(int templateId) async =>
       _client.get('/trainer/workout-templates/$templateId');
-  Future<Map<String, dynamic>> fetchWorkoutPlans() async =>
-      _client.get('/trainer/workout-plans');
-  Future<Map<String, dynamic>> fetchDietPlans({int? memberId}) => _client.get(
-    '/trainer/diet-plans',
-    queryParameters: {
-      'per_page': 100,
-      if (memberId != null) 'member_id': memberId,
-    },
-  );
-  Future<Map<String, dynamic>> fetchDietTemplates() =>
-      _client.get('/trainer/diet-templates');
+  Future<Map<String, dynamic>> fetchWorkoutPlans({int page = 1}) async =>
+      _client.get('/trainer/workout-plans', queryParameters: {'page': page});
+  Future<Map<String, dynamic>> fetchDietPlans({int? memberId, int page = 1}) =>
+      _client.get(
+        '/trainer/diet-plans',
+        queryParameters: {
+          'page': page,
+          'per_page': 20,
+          if (memberId != null) 'member_id': memberId,
+        },
+      );
+  Future<Map<String, dynamic>> fetchDietTemplates({int page = 1}) =>
+      _client.get(
+        '/trainer/diet-templates',
+        queryParameters: {'page': page, 'per_page': 20},
+      );
   Future<Map<String, dynamic>> createDietTemplate(
     Map<String, dynamic> payload,
   ) => _client.post('/trainer/diet-templates', data: payload);
@@ -236,12 +314,21 @@ class TrainerRepository {
         '/trainer/trial-requests',
         queryParameters: {'page': page, 'per_page': 20},
       );
-  Future<Map<String, dynamic>> fetchNotifications() async {
+  Future<Map<String, dynamic>> fetchNotifications({
+    int page = 1,
+    int perPage = 20,
+  }) async {
     try {
-      return await _client.get('/notifications');
+      return await _client.get(
+        '/notifications',
+        queryParameters: {'page': page, 'per_page': perPage},
+      );
     } on DioException catch (error) {
       if (error.response?.statusCode == 404) {
-        return _client.get('/trainer/notifications');
+        return _client.get(
+          '/trainer/notifications',
+          queryParameters: {'page': page, 'per_page': perPage},
+        );
       }
       rethrow;
     }
@@ -260,8 +347,13 @@ class TrainerRepository {
     },
   );
 
-  Future<Map<String, dynamic>> fetchChatConversations() =>
-      _client.get('/chat/conversations');
+  Future<Map<String, dynamic>> fetchChatConversations({
+    int page = 1,
+    int perPage = 50,
+  }) => _client.get(
+    '/chat/conversations',
+    queryParameters: {'page': page, 'per_page': perPage},
+  );
 
   Future<Map<String, dynamic>> sendChatMessage(
     int recipientId,

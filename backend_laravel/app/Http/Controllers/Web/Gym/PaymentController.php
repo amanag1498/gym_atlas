@@ -482,7 +482,7 @@ class PaymentController extends Controller
 
         $payments = (clone $paymentsQuery)
             ->latest('paid_at')
-            ->paginate(15)
+            ->paginate(15, ['*'], 'payments_page')
             ->withQueryString();
         $ledgerPaginator = (clone $ledgerQuery)
             ->orderByDesc('occurred_at')

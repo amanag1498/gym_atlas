@@ -86,6 +86,10 @@ class _PlatformWorkoutBooksWorkspaceState
   List<Map<String, dynamic>> _books = const [];
   final TextEditingController _searchController = TextEditingController();
   String? _statusFilter;
+  int _page = 1;
+  int _lastPage = 1;
+
+  bool get _hasMore => _page < _lastPage;
 
   @override
   void initState() {
@@ -99,19 +103,30 @@ class _PlatformWorkoutBooksWorkspaceState
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool reset = true}) async {
     setState(() {
       _loading = true;
       _error = null;
+      if (reset) {
+        _page = 1;
+        _lastPage = 1;
+      }
     });
 
     try {
-      _books = await widget.repository.fetchPlatformWorkoutBooks(
+      final response = await widget.repository.fetchPlatformWorkoutBooks(
+        page: _page,
         search: _searchController.text.trim().isEmpty
             ? null
             : _searchController.text.trim(),
         status: _statusFilter,
       );
+      if (!mounted) return;
+      setState(() {
+        _books = reset ? response.items : [..._books, ...response.items];
+        _page = response.currentPage;
+        _lastPage = response.lastPage;
+      });
     } catch (exception) {
       _error = exception.toString();
     }
@@ -437,6 +452,26 @@ class _PlatformWorkoutBooksWorkspaceState
                     ),
                   )
                   .toList(),
+            );
+          }
+
+          if (_hasMore) {
+            content.add(
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 20),
+                child: Center(
+                  child: OutlinedButton.icon(
+                    onPressed: _loading
+                        ? null
+                        : () {
+                            setState(() => _page += 1);
+                            _load(reset: false);
+                          },
+                    icon: const Icon(Icons.expand_more_rounded),
+                    label: const Text('Load more'),
+                  ),
+                ),
+              ),
             );
           }
 

@@ -704,8 +704,14 @@ class MemberController extends Controller
         $payload['injury_notes'] = $request->validated('injury_notes', $profileSource?->injury_notes);
         $payload['emergency_contact_name'] = $request->validated('emergency_contact_name', $profileSource?->emergency_contact_name);
         $payload['emergency_contact_phone'] = $request->validated('emergency_contact_phone', $profileSource?->emergency_contact_phone);
-        $payload['biometric_identifier'] = $request->validated('biometric_identifier', $profileSource?->biometric_identifier);
-        $payload['biometric_enabled'] = $request->validated('biometric_enabled', $profileSource?->biometric_enabled ?? false);
+        $payload['biometric_identifier'] = $request->validated(
+            'biometric_identifier',
+            $existingUser ? null : $profileSource?->biometric_identifier
+        );
+        $payload['biometric_enabled'] = $request->validated(
+            'biometric_enabled',
+            $existingUser ? false : ($profileSource?->biometric_enabled ?? false)
+        );
         $payload['membership_status'] = $request->validated('membership_status', $memberProfile?->membership_status ?? 'active');
         $payload['membership_expires_on'] = $request->validated('membership_expires_on', $memberProfile?->membership_expires_on?->toDateString());
         $payload['is_active'] = $request->validated('is_active', $memberProfile?->is_active ?? true);
@@ -754,8 +760,8 @@ class MemberController extends Controller
             'injury_notes' => $profile?->injury_notes,
             'emergency_contact_name' => $profile?->emergency_contact_name,
             'emergency_contact_phone' => $profile?->emergency_contact_phone,
-            'biometric_identifier' => $profile?->biometric_identifier,
-            'biometric_enabled' => (bool) $profile?->biometric_enabled,
+            'biometric_identifier' => null,
+            'biometric_enabled' => false,
         ];
     }
 

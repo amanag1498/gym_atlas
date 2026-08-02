@@ -45,7 +45,9 @@ class DietPlanController extends Controller
             );
         }
         if (! $profile?->gym_id && $relationshipIds->isEmpty()) {
-            return $this->success([], 'No active diet coaching space is available.');
+            $plans = DietPlan::query()->whereRaw('1 = 0')->paginate((int) $request->integer('per_page', 15));
+
+            return $this->paginated($plans, [], 'No active diet coaching space is available.');
         }
         $plans = DietPlan::query()
             ->with([
@@ -69,9 +71,13 @@ class DietPlanController extends Controller
             ->when($requestedRelationshipId !== null, fn ($query) => $query->where('independent_trainer_member_relationship_id', $requestedRelationshipId))
             ->availableOn()
             ->latest()
-            ->get();
+            ->paginate((int) $request->integer('per_page', 15));
 
-        return $this->success(DietPlanResource::collection($plans), 'Diet plans fetched successfully.');
+        return $this->paginated(
+            $plans,
+            DietPlanResource::collection($plans->getCollection()),
+            'Diet plans fetched successfully.'
+        );
     }
 
     public function show(Request $request, DietPlan $dietPlan)
@@ -106,19 +112,21 @@ class DietPlanController extends Controller
 
     public function templates(Request $request)
     {
-        if (! $this->memberAppService->memberProfileFor($request->user())?->gym_id) {
-            return $this->success([], 'Join a gym to use global diet templates.');
-        }
+        $hasGym = (bool) $this->memberAppService->memberProfileFor($request->user())?->gym_id;
+        $paginator = DietPlanTemplate::query()
+            ->globalCatalog()
+            ->where('status', 'active')
+            ->when(! $hasGym, fn ($query) => $query->whereRaw('1 = 0'))
+            ->orderBy('name')
+            ->orderBy('id')
+            ->paginate($request->integer('per_page', 20));
 
-        return $this->success(
-            DietPlanTemplateResource::collection(
-                DietPlanTemplate::query()
-                    ->globalCatalog()
-                    ->where('status', 'active')
-                    ->orderBy('name')
-                    ->get()
-            ),
-            'Global diet templates fetched successfully.',
+        return $this->paginated(
+            $paginator,
+            DietPlanTemplateResource::collection($paginator->getCollection()),
+            $hasGym
+                ? 'Global diet templates fetched successfully.'
+                : 'Join a gym to use global diet templates.',
         );
     }
 

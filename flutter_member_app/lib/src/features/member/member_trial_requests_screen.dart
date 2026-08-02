@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models.dart';
 import '../../core/secure_storage_service.dart';
+import '../../core/pagination.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -88,7 +89,7 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
         widget.currentUser.id,
       );
       final results = await Future.wait<Map<String, dynamic>>([
-        widget.repository.fetchPublicGyms(),
+        _fetchAllPublicGyms(),
         widget.repository.fetchContext(),
       ]);
 
@@ -131,6 +132,24 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
     if (mounted) {
       setState(() => _loading = false);
     }
+  }
+
+  Future<Map<String, dynamic>> _fetchAllPublicGyms() async {
+    var response = await widget.repository.fetchPublicGyms(
+      filters: const {'page': 1, 'per_page': 50},
+    );
+    var gyms = apiPageItems(response);
+    var pagination = ApiPagination.fromResponse(response);
+
+    while (pagination.hasMore) {
+      response = await widget.repository.fetchPublicGyms(
+        filters: {'page': pagination.nextPage, 'per_page': 50},
+      );
+      gyms = mergeApiPageItems(gyms, apiPageItems(response));
+      pagination = ApiPagination.fromResponse(response);
+    }
+
+    return {'data': gyms};
   }
 
   Future<void> _hydrateGymBranches(Map<String, dynamic> gym) async {

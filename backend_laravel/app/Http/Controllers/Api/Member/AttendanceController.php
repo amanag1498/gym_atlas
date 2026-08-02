@@ -23,7 +23,10 @@ class AttendanceController extends Controller
         $profile = $this->memberAppService->memberProfileFor($user);
         $attendanceStatus = $this->memberAppService->attendanceStatusFor($user, $profile);
 
-        if (($attendanceStatus['enabled'] ?? false) !== true || ! $profile?->gym || ! $profile->branch) {
+        $gym = $profile?->gym;
+        $branch = $profile?->branch ?? $this->memberAppService->attendanceMembershipFor($user, $profile)?->branch;
+
+        if (($attendanceStatus['enabled'] ?? false) !== true || ! $gym || ! $branch) {
             return $this->success([
                 'enabled' => false,
                 'qr_payload' => null,
@@ -34,7 +37,7 @@ class AttendanceController extends Controller
 
         return $this->success([
             'enabled' => true,
-            ...$this->attendanceService->buildQrPayload($user, $profile->gym, $profile->branch),
+            ...$this->attendanceService->buildQrPayload($user, $gym, $branch),
             'check_in_status' => $attendanceStatus,
         ], 'Member QR code payload generated successfully.');
     }
@@ -45,23 +48,36 @@ class AttendanceController extends Controller
         $profile = $this->memberAppService->memberProfileFor($user);
         $attendanceStatus = $this->memberAppService->attendanceStatusFor($user, $profile);
 
-        if (($attendanceStatus['enabled'] ?? false) !== true || ! $profile || ! $profile->gym || ! $profile->branch) {
+        $membership = $this->memberAppService->attendanceMembershipFor($user, $profile);
+        $branch = $profile?->branch ?? $membership?->branch;
+
+        if (($attendanceStatus['enabled'] ?? false) !== true || ! $profile || ! $profile->gym || ! $branch) {
             return $this->success([
                 'enabled' => false,
+                'attendance_enabled' => (bool) ($attendanceStatus['enabled'] ?? false),
                 'biometric_enabled' => false,
                 'biometric_identifier' => null,
+                'biometric_identifier_masked' => null,
                 'check_in_status' => $attendanceStatus,
                 'message' => 'Biometric attendance is unavailable until an active gym membership and biometric profile are assigned.',
             ], 'Biometric attendance is unavailable until an active gym membership and biometric profile are assigned.');
         }
 
+        $biometricReady = $profile->biometric_enabled && filled($profile->biometric_identifier);
+
         return $this->success([
-            'enabled' => true,
+            'enabled' => $biometricReady,
+            'attendance_enabled' => true,
             'biometric_enabled' => (bool) $profile->biometric_enabled,
-            'biometric_identifier' => $profile->biometric_identifier,
-            'branch_id' => $profile->branch_id,
+            'biometric_registered' => filled($profile->biometric_identifier),
+            'biometric_identifier' => null,
+            'biometric_identifier_masked' => $this->maskedBiometricIdentifier($profile->biometric_identifier),
+            'branch_id' => $branch->id,
             'gym_id' => $profile->gym_id,
             'check_in_status' => $attendanceStatus,
+            'message' => $biometricReady
+                ? 'Biometric attendance is ready. Check in using the enrolled scanner at your gym.'
+                : 'Ask your gym to enroll and enable your biometric scanner profile.',
         ], 'Member biometric attendance profile fetched successfully.');
     }
 
@@ -87,7 +103,8 @@ class AttendanceController extends Controller
             ->where('member_id', $request->user()->id)
             ->where('gym_id', $profile->gym_id)
             ->when($profile->branch_id, fn ($builder) => $builder->where('branch_id', $profile->branch_id))
-            ->latest('checked_in_at');
+            ->latest('checked_in_at')
+            ->latest('id');
 
         $paginator = $query->paginate((int) $request->integer('per_page', 15));
 
@@ -102,5 +119,16 @@ class AttendanceController extends Controller
             $this->memberAppService->attendanceStatusFor($request->user(), $profile),
             'Member attendance status fetched successfully.'
         );
+    }
+
+    private function maskedBiometricIdentifier(?string $identifier): ?string
+    {
+        if (blank($identifier)) {
+            return null;
+        }
+
+        $identifier = (string) $identifier;
+
+        return str_repeat('•', max(4, mb_strlen($identifier) - 4)).mb_substr($identifier, -4);
     }
 }

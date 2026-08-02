@@ -24,8 +24,7 @@ class GymPlatformSubscriptionController extends Controller
     public function __construct(
         private readonly AuditLogService $auditLogService,
         private readonly PlatformSubscriptionLedgerService $platformSubscriptionLedgerService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -88,7 +87,7 @@ class GymPlatformSubscriptionController extends Controller
         return view('web.admin.gym-platform-subscriptions.index', [
             'pageTitle' => 'Gym Billing',
             'breadcrumbs' => ['Platform', 'Gym Billing'],
-            'subscriptions' => $query->paginate(15)->withQueryString(),
+            'subscriptions' => $query->paginate(15, ['*'], 'subscriptions_page')->withQueryString(),
             'gyms' => Gym::query()->orderBy('name')->get(['id', 'name']),
             'totalSubscriptionsCount' => GymPlatformSubscription::query()->count(),
             'activeSubscriptionsCount' => GymPlatformSubscription::query()->where('status', 'active')->count(),

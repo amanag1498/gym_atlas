@@ -36,12 +36,59 @@ class AdminRepository {
       ((response['meta'] as Map?)?['pagination'] as Map?) ?? const {},
     );
 
-    return PaginatedResponse<Map<String, dynamic>>(
+    final firstPage = PaginatedResponse<Map<String, dynamic>>(
       items: items,
-      currentPage: (pagination['current_page'] as num?)?.toInt() ?? page,
-      lastPage: (pagination['last_page'] as num?)?.toInt() ?? page,
-      total: (pagination['total'] as num?)?.toInt() ?? items.length,
+      currentPage: _paginationInt(pagination['current_page']) ?? page,
+      lastPage: _paginationInt(pagination['last_page']) ?? page,
+      total: _paginationInt(pagination['total']) ?? items.length,
     );
+
+    // Existing max-sized requests are complete option/audit datasets used by
+    // forms rather than visible paginated tables. Continue through every API
+    // page so gyms with more than 100 records are not silently truncated.
+    if (page != 1 || perPage < 100 || !firstPage.hasMore) {
+      return firstPage;
+    }
+
+    final merged = <Map<String, dynamic>>[...firstPage.items];
+    final seenIds = firstPage.items
+        .map((item) => item['id'])
+        .where((id) => id != null)
+        .toSet();
+    var currentPage = firstPage.currentPage;
+    var lastPage = firstPage.lastPage;
+    var total = firstPage.total;
+
+    while (currentPage < lastPage) {
+      final next = await fetchCollection(
+        path,
+        page: currentPage + 1,
+        perPage: perPage,
+        queryParameters: queryParameters,
+      );
+      for (final item in next.items) {
+        final id = item['id'];
+        if (id == null || seenIds.add(id)) {
+          merged.add(item);
+        }
+      }
+      if (next.currentPage <= currentPage) break;
+      currentPage = next.currentPage;
+      lastPage = next.lastPage;
+      total = next.total;
+    }
+
+    return PaginatedResponse<Map<String, dynamic>>(
+      items: merged,
+      currentPage: currentPage,
+      lastPage: lastPage,
+      total: total,
+    );
+  }
+
+  int? _paginationInt(Object? value) {
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '');
   }
 
   Future<Map<String, dynamic>> fetchMemberDetail(int memberId) async {
@@ -183,19 +230,21 @@ class AdminRepository {
   Future<void> deletePlatformFacility(int facilityId) =>
       _apiClient.delete('/platform-admin/facilities/$facilityId');
 
-  Future<List<Map<String, dynamic>>> fetchPlatformWorkoutBooks({
+  Future<PaginatedResponse<Map<String, dynamic>>> fetchPlatformWorkoutBooks({
+    int page = 1,
+    int perPage = 20,
     String? search,
     String? status,
-  }) async {
-    final response = await fetchCollection(
+  }) {
+    return fetchCollection(
       '/platform-admin/workout-books',
-      perPage: 100,
+      page: page,
+      perPage: perPage,
       queryParameters: {
         if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
         if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
       },
     );
-    return response.items;
   }
 
   Future<Map<String, dynamic>> fetchPlatformWorkoutBookDetail(int id) async {
@@ -227,12 +276,15 @@ class AdminRepository {
   Future<void> deletePlatformWorkoutBook(int id) =>
       _apiClient.delete('/platform-admin/workout-books/$id');
 
-  Future<List<Map<String, dynamic>>> fetchPlatformDietTemplates() async {
-    final response = await fetchCollection(
+  Future<PaginatedResponse<Map<String, dynamic>>> fetchPlatformDietTemplates({
+    int page = 1,
+    int perPage = 20,
+  }) {
+    return fetchCollection(
       '/platform-admin/diet-templates',
-      perPage: 100,
+      page: page,
+      perPage: perPage,
     );
-    return response.items;
   }
 
   Future<Map<String, dynamic>> createPlatformDietTemplate(
@@ -256,12 +308,29 @@ class AdminRepository {
     return Map<String, dynamic>.from(response['data'] as Map? ?? const {});
   }
 
-  Future<List<Map<String, dynamic>>> fetchGymDietPlans({
+  Future<PaginatedResponse<Map<String, dynamic>>> fetchGymDietPlans({
+    required int gymId,
+    int? branchId,
+    int page = 1,
+    int perPage = 20,
+  }) {
+    return fetchCollection(
+      '/gym/diet-plans',
+      page: page,
+      perPage: perPage,
+      queryParameters: {
+        'gym_id': gymId,
+        if (branchId != null) 'branch_id': branchId,
+      },
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> fetchGymDietTemplates({
     required int gymId,
     int? branchId,
   }) async {
     final response = await fetchCollection(
-      '/gym/diet-plans',
+      '/gym/diet-templates',
       perPage: 100,
       queryParameters: {
         'gym_id': gymId,
@@ -269,22 +338,6 @@ class AdminRepository {
       },
     );
     return response.items;
-  }
-
-  Future<List<Map<String, dynamic>>> fetchGymDietTemplates({
-    required int gymId,
-    int? branchId,
-  }) async {
-    final response = await _apiClient.get(
-      '/gym/diet-templates',
-      queryParameters: {
-        'gym_id': gymId,
-        if (branchId != null) 'branch_id': branchId,
-      },
-    );
-    return (response['data'] as List<dynamic>? ?? const [])
-        .map((item) => Map<String, dynamic>.from(item as Map))
-        .toList();
   }
 
   Future<List<Map<String, dynamic>>> fetchGymDietMembers({
@@ -457,14 +510,30 @@ class AdminRepository {
     );
   }
 
-  Future<Map<String, dynamic>> fetchGymAttendanceToday({
+  Future<PaginatedResponse<Map<String, dynamic>>> fetchGymAttendanceToday({
+    int page = 1,
+    int perPage = 20,
     Map<String, dynamic>? queryParameters,
   }) async {
     final response = await _apiClient.get(
       '/gym/attendance/today',
-      queryParameters: queryParameters,
+      queryParameters: {'page': page, 'per_page': perPage, ...?queryParameters},
     );
-    return Map<String, dynamic>.from(response['data'] as Map? ?? const {});
+    final data = Map<String, dynamic>.from(
+      response['data'] as Map? ?? const {},
+    );
+    final items = (data['items'] as List<dynamic>? ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+    final pagination = Map<String, dynamic>.from(
+      ((response['meta'] as Map?)?['pagination'] as Map?) ?? const {},
+    );
+    return PaginatedResponse<Map<String, dynamic>>(
+      items: items,
+      currentPage: _paginationInt(pagination['current_page']) ?? page,
+      lastPage: _paginationInt(pagination['last_page']) ?? page,
+      total: _paginationInt(pagination['total']) ?? items.length,
+    );
   }
 
   Future<PaginatedResponse<Map<String, dynamic>>> fetchGymTrialRequests({
@@ -849,6 +918,8 @@ class AdminRepository {
       _apiClient.post('/gym/attendance/manual', data: payload);
   Future<void> scanAttendance(Map<String, dynamic> payload) =>
       _apiClient.post('/gym/attendance/qr-scan', data: payload);
+  Future<void> biometricAttendance(Map<String, dynamic> payload) =>
+      _apiClient.post('/gym/attendance/biometric-scan', data: payload);
   Future<void> publishAnnouncement(String role, Map<String, dynamic> payload) {
     final path = role == 'platform_admin'
         ? '/platform-admin/announcements'

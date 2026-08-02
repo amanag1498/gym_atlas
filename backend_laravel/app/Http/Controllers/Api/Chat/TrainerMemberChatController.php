@@ -46,16 +46,16 @@ class TrainerMemberChatController extends Controller
                 ->where('assigned_trainer_user_id', $user->id)
                 ->where('gym_id', $trainerProfile->gym_id)
                 ->when($trainerProfile->branch_id, fn ($query) => $query->where('branch_id', $trainerProfile->branch_id));
-            $profiles = $this->gymMemberAccessService
+            $gymMemberIds = $this->gymMemberAccessService
                 ->scopeAccessibleProfiles($profileQuery)
-                ->get();
+                ->pluck('user_id');
 
             $independentMemberIds = collect();
             if ($trainerProfile->gym_id === null) {
                 $independentMemberIds = $this->independentCoachingAccessService
                     ->activeMemberIdsForTrainer($user, 'chat');
             }
-            $memberIds = $profiles->pluck('user_id')
+            $memberIds = $gymMemberIds
                 ->merge($independentMemberIds)
                 ->filter()
                 ->map(fn ($id): int => (int) $id)
@@ -64,14 +64,15 @@ class TrainerMemberChatController extends Controller
                 ->all();
             $this->ensureTrainerConversations($user->id, $memberIds);
 
-            $conversations = ChatConversation::query()
+            $paginator = ChatConversation::query()
                 ->with(['trainer', 'member', 'lastMessage'])
                 ->where('trainer_id', $user->id)
                 ->whereIn('member_id', $memberIds)
                 ->orderByDesc(DB::raw('COALESCE(last_message_at, updated_at)'))
-                ->get();
+                ->orderByDesc('id')
+                ->paginate($request->integer('per_page', 50));
 
-            return $this->success(ChatConversationResource::collection($conversations), 'Chat conversations fetched successfully.');
+            return $this->paginated($paginator, ChatConversationResource::collection($paginator->getCollection()), 'Chat conversations fetched successfully.');
         }
 
         if ($user->active_role === RoleName::Member->value) {
@@ -85,18 +86,23 @@ class TrainerMemberChatController extends Controller
                 ->values();
 
             if ($trainerIds->isEmpty()) {
-                return $this->success([], 'No assigned trainer conversation found.');
+                $paginator = ChatConversation::query()
+                    ->whereRaw('1 = 0')
+                    ->paginate($request->integer('per_page', 50));
+
+                return $this->paginated($paginator, ChatConversationResource::collection($paginator->getCollection()), 'No assigned trainer conversation found.');
             }
 
             $this->ensureMemberConversations($user->id, $trainerIds->all());
-            $conversations = ChatConversation::query()
+            $paginator = ChatConversation::query()
                 ->with(['trainer', 'member', 'lastMessage'])
                 ->where('member_id', $user->id)
                 ->whereIn('trainer_id', $trainerIds)
                 ->orderByDesc(DB::raw('COALESCE(last_message_at, updated_at)'))
-                ->get();
+                ->orderByDesc('id')
+                ->paginate($request->integer('per_page', 50));
 
-            return $this->success(ChatConversationResource::collection($conversations), 'Chat conversations fetched successfully.');
+            return $this->paginated($paginator, ChatConversationResource::collection($paginator->getCollection()), 'Chat conversations fetched successfully.');
         }
 
         abort(403, 'This role cannot access trainer-member chat.');

@@ -16,15 +16,13 @@ class ExerciseController extends Controller
 {
     public function __construct(
         private readonly AuditLogService $auditLogService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {
         $query = Exercise::query()
             ->where('is_global', true)
-            ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
-            ->orderBy('name');
+            ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')));
 
         if ($request->filled('search')) {
             $search = '%'.$request->string('search')->trim().'%';
@@ -35,37 +33,23 @@ class ExerciseController extends Controller
             });
         }
 
-        $requestedBodyPart = $request->filled('body_part')
-            ? ExerciseBookCatalog::bodyPartForMuscleGroup($request->string('body_part')->toString())
-            : null;
+        if ($request->filled('body_part')) {
+            ExerciseBookCatalog::applyBodyPartFilter($query, $request->string('body_part')->toString());
+        }
 
-        $exercises = $query->get()
-            ->filter(function (Exercise $exercise) use ($requestedBodyPart): bool {
-                if ($requestedBodyPart === null) {
-                    return true;
-                }
+        ExerciseBookCatalog::applyBodyPartOrder($query);
 
-                return ExerciseBookCatalog::bodyPartForMuscleGroup($exercise->muscle_group)
-                    === $requestedBodyPart;
-            })
-            ->sortBy([
-                fn (Exercise $exercise) => array_search(
-                    ExerciseBookCatalog::bodyPartForMuscleGroup($exercise->muscle_group),
-                    ExerciseBookCatalog::BODY_PART_ORDER,
-                    true
-                ),
-                fn (Exercise $exercise) => $exercise->name,
-            ])
-            ->values();
+        $exercises = $query->paginate((int) $request->integer('per_page', 25));
 
         if ($request->boolean('grouped')) {
-            return $this->success([
-                'groups' => ExerciseBookCatalog::grouped($exercises),
+            return $this->paginated($exercises, [
+                'groups' => ExerciseBookCatalog::grouped($exercises->getCollection()),
             ], 'Exercise book fetched successfully.');
         }
 
-        return $this->success(
-            ExerciseResource::collection($exercises),
+        return $this->paginated(
+            $exercises,
+            ExerciseResource::collection($exercises->getCollection()),
             'Exercises fetched successfully.'
         );
     }

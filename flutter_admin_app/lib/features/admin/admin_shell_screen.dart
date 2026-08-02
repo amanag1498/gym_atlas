@@ -9717,7 +9717,7 @@ class _BillingDueSummary {
   final int memberCount;
 }
 
-enum _AttendanceWorkspaceTab { today, manual, qr, history }
+enum _AttendanceWorkspaceTab { today, manual, qr, biometric, history }
 
 class _AttendanceWorkspaceSection extends StatefulWidget {
   const _AttendanceWorkspaceSection({
@@ -9751,7 +9751,13 @@ class _AttendanceWorkspaceSectionState
   List<Map<String, dynamic>> _historyItems = const [];
   bool _loadingOptions = true;
   bool _loadingToday = true;
+  bool _loadingMoreToday = false;
   bool _loadingHistory = false;
+  int _historyPage = 1;
+  int _historyLastPage = 1;
+  int _todayPage = 1;
+  int _todayLastPage = 1;
+  int _todayTotal = 0;
   bool _busy = false;
   String? _error;
   String? _successMessage;
@@ -9760,6 +9766,10 @@ class _AttendanceWorkspaceSectionState
   final TextEditingController _manualNotesController = TextEditingController();
   final TextEditingController _qrNotesController = TextEditingController();
   final TextEditingController _qrPayloadController = TextEditingController();
+  final TextEditingController _biometricNotesController =
+      TextEditingController();
+  final TextEditingController _biometricIdentifierController =
+      TextEditingController();
   final TextEditingController _startDateController = TextEditingController();
   final TextEditingController _endDateController = TextEditingController();
   int? _selectedBranchId;
@@ -9768,6 +9778,7 @@ class _AttendanceWorkspaceSectionState
   int? _manualBranchId;
   int? _manualMemberId;
   int? _qrBranchId;
+  int? _biometricBranchId;
   String? _lastQrPayload;
 
   bool get _canManageAttendance =>
@@ -9787,6 +9798,8 @@ class _AttendanceWorkspaceSectionState
     _manualNotesController.dispose();
     _qrNotesController.dispose();
     _qrPayloadController.dispose();
+    _biometricNotesController.dispose();
+    _biometricIdentifierController.dispose();
     _startDateController.dispose();
     _endDateController.dispose();
     super.dispose();
@@ -9813,6 +9826,7 @@ class _AttendanceWorkspaceSectionState
         _selectedBranchId ??= (branches.firstOrNull?['id'] as num?)?.toInt();
         _manualBranchId ??= _selectedBranchId;
         _qrBranchId ??= _selectedBranchId;
+        _biometricBranchId ??= _selectedBranchId;
       });
       await _loadToday();
       await _loadHistory();
@@ -9828,43 +9842,57 @@ class _AttendanceWorkspaceSectionState
     }
   }
 
-  Future<void> _loadToday() async {
+  bool get _todayHasMore => _todayPage < _todayLastPage;
+
+  List<Map<String, dynamic>> _mergeTodayItems(
+    List<Map<String, dynamic>> current,
+    List<Map<String, dynamic>> incoming,
+  ) {
+    final merged = <Map<String, dynamic>>[...current];
+    final seenIds = current
+        .map((item) => item['id'])
+        .where((id) => id != null)
+        .toSet();
+    for (final item in incoming) {
+      final id = item['id'];
+      if (id == null || seenIds.add(id)) merged.add(item);
+    }
+    return merged;
+  }
+
+  Future<void> _loadToday({bool reset = true}) async {
     setState(() {
-      _loadingToday = true;
+      if (reset) {
+        _loadingToday = true;
+        _todayPage = 1;
+        _todayLastPage = 1;
+      } else {
+        _loadingMoreToday = true;
+      }
       _error = null;
     });
     try {
-      final payload = await widget.repository.fetchGymAttendanceToday(
+      final response = await widget.repository.fetchGymAttendanceToday(
+        page: _todayPage,
         queryParameters: {
           if (_selectedBranchId != null) 'branch_id': _selectedBranchId,
+          if (_selectedMemberId != null) 'member_id': _selectedMemberId,
+          if (_selectedMethod.isNotEmpty) 'check_in_method': _selectedMethod,
+          if (_historySearchController.text.trim().isNotEmpty)
+            'member_search': _historySearchController.text.trim(),
         },
       );
       if (!mounted) {
         return;
       }
-      final items = (payload['items'] as List<dynamic>? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .where((item) {
-            if (_selectedMemberId != null &&
-                (item['member_id'] as num?)?.toInt() != _selectedMemberId) {
-              return false;
-            }
-            if (_selectedMethod.isNotEmpty &&
-                item['check_in_method']?.toString() != _selectedMethod) {
-              return false;
-            }
-            final search = _historySearchController.text.trim().toLowerCase();
-            if (search.isEmpty) {
-              return true;
-            }
-            final member = _recordMap(item['member']);
-            return (member['name']?.toString().toLowerCase().contains(search) ??
-                    false) ||
-                (member['email']?.toString().toLowerCase().contains(search) ??
-                    false);
-          })
-          .toList();
-      setState(() => _todayItems = items);
+      setState(() {
+        _todayItems = reset
+            ? response.items
+            : _mergeTodayItems(_todayItems, response.items);
+        _todayPage = response.currentPage;
+        _todayLastPage = response.lastPage;
+        _todayTotal = response.total;
+      });
     } catch (exception) {
       if (!mounted) {
         return;
@@ -9872,20 +9900,29 @@ class _AttendanceWorkspaceSectionState
       setState(() => _error = exception.toString());
     } finally {
       if (mounted) {
-        setState(() => _loadingToday = false);
+        setState(() {
+          _loadingToday = false;
+          _loadingMoreToday = false;
+        });
       }
     }
   }
 
-  Future<void> _loadHistory() async {
+  bool get _historyHasMore => _historyPage < _historyLastPage;
+
+  Future<void> _loadHistory({bool reset = true}) async {
     setState(() {
       _loadingHistory = true;
       _error = null;
+      if (reset) {
+        _historyPage = 1;
+        _historyLastPage = 1;
+      }
     });
     try {
       final response = await widget.repository.fetchGymAttendance(
-        page: 1,
-        perPage: 50,
+        page: _historyPage,
+        perPage: 20,
         queryParameters: {
           if (_selectedBranchId != null) 'branch_id': _selectedBranchId,
           if (_selectedMemberId != null) 'member_id': _selectedMemberId,
@@ -9901,7 +9938,13 @@ class _AttendanceWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      setState(() => _historyItems = response.items);
+      setState(() {
+        _historyItems = reset
+            ? response.items
+            : [..._historyItems, ...response.items];
+        _historyPage = response.currentPage;
+        _historyLastPage = response.lastPage;
+      });
     } catch (exception) {
       if (!mounted) {
         return;
@@ -9937,6 +9980,14 @@ class _AttendanceWorkspaceSectionState
       );
       return;
     }
+    final gymId = _gymIdForBranch(_manualBranchId);
+    if (gymId == null) {
+      setState(
+        () => _error =
+            'The selected branch has no gym scope. Refresh and try again.',
+      );
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -9945,6 +9996,7 @@ class _AttendanceWorkspaceSectionState
     final messenger = ScaffoldMessenger.of(context);
     try {
       await widget.repository.manualAttendance({
+        'gym_id': gymId,
         'branch_id': _manualBranchId,
         'member_id': _manualMemberId,
         'checked_in_at': DateTime.now().toIso8601String(),
@@ -9987,6 +10039,14 @@ class _AttendanceWorkspaceSectionState
       setState(() => _error = 'Select a branch before scanning attendance.');
       return;
     }
+    final gymId = _gymIdForBranch(_qrBranchId);
+    if (gymId == null) {
+      setState(
+        () => _error =
+            'The selected branch has no gym scope. Refresh and try again.',
+      );
+      return;
+    }
     if (_qrPayloadController.text.trim().isEmpty) {
       setState(() => _error = 'Scan or paste a QR payload before submitting.');
       return;
@@ -9999,6 +10059,7 @@ class _AttendanceWorkspaceSectionState
     final messenger = ScaffoldMessenger.of(context);
     try {
       await widget.repository.scanAttendance({
+        'gym_id': gymId,
         'branch_id': _qrBranchId,
         'qr_payload': _qrPayloadController.text.trim(),
         'notes': _qrNotesController.text.trim(),
@@ -10028,6 +10089,72 @@ class _AttendanceWorkspaceSectionState
     }
   }
 
+  Future<void> _submitBiometricAttendance() async {
+    if (!_canManageAttendance) {
+      setState(
+        () => _error =
+            'The manage_attendance permission is required to scan attendance.',
+      );
+      return;
+    }
+    if (_biometricBranchId == null) {
+      setState(() => _error = 'Select a branch before scanning attendance.');
+      return;
+    }
+    final gymId = _gymIdForBranch(_biometricBranchId);
+    if (gymId == null) {
+      setState(
+        () => _error =
+            'The selected branch has no gym scope. Refresh and try again.',
+      );
+      return;
+    }
+    if (_biometricIdentifierController.text.trim().isEmpty) {
+      setState(
+        () => _error =
+            'Capture or enter the scanner identifier before submitting.',
+      );
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+      _successMessage = null;
+    });
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await widget.repository.biometricAttendance({
+        'gym_id': gymId,
+        'branch_id': _biometricBranchId,
+        'biometric_identifier': _biometricIdentifierController.text.trim(),
+        'notes': _biometricNotesController.text.trim(),
+        'source_device': 'flutter_admin_app_biometric_desk',
+      });
+      if (!mounted) {
+        return;
+      }
+      _biometricNotesController.clear();
+      _biometricIdentifierController.clear();
+      setState(() => _successMessage = 'Biometric attendance recorded.');
+      await _loadToday();
+      await _loadHistory();
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Biometric attendance recorded successfully.'),
+        ),
+      );
+    } catch (exception) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _error = exception.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
   void _onQrDetected(BarcodeCapture capture) {
     final rawValue = capture.barcodes.firstOrNull?.rawValue?.trim();
     if (rawValue == null || rawValue.isEmpty || rawValue == _lastQrPayload) {
@@ -10041,9 +10168,30 @@ class _AttendanceWorkspaceSectionState
     });
   }
 
+  int? _gymIdForBranch(int? branchId) {
+    if (branchId == null) {
+      return null;
+    }
+    for (final branch in _branches) {
+      if ((branch['id'] as num?)?.toInt() == branchId) {
+        final gymId = (branch['gym_id'] as num?)?.toInt();
+        if (gymId != null) {
+          return gymId;
+        }
+      }
+    }
+
+    if (widget.appUser.gyms.length == 1) {
+      return (widget.appUser.gyms.first['id'] as num?)?.toInt();
+    }
+
+    return null;
+  }
+
   List<Map<String, dynamic>> _branchScopedMembers() {
     if (_manualBranchId == null &&
         _qrBranchId == null &&
+        _biometricBranchId == null &&
         _selectedBranchId == null) {
       return _members;
     }
@@ -10051,6 +10199,8 @@ class _AttendanceWorkspaceSectionState
         ? _manualBranchId
         : _selectedTab == _AttendanceWorkspaceTab.qr
         ? _qrBranchId
+        : _selectedTab == _AttendanceWorkspaceTab.biometric
+        ? _biometricBranchId
         : _selectedBranchId;
     if (activeBranchId == null) {
       return _members;
@@ -10082,7 +10232,7 @@ class _AttendanceWorkspaceSectionState
   Widget build(BuildContext context) {
     final summaryCount = _selectedTab == _AttendanceWorkspaceTab.history
         ? _historyItems.length
-        : _todayItems.length;
+        : _todayTotal;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -10113,7 +10263,7 @@ class _AttendanceWorkspaceSectionState
               ),
               const SizedBox(height: 8),
               Text(
-                'Track today’s check-ins, mark attendance manually, and handle QR-based entry from one scoped attendance workspace.',
+                'Track today’s check-ins and handle manual, QR, and biometric entry from one branch-scoped attendance workspace.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 16),
@@ -10192,15 +10342,42 @@ class _AttendanceWorkspaceSectionState
                 child: RefreshIndicator(
                   onRefresh: _loadToday,
                   child: ListView.separated(
-                    itemCount: _todayItems.length,
+                    itemCount: _todayItems.length + (_todayHasMore ? 1 : 0),
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) => RevealOnBuild(
-                      delay: Duration(milliseconds: 40 * (index % 8)),
-                      child: _AttendanceLogCard(
-                        item: _todayItems[index],
-                        onTap: () => _openMemberDetail(_todayItems[index]),
-                      ),
-                    ),
+                    itemBuilder: (context, index) {
+                      if (index == _todayItems.length) {
+                        return Center(
+                          child: OutlinedButton.icon(
+                            onPressed: _loadingMoreToday
+                                ? null
+                                : () {
+                                    setState(() => _todayPage += 1);
+                                    _loadToday(reset: false);
+                                  },
+                            icon: _loadingMoreToday
+                                ? const SizedBox.square(
+                                    dimension: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.expand_more_rounded),
+                            label: Text(
+                              _loadingMoreToday
+                                  ? 'Loading...'
+                                  : 'Load more check-ins',
+                            ),
+                          ),
+                        );
+                      }
+                      return RevealOnBuild(
+                        delay: Duration(milliseconds: 40 * (index % 8)),
+                        child: _AttendanceLogCard(
+                          item: _todayItems[index],
+                          onTap: () => _openMemberDetail(_todayItems[index]),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -10355,6 +10532,88 @@ class _AttendanceWorkspaceSectionState
             ),
           ],
         );
+      case _AttendanceWorkspaceTab.biometric:
+        return ListView(
+          children: [
+            PremiumCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Biometric Desk',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Use the identifier returned by your enrolled fingerprint, face, or access-control scanner. The member must have an active membership and biometric attendance enabled in their gym profile.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 14),
+                  DropdownButtonFormField<int>(
+                    initialValue: _biometricBranchId,
+                    decoration: const InputDecoration(labelText: 'Branch'),
+                    items: _branches
+                        .map(
+                          (branch) => DropdownMenuItem<int>(
+                            value: (branch['id'] as num?)?.toInt(),
+                            child: Text(branch['name']?.toString() ?? 'Branch'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: _canManageAttendance
+                        ? (value) => setState(() => _biometricBranchId = value)
+                        : null,
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _biometricIdentifierController,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) {
+                      if (_canManageAttendance && !_busy) {
+                        _submitBiometricAttendance();
+                      }
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'Scanner identifier',
+                      hintText: 'Scan or enter the enrolled identifier',
+                      prefixIcon: Icon(Icons.fingerprint_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _biometricNotesController,
+                    minLines: 2,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Notes (optional)',
+                    ),
+                  ),
+                  if (_error != null && !_isPermissionError(_error)) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      _error!,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: AppColors.error),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  GradientButton(
+                    label: 'Record Biometric Check-in',
+                    icon: Icons.fingerprint_rounded,
+                    loading: _busy,
+                    expanded: true,
+                    onPressed: _canManageAttendance
+                        ? _submitBiometricAttendance
+                        : null,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
       case _AttendanceWorkspaceTab.history:
         return Column(
           children: [
@@ -10376,15 +10635,31 @@ class _AttendanceWorkspaceSectionState
                 child: RefreshIndicator(
                   onRefresh: _loadHistory,
                   child: ListView.separated(
-                    itemCount: _historyItems.length,
+                    itemCount: _historyItems.length + (_historyHasMore ? 1 : 0),
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) => RevealOnBuild(
-                      delay: Duration(milliseconds: 40 * (index % 8)),
-                      child: _AttendanceLogCard(
-                        item: _historyItems[index],
-                        onTap: () => _openMemberDetail(_historyItems[index]),
-                      ),
-                    ),
+                    itemBuilder: (context, index) {
+                      if (index == _historyItems.length) {
+                        return Center(
+                          child: OutlinedButton.icon(
+                            onPressed: _loadingHistory
+                                ? null
+                                : () {
+                                    setState(() => _historyPage += 1);
+                                    _loadHistory(reset: false);
+                                  },
+                            icon: const Icon(Icons.expand_more_rounded),
+                            label: const Text('Load more'),
+                          ),
+                        );
+                      }
+                      return RevealOnBuild(
+                        delay: Duration(milliseconds: 40 * (index % 8)),
+                        child: _AttendanceLogCard(
+                          item: _historyItems[index],
+                          onTap: () => _openMemberDetail(_historyItems[index]),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -10483,6 +10758,10 @@ class _AttendanceWorkspaceSectionState
                       child: Text('Manual'),
                     ),
                     DropdownMenuItem<String>(value: 'qr', child: Text('QR')),
+                    DropdownMenuItem<String>(
+                      value: 'biometric',
+                      child: Text('Biometric'),
+                    ),
                   ],
                   onChanged: (value) {
                     setState(() => _selectedMethod = value ?? '');
@@ -10539,6 +10818,8 @@ class _AttendanceWorkspaceSectionState
         return 'Manual Attendance';
       case _AttendanceWorkspaceTab.qr:
         return 'QR Scanner';
+      case _AttendanceWorkspaceTab.biometric:
+        return 'Biometric Desk';
       case _AttendanceWorkspaceTab.history:
         return 'Attendance History';
     }
@@ -10651,6 +10932,10 @@ class _TrialRequestsWorkspaceSectionState
   _TrialStatusFilter _status = _TrialStatusFilter.pending;
   int? _branchId;
   int? _trainerId;
+  int _page = 1;
+  int _lastPage = 1;
+
+  bool get _hasMore => _page < _lastPage;
 
   @override
   void initState() {
@@ -10673,7 +10958,7 @@ class _TrialRequestsWorkspaceSectionState
       final results = await Future.wait([
         widget.repository.fetchCollection('/gym/branches', perPage: 100),
         widget.repository.fetchCollection('/gym/trainers', perPage: 100),
-        _fetchTrials(),
+        _fetchTrials(reset: true),
       ]);
       if (!mounted) {
         return;
@@ -10685,7 +10970,6 @@ class _TrialRequestsWorkspaceSectionState
       setState(() {
         _branches = branches;
         _trainers = trainers;
-        _trials = results[2] as List<Map<String, dynamic>>;
       });
     } catch (exception) {
       if (!mounted) {
@@ -10699,10 +10983,14 @@ class _TrialRequestsWorkspaceSectionState
     }
   }
 
-  Future<List<Map<String, dynamic>>> _fetchTrials() async {
+  Future<void> _fetchTrials({required bool reset}) async {
+    if (reset) {
+      _page = 1;
+      _lastPage = 1;
+    }
     final response = await widget.repository.fetchGymTrialRequests(
-      page: 1,
-      perPage: 50,
+      page: _page,
+      perPage: 20,
       queryParameters: {
         'status': _status.name,
         if (_branchId != null) 'branch_id': _branchId,
@@ -10711,7 +10999,9 @@ class _TrialRequestsWorkspaceSectionState
           'search': _searchController.text.trim(),
       },
     );
-    return response.items;
+    _trials = reset ? response.items : [..._trials, ...response.items];
+    _page = response.currentPage;
+    _lastPage = response.lastPage;
   }
 
   Future<void> _reloadTrials() async {
@@ -10720,11 +11010,11 @@ class _TrialRequestsWorkspaceSectionState
       _error = null;
     });
     try {
-      final items = await _fetchTrials();
+      await _fetchTrials(reset: true);
       if (!mounted) {
         return;
       }
-      setState(() => _trials = items);
+      setState(() {});
     } catch (exception) {
       if (!mounted) {
         return;
@@ -11326,24 +11616,50 @@ class _TrialRequestsWorkspaceSectionState
                   child: RefreshIndicator(
                     onRefresh: _reloadTrials,
                     child: ListView.separated(
-                      itemCount: _trials.length,
+                      itemCount: _trials.length + (_hasMore ? 1 : 0),
                       separatorBuilder: (_, __) => const SizedBox(height: 10),
-                      itemBuilder: (context, index) => RevealOnBuild(
-                        delay: Duration(milliseconds: 40 * (index % 8)),
-                        child: _TrialRequestCard(
-                          trial: _trials[index],
-                          onTap: () => _showTrialDetail(_trials[index]),
-                          onAccept: () =>
-                              _confirmAndRun(_trials[index], 'accept'),
-                          onReject: () =>
-                              _confirmAndRun(_trials[index], 'reject'),
-                          onComplete: () =>
-                              _confirmAndRun(_trials[index], 'complete'),
-                          onAssignTrainer: () =>
-                              _showAssignTrainerSheet(_trials[index]),
-                          onConvert: () => _showConvertSheet(_trials[index]),
-                        ),
-                      ),
+                      itemBuilder: (context, index) {
+                        if (index == _trials.length) {
+                          return Center(
+                            child: OutlinedButton.icon(
+                              onPressed: _loading
+                                  ? null
+                                  : () async {
+                                      setState(() {
+                                        _page += 1;
+                                        _loading = true;
+                                      });
+                                      try {
+                                        await _fetchTrials(reset: false);
+                                      } catch (exception) {
+                                        _error = exception.toString();
+                                      }
+                                      if (mounted) {
+                                        setState(() => _loading = false);
+                                      }
+                                    },
+                              icon: const Icon(Icons.expand_more_rounded),
+                              label: const Text('Load more'),
+                            ),
+                          );
+                        }
+                        return RevealOnBuild(
+                          delay: Duration(milliseconds: 40 * (index % 8)),
+                          child: _TrialRequestCard(
+                            trial: _trials[index],
+                            onTap: () => _showTrialDetail(_trials[index]),
+                            onAccept: () =>
+                                _confirmAndRun(_trials[index], 'accept'),
+                            onReject: () =>
+                                _confirmAndRun(_trials[index], 'reject'),
+                            onComplete: () =>
+                                _confirmAndRun(_trials[index], 'complete'),
+                            onAssignTrainer: () =>
+                                _showAssignTrainerSheet(_trials[index]),
+                            onConvert: () => _showConvertSheet(_trials[index]),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -11708,6 +12024,10 @@ class _AnnouncementsWorkspaceSectionState
   int? _historyBranchId;
   int? _selectedBranchId;
   Set<int> _selectedMemberIds = <int>{};
+  int _historyPage = 1;
+  int _historyLastPage = 1;
+
+  bool get _historyHasMore => _historyPage < _historyLastPage;
 
   bool get _canSendAnnouncements =>
       widget.appUser.activeRole == 'gym_owner' ||
@@ -11745,7 +12065,7 @@ class _AnnouncementsWorkspaceSectionState
       final results = await Future.wait([
         widget.repository.fetchCollection('/gym/branches', perPage: 100),
         widget.repository.fetchCollection('/gym/members', perPage: 100),
-        widget.repository.fetchCollection('/gym/announcements', perPage: 30),
+        widget.repository.fetchCollection('/gym/announcements', perPage: 20),
       ]);
       if (!mounted) {
         return;
@@ -11753,6 +12073,7 @@ class _AnnouncementsWorkspaceSectionState
       final branches = results[0].items;
       final members = results[1].items;
       final announcements = results[2].items;
+      final announcementPage = results[2];
       int? defaultBranchId = _selectedBranchId;
       if (widget.appUser.activeRole == 'branch_manager' &&
           branches.isNotEmpty) {
@@ -11762,6 +12083,8 @@ class _AnnouncementsWorkspaceSectionState
         _branches = branches;
         _members = members;
         _announcements = announcements;
+        _historyPage = announcementPage.currentPage;
+        _historyLastPage = announcementPage.lastPage;
         _selectedBranchId = defaultBranchId;
         _historyBranchId ??= defaultBranchId;
       });
@@ -11777,15 +12100,20 @@ class _AnnouncementsWorkspaceSectionState
     }
   }
 
-  Future<void> _reloadAnnouncements() async {
+  Future<void> _reloadAnnouncements({bool reset = true}) async {
     setState(() {
       _loading = true;
       _error = null;
+      if (reset) {
+        _historyPage = 1;
+        _historyLastPage = 1;
+      }
     });
     try {
       final response = await widget.repository.fetchCollection(
         '/gym/announcements',
-        perPage: 30,
+        page: _historyPage,
+        perPage: 20,
         queryParameters: {
           if (_historyBranchId != null) 'branch_id': _historyBranchId,
         },
@@ -11793,7 +12121,13 @@ class _AnnouncementsWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      setState(() => _announcements = response.items);
+      setState(() {
+        _announcements = reset
+            ? response.items
+            : [..._announcements, ...response.items];
+        _historyPage = response.currentPage;
+        _historyLastPage = response.lastPage;
+      });
     } catch (exception) {
       if (!mounted) {
         return;
@@ -12254,24 +12588,48 @@ class _AnnouncementsWorkspaceSectionState
                                   : RefreshIndicator(
                                       onRefresh: _reloadAnnouncements,
                                       child: ListView.separated(
-                                        itemCount: _announcements.length,
+                                        itemCount:
+                                            _announcements.length +
+                                            (_historyHasMore ? 1 : 0),
                                         separatorBuilder: (_, __) =>
                                             const SizedBox(height: 10),
-                                        itemBuilder: (context, index) =>
-                                            RevealOnBuild(
-                                              delay: Duration(
-                                                milliseconds: 40 * (index % 8),
-                                              ),
-                                              child: _AnnouncementCard(
-                                                announcement:
-                                                    _announcements[index],
-                                                branchLabel: _branchName(
-                                                  (_announcements[index]['branch_id']
-                                                          as num?)
-                                                      ?.toInt(),
+                                        itemBuilder: (context, index) {
+                                          if (index == _announcements.length) {
+                                            return Center(
+                                              child: OutlinedButton.icon(
+                                                onPressed: _loading
+                                                    ? null
+                                                    : () {
+                                                        setState(
+                                                          () =>
+                                                              _historyPage += 1,
+                                                        );
+                                                        _reloadAnnouncements(
+                                                          reset: false,
+                                                        );
+                                                      },
+                                                icon: const Icon(
+                                                  Icons.expand_more_rounded,
                                                 ),
+                                                label: const Text('Load more'),
+                                              ),
+                                            );
+                                          }
+                                          return RevealOnBuild(
+                                            delay: Duration(
+                                              milliseconds: 40 * (index % 8),
+                                            ),
+                                            child: _AnnouncementCard(
+                                              announcement:
+                                                  _announcements[index],
+                                              branchLabel: _branchName(
+                                                (_announcements[index]['branch_id']
+                                                        as num?)
+                                                    ?.toInt(),
                                               ),
                                             ),
+                                          );
+                                        },
                                       ),
                                     ),
                             ),
@@ -12373,6 +12731,10 @@ class _NotificationsWorkspaceSectionState
   bool _markingAll = false;
   String? _error;
   _NotificationFeedFilter _filter = _NotificationFeedFilter.all;
+  int _page = 1;
+  int _lastPage = 1;
+
+  bool get _hasMore => _page < _lastPage;
 
   int? get _branchId =>
       (_recordMap(
@@ -12389,17 +12751,30 @@ class _NotificationsWorkspaceSectionState
     _loadNotifications();
   }
 
-  Future<void> _loadNotifications() async {
+  Future<void> _loadNotifications({bool reset = true}) async {
     setState(() {
       _loading = true;
       _error = null;
+      if (reset) {
+        _page = 1;
+        _lastPage = 1;
+      }
     });
     try {
-      final response = await widget.repository.fetchNotifications(perPage: 50);
+      final response = await widget.repository.fetchNotifications(
+        page: _page,
+        perPage: 20,
+      );
       if (!mounted) {
         return;
       }
-      setState(() => _notifications = response.items);
+      setState(() {
+        _notifications = reset
+            ? response.items
+            : [..._notifications, ...response.items];
+        _page = response.currentPage;
+        _lastPage = response.lastPage;
+      });
     } catch (exception) {
       if (!mounted) {
         return;
@@ -12601,20 +12976,40 @@ class _NotificationsWorkspaceSectionState
                             : RefreshIndicator(
                                 onRefresh: _loadNotifications,
                                 child: ListView.separated(
-                                  itemCount: visibleItems.length,
+                                  itemCount:
+                                      visibleItems.length + (_hasMore ? 1 : 0),
                                   separatorBuilder: (_, __) =>
                                       const SizedBox(height: 10),
-                                  itemBuilder: (context, index) =>
-                                      RevealOnBuild(
-                                        delay: Duration(
-                                          milliseconds: 40 * (index % 8),
+                                  itemBuilder: (context, index) {
+                                    if (index == visibleItems.length) {
+                                      return Center(
+                                        child: OutlinedButton.icon(
+                                          onPressed: _loading
+                                              ? null
+                                              : () {
+                                                  setState(() => _page += 1);
+                                                  _loadNotifications(
+                                                    reset: false,
+                                                  );
+                                                },
+                                          icon: const Icon(
+                                            Icons.expand_more_rounded,
+                                          ),
+                                          label: const Text('Load more'),
                                         ),
-                                        child: _NotificationCard(
-                                          notification: visibleItems[index],
-                                          onMarkRead: () =>
-                                              _markRead(visibleItems[index]),
-                                        ),
+                                      );
+                                    }
+                                    return RevealOnBuild(
+                                      delay: Duration(
+                                        milliseconds: 40 * (index % 8),
                                       ),
+                                      child: _NotificationCard(
+                                        notification: visibleItems[index],
+                                        onMarkRead: () =>
+                                            _markRead(visibleItems[index]),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ),
                       ),
@@ -19646,12 +20041,13 @@ class _WorkoutBookWorkspaceSectionState
     });
 
     try {
-      _books = await widget.repository.fetchPlatformWorkoutBooks(
+      final response = await widget.repository.fetchPlatformWorkoutBooks(
         search: _searchController.text.trim().isEmpty
             ? null
             : _searchController.text.trim(),
         status: _statusFilter,
       );
+      _books = response.items;
     } catch (exception) {
       _error = exception.toString();
     }

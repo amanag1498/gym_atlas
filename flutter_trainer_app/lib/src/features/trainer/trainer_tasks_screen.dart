@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/confirmation_dialog.dart';
 import '../../../core/widgets/premium_card.dart';
+import '../../core/pagination.dart';
 import 'trainer_repository.dart';
 
 class TrainerTasksScreen extends StatefulWidget {
@@ -26,11 +27,13 @@ class TrainerTasksScreen extends StatefulWidget {
 class _TrainerTasksScreenState extends State<TrainerTasksScreen> {
   bool _loading = true;
   bool _saving = false;
+  bool _loadingMore = false;
   bool _completionUnavailable = false;
   bool _followUpEndpointUnavailable = false;
   String? _error;
   Map<String, dynamic> _taskSummary = const {};
   List<Map<String, dynamic>> _followUps = const [];
+  ApiPagination _followUpPage = const ApiPagination.singlePage();
 
   int? _selectedMemberId;
   late final TextEditingController _noteController;
@@ -74,6 +77,7 @@ class _TrainerTasksScreenState extends State<TrainerTasksScreen> {
     try {
       Map<String, dynamic> taskSummary = const {};
       List<Map<String, dynamic>> followUps = const [];
+      ApiPagination followUpPage = const ApiPagination.singlePage();
       bool followUpEndpointUnavailable = false;
 
       try {
@@ -90,6 +94,7 @@ class _TrainerTasksScreenState extends State<TrainerTasksScreen> {
         final followUpResponse = await widget.repository
             .fetchPendingFollowUps();
         followUps = _mapList(followUpResponse['data']);
+        followUpPage = ApiPagination.fromResponse(followUpResponse);
       } catch (exception) {
         if (_looksLikeMissingEndpoint(exception)) {
           followUpEndpointUnavailable = true;
@@ -105,6 +110,7 @@ class _TrainerTasksScreenState extends State<TrainerTasksScreen> {
       setState(() {
         _taskSummary = taskSummary;
         _followUps = followUps;
+        _followUpPage = followUpPage;
         _followUpEndpointUnavailable = followUpEndpointUnavailable;
         _loading = false;
       });
@@ -116,6 +122,29 @@ class _TrainerTasksScreenState extends State<TrainerTasksScreen> {
         _error = exception.toString();
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _loadMoreFollowUps() async {
+    if (_loadingMore || !_followUpPage.hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final response = await widget.repository.fetchPendingFollowUps(
+        page: _followUpPage.nextPage,
+      );
+      if (!mounted) return;
+      setState(() {
+        _followUps = mergeApiPageItems(_followUps, apiPageItems(response));
+        _followUpPage = ApiPagination.fromResponse(response);
+      });
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -362,6 +391,25 @@ class _TrainerTasksScreenState extends State<TrainerTasksScreen> {
                     completionUnavailable: _completionUnavailable,
                     onComplete: _completeTask,
                   ),
+                  if (_followUpPage.hasMore) ...[
+                    const SizedBox(height: 16),
+                    Center(
+                      child: OutlinedButton.icon(
+                        onPressed: _loadingMore ? null : _loadMoreFollowUps,
+                        icon: _loadingMore
+                            ? const SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.expand_more_rounded),
+                        label: Text(
+                          _loadingMore ? 'Loading...' : 'Load more follow-ups',
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

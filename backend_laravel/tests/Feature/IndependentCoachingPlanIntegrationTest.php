@@ -88,6 +88,8 @@ class IndependentCoachingPlanIntegrationTest extends TestCase
         $diets = $this->actingAs($member, 'sanctum')
             ->getJson('/api/member/diet-plans')
             ->assertOk()
+            ->assertJsonPath('meta.pagination.current_page', 1)
+            ->assertJsonPath('meta.pagination.per_page', 15)
             ->json('data');
         $this->assertEqualsCanonicalizing(
             [$gymDiet->id, $independentDiet->id],
@@ -103,6 +105,7 @@ class IndependentCoachingPlanIntegrationTest extends TestCase
         $conversations = $this->actingAs($member, 'sanctum')
             ->getJson('/api/chat/conversations')
             ->assertOk()
+            ->assertJsonPath('meta.pagination.current_page', 1)
             ->json('data');
         $this->assertEqualsCanonicalizing(
             [$gymTrainer->id, $independentTrainer->id],
@@ -261,6 +264,7 @@ class IndependentCoachingPlanIntegrationTest extends TestCase
         $conversationTrainerIds = collect($this->actingAs($member, 'sanctum')
             ->getJson('/api/chat/conversations')
             ->assertOk()
+            ->assertJsonPath('meta.pagination.current_page', 1)
             ->json('data'))
             ->pluck('trainer_id')
             ->all();
@@ -400,12 +404,14 @@ class IndependentCoachingPlanIntegrationTest extends TestCase
             ->getJson('/api/trainer/independent-members/'.$firstRelationship->id.'/progress')
             ->assertOk()
             ->assertJsonCount(1, 'data.personal_records')
-            ->assertJsonPath('data.personal_records.0.best_weight', 45);
+            ->assertJsonPath('data.personal_records.0.best_weight', 45)
+            ->assertJsonPath('meta.personal_records_pagination.current_page', 1);
         $this->actingAs($secondTrainer, 'sanctum')
             ->getJson('/api/trainer/independent-members/'.$secondRelationship->id.'/progress')
             ->assertOk()
             ->assertJsonCount(1, 'data.personal_records')
-            ->assertJsonPath('data.personal_records.0.best_weight', 65);
+            ->assertJsonPath('data.personal_records.0.best_weight', 65)
+            ->assertJsonPath('meta.personal_records_pagination.current_page', 1);
     }
 
     public function test_member_removes_only_the_gym_trainer_assignment(): void

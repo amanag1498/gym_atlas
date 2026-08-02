@@ -34,7 +34,13 @@ class StoreMemberRequest extends FormRequest
             'injury_notes' => ['nullable', 'string', 'max:5000'],
             'emergency_contact_name' => ['nullable', 'string', 'max:160'],
             'emergency_contact_phone' => ['nullable', 'string', 'max:40'],
-            'biometric_identifier' => ['nullable', 'string', 'max:255', Rule::unique('member_profiles', 'biometric_identifier')],
+            'biometric_identifier' => [
+                'nullable',
+                'string',
+                'max:255',
+                Rule::unique('member_profiles', 'biometric_identifier')
+                    ->where(fn ($query) => $query->where('gym_id', $this->resolvedGymId())),
+            ],
             'biometric_enabled' => ['sometimes', 'boolean'],
             'status' => ['nullable', Rule::in(['active', 'inactive', 'expired'])],
             'membership_status' => ['nullable', 'string', 'max:80'],
@@ -65,6 +71,12 @@ class StoreMemberRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $this->merge([
+            'biometric_identifier' => filled($this->input('biometric_identifier'))
+                ? trim((string) $this->input('biometric_identifier'))
+                : null,
+        ]);
+
         $status = $this->input('status');
 
         if ($status !== null) {
@@ -79,6 +91,17 @@ class StoreMemberRequest extends FormRequest
                 'biometric_enabled' => false,
             ]);
         }
+    }
+
+    private function resolvedGymId(): ?int
+    {
+        $routeGym = $this->route('gym');
+        $value = is_object($routeGym) ? $routeGym->id : $routeGym;
+        $value ??= $this->input('gym_id');
+        $value ??= $this->query('gym');
+        $value ??= $this->header('X-Gym-Id');
+
+        return filter_var($value, FILTER_VALIDATE_INT) ?: null;
     }
 
     public function withValidator(Validator $validator): void

@@ -119,7 +119,13 @@
                         <div class="panel-card-muted p-4">
                             <p class="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Biometric attendance</p>
                             <p class="mt-2 font-semibold text-slate-950 dark:text-white">{{ $memberProfile->biometric_enabled ? 'Enabled' : 'Disabled' }}</p>
-                            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $memberProfile->biometric_identifier ?: 'No biometric identifier enrolled' }}</p>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                @if ($memberProfile->biometric_identifier)
+                                    Enrolled ••••{{ mb_substr($memberProfile->biometric_identifier, -4) }}
+                                @else
+                                    No biometric identifier enrolled
+                                @endif
+                            </p>
                         </div>
                     </div>
                 </x-premium-card>

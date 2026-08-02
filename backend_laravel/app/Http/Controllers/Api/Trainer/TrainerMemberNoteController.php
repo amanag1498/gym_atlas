@@ -33,6 +33,7 @@ class TrainerMemberNoteController extends Controller
             ->where('trainer_id', $trainerProfile->user_id)
             ->where('member_id', $member->id)
             ->latest('created_at')
+            ->latest('id')
             ->paginate((int) $request->integer('per_page', 20));
 
         return $this->paginated($paginator, TrainerMemberNoteResource::collection($paginator->getCollection()), 'Trainer notes fetched successfully.');

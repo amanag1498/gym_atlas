@@ -71,13 +71,15 @@ class DietPlanController extends Controller
         $branchId = $request->integer('branch_id') ?: $request->header('X-Branch-Id');
         $this->assertScope($request, (int) $gymId, $branchId);
 
-        return $this->success(
-            DietPlanTemplateResource::collection(
-                DietPlanTemplate::query()
-                    ->where('status', 'active')
-                    ->orderBy('name')
-                    ->get()
-            ),
+        $paginator = DietPlanTemplate::query()
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->orderBy('id')
+            ->paginate($request->integer('per_page', 20));
+
+        return $this->paginated(
+            $paginator,
+            DietPlanTemplateResource::collection($paginator->getCollection()),
             'Global diet templates fetched successfully.',
         );
     }

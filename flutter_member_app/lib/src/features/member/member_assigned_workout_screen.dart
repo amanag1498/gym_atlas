@@ -6,6 +6,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/loading_state.dart';
 import '../../../core/widgets/workout_reference_widgets.dart';
+import '../../core/pagination.dart';
 import 'member_repository.dart';
 
 class MemberAssignedWorkoutScreen extends StatefulWidget {
@@ -30,10 +31,12 @@ class MemberAssignedWorkoutScreen extends StatefulWidget {
 class _MemberAssignedWorkoutScreenState
     extends State<MemberAssignedWorkoutScreen> {
   bool _loading = true;
+  bool _loadingMore = false;
   String? _error;
   List<Map<String, dynamic>> _plans = const [];
   int? _selectedPlanId;
   int _selectedDayIndex = 0;
+  ApiPagination _planPage = const ApiPagination.singlePage();
 
   @override
   void initState() {
@@ -54,9 +57,8 @@ class _MemberAssignedWorkoutScreenState
 
     try {
       final response = await widget.repository.fetchWorkoutPlans();
-      _plans = (response['data'] as List<dynamic>? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
+      _plans = apiPageItems(response);
+      _planPage = ApiPagination.fromResponse(response);
       if (!_plans.any(
         (plan) => (plan['id'] as num?)?.toInt() == _selectedPlanId,
       )) {
@@ -70,6 +72,26 @@ class _MemberAssignedWorkoutScreenState
 
     if (mounted) {
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_planPage.hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final response = await widget.repository.fetchWorkoutPlans(
+        page: _planPage.nextPage,
+      );
+      _plans = mergeApiPageItems(_plans, apiPageItems(response));
+      _planPage = ApiPagination.fromResponse(response);
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -376,6 +398,25 @@ class _MemberAssignedWorkoutScreenState
                               );
                             }),
                         ],
+                      ),
+                    ),
+                  ],
+                  if (_planPage.hasMore) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    Center(
+                      child: OutlinedButton.icon(
+                        onPressed: _loadingMore ? null : _loadMore,
+                        icon: _loadingMore
+                            ? const SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.expand_more_rounded),
+                        label: Text(
+                          _loadingMore ? 'Loading...' : 'Load more plans',
+                        ),
                       ),
                     ),
                   ],

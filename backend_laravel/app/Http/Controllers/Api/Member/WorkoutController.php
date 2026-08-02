@@ -155,37 +155,22 @@ class WorkoutController extends Controller
             });
         }
 
-        $requestedBodyPart = $request->filled('body_part')
-            ? ExerciseBookCatalog::bodyPartForMuscleGroup($request->string('body_part')->toString())
-            : null;
+        if ($request->filled('body_part')) {
+            ExerciseBookCatalog::applyBodyPartFilter($query, $request->string('body_part')->toString());
+        }
 
-        $exercises = $query->get()
-            ->filter(function (Exercise $exercise) use ($requestedBodyPart): bool {
-                if ($requestedBodyPart === null) {
-                    return true;
-                }
-
-                return ExerciseBookCatalog::bodyPartForMuscleGroup($exercise->muscle_group)
-                    === $requestedBodyPart;
-            })
-            ->sortBy([
-                fn (Exercise $exercise) => array_search(
-                    ExerciseBookCatalog::bodyPartForMuscleGroup($exercise->muscle_group),
-                    ExerciseBookCatalog::BODY_PART_ORDER,
-                    true
-                ),
-                fn (Exercise $exercise) => $exercise->name,
-            ])
-            ->values();
+        ExerciseBookCatalog::applyBodyPartOrder($query);
+        $exercises = $query->paginate((int) $request->integer('per_page', 25));
 
         if ($request->boolean('grouped')) {
-            return $this->success([
-                'groups' => ExerciseBookCatalog::grouped($exercises),
+            return $this->paginated($exercises, [
+                'groups' => ExerciseBookCatalog::grouped($exercises->getCollection()),
             ], 'Exercise book fetched successfully.');
         }
 
-        return $this->success(
-            ExerciseResource::collection($exercises),
+        return $this->paginated(
+            $exercises,
+            ExerciseResource::collection($exercises->getCollection()),
             'Workout exercises fetched successfully.'
         );
     }
@@ -439,6 +424,7 @@ class WorkoutController extends Controller
                 }
             })
             ->orderByDesc('session_date')
+            ->orderByDesc('id')
             ->paginate((int) $request->integer('per_page', 15));
 
         return $this->paginated($paginator, WorkoutSessionResource::collection($paginator->getCollection()), 'Workout history fetched successfully.');
@@ -461,6 +447,7 @@ class WorkoutController extends Controller
             })
             ->whereHas('exercises', fn ($query) => $query->where('exercise_id', $exerciseId))
             ->orderByDesc('session_date')
+            ->orderByDesc('id')
             ->paginate((int) $request->integer('per_page', 15));
 
         $record = PersonalRecord::query()
@@ -469,13 +456,23 @@ class WorkoutController extends Controller
             ->where('exercise_id', $exerciseId)
             ->first();
 
-        return $this->success([
+        return $this->successWithMeta([
             'personal_record' => $record ? PersonalRecordResource::make($record) : null,
             'history' => WorkoutSessionResource::collection($sessions->getCollection()),
             'pagination' => [
                 'current_page' => $sessions->currentPage(),
                 'last_page' => $sessions->lastPage(),
                 'per_page' => $sessions->perPage(),
+                'total' => $sessions->total(),
+            ],
+        ], [
+            'pagination' => [
+                'current_page' => $sessions->currentPage(),
+                'from' => $sessions->firstItem(),
+                'last_page' => $sessions->lastPage(),
+                'path' => $sessions->path(),
+                'per_page' => $sessions->perPage(),
+                'to' => $sessions->lastItem(),
                 'total' => $sessions->total(),
             ],
         ]);
@@ -487,12 +484,27 @@ class WorkoutController extends Controller
         $recentWorkouts = WorkoutSession::query()->where('member_id', $memberId)->count();
         $totalVolume = (float) WorkoutSession::query()->where('member_id', $memberId)->sum('total_volume');
 
-        return $this->success([
+        $records = PersonalRecord::query()
+            ->with('exercise')
+            ->where('member_id', $memberId)
+            ->orderByDesc('best_volume')
+            ->orderByDesc('id')
+            ->paginate($request->integer('per_page', 15));
+
+        return $this->successWithMeta([
             'recent_workouts_count' => $recentWorkouts,
             'total_volume' => $totalVolume,
-            'personal_records' => PersonalRecordResource::collection(
-                PersonalRecord::query()->with('exercise')->where('member_id', $memberId)->orderByDesc('best_volume')->get()
-            ),
+            'personal_records' => PersonalRecordResource::collection($records->getCollection()),
+        ], [
+            'pagination' => [
+                'current_page' => $records->currentPage(),
+                'from' => $records->firstItem(),
+                'last_page' => $records->lastPage(),
+                'path' => $records->path(),
+                'per_page' => $records->perPage(),
+                'to' => $records->lastItem(),
+                'total' => $records->total(),
+            ],
         ]);
     }
 }

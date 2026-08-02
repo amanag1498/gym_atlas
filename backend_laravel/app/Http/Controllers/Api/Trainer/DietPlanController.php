@@ -126,10 +126,11 @@ class DietPlanController extends Controller
                     ->orWhere('created_by_user_id', $request->user()->id);
             })
             ->orderBy('name')
-            ->get();
+            ->paginate((int) $request->integer('per_page', 20));
 
-        return $this->success(
-            DietPlanTemplateResource::collection($templates),
+        return $this->paginated(
+            $templates,
+            DietPlanTemplateResource::collection($templates->getCollection()),
             'Global diet templates fetched successfully.',
         );
     }

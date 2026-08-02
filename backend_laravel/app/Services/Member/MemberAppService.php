@@ -592,10 +592,30 @@ class MemberAppService
     public function attendanceStatusFor(User $user, ?MemberProfile $profile = null): array
     {
         $profile ??= $this->memberProfileFor($user);
-        $membership = $this->currentMembershipFor($user);
-        $enabled = $profile?->gym_id !== null
-            && $profile?->branch_id !== null
-            && $this->hasActiveMembership($membership, $profile);
+        $membership = $this->attendanceMembershipFor($user, $profile);
+        $gym = $profile?->gym ?? $membership?->gym;
+        $branch = $profile?->branch ?? $membership?->branch;
+        $timezone = $branch?->timezone ?: $gym?->timezone ?: config('app.timezone', 'UTC');
+        if (! in_array($timezone, timezone_identifiers_list(), true)) {
+            $timezone = 'UTC';
+        }
+        $localToday = now()->timezone($timezone)->toDateString();
+        $enabled = $user->is_active
+            && $profile?->gym_id !== null
+            && $profile->is_active
+            && ($profile->status === null || $profile->status === 'active')
+            && $profile->membership_status === 'active'
+            && ($profile->membership_expires_on === null || $profile->membership_expires_on->gte($localToday))
+            && $membership !== null
+            && $membership->status === 'active'
+            && $membership->start_date?->lte($localToday)
+            && ($membership->expiry_date === null || $membership->expiry_date->gte($localToday))
+            && $gym?->is_active
+            && $gym?->status === 'active'
+            && $gym?->operational_access_enabled
+            && $branch !== null
+            && $branch->is_active
+            && $branch->status === 'active';
 
         if (! $enabled) {
             return [
@@ -606,15 +626,20 @@ class MemberAppService
                 'today_check_in_at' => null,
                 'last_check_in_at' => null,
                 'check_in_method' => null,
-                'message' => 'Attendance unlocks after an active gym membership is assigned.',
+                'message' => $membership?->status === 'frozen'
+                    ? 'Attendance is paused while your gym membership is frozen.'
+                    : 'Attendance unlocks after an active gym membership and branch are assigned.',
             ];
         }
+
+        $localStart = Carbon::parse($localToday, $timezone)->startOfDay()->utc();
+        $localEnd = Carbon::parse($localToday, $timezone)->endOfDay()->utc();
 
         $todayCheckIn = AttendanceLog::query()
             ->where('member_id', $user->id)
             ->when($profile?->gym_id, fn ($query) => $query->where('gym_id', $profile->gym_id))
             ->when($profile?->branch_id, fn ($query) => $query->where('branch_id', $profile->branch_id))
-            ->whereDate('checked_in_at', now()->toDateString())
+            ->whereBetween('checked_in_at', [$localStart, $localEnd])
             ->latest('checked_in_at')
             ->first();
 
@@ -634,9 +659,27 @@ class MemberAppService
             'last_check_in_at' => $latestCheckIn?->checked_in_at?->toIso8601String(),
             'check_in_method' => $todayCheckIn?->check_in_method,
             'message' => $todayCheckIn !== null
-                ? 'Attendance is active for your current gym membership.'
-                : 'Attendance is active for your current gym membership.',
+                ? 'You are checked in today for your current gym membership.'
+                : 'Attendance is ready for check-in at your gym.',
         ];
+    }
+
+    public function attendanceMembershipFor(User $user, ?MemberProfile $profile = null): ?MemberMembership
+    {
+        $profile ??= $this->memberProfileFor($user);
+        if ($profile?->gym_id === null) {
+            return null;
+        }
+
+        return MemberMembership::query()
+            ->with(['gym', 'branch'])
+            ->where('member_id', $user->id)
+            ->where('gym_id', $profile->gym_id)
+            ->whereIn('status', ['active', 'frozen'])
+            ->orderByRaw(MemberMembership::CURRENT_STATUS_PRIORITY_SQL)
+            ->orderByDesc('start_date')
+            ->orderByDesc('id')
+            ->first();
     }
 
     /**

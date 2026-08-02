@@ -9,6 +9,7 @@ use App\Http\Middleware\EnsurePermission;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureWebGymPanelAccess;
 use App\Http\Middleware\EnsureWebPlatformAdmin;
+use App\Http\Middleware\ValidatePaginationParameters;
 use App\Support\Api\ApiResponse;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
@@ -30,6 +31,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->api(append: [
+            ValidatePaginationParameters::class,
+        ]);
+
         $middleware->redirectGuestsTo(static function (Request $request): string {
             if ($request->is('gym') || $request->is('gym/*')) {
                 return route('web.gym.login');

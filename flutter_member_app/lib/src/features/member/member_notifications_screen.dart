@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/loading_state.dart';
+import '../../core/pagination.dart';
 import 'member_repository.dart';
 
 class MemberNotificationsScreen extends StatefulWidget {
@@ -25,12 +26,21 @@ class MemberNotificationsScreen extends StatefulWidget {
 
 class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
   bool _loading = true;
+  bool _loadingMore = false;
   bool _markingAllRead = false;
   final Set<int> _respondingInvitationIds = <int>{};
   String? _error;
   List<Map<String, dynamic>> _notifications = const [];
   List<Map<String, dynamic>> _gymInvitations = const [];
   List<Map<String, dynamic>> _independentInvitations = const [];
+  ApiPagination _notificationPage = const ApiPagination.singlePage();
+  ApiPagination _gymInvitationPage = const ApiPagination.singlePage();
+  ApiPagination _independentInvitationPage = const ApiPagination.singlePage();
+
+  bool get _hasMore =>
+      _notificationPage.hasMore ||
+      _gymInvitationPage.hasMore ||
+      _independentInvitationPage.hasMore;
 
   @override
   void initState() {
@@ -53,16 +63,12 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
         widget.repository.fetchGymInvitations(status: 'pending'),
         widget.repository.fetchIndependentTrainerInvitations(),
       ]);
-      _notifications = (results[0]['data'] as List<dynamic>? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
-      _gymInvitations = (results[1]['data'] as List<dynamic>? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
-      _independentInvitations =
-          (results[2]['data'] as List<dynamic>? ?? const [])
-              .map((item) => Map<String, dynamic>.from(item as Map))
-              .toList();
+      _notifications = apiPageItems(results[0]);
+      _gymInvitations = apiPageItems(results[1]);
+      _independentInvitations = apiPageItems(results[2]);
+      _notificationPage = ApiPagination.fromResponse(results[0]);
+      _gymInvitationPage = ApiPagination.fromResponse(results[1]);
+      _independentInvitationPage = ApiPagination.fromResponse(results[2]);
       await widget.onChanged();
     } catch (exception) {
       _error = exception.toString();
@@ -70,6 +76,61 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
 
     if (mounted) {
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final notificationResponse = _notificationPage.hasMore
+          ? await widget.repository.fetchNotifications(
+              page: _notificationPage.nextPage,
+            )
+          : null;
+      final gymResponse = _gymInvitationPage.hasMore
+          ? await widget.repository.fetchGymInvitations(
+              status: 'pending',
+              page: _gymInvitationPage.nextPage,
+            )
+          : null;
+      final independentResponse = _independentInvitationPage.hasMore
+          ? await widget.repository.fetchIndependentTrainerInvitations(
+              page: _independentInvitationPage.nextPage,
+            )
+          : null;
+
+      if (notificationResponse != null) {
+        _notifications = mergeApiPageItems(
+          _notifications,
+          apiPageItems(notificationResponse),
+        );
+        _notificationPage = ApiPagination.fromResponse(notificationResponse);
+      }
+      if (gymResponse != null) {
+        _gymInvitations = mergeApiPageItems(
+          _gymInvitations,
+          apiPageItems(gymResponse),
+        );
+        _gymInvitationPage = ApiPagination.fromResponse(gymResponse);
+      }
+      if (independentResponse != null) {
+        _independentInvitations = mergeApiPageItems(
+          _independentInvitations,
+          apiPageItems(independentResponse),
+        );
+        _independentInvitationPage = ApiPagination.fromResponse(
+          independentResponse,
+        );
+      }
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -475,6 +536,25 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
                           ),
                       ],
                     ),
+                  if (_hasMore) ...[
+                    const SizedBox(height: 20),
+                    Center(
+                      child: OutlinedButton.icon(
+                        onPressed: _loadingMore ? null : _loadMore,
+                        icon: _loadingMore
+                            ? const SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.expand_more_rounded),
+                        label: Text(
+                          _loadingMore ? 'Loading...' : 'Load older updates',
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

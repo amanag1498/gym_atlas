@@ -12,12 +12,14 @@ class AnnouncementController extends Controller
 {
     public function __construct(
         private readonly AnnouncementService $announcementService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {
-        $paginator = $this->announcementService->listAnnouncementsForActor($request->user());
+        $paginator = $this->announcementService->listAnnouncementsForActor(
+            $request->user(),
+            filters: $request->only(['search', 'audience_type', 'per_page']),
+        );
 
         return $this->paginated($paginator, AnnouncementResource::collection($paginator->getCollection()), 'Platform announcements fetched successfully.');
     }

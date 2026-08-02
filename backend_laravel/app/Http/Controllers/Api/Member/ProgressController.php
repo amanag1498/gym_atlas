@@ -114,7 +114,10 @@ class ProgressController extends Controller
 
     public function photos(Request $request)
     {
-        $paginator = $request->user()->progressPhotos()->latest('captured_on')->paginate((int) $request->integer('per_page', 15));
+        $paginator = $request->user()->progressPhotos()
+            ->latest('captured_on')
+            ->latest('id')
+            ->paginate((int) $request->integer('per_page', 15));
 
         return $this->paginated($paginator, ProgressPhotoResource::collection($paginator->getCollection()), 'Progress photos fetched successfully.');
     }

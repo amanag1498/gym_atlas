@@ -42,7 +42,13 @@ class AnnouncementController extends Controller
             'gym' => $gym,
             'branch' => $branch,
             'announcements' => $this->announcementService
-                ->listAnnouncementsForActor($request->user(), $gym->id, $branch?->id)
+                ->listAnnouncementsForActor(
+                    $request->user(),
+                    $gym->id,
+                    $branch?->id,
+                    $request->only(['search', 'audience_type']),
+                    'announcements_page',
+                )
                 ->withQueryString(),
             'branches' => $gym->branches()
                 ->whereIn('id', $this->gymWebPanelService->accessibleBranchIds($request, $gym))

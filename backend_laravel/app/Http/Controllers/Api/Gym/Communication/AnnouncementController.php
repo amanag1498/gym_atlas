@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\Api\Gym\Communication;
 
+use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Communication\StoreAnnouncementRequest;
 use App\Http\Resources\Communication\AnnouncementResource;
 use App\Models\Announcement;
-use App\Services\Communication\AnnouncementService;
 use App\Services\Authorization\ScopedPermissionResolver;
-use App\Enums\RoleName;
+use App\Services\Communication\AnnouncementService;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -17,8 +17,7 @@ class AnnouncementController extends Controller
     public function __construct(
         private readonly AnnouncementService $announcementService,
         private readonly ScopedPermissionResolver $scopedPermissionResolver,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {
@@ -26,6 +25,7 @@ class AnnouncementController extends Controller
             actor: $request->user(),
             gymId: $request->integer('gym_id') ?: null,
             branchId: $request->integer('branch_id') ?: null,
+            filters: $request->only(['search', 'audience_type', 'per_page']),
         );
 
         return $this->paginated($paginator, AnnouncementResource::collection($paginator->getCollection()), 'Announcements fetched successfully.');

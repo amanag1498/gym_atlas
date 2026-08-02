@@ -8,6 +8,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/confirmation_dialog.dart';
 import '../../../core/widgets/loading_state.dart';
+import '../../core/pagination.dart';
 import 'trainer_repository.dart';
 
 class TrainerDietPlanScreen extends StatefulWidget {
@@ -37,10 +38,12 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
 
   bool _loading = true;
   bool _saving = false;
+  bool _loadingMore = false;
   int _selectedTab = 0;
   int _editorRevision = 0;
   String? _error;
   List<Map<String, dynamic>> _templates = const [];
+  ApiPagination _templatePage = const ApiPagination.singlePage();
   Map<String, dynamic> _draftDetails = {'status': 'active'};
   List<Map<String, dynamic>> _draftMeals = _defaultMeals();
 
@@ -57,14 +60,33 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
     });
     try {
       final response = await widget.repository.fetchDietTemplates();
-      _templates = (response['data'] as List<dynamic>? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
+      _templates = apiPageItems(response);
+      _templatePage = ApiPagination.fromResponse(response);
     } catch (error) {
       _error = _dietErrorMessage(error);
     }
     if (mounted) {
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadMoreTemplates() async {
+    if (_loadingMore || !_templatePage.hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final response = await widget.repository.fetchDietTemplates(
+        page: _templatePage.nextPage,
+      );
+      _templates = mergeApiPageItems(_templates, apiPageItems(response));
+      _templatePage = ApiPagination.fromResponse(response);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_dietErrorMessage(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -744,9 +766,23 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
     return ListView.separated(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(18, 2, 18, 32),
-      itemCount: _templates.length,
+      itemCount: _templates.length + (_templatePage.hasMore ? 1 : 0),
       separatorBuilder: (_, __) => const SizedBox(height: 9),
       itemBuilder: (context, index) {
+        if (index == _templates.length) {
+          return Center(
+            child: OutlinedButton.icon(
+              onPressed: _loadingMore ? null : _loadMoreTemplates,
+              icon: _loadingMore
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.expand_more_rounded),
+              label: Text(_loadingMore ? 'Loading...' : 'Load more diet plans'),
+            ),
+          );
+        }
         final template = _templates[index];
         return _DietLibraryCard(
           template: template,

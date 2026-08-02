@@ -140,6 +140,9 @@
                     </x-premium-card>
                 @endforeach
             </div>
+            <div>
+                {{ $exercises->links() }}
+            </div>
         @else
             <x-premium-card class="p-5">
                 <x-empty-state title="No exercises found" message="Adjust the filters or create the first global exercise for the platform library." action-label="Add Exercise" :action-href="route('web.admin.exercises.create')" />

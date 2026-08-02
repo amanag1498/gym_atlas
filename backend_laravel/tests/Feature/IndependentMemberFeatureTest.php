@@ -138,6 +138,8 @@ class IndependentMemberFeatureTest extends TestCase
         $this->actingAs($member, 'sanctum')
             ->getJson('/api/member/workout-exercises')
             ->assertOk()
+            ->assertJsonPath('meta.pagination.current_page', 1)
+            ->assertJsonPath('meta.pagination.per_page', 25)
             ->assertJsonFragment([
                 'id' => $exercise->id,
                 'name' => 'Push Up',
@@ -221,7 +223,15 @@ class IndependentMemberFeatureTest extends TestCase
             ->getJson('/api/member/logbook-summary')
             ->assertOk()
             ->assertJsonPath('data.recent_workouts_count', 1)
-            ->assertJsonPath('data.total_volume', 0);
+            ->assertJsonPath('data.total_volume', 0)
+            ->assertJsonPath('meta.pagination.current_page', 1);
+
+        $this->actingAs($member, 'sanctum')
+            ->getJson("/api/member/exercise-history/{$exercise->id}?per_page=1")
+            ->assertOk()
+            ->assertJsonCount(1, 'data.history')
+            ->assertJsonPath('meta.pagination.current_page', 1)
+            ->assertJsonPath('meta.pagination.total', 1);
 
         $this->assertDatabaseHas(WorkoutSession::class, [
             'id' => $sessionId,

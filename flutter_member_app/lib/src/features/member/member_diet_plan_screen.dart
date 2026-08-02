@@ -8,6 +8,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/loading_state.dart';
 import '../../../core/widgets/premium_card.dart';
+import '../../core/pagination.dart';
 import 'member_repository.dart';
 
 class MemberDietPlanScreen extends StatefulWidget {
@@ -20,9 +21,11 @@ class MemberDietPlanScreen extends StatefulWidget {
 
 class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
   bool _loading = true;
+  bool _loadingMore = false;
   String? _error;
   List<Map<String, dynamic>> _plans = const [];
   List<Map<String, dynamic>> _templates = const [];
+  ApiPagination _planPage = const ApiPagination.singlePage();
   int? _selectedPlanId;
   final Set<int> _completedMealIds = <int>{};
 
@@ -39,14 +42,10 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
     });
     try {
       final plansResponse = await widget.repository.fetchDietPlans();
-      _plans = (plansResponse['data'] as List<dynamic>? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
+      _plans = apiPageItems(plansResponse);
+      _planPage = ApiPagination.fromResponse(plansResponse);
       try {
-        final templatesResponse = await widget.repository.fetchDietTemplates();
-        _templates = (templatesResponse['data'] as List<dynamic>? ?? const [])
-            .map((item) => Map<String, dynamic>.from(item as Map))
-            .toList();
+        _templates = await _fetchAllTemplates();
       } catch (_) {
         _templates = const [];
       }
@@ -64,6 +63,42 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
       _error = _dietErrorMessage(error);
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchAllTemplates() async {
+    var response = await widget.repository.fetchDietTemplates();
+    var templates = apiPageItems(response);
+    var pagination = ApiPagination.fromResponse(response);
+
+    while (pagination.hasMore) {
+      response = await widget.repository.fetchDietTemplates(
+        page: pagination.nextPage,
+      );
+      templates = mergeApiPageItems(templates, apiPageItems(response));
+      pagination = ApiPagination.fromResponse(response);
+    }
+
+    return templates;
+  }
+
+  Future<void> _loadMorePlans() async {
+    if (_loadingMore || !_planPage.hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final response = await widget.repository.fetchDietPlans(
+        page: _planPage.nextPage,
+      );
+      _plans = mergeApiPageItems(_plans, apiPageItems(response));
+      _planPage = ApiPagination.fromResponse(response);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_dietErrorMessage(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
   }
 
   Map<String, dynamic> _activePlan() => _plans.firstWhere(
@@ -239,6 +274,28 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                         ),
                         children: [
                           _DietCreateCard(onCreate: _openCreateStudio),
+                          if (_planPage.hasMore) ...[
+                            const SizedBox(height: AppSpacing.md),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: OutlinedButton.icon(
+                                onPressed: _loadingMore ? null : _loadMorePlans,
+                                icon: _loadingMore
+                                    ? const SizedBox.square(
+                                        dimension: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.expand_more_rounded),
+                                label: Text(
+                                  _loadingMore
+                                      ? 'Loading...'
+                                      : 'Load more plans',
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: AppSpacing.lg),
                           if (plan.isEmpty)
                             const EmptyStateView(

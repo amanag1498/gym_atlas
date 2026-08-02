@@ -92,6 +92,7 @@ class AnnouncementService
         ?int $gymId = null,
         ?int $branchId = null,
         array $filters = [],
+        string $pageName = 'page',
     ) {
         return Announcement::query()
             ->when($actor->active_role !== RoleName::PlatformAdmin->value, function ($query) use ($actor): void {
@@ -127,7 +128,7 @@ class AnnouncementService
                 'recipients as read_recipients_count' => fn ($query) => $query->whereNotNull('read_at'),
             ])
             ->latest('id')
-            ->paginate(15);
+            ->paginate((int) ($filters['per_page'] ?? 15), ['*'], $pageName);
     }
 
     public function resolveAnnouncementForActor(User $actor, Announcement $announcement): Announcement

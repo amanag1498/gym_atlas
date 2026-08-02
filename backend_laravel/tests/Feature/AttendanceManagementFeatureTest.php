@@ -10,9 +10,11 @@ use App\Models\MemberProfile;
 use App\Models\MembershipPlan;
 use App\Models\User;
 use App\Services\Attendance\AttendanceService;
+use Carbon\Carbon;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class AttendanceManagementFeatureTest extends TestCase
@@ -49,6 +51,37 @@ class AttendanceManagementFeatureTest extends TestCase
             ->assertSee($member->name);
     }
 
+    public function test_today_attendance_api_paginates_without_losing_the_total(): void
+    {
+        [$owner, $member, $gym, $branch] = $this->makeGymScope(RoleName::GymOwner->value);
+        $gym->forceFill(['prevent_duplicate_same_day_checkins' => false])->save();
+        $service = app(AttendanceService::class);
+        $service->recordManualCheckIn($gym, $branch, $member, $owner, checkedInAt: now()->subMinute());
+        $service->recordManualCheckIn($gym, $branch, $member, $owner, checkedInAt: now());
+        $headers = [
+            'X-Gym-Id' => (string) $gym->id,
+            'X-Branch-Id' => (string) $branch->id,
+        ];
+
+        $firstId = $this->actingAs($owner, 'sanctum')
+            ->getJson('/api/gym/attendance/today?per_page=1&page=1', $headers)
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.count', 2)
+            ->assertJsonPath('meta.pagination.current_page', 1)
+            ->assertJsonPath('meta.pagination.last_page', 2)
+            ->json('data.items.0.id');
+
+        $secondId = $this->actingAs($owner, 'sanctum')
+            ->getJson('/api/gym/attendance/today?per_page=1&page=2', $headers)
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('meta.pagination.current_page', 2)
+            ->json('data.items.0.id');
+
+        $this->assertNotSame($firstId, $secondId);
+    }
+
     public function test_qr_scan_alias_records_attendance_and_blocks_duplicate_same_day(): void
     {
         [$owner, $member, $gym, $branch] = $this->makeGymScope(RoleName::GymOwner->value);
@@ -80,6 +113,201 @@ class AttendanceManagementFeatureTest extends TestCase
             ], $headers)
             ->assertUnprocessable()
             ->assertJsonPath('errors.member_id.0', 'This member has already checked in today.');
+    }
+
+    public function test_biometric_scan_records_attendance_for_an_enabled_active_profile(): void
+    {
+        [$owner, $member, $gym, $branch] = $this->makeGymScope(RoleName::GymOwner->value);
+        MemberProfile::query()
+            ->where('gym_id', $gym->id)
+            ->where('user_id', $member->id)
+            ->update([
+                'biometric_identifier' => 'scanner-member-42',
+                'biometric_enabled' => true,
+            ]);
+
+        $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/gym/attendance/biometric-scan', [
+                'gym_id' => $gym->id,
+                'branch_id' => $branch->id,
+                'biometric_identifier' => '  scanner-member-42  ',
+                'source_device' => 'front-desk-scanner',
+            ], [
+                'X-Gym-Id' => (string) $gym->id,
+                'X-Branch-Id' => (string) $branch->id,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.check_in_method', 'biometric');
+
+        $this->assertDatabaseHas('attendance_logs', [
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_id' => $member->id,
+            'check_in_method' => 'biometric',
+            'source_device' => 'front-desk-scanner',
+        ]);
+    }
+
+    public function test_biometric_scan_rejects_an_inactive_gym_member_profile(): void
+    {
+        [$owner, $member, $gym, $branch] = $this->makeGymScope(RoleName::GymOwner->value);
+        MemberProfile::query()
+            ->where('gym_id', $gym->id)
+            ->where('user_id', $member->id)
+            ->update([
+                'biometric_identifier' => 'inactive-member-scan',
+                'biometric_enabled' => true,
+                'is_active' => false,
+                'status' => 'inactive',
+                'membership_status' => 'inactive',
+            ]);
+
+        $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/gym/attendance/biometric-scan', [
+                'gym_id' => $gym->id,
+                'branch_id' => $branch->id,
+                'biometric_identifier' => 'inactive-member-scan',
+            ], [
+                'X-Gym-Id' => (string) $gym->id,
+                'X-Branch-Id' => (string) $branch->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.member_id.0', 'Attendance is unavailable because this gym member profile is inactive.');
+
+        $this->assertDatabaseMissing('attendance_logs', ['member_id' => $member->id]);
+    }
+
+    public function test_scan_request_rejects_ambiguous_qr_and_biometric_credentials(): void
+    {
+        [$owner, $member, $gym, $branch] = $this->makeGymScope(RoleName::GymOwner->value);
+        $qrPayload = app(AttendanceService::class)->buildQrPayload($member, $gym, $branch)['qr_payload'];
+
+        $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/gym/attendance/scan', [
+                'gym_id' => $gym->id,
+                'branch_id' => $branch->id,
+                'biometric_identifier' => 'scanner-member-42',
+                'qr_payload' => $qrPayload,
+            ], [
+                'X-Gym-Id' => (string) $gym->id,
+                'X-Branch-Id' => (string) $branch->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['biometric_identifier', 'qr_payload']);
+    }
+
+    public function test_qr_payload_cannot_be_replayed_when_same_day_duplicates_are_allowed(): void
+    {
+        [$owner, $member, $gym, $branch] = $this->makeGymScope(RoleName::GymOwner->value);
+        $gym->forceFill(['prevent_duplicate_same_day_checkins' => false])->save();
+        $qrPayload = app(AttendanceService::class)->buildQrPayload($member, $gym, $branch)['qr_payload'];
+        $headers = [
+            'X-Gym-Id' => (string) $gym->id,
+            'X-Branch-Id' => (string) $branch->id,
+        ];
+
+        $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/gym/attendance/qr-scan', [
+                'gym_id' => $gym->id,
+                'branch_id' => $branch->id,
+                'qr_payload' => $qrPayload,
+            ], $headers)
+            ->assertCreated();
+
+        $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/gym/attendance/qr-scan', [
+                'gym_id' => $gym->id,
+                'branch_id' => $branch->id,
+                'qr_payload' => $qrPayload,
+            ], $headers)
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.qr_payload.0', 'This attendance QR code has already been used. Ask the member to refresh it.');
+
+        $this->assertDatabaseCount('attendance_logs', 1);
+    }
+
+    public function test_duplicate_day_is_calculated_in_the_branch_timezone(): void
+    {
+        [$owner, $member, $gym, $branch] = $this->makeGymScope(RoleName::GymOwner->value);
+        $branch->forceFill(['timezone' => 'Pacific/Kiritimati'])->save();
+        $localDay = Carbon::now('Pacific/Kiritimati')->startOfDay();
+        $firstCheckIn = $localDay->copy()->addHour()->utc();
+        $secondCheckIn = $localDay->copy()->addHours(20)->utc();
+        $this->assertNotSame($firstCheckIn->toDateString(), $secondCheckIn->toDateString());
+
+        MemberMembership::query()
+            ->where('gym_id', $gym->id)
+            ->where('member_id', $member->id)
+            ->update([
+                'start_date' => $localDay->copy()->subDay()->toDateString(),
+                'expiry_date' => $localDay->copy()->addDay()->toDateString(),
+            ]);
+
+        $service = app(AttendanceService::class);
+        $service->recordManualCheckIn($gym, $branch, $member, $owner, checkedInAt: $firstCheckIn);
+
+        try {
+            $service->recordManualCheckIn($gym, $branch, $member, $owner, checkedInAt: $secondCheckIn);
+            $this->fail('A second check-in on the same branch-local day should be rejected.');
+        } catch (ValidationException $exception) {
+            $this->assertSame('This member has already checked in today.', $exception->errors()['member_id'][0]);
+        }
+    }
+
+    public function test_frozen_membership_is_not_reported_as_attendance_enabled(): void
+    {
+        [, $member, $gym] = $this->makeGymScope(RoleName::GymOwner->value);
+        MemberMembership::query()
+            ->where('gym_id', $gym->id)
+            ->where('member_id', $member->id)
+            ->update(['status' => 'frozen']);
+        MemberProfile::query()
+            ->where('gym_id', $gym->id)
+            ->where('user_id', $member->id)
+            ->update(['membership_status' => 'frozen']);
+
+        $this->actingAs($member, 'sanctum')
+            ->getJson('/api/member/attendance/status')
+            ->assertOk()
+            ->assertJsonPath('data.enabled', false)
+            ->assertJsonPath('data.message', 'Attendance is paused while your gym membership is frozen.');
+    }
+
+    public function test_member_biometric_profile_reports_readiness_without_exposing_the_identifier(): void
+    {
+        [, $member, $gym, $branch] = $this->makeGymScope(RoleName::GymOwner->value);
+        MemberProfile::query()
+            ->where('gym_id', $gym->id)
+            ->where('user_id', $member->id)
+            ->update([
+                'biometric_identifier' => 'sensitive-scanner-8842',
+                'biometric_enabled' => true,
+            ]);
+
+        $this->actingAs($member, 'sanctum')
+            ->getJson('/api/member/attendance/biometric-profile')
+            ->assertOk()
+            ->assertJsonPath('data.enabled', true)
+            ->assertJsonPath('data.attendance_enabled', true)
+            ->assertJsonPath('data.biometric_registered', true)
+            ->assertJsonPath('data.biometric_identifier', null)
+            ->assertJsonPath('data.biometric_identifier_masked', '••••••••••••••••••8842')
+            ->assertJsonPath('data.branch_id', $branch->id);
+    }
+
+    public function test_biometric_identifier_is_scoped_to_a_gym(): void
+    {
+        [, $firstMember, $firstGym] = $this->makeGymScope(RoleName::GymOwner->value);
+        [, $secondMember, $secondGym] = $this->makeGymScope(RoleName::GymOwner->value);
+
+        MemberProfile::query()->where('gym_id', $firstGym->id)->where('user_id', $firstMember->id)->update([
+            'biometric_identifier' => 'local-scanner-slot-7',
+        ]);
+        MemberProfile::query()->where('gym_id', $secondGym->id)->where('user_id', $secondMember->id)->update([
+            'biometric_identifier' => 'local-scanner-slot-7',
+        ]);
+
+        $this->assertSame(2, MemberProfile::query()->where('biometric_identifier', 'local-scanner-slot-7')->count());
     }
 
     public function test_member_qr_uses_current_gym_profile_when_independent_profile_exists(): void
@@ -267,6 +495,43 @@ class AttendanceManagementFeatureTest extends TestCase
                 'X-Branch-Id' => (string) $branch->id,
             ])
             ->assertNotFound();
+    }
+
+    public function test_gym_wide_profile_can_be_searched_and_viewed_through_its_membership_branch(): void
+    {
+        [$owner, $member, $gym, $branch] = $this->makeGymScope(RoleName::GymOwner->value);
+        MemberProfile::query()
+            ->where('gym_id', $gym->id)
+            ->where('user_id', $member->id)
+            ->update(['branch_id' => null]);
+        app(AttendanceService::class)->recordManualCheckIn($gym, $branch, $member, $owner);
+
+        $this->actingAs($owner)
+            ->getJson(route('web.gym.attendance.search.members', [
+                'gym' => $gym->id,
+                'branch' => $branch->id,
+                'branch_id' => $branch->id,
+                'q' => $member->email,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $member->id);
+
+        $this->actingAs($owner)
+            ->get(route('web.gym.members.attendance', [
+                'gym' => $gym->id,
+                'branch' => $branch->id,
+                'member' => $member->id,
+            ]))
+            ->assertOk()
+            ->assertSee($member->name);
+
+        $this->actingAs($owner, 'sanctum')
+            ->getJson("/api/gym/members/{$member->id}/attendance?gym_id={$gym->id}&branch_id={$branch->id}", [
+                'X-Gym-Id' => (string) $gym->id,
+                'X-Branch-Id' => (string) $branch->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.0.member_id', $member->id);
     }
 
     public function test_gym_staff_needs_manage_attendance_custom_permission(): void

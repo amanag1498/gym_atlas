@@ -172,7 +172,8 @@ class MultiGymMemberContextFeatureTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonCount(1, 'data.weight_logs')
-            ->assertJsonPath('data.weight_logs.0.weight_kg', 71);
+            ->assertJsonPath('data.weight_logs.0.weight_kg', 71)
+            ->assertJsonPath('meta.weight_logs_pagination.current_page', 1);
 
         $trainerPlans = $this->actingAs($trainerA, 'sanctum')
             ->getJson('/api/trainer/assigned-members/'.$member->id.'/workout-plans', [

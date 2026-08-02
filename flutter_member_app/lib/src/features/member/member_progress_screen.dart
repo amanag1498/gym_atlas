@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/premium_card.dart';
+import '../../core/pagination.dart';
 import 'member_repository.dart';
 
 class MemberProgressScreen extends StatefulWidget {
@@ -34,6 +35,7 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
   bool _savingWeight = false;
   bool _savingMeasurement = false;
   bool _savingPhoto = false;
+  bool _loadingMore = false;
   String? _error;
   String? _lastSuccessMessage;
   Map<String, dynamic> _summary = const {};
@@ -42,6 +44,12 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
   List<Map<String, dynamic>> _weightLogs = const [];
   List<Map<String, dynamic>> _bodyMeasurements = const [];
   List<Map<String, dynamic>> _photos = const [];
+  ApiPagination _weightPage = const ApiPagination.singlePage();
+  ApiPagination _measurementPage = const ApiPagination.singlePage();
+  ApiPagination _photoPage = const ApiPagination.singlePage();
+
+  bool get _hasMore =>
+      _weightPage.hasMore || _measurementPage.hasMore || _photoPage.hasMore;
 
   final _weightController = TextEditingController();
   final _weightNotesController = TextEditingController();
@@ -104,15 +112,12 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
       _summary = Map<String, dynamic>.from(
         results[0]['data'] as Map? ?? const {},
       );
-      _weightLogs = (results[1]['data'] as List<dynamic>? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
-      _bodyMeasurements = (results[2]['data'] as List<dynamic>? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
-      _photos = (results[3]['data'] as List<dynamic>? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
+      _weightLogs = apiPageItems(results[1]);
+      _bodyMeasurements = apiPageItems(results[2]);
+      _photos = apiPageItems(results[3]);
+      _weightPage = ApiPagination.fromResponse(results[1]);
+      _measurementPage = ApiPagination.fromResponse(results[2]);
+      _photoPage = ApiPagination.fromResponse(results[3]);
       _todaySteps = Map<String, dynamic>.from(
         results[4]['data'] as Map? ?? const {},
       );
@@ -125,6 +130,45 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
 
     if (mounted) {
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadMoreProgress() async {
+    if (_loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      if (_weightPage.hasMore) {
+        final response = await widget.repository.fetchWeightLogs(
+          page: _weightPage.nextPage,
+        );
+        _weightLogs = mergeApiPageItems(_weightLogs, apiPageItems(response));
+        _weightPage = ApiPagination.fromResponse(response);
+      }
+      if (_measurementPage.hasMore) {
+        final response = await widget.repository.fetchBodyMeasurements(
+          page: _measurementPage.nextPage,
+        );
+        _bodyMeasurements = mergeApiPageItems(
+          _bodyMeasurements,
+          apiPageItems(response),
+        );
+        _measurementPage = ApiPagination.fromResponse(response);
+      }
+      if (_photoPage.hasMore) {
+        final response = await widget.repository.fetchPhotos(
+          page: _photoPage.nextPage,
+        );
+        _photos = mergeApiPageItems(_photos, apiPageItems(response));
+        _photoPage = ApiPagination.fromResponse(response);
+      }
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -485,6 +529,27 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
                     ],
                   ),
                 ),
+                if (_hasMore)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      8,
+                      AppSpacing.lg,
+                      AppSpacing.md,
+                    ),
+                    child: OutlinedButton.icon(
+                      onPressed: _loadingMore ? null : _loadMoreProgress,
+                      icon: _loadingMore
+                          ? const SizedBox.square(
+                              dimension: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.expand_more_rounded),
+                      label: Text(
+                        _loadingMore ? 'Loading...' : 'Load older progress',
+                      ),
+                    ),
+                  ),
               ],
             ),
     );

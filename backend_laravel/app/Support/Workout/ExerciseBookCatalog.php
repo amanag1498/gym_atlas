@@ -3,6 +3,7 @@
 namespace App\Support\Workout;
 
 use App\Models\Exercise;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -69,6 +70,90 @@ class ExerciseBookCatalog
             'full_body' => 'Full Body',
             default => Str::of($bodyPart)->replace('_', ' ')->title()->toString(),
         };
+    }
+
+    public static function applyBodyPartFilter(Builder $query, string $bodyPart): Builder
+    {
+        $bodyPart = self::bodyPartForMuscleGroup($bodyPart);
+        $normalizedColumn = "LOWER(REPLACE(REPLACE(COALESCE(muscle_group, ''), '_', ' '), '-', ' '))";
+        $patterns = [
+            'chest' => ['%chest%'],
+            'back' => ['%back%', '%lats%', '%trap%'],
+            'shoulders' => ['%shoulder%', '%delt%'],
+            'arms' => ['%bicep%', '%tricep%', '%forearm%', '%arm%'],
+            'core' => ['%core%', '%ab%', '%oblique%'],
+            'glutes' => ['%glute%'],
+            'quads' => ['%quad%', '%leg%', '%lower body%'],
+            'hamstrings' => ['%hamstring%'],
+            'calves' => ['%calf%'],
+            'conditioning' => ['%conditioning%', '%cardio%'],
+            'mobility' => ['%mobility%', '%recovery%'],
+            'full_body' => ['%full body%'],
+        ];
+
+        $precedingPatterns = [];
+        foreach (self::BODY_PART_ORDER as $candidate) {
+            if ($candidate === $bodyPart) {
+                break;
+            }
+
+            $precedingPatterns = [...$precedingPatterns, ...($patterns[$candidate] ?? [])];
+        }
+
+        return $query->where(function (Builder $builder) use ($bodyPart, $normalizedColumn, $patterns, $precedingPatterns): void {
+            foreach ($precedingPatterns as $pattern) {
+                $builder->whereRaw("{$normalizedColumn} NOT LIKE ?", [$pattern]);
+            }
+
+            $requestedPatterns = $patterns[$bodyPart] ?? [];
+            if ($requestedPatterns === []) {
+                foreach (collect($patterns)->flatten() as $pattern) {
+                    $builder->whereRaw("{$normalizedColumn} NOT LIKE ?", [$pattern]);
+                }
+
+                return;
+            }
+
+            $builder->where(function (Builder $matching) use ($normalizedColumn, $requestedPatterns): void {
+                foreach ($requestedPatterns as $index => $pattern) {
+                    $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
+                    $matching->{$method}("{$normalizedColumn} LIKE ?", [$pattern]);
+                }
+            });
+        });
+    }
+
+    public static function applyBodyPartOrder(Builder $query): Builder
+    {
+        $normalizedColumn = "LOWER(REPLACE(REPLACE(COALESCE(muscle_group, ''), '_', ' '), '-', ' '))";
+        $cases = [
+            [1, ['%chest%']],
+            [2, ['%back%', '%lats%', '%trap%']],
+            [3, ['%shoulder%', '%delt%']],
+            [4, ['%bicep%', '%tricep%', '%forearm%', '%arm%']],
+            [5, ['%core%', '%ab%', '%oblique%']],
+            [6, ['%glute%']],
+            [7, ['%quad%']],
+            [8, ['%hamstring%']],
+            [9, ['%calf%']],
+            [10, ['%conditioning%', '%cardio%']],
+            [11, ['%mobility%', '%recovery%']],
+            [12, ['%full body%']],
+            [7, ['%leg%', '%lower body%']],
+        ];
+        $sql = 'CASE';
+        $bindings = [];
+
+        foreach ($cases as [$position, $patterns]) {
+            $conditions = [];
+            foreach ($patterns as $pattern) {
+                $conditions[] = "{$normalizedColumn} LIKE ?";
+                $bindings[] = $pattern;
+            }
+            $sql .= ' WHEN ('.implode(' OR ', $conditions).") THEN {$position}";
+        }
+
+        return $query->orderByRaw($sql.' ELSE 13 END', $bindings)->orderBy('name')->orderBy('id');
     }
 
     public static function exerciseToArray(Exercise $exercise): array

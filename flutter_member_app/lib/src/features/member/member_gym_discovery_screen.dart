@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/models.dart';
+import '../../core/pagination.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -38,6 +39,7 @@ class _MemberGymDiscoveryScreenState extends State<MemberGymDiscoveryScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _loading = true;
   bool _savingGym = false;
+  bool _loadingMore = false;
   String? _error;
   bool _locationLoading = false;
   String? _locationError;
@@ -45,6 +47,8 @@ class _MemberGymDiscoveryScreenState extends State<MemberGymDiscoveryScreen> {
   double? _currentLongitude;
   List<Map<String, dynamic>> _gyms = const [];
   List<Map<String, dynamic>> _savedGyms = const [];
+  ApiPagination _gymPage = const ApiPagination.singlePage();
+  ApiPagination _savedGymPage = const ApiPagination.singlePage();
   _GymDiscoveryFilters _filters = const _GymDiscoveryFilters();
   double _nearbyDistanceKm = 25;
 
@@ -70,16 +74,14 @@ class _MemberGymDiscoveryScreenState extends State<MemberGymDiscoveryScreen> {
 
     try {
       final results = await Future.wait<Map<String, dynamic>>([
-        widget.repository.fetchPublicGyms(filters: _discoveryQuery()),
-        widget.repository.fetchSavedGyms(),
+        widget.repository.fetchPublicGyms(filters: _discoveryQuery(page: 1)),
+        widget.repository.fetchSavedGyms(page: 1),
       ]);
 
-      _gyms = (results[0]['data'] as List<dynamic>? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
-      _savedGyms = (results[1]['data'] as List<dynamic>? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
+      _gyms = apiPageItems(results[0]);
+      _savedGyms = apiPageItems(results[1]);
+      _gymPage = ApiPagination.fromResponse(results[0]);
+      _savedGymPage = ApiPagination.fromResponse(results[1]);
     } catch (exception) {
       _error = exception.toString();
     }
@@ -89,14 +91,45 @@ class _MemberGymDiscoveryScreenState extends State<MemberGymDiscoveryScreen> {
     }
   }
 
-  Map<String, dynamic> _discoveryQuery() {
+  Map<String, dynamic> _discoveryQuery({required int page}) {
     final query = Map<String, dynamic>.from(_filters.toQuery());
+    query['page'] = page;
+    query['per_page'] = 12;
     if (_currentLatitude != null && _currentLongitude != null) {
       query['latitude'] = _currentLatitude;
       query['longitude'] = _currentLongitude;
       query['distance'] = _nearbyDistanceKm;
     }
     return query;
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || (!_gymPage.hasMore && !_savedGymPage.hasMore)) return;
+    setState(() => _loadingMore = true);
+    try {
+      if (_gymPage.hasMore) {
+        final response = await widget.repository.fetchPublicGyms(
+          filters: _discoveryQuery(page: _gymPage.nextPage),
+        );
+        _gyms = mergeApiPageItems(_gyms, apiPageItems(response));
+        _gymPage = ApiPagination.fromResponse(response);
+      }
+      if (_savedGymPage.hasMore) {
+        final response = await widget.repository.fetchSavedGyms(
+          page: _savedGymPage.nextPage,
+        );
+        _savedGyms = mergeApiPageItems(_savedGyms, apiPageItems(response));
+        _savedGymPage = ApiPagination.fromResponse(response);
+      }
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
   }
 
   Future<void> _useCurrentLocation() async {
@@ -434,7 +467,7 @@ class _MemberGymDiscoveryScreenState extends State<MemberGymDiscoveryScreen> {
                   _DiscoverySectionTitle(
                     title: _gyms.isEmpty
                         ? 'No gyms available'
-                        : '${_gyms.length} gyms ready to explore',
+                        : '${_gymPage.total} gyms ready to explore',
                     action: 'Filters',
                     onTap: _openFilters,
                   ),
@@ -461,6 +494,25 @@ class _MemberGymDiscoveryScreenState extends State<MemberGymDiscoveryScreen> {
                         ),
                       ),
                     ),
+                  if (_gymPage.hasMore || _savedGymPage.hasMore) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Center(
+                      child: OutlinedButton.icon(
+                        onPressed: _loadingMore ? null : _loadMore,
+                        icon: _loadingMore
+                            ? const SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.expand_more_rounded),
+                        label: Text(
+                          _loadingMore ? 'Loading...' : 'Load more gyms',
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -9,6 +9,7 @@ import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../core/config.dart';
+import '../../core/pagination.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/confirmation_dialog.dart';
 import '../../../core/widgets/premium_card.dart';
@@ -59,6 +60,16 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
   List<Map<String, dynamic>> _exercises = const [];
   List<Map<String, dynamic>> _chatConversations = const [];
   List<Map<String, dynamic>> _independentInvitations = const [];
+  ApiPagination _gymMemberPage = const ApiPagination.singlePage();
+  ApiPagination _independentMemberPage = const ApiPagination.singlePage();
+  ApiPagination _notificationPage = const ApiPagination.singlePage();
+  ApiPagination _trialPage = const ApiPagination.singlePage();
+  ApiPagination _planPage = const ApiPagination.singlePage();
+  ApiPagination _templatePage = const ApiPagination.singlePage();
+  ApiPagination _exercisePage = const ApiPagination.singlePage();
+  bool _loadingMoreMembers = false;
+  bool _loadingMoreNotifications = false;
+  bool _loadingMoreWorkoutData = false;
   String? _chatError;
   String? _workoutFocusAssignmentKey;
   int _handledChatLaunchVersion = -1;
@@ -186,6 +197,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         }
         _contextData = _normalizeTrainerContext(contextData);
         _notifications = _mapList(notificationsResponse['data']);
+        _notificationPage = ApiPagination.fromResponse(notificationsResponse);
         _members = const [];
         _todayClients = const [];
         _followUps = const [];
@@ -224,6 +236,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         coachingRequest(_repository.fetchTrialRequests, 'trial requests'),
       ]);
       List<Map<String, dynamic>> independentMembers = const [];
+      Map<String, dynamic>? independentMembersResponse;
       List<Map<String, dynamic>> independentInvitations = const [];
       Map<String, dynamic> independentContext = const {};
       try {
@@ -235,6 +248,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       if (isIndependent && isVerified) {
         try {
           final response = await _repository.fetchIndependentMembers();
+          independentMembersResponse = response;
           independentMembers = _recordsFromResponse(
             response,
           ).map(_normalizeIndependentAssignment).toList();
@@ -281,8 +295,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         followUps = const [];
       }
       try {
-        final response = await _repository.fetchChatConversations();
-        chatConversations = _mapList(response['data']);
+        chatConversations = await _fetchAllChatConversations();
         _chatError = null;
       } catch (exception) {
         chatConversations = const [];
@@ -293,12 +306,21 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       }
       _contextData = _normalizeTrainerContext(contextData);
       _members = [..._mapList(results[0]['data']), ...independentMembers];
+      _gymMemberPage = ApiPagination.fromResponse(results[0]);
+      _independentMemberPage = independentMembersResponse == null
+          ? const ApiPagination.singlePage()
+          : ApiPagination.fromResponse(independentMembersResponse);
       _todayClients = _mapList(results[1]['data']);
       _templates = _mapList(results[2]['data']);
+      _templatePage = ApiPagination.fromResponse(results[2]);
       _plans = _mapList(results[3]['data']);
+      _planPage = ApiPagination.fromResponse(results[3]);
       _notifications = _mapList(results[4]['data']);
+      _notificationPage = ApiPagination.fromResponse(results[4]);
       _exercises = _mapList(results[5]['data']);
+      _exercisePage = ApiPagination.fromResponse(results[5]);
       _trialRequests = _mapList(results[6]['data']);
+      _trialPage = ApiPagination.fromResponse(results[6]);
       _tasks = tasks;
       _followUps = followUps;
       _chatConversations = chatConversations;
@@ -309,6 +331,127 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
 
     if (mounted) {
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadMoreMembers() async {
+    if (_loadingMoreMembers ||
+        (!_gymMemberPage.hasMore && !_independentMemberPage.hasMore)) {
+      return;
+    }
+    setState(() => _loadingMoreMembers = true);
+    try {
+      var gymMembers = _members
+          .where((item) => item['relationship_type'] != 'independent')
+          .toList();
+      var independentMembers = _members
+          .where((item) => item['relationship_type'] == 'independent')
+          .toList();
+      if (_gymMemberPage.hasMore) {
+        final response = await _repository.fetchAssignedMembers(
+          page: _gymMemberPage.nextPage,
+        );
+        gymMembers = mergeApiPageItems(gymMembers, apiPageItems(response));
+        _gymMemberPage = ApiPagination.fromResponse(response);
+      }
+      if (_independentMemberPage.hasMore) {
+        final response = await _repository.fetchIndependentMembers(
+          page: _independentMemberPage.nextPage,
+        );
+        independentMembers = mergeApiPageItems(
+          independentMembers,
+          apiPageItems(response).map(_normalizeIndependentAssignment),
+        );
+        _independentMemberPage = ApiPagination.fromResponse(response);
+      }
+      _members = [...gymMembers, ...independentMembers];
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMoreMembers = false);
+    }
+  }
+
+  Future<void> _loadMoreNotifications() async {
+    if (_loadingMoreNotifications ||
+        (!_notificationPage.hasMore && !_trialPage.hasMore)) {
+      return;
+    }
+    setState(() => _loadingMoreNotifications = true);
+    try {
+      if (_notificationPage.hasMore) {
+        final response = await _repository.fetchNotifications(
+          page: _notificationPage.nextPage,
+        );
+        _notifications = mergeApiPageItems(
+          _notifications,
+          apiPageItems(response),
+        );
+        _notificationPage = ApiPagination.fromResponse(response);
+      }
+      if (_trialPage.hasMore) {
+        final response = await _repository.fetchTrialRequests(
+          page: _trialPage.nextPage,
+        );
+        _trialRequests = mergeApiPageItems(
+          _trialRequests,
+          apiPageItems(response),
+        );
+        _trialPage = ApiPagination.fromResponse(response);
+      }
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMoreNotifications = false);
+    }
+  }
+
+  Future<void> _loadMoreWorkoutData() async {
+    if (_loadingMoreWorkoutData ||
+        (!_templatePage.hasMore &&
+            !_planPage.hasMore &&
+            !_exercisePage.hasMore)) {
+      return;
+    }
+    setState(() => _loadingMoreWorkoutData = true);
+    try {
+      if (_templatePage.hasMore) {
+        final response = await _repository.fetchWorkoutTemplates(
+          page: _templatePage.nextPage,
+        );
+        _templates = mergeApiPageItems(_templates, apiPageItems(response));
+        _templatePage = ApiPagination.fromResponse(response);
+      }
+      if (_planPage.hasMore) {
+        final response = await _repository.fetchWorkoutPlans(
+          page: _planPage.nextPage,
+        );
+        _plans = mergeApiPageItems(_plans, apiPageItems(response));
+        _planPage = ApiPagination.fromResponse(response);
+      }
+      if (_exercisePage.hasMore) {
+        final response = await _repository.fetchExercises(
+          page: _exercisePage.nextPage,
+        );
+        _exercises = mergeApiPageItems(_exercises, apiPageItems(response));
+        _exercisePage = ApiPagination.fromResponse(response);
+      }
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMoreWorkoutData = false);
     }
   }
 
@@ -397,6 +540,9 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         members: _members,
         plans: _plans,
         onRefresh: _load,
+        hasMore: _gymMemberPage.hasMore || _independentMemberPage.hasMore,
+        loadingMore: _loadingMoreMembers,
+        onLoadMore: _loadMoreMembers,
         onOpenMember: _openMemberDetailSheet,
         onQuickNote: _openQuickNoteSheet,
         onQuickAssign: _openQuickAssignSheet,
@@ -427,6 +573,10 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         repository: _repository,
         initialAssignmentKey: _workoutFocusAssignmentKey,
         onRefresh: _load,
+        hasMore:
+            _templatePage.hasMore || _planPage.hasMore || _exercisePage.hasMore,
+        loadingMore: _loadingMoreWorkoutData,
+        onLoadMore: _loadMoreWorkoutData,
       ),
       _ChatPage(
         members: _coachingActionMembers,
@@ -445,6 +595,9 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         trialRequests: _trialRequests,
         members: _members,
         onRefresh: _load,
+        hasMore: _notificationPage.hasMore || _trialPage.hasMore,
+        loadingMore: _loadingMoreNotifications,
+        onLoadMore: _loadMoreNotifications,
         onMarkRead: (notificationId) async {
           await _repository.markNotificationRead(notificationId);
           await _load();
@@ -515,6 +668,9 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                   trialRequests: const [],
                   members: const [],
                   onRefresh: _load,
+                  hasMore: _notificationPage.hasMore || _trialPage.hasMore,
+                  loadingMore: _loadingMoreNotifications,
+                  onLoadMore: _loadMoreNotifications,
                   onMarkRead: (notificationId) async {
                     await _repository.markNotificationRead(notificationId);
                     await _load();
@@ -687,12 +843,12 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
 
   Future<void> _refreshChatConversations() async {
     try {
-      final response = await _repository.fetchChatConversations();
+      final conversations = await _fetchAllChatConversations();
       if (!mounted) {
         return;
       }
       setState(() {
-        _chatConversations = _mapList(response['data']);
+        _chatConversations = conversations;
         _chatError = null;
       });
     } catch (exception) {
@@ -700,6 +856,22 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         setState(() => _chatError = exception.toString());
       }
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchAllChatConversations() async {
+    var response = await _repository.fetchChatConversations();
+    var conversations = apiPageItems(response);
+    var pagination = ApiPagination.fromResponse(response);
+
+    while (pagination.hasMore) {
+      response = await _repository.fetchChatConversations(
+        page: pagination.nextPage,
+      );
+      conversations = mergeApiPageItems(conversations, apiPageItems(response));
+      pagination = ApiPagination.fromResponse(response);
+    }
+
+    return conversations;
   }
 
   Future<void> _openMemberDetailSheet(Map<String, dynamic> assignment) async {
@@ -745,57 +917,80 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         .toSet();
     final accessActive = assignment['access_active'] != false;
 
-    Future<List<Map<String, dynamic>>> loadRecords(
-      Future<Map<String, dynamic>> Function() request,
+    Future<({List<Map<String, dynamic>> items, int total})> loadPreview(
+      Future<Map<String, dynamic>> Function(int page) request,
     ) async {
       try {
-        return _recordsFromResponse(await request());
+        final response = await request(1);
+        final records = apiPageItems(response);
+        return (
+          items: records,
+          total: ApiPagination.fromResponse(response).total,
+        );
       } catch (exception) {
         debugPrint('[independent-member][warn] $exception');
-        return const [];
+        return (items: const <Map<String, dynamic>>[], total: 0);
       }
     }
 
     final results = await Future.wait([
       if (accessActive && permissions.contains('workouts'))
-        loadRecords(
-          () => _repository.fetchIndependentMemberWorkoutPlans(relationshipId),
+        loadPreview(
+          (page) => _repository.fetchIndependentMemberWorkoutPlans(
+            relationshipId,
+            page: page,
+          ),
         )
       else
-        Future.value(const <Map<String, dynamic>>[]),
+        Future.value((items: const <Map<String, dynamic>>[], total: 0)),
       if (accessActive && permissions.contains('workouts'))
-        loadRecords(
-          () =>
-              _repository.fetchIndependentMemberWorkoutLogbook(relationshipId),
+        loadPreview(
+          (page) => _repository.fetchIndependentMemberWorkoutLogbook(
+            relationshipId,
+            page: page,
+          ),
         )
       else
-        Future.value(const <Map<String, dynamic>>[]),
+        Future.value((items: const <Map<String, dynamic>>[], total: 0)),
       if (accessActive && permissions.contains('profile'))
-        loadRecords(
-          () => _repository.fetchIndependentMemberNotes(relationshipId),
+        loadPreview(
+          (page) => _repository.fetchIndependentMemberNotes(
+            relationshipId,
+            page: page,
+          ),
         )
       else
-        Future.value(const <Map<String, dynamic>>[]),
+        Future.value((items: const <Map<String, dynamic>>[], total: 0)),
     ]);
     if (!mounted) return;
-    final workoutPlans = results[0];
-    final workoutSessions = results[1];
-    final notes = results[2];
-    Map<String, dynamic> progress = const {};
+    final workoutPlans = results[0].items;
+    final workoutPlanTotal = results[0].total;
+    final workoutSessionTotal = results[1].total;
+    final notes = results[2].items;
+    final noteTotal = results[2].total;
+    var progressTotal = 0;
     if (accessActive && permissions.contains('progress')) {
       try {
         final response = await _repository.fetchIndependentMemberProgress(
           relationshipId,
         );
-        progress = _map(response['data']);
+        final meta = _map(response['meta']);
+        progressTotal =
+            const [
+              'weight_logs_pagination',
+              'body_measurements_pagination',
+              'progress_photos_pagination',
+              'personal_records_pagination',
+            ].fold<int>(
+              0,
+              (total, key) =>
+                  total + (_intValue(_map(meta[key])['total']) ?? 0),
+            );
       } catch (exception) {
         debugPrint('[independent-member][warn] progress: $exception');
       }
     }
     if (!mounted) return;
-    final weightLogs = _mapList(progress['weight_logs']);
-    final measurements = _mapList(progress['body_measurements']);
-    final personalRecords = _mapList(progress['personal_records']);
     await showModalBottomSheet<void>(
       context: context,
       useSafeArea: true,
@@ -838,21 +1033,20 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
               runSpacing: 8,
               children: [
                 _MemberMetaChip(
-                  label: '${workoutPlans.length} workout plans',
+                  label: '$workoutPlanTotal workout plans',
                   icon: Icons.fitness_center_rounded,
                 ),
                 _MemberMetaChip(
-                  label: '${workoutSessions.length} logged sessions',
+                  label: '$workoutSessionTotal logged sessions',
                   icon: Icons.history_rounded,
                 ),
                 _MemberMetaChip(
-                  label: '${notes.length} private notes',
+                  label: '$noteTotal private notes',
                   icon: Icons.note_alt_outlined,
                 ),
                 if (accessActive && permissions.contains('progress'))
                   _MemberMetaChip(
-                    label:
-                        '${weightLogs.length + measurements.length + personalRecords.length} progress records',
+                    label: '$progressTotal progress records',
                     icon: Icons.insights_rounded,
                   ),
               ],
@@ -5223,6 +5417,9 @@ class _MemberPage extends StatefulWidget {
     required this.members,
     required this.plans,
     required this.onRefresh,
+    required this.hasMore,
+    required this.loadingMore,
+    required this.onLoadMore,
     required this.onOpenMember,
     required this.onQuickNote,
     required this.onQuickAssign,
@@ -5240,6 +5437,9 @@ class _MemberPage extends StatefulWidget {
   final List<Map<String, dynamic>> members;
   final List<Map<String, dynamic>> plans;
   final Future<void> Function() onRefresh;
+  final bool hasMore;
+  final bool loadingMore;
+  final Future<void> Function() onLoadMore;
   final Future<void> Function(Map<String, dynamic>) onOpenMember;
   final Future<void> Function(Map<String, dynamic>) onQuickNote;
   final Future<void> Function(Map<String, dynamic>) onQuickAssign;
@@ -5435,6 +5635,23 @@ class _MemberPageState extends State<_MemberPage> {
                 ),
               ),
             ),
+          if (widget.hasMore) ...[
+            const SizedBox(height: 4),
+            Center(
+              child: OutlinedButton.icon(
+                onPressed: widget.loadingMore ? null : widget.onLoadMore,
+                icon: widget.loadingMore
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.expand_more_rounded),
+                label: Text(
+                  widget.loadingMore ? 'Loading...' : 'Load more members',
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -5451,6 +5668,9 @@ class _WorkoutPage extends StatefulWidget {
     required this.repository,
     required this.initialAssignmentKey,
     required this.onRefresh,
+    required this.hasMore,
+    required this.loadingMore,
+    required this.onLoadMore,
   });
 
   final Map<String, dynamic> contextData;
@@ -5461,6 +5681,9 @@ class _WorkoutPage extends StatefulWidget {
   final TrainerRepository repository;
   final String? initialAssignmentKey;
   final Future<void> Function() onRefresh;
+  final bool hasMore;
+  final bool loadingMore;
+  final Future<void> Function() onLoadMore;
 
   @override
   State<_WorkoutPage> createState() => __WorkoutPageState();
@@ -6204,6 +6427,10 @@ class __WorkoutPageState extends State<_WorkoutPage> {
               ],
             ),
           ),
+        if (widget.hasMore) ...[
+          const SizedBox(height: 16),
+          _workoutLoadMoreButton(),
+        ],
       ],
     );
   }
@@ -6275,7 +6502,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                   icon: Icons.sports_gymnastics_outlined,
                 )
               : Column(
-                  children: widget.exercises.take(20).map((exercise) {
+                  children: widget.exercises.map((exercise) {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: _TrainerWorkoutTile(
@@ -6295,9 +6522,26 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                   }).toList(),
                 ),
         ),
+        if (widget.hasMore) ...[
+          const SizedBox(height: 16),
+          _workoutLoadMoreButton(),
+        ],
       ],
     );
   }
+
+  Widget _workoutLoadMoreButton() => Center(
+    child: OutlinedButton.icon(
+      onPressed: widget.loadingMore ? null : widget.onLoadMore,
+      icon: widget.loadingMore
+          ? const SizedBox.square(
+              dimension: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.expand_more_rounded),
+      label: Text(widget.loadingMore ? 'Loading...' : 'Load more workout data'),
+    ),
+  );
 
   Future<void> _openWorkoutTemplatePreview(
     Map<String, dynamic> template,
@@ -9776,6 +10020,9 @@ class _NotificationPage extends StatelessWidget {
     required this.trialRequests,
     required this.members,
     required this.onRefresh,
+    required this.hasMore,
+    required this.loadingMore,
+    required this.onLoadMore,
     required this.onMarkRead,
     required this.onMarkAllRead,
     required this.onUpdateTrial,
@@ -9787,6 +10034,9 @@ class _NotificationPage extends StatelessWidget {
   final List<Map<String, dynamic>> trialRequests;
   final List<Map<String, dynamic>> members;
   final Future<void> Function() onRefresh;
+  final bool hasMore;
+  final bool loadingMore;
+  final Future<void> Function() onLoadMore;
   final Future<void> Function(int notificationId) onMarkRead;
   final Future<void> Function() onMarkAllRead;
   final Future<void> Function(int trialRequestId, String status) onUpdateTrial;
@@ -9919,6 +10169,23 @@ class _NotificationPage extends StatelessWidget {
                   Divider(color: AppColors.stroke, height: 1),
               ];
             }),
+          if (hasMore) ...[
+            const SizedBox(height: 20),
+            Center(
+              child: OutlinedButton.icon(
+                onPressed: loadingMore ? null : onLoadMore,
+                icon: loadingMore
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.expand_more_rounded),
+                label: Text(
+                  loadingMore ? 'Loading...' : 'Load older notifications',
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
