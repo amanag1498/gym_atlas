@@ -15,8 +15,6 @@ class IndependentCoachingAccessService
     {
         return $trainer->is_active && TrainerProfile::query()
             ->where('user_id', $trainer->id)
-            ->whereNull('gym_id')
-            ->whereNull('branch_id')
             ->where('is_active', true)
             ->where('status', 'active')
             ->where('verification_status', 'verified')
@@ -40,9 +38,7 @@ class IndependentCoachingAccessService
             ->where('status', 'active')
             ->whereHas('trainer', fn (Builder $trainer) => $trainer->where('is_active', true))
             ->whereHas('trainer.managedTrainerProfile', function (Builder $query): void {
-                $query->whereNull('gym_id')
-                    ->whereNull('branch_id')
-                    ->where('is_active', true)
+                $query->where('is_active', true)
                     ->where('status', 'active')
                     ->where('verification_status', 'verified');
             });
@@ -185,8 +181,6 @@ class IndependentCoachingAccessService
     {
         $profile = TrainerProfile::query()
             ->where('user_id', $trainer->id)
-            ->whereNull('gym_id')
-            ->whereNull('branch_id')
             ->where('is_active', true)
             ->where('status', 'active')
             ->where('verification_status', 'verified')
@@ -195,7 +189,7 @@ class IndependentCoachingAccessService
         if (! $profile) {
             throw ValidationException::withMessages([
                 'trainer' => [
-                    'Independent coaching requires an active, verified trainer account with no gym assignment.',
+                    'Personal coaching requires an active, verified trainer account.',
                 ],
             ]);
         }

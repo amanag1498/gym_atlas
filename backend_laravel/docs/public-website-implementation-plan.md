@@ -1,3 +1,4 @@
+
 # Gym Atlas Laravel Public Website Implementation Plan
 
 ## Objective

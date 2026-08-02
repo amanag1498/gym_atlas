@@ -336,6 +336,7 @@ class MemberAppService
             }
 
             if ($gymId !== null) {
+                $this->releaseMemberOwnedWorkoutPlans($user, (int) $gymId);
                 WorkoutPlan::query()
                     ->where('member_id', $user->id)
                     ->where('gym_id', $gymId)
@@ -449,6 +450,7 @@ class MemberAppService
                 ])->save();
             }
 
+            $this->releaseMemberOwnedWorkoutPlans($user, (int) $gymId);
             WorkoutPlan::query()
                 ->where('member_id', $user->id)
                 ->where('gym_id', $gymId)
@@ -749,6 +751,37 @@ class MemberAppService
     public function forgetStepSummaryCacheFor(User $user, ?MemberProfile $profile = null): void
     {
         Cache::forget($this->stepSummaryCacheKey($user, $this->stepTimezoneFor($user, $profile)));
+    }
+
+    private function releaseMemberOwnedWorkoutPlans(User $member, int $gymId): void
+    {
+        $planIds = WorkoutPlan::query()
+            ->where('member_id', $member->id)
+            ->where('gym_id', $gymId)
+            ->where('created_by_user_id', $member->id)
+            ->whereNull('trainer_id')
+            ->whereNull('independent_trainer_member_relationship_id')
+            ->where('is_member_editable', true)
+            ->pluck('id');
+
+        if ($planIds->isEmpty()) {
+            return;
+        }
+
+        WorkoutSession::query()
+            ->where('member_id', $member->id)
+            ->whereIn('workout_plan_id', $planIds)
+            ->update([
+                'gym_id' => null,
+                'branch_id' => null,
+            ]);
+
+        WorkoutPlan::query()
+            ->whereIn('id', $planIds)
+            ->update([
+                'gym_id' => null,
+                'branch_id' => null,
+            ]);
     }
 
     public function stepTimezoneFor(User $user, ?MemberProfile $profile = null): string

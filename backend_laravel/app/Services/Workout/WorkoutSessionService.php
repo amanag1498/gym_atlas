@@ -52,7 +52,7 @@ class WorkoutSessionService
                 ]);
             }
 
-            if ($plan?->independent_trainer_member_relationship_id !== null) {
+            if ($plan !== null && $plan->gym_id === null) {
                 $gymId = null;
                 $branchId = null;
             }

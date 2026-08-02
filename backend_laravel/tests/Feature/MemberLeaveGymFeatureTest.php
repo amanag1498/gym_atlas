@@ -4,12 +4,15 @@ namespace Tests\Feature;
 
 use App\Enums\RoleName;
 use App\Models\Branch;
+use App\Models\Exercise;
 use App\Models\FitnessGoal;
 use App\Models\Gym;
 use App\Models\MemberMembership;
 use App\Models\MemberProfile;
 use App\Models\MembershipPlan;
 use App\Models\User;
+use App\Models\WorkoutPlan;
+use App\Models\WorkoutSession;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -135,6 +138,122 @@ class MemberLeaveGymFeatureTest extends TestCase
             'is_active' => false,
         ]);
         $this->assertTrue($member->fresh()->hasRole(RoleName::Member->value));
+    }
+
+    public function test_leaving_gym_retains_workout_logs_global_exercises_and_member_owned_plans(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [, $member, $gym, $branch] = $this->makeActiveGymMember();
+        $trainer = User::factory()->create(['active_role' => RoleName::Trainer->value]);
+        $trainer->assignRole(RoleName::Trainer->value);
+
+        $trainerPlan = WorkoutPlan::query()->create([
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_id' => $member->id,
+            'trainer_id' => $trainer->id,
+            'created_by_user_id' => $trainer->id,
+            'plan_origin' => 'trainer_assigned',
+            'is_member_editable' => false,
+            'name' => 'Gym trainer plan',
+            'duration_weeks' => 4,
+            'status' => 'active',
+        ]);
+        $personalPlan = WorkoutPlan::query()->create([
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_id' => $member->id,
+            'trainer_id' => null,
+            'created_by_user_id' => $member->id,
+            'source_workout_book_id' => null,
+            'plan_origin' => 'catalog_adopted',
+            'is_member_editable' => true,
+            'name' => 'Global catalog plan',
+            'duration_weeks' => 6,
+            'status' => 'active',
+        ]);
+        $completedSession = WorkoutSession::query()->create([
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_id' => $member->id,
+            'trainer_id' => $trainer->id,
+            'workout_plan_id' => $trainerPlan->id,
+            'started_by_user_id' => $member->id,
+            'session_date' => today()->subDay(),
+            'status' => 'completed',
+            'started_at' => now()->subDay(),
+            'completed_at' => now()->subDay()->addHour(),
+            'total_volume' => 1250,
+        ]);
+        $personalSession = WorkoutSession::query()->create([
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_id' => $member->id,
+            'trainer_id' => null,
+            'workout_plan_id' => $personalPlan->id,
+            'started_by_user_id' => $member->id,
+            'session_date' => today()->subDays(2),
+            'status' => 'completed',
+            'started_at' => now()->subDays(2),
+            'completed_at' => now()->subDays(2)->addHour(),
+            'total_volume' => 900,
+        ]);
+        $globalExercise = Exercise::query()->create([
+            'name' => 'Global bodyweight squat',
+            'muscle_group' => 'legs',
+            'is_global' => true,
+            'status' => 'approved',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/membership/leave')
+            ->assertOk();
+
+        $this->assertDatabaseHas('workout_plans', [
+            'id' => $trainerPlan->id,
+            'status' => 'inactive',
+            'gym_id' => $gym->id,
+        ]);
+        $this->assertDatabaseHas('workout_plans', [
+            'id' => $personalPlan->id,
+            'status' => 'active',
+            'gym_id' => null,
+            'branch_id' => null,
+        ]);
+        $this->assertDatabaseHas('workout_sessions', [
+            'id' => $personalSession->id,
+            'gym_id' => null,
+            'branch_id' => null,
+            'status' => 'completed',
+        ]);
+
+        $this->actingAs($member->fresh(), 'sanctum')
+            ->getJson('/api/member/workout-plans')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $personalPlan->id)
+            ->assertJsonPath('data.0.coaching_scope', 'personal');
+        $this->actingAs($member->fresh(), 'sanctum')
+            ->getJson('/api/member/workout-history')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $completedSession->id]);
+        $this->actingAs($member->fresh(), 'sanctum')
+            ->getJson('/api/member/workout-sessions/'.$completedSession->id)
+            ->assertOk()
+            ->assertJsonPath('data.total_volume', 1250);
+        $this->actingAs($member->fresh(), 'sanctum')
+            ->getJson('/api/member/workout-exercises')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $globalExercise->id]);
+        $this->actingAs($member->fresh(), 'sanctum')
+            ->postJson('/api/member/workout-sessions/start', [
+                'workout_plan_id' => $personalPlan->id,
+                'session_date' => today()->toDateString(),
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.gym_id', null)
+            ->assertJsonPath('data.workout_plan_id', $personalPlan->id);
     }
 
     /**

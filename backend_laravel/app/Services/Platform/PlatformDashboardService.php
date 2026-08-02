@@ -61,13 +61,10 @@ class PlatformDashboardService
             'active_gyms' => Gym::query()->where('is_active', true)->count(),
             'pending_gym_approvals' => Gym::query()->where('approval_status', 'pending')->count(),
             'pending_independent_trainer_verifications' => TrainerProfile::query()
-                ->whereNull('gym_id')
-                ->whereNull('branch_id')
                 ->where('verification_status', 'pending')
+                ->whereNotNull('verification_submitted_at')
                 ->count(),
             'verified_independent_trainers' => TrainerProfile::query()
-                ->whereNull('gym_id')
-                ->whereNull('branch_id')
                 ->where('verification_status', 'verified')
                 ->count(),
             'inactive_gyms' => Gym::query()->where('is_active', false)->count(),
@@ -114,11 +111,10 @@ class PlatformDashboardService
     private function pendingIndependentTrainerVerifications(): array
     {
         return TrainerProfile::query()
-            ->with('user:id,name,email')
-            ->whereNull('gym_id')
-            ->whereNull('branch_id')
+            ->with(['user:id,name,email', 'gym:id,name'])
             ->where('verification_status', 'pending')
-            ->latest('created_at')
+            ->whereNotNull('verification_submitted_at')
+            ->latest('verification_submitted_at')
             ->latest('id')
             ->limit(6)
             ->get()
@@ -129,7 +125,8 @@ class PlatformDashboardService
                 'email' => $profile->user?->email,
                 'specialization' => $profile->specialization,
                 'experience_years' => $profile->experience_years,
-                'submitted_at' => $profile->created_at,
+                'submitted_at' => $profile->verification_submitted_at,
+                'gym_name' => $profile->gym?->name,
                 'status' => $profile->verification_status,
             ])
             ->all();

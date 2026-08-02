@@ -42,6 +42,8 @@ class TrainerProfileResource extends JsonResource
             'request_session_action' => $summary['request_session_action'] ?? null,
             'is_active' => $this->is_active,
             'verification_status' => $this->verification_status,
+            'verification_submitted' => $this->verification_submitted_at !== null,
+            'verification_submitted_at' => $this->verification_submitted_at?->toIso8601String(),
             'verification_rejection_reason' => $this->verification_rejection_reason,
             'verification_reviewed_at' => $this->verification_reviewed_at?->toIso8601String(),
             'verification_verified_at' => $this->verification_verified_at?->toIso8601String(),

@@ -20,6 +20,9 @@ class IndependentTrainerVerificationResource extends JsonResource
                 'is_active' => (bool) $this->user->is_active,
             ]),
             'independent' => $this->gym_id === null,
+            'has_gym_assignment' => $this->gym_id !== null,
+            'gym' => $this->whenLoaded('gym', fn () => $this->gym ? ['id' => $this->gym->id, 'name' => $this->gym->name] : null),
+            'branch' => $this->whenLoaded('branch', fn () => $this->branch ? ['id' => $this->branch->id, 'name' => $this->branch->name] : null),
             'profile_photo_url' => $this->profile_photo_url,
             'bio' => $this->bio,
             'specialization' => $this->specialization,
@@ -31,6 +34,8 @@ class IndependentTrainerVerificationResource extends JsonResource
             'is_active' => (bool) $this->is_active,
             'verification' => [
                 'status' => $this->verification_status,
+                'submitted' => $this->verification_submitted_at !== null,
+                'submitted_at' => $this->verification_submitted_at?->toIso8601String(),
                 'reviewed_at' => $this->verification_reviewed_at?->toIso8601String(),
                 'verified_at' => $this->verification_verified_at?->toIso8601String(),
                 'rejection_reason' => $this->verification_rejection_reason,

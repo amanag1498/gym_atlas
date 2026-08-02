@@ -74,18 +74,15 @@ class TaskController extends Controller
             ->whereNull('completed_at')
             ->whereDate('follow_up_date', '<=', now()->toDateString());
 
-        if ($trainerProfile->gym_id !== null) {
-            return $query->whereNull('independent_trainer_member_relationship_id');
-        }
-
         $trainer = $trainerProfile->user;
         if (! $trainer
             || ! $trainer->is_active
             || ! $trainerProfile->is_active
             || $trainerProfile->status !== 'active'
-            || $trainerProfile->branch_id !== null
             || $trainerProfile->verification_status !== 'verified') {
-            return $query->whereRaw('1 = 0');
+            return $trainerProfile->gym_id !== null
+                ? $query->whereNull('independent_trainer_member_relationship_id')
+                : $query->whereRaw('1 = 0');
         }
 
         $relationshipIds = $this->independentCoachingAccessService
@@ -94,6 +91,15 @@ class TaskController extends Controller
             ->filter(fn ($relationship): bool => in_array('profile', $relationship->sharing_permissions ?? [], true))
             ->pluck('id');
 
-        return $query->whereIn('independent_trainer_member_relationship_id', $relationshipIds);
+        return $query->where(function (Builder $scope) use ($trainerProfile, $relationshipIds): void {
+            if ($trainerProfile->gym_id !== null) {
+                $scope->whereNull('independent_trainer_member_relationship_id')
+                    ->orWhereIn('independent_trainer_member_relationship_id', $relationshipIds);
+
+                return;
+            }
+
+            $scope->whereIn('independent_trainer_member_relationship_id', $relationshipIds);
+        });
     }
 }

@@ -12,8 +12,6 @@ class IndependentTrainerMemberRelationshipResource extends JsonResource
         $trainerProfile = $this->relationLoaded('trainer') ? $this->trainer?->managedTrainerProfile : null;
         $accessActive = $this->status === 'active'
             && $trainerProfile !== null
-            && $trainerProfile->gym_id === null
-            && $trainerProfile->branch_id === null
             && $trainerProfile->is_active
             && $trainerProfile->status === 'active'
             && $trainerProfile->verification_status === 'verified';

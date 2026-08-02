@@ -51,10 +51,7 @@ class TrainerMemberChatController extends Controller
                 ->pluck('user_id');
 
             $independentMemberIds = collect();
-            if (
-                $trainerProfile->gym_id === null
-                && $trainerProfile->verification_status === 'verified'
-            ) {
+            if ($trainerProfile->verification_status === 'verified') {
                 $independentMemberIds = $this->independentCoachingAccessService
                     ->activeMemberIdsForTrainer($user, 'chat');
             }
@@ -735,13 +732,6 @@ class TrainerMemberChatController extends Controller
             ->where('is_active', true)
             ->where('status', 'active')
             ->whereHas('user', fn ($user) => $user->where('is_active', true))
-            ->where(function ($scope): void {
-                $scope->whereNull('gym_id')
-                    ->orWhereHas('gym', fn ($gym) => $gym
-                        ->where('is_active', true)
-                        ->where('status', 'active')
-                        ->where('operational_access_enabled', true));
-            })
             ->first();
         abort_unless($trainerProfile, 422, 'Trainer profile is not available.');
 
@@ -762,13 +752,6 @@ class TrainerMemberChatController extends Controller
             ->where('user_id', $trainer->id)
             ->where('is_active', true)
             ->where('status', 'active')
-            ->where(function ($scope): void {
-                $scope->whereNull('gym_id')
-                    ->orWhereHas('gym', fn ($gym) => $gym
-                        ->where('is_active', true)
-                        ->where('status', 'active')
-                        ->where('operational_access_enabled', true));
-            })
             ->first();
 
         if (! $profile) {

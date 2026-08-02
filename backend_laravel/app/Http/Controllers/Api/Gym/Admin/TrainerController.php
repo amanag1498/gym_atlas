@@ -333,7 +333,6 @@ class TrainerController extends Controller
         $payload['languages'] = $request->validated('languages', $profile?->languages ?? []);
         $payload['availability_notes'] = $request->validated('availability_notes', $profile?->availability_notes);
         $payload['is_active'] = $request->validated('is_active', $profile?->is_active ?? true);
-        $payload['verification_status'] = $request->validated('verification_status', $profile?->verification_status ?? 'pending');
 
         return $payload;
     }

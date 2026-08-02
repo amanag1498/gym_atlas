@@ -6,7 +6,6 @@ use App\Enums\RoleName;
 use App\Models\Branch;
 use App\Models\FitnessGoal;
 use App\Models\Gym;
-use App\Models\IndependentTrainerMemberRelationship;
 use App\Models\MemberProfile;
 use App\Models\TrainerProfile;
 use App\Models\User;
@@ -15,7 +14,6 @@ use App\Services\Member\MemberFitnessGoalService;
 use App\Services\Notification\NotificationService;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class ManagedUserService
 {
@@ -201,7 +199,9 @@ class ManagedUserService
     {
         return DB::transaction(function () use ($user, $gym, $data): User {
             $existingUser = $user ?? User::query()->firstWhere('email', $data['email']);
-            $this->assertNoActiveIndependentCoaching($existingUser);
+            $existingProfile = $existingUser
+                ? TrainerProfile::query()->where('user_id', $existingUser->id)->first()
+                : null;
 
             $user = $this->persistUser($user, $data);
             $user->assignRole(RoleName::Trainer->value);
@@ -224,7 +224,9 @@ class ManagedUserService
                     'languages' => $data['languages'] ?? [],
                     'availability_notes' => $data['availability_notes'] ?? null,
                     'is_active' => Arr::get($data, 'is_active', true),
-                    'verification_status' => $data['verification_status'] ?? 'pending',
+                    // Gym enrollment never grants, revokes, or resets the
+                    // platform-level personal coaching verification.
+                    'verification_status' => $existingProfile?->verification_status ?? 'pending',
                 ],
             );
 
@@ -238,26 +240,6 @@ class ManagedUserService
 
             return $user->fresh(['gyms', 'branches', 'roles', 'permissions', 'managedTrainerProfile']);
         });
-    }
-
-    private function assertNoActiveIndependentCoaching(?User $user): void
-    {
-        if ($user === null) {
-            return;
-        }
-
-        $hasActiveRelationships = IndependentTrainerMemberRelationship::query()
-            ->where('trainer_user_id', $user->id)
-            ->where('status', 'active')
-            ->exists();
-
-        if ($hasActiveRelationships) {
-            throw ValidationException::withMessages([
-                'email' => [
-                    'This trainer has active independent coaching relationships. End those relationships before assigning the trainer to a gym.',
-                ],
-            ]);
-        }
     }
 
     /**

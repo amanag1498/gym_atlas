@@ -190,24 +190,27 @@ class WorkoutController extends Controller
                 'workouts',
             );
         }
-        if (! $profile?->gym_id && $relationshipIds->isEmpty()) {
-            return $this->success([], 'No active workout coaching space is available.');
-        }
         $paginator = $request->user()->workoutPlansAsMember()
             ->with(['trainer', 'creator', 'template.workoutBook', 'sourceWorkoutBook', 'days.exercises.exercise'])
-            ->where(function ($query) use ($profile, $relationshipIds): void {
+            ->where('status', 'active')
+            ->where(function ($query) use ($request, $profile, $relationshipIds): void {
+                $query->where(function ($personalQuery) use ($request): void {
+                    $personalQuery->where('created_by_user_id', $request->user()->id)
+                        ->whereNull('trainer_id')
+                        ->where('is_member_editable', true);
+                });
+
                 if ($profile?->gym_id) {
-                    $query->where(function ($gymQuery) use ($profile): void {
+                    $query->orWhere(function ($gymQuery) use ($profile): void {
                         $gymQuery->where('gym_id', $profile->gym_id)
-                            ->where('status', 'active')
                             ->whereNull('independent_trainer_member_relationship_id')
+                            ->whereNotNull('trainer_id')
                             ->when($profile->branch_id, fn ($branchQuery) => $branchQuery->where(fn ($scope) => $scope->whereNull('branch_id')->orWhere('branch_id', $profile->branch_id)));
                     });
                 }
 
                 if ($relationshipIds->isNotEmpty()) {
-                    $method = $profile?->gym_id ? 'orWhereIn' : 'whereIn';
-                    $query->{$method}('independent_trainer_member_relationship_id', $relationshipIds);
+                    $query->orWhereIn('independent_trainer_member_relationship_id', $relationshipIds);
                 }
             })
             ->when($requestedRelationshipId !== null, fn ($query) => $query->where('independent_trainer_member_relationship_id', $requestedRelationshipId))
@@ -385,7 +388,7 @@ class WorkoutController extends Controller
 
     public function showSession(Request $request, WorkoutSession $workoutSession)
     {
-        $this->workoutAccessService->assertSessionAccess($request->user(), $workoutSession);
+        $this->workoutAccessService->assertSessionReadAccess($request->user(), $workoutSession);
 
         return $this->success(WorkoutSessionResource::make($workoutSession->load('exercises.exercise', 'exercises.sets')));
     }
@@ -410,19 +413,9 @@ class WorkoutController extends Controller
 
     public function history(Request $request)
     {
-        $profile = $this->memberAppService->memberProfileFor($request->user());
         $paginator = WorkoutSession::query()
             ->with('exercises.exercise', 'exercises.sets')
             ->where('member_id', $request->user()->id)
-            ->where(function ($query) use ($profile): void {
-                $query->whereNull('gym_id');
-                if ($profile?->gym_id) {
-                    $query->orWhere(function ($gymQuery) use ($profile): void {
-                        $gymQuery->where('gym_id', $profile->gym_id)
-                            ->when($profile->branch_id, fn ($branchQuery) => $branchQuery->where('branch_id', $profile->branch_id));
-                    });
-                }
-            })
             ->orderByDesc('session_date')
             ->orderByDesc('id')
             ->paginate((int) $request->integer('per_page', 15));
@@ -432,19 +425,9 @@ class WorkoutController extends Controller
 
     public function exerciseHistory(Request $request, int $exerciseId)
     {
-        $profile = $this->memberAppService->memberProfileFor($request->user());
         $sessions = WorkoutSession::query()
             ->with(['exercises' => fn ($query) => $query->where('exercise_id', $exerciseId)->with('exercise', 'sets')])
             ->where('member_id', $request->user()->id)
-            ->where(function ($query) use ($profile): void {
-                $query->whereNull('gym_id');
-                if ($profile?->gym_id) {
-                    $query->orWhere(function ($gymQuery) use ($profile): void {
-                        $gymQuery->where('gym_id', $profile->gym_id)
-                            ->when($profile->branch_id, fn ($branchQuery) => $branchQuery->where('branch_id', $profile->branch_id));
-                    });
-                }
-            })
             ->whereHas('exercises', fn ($query) => $query->where('exercise_id', $exerciseId))
             ->orderByDesc('session_date')
             ->orderByDesc('id')

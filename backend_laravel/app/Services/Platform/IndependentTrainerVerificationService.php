@@ -35,14 +35,13 @@ class IndependentTrainerVerificationService
                 ->lockForUpdate()
                 ->findOrFail($trainerProfile->id);
 
-            if ($trainerProfile->gym_id !== null || $trainerProfile->branch_id !== null) {
-                throw ValidationException::withMessages([
-                    'trainer' => 'Only trainers without a gym can be reviewed through independent verification.',
-                ]);
-            }
-
             $currentStatus = strtolower((string) ($trainerProfile->verification_status ?: 'pending'));
             $status = $data['verification_status'];
+            if ($currentStatus === 'pending' && $trainerProfile->verification_submitted_at === null && in_array($status, ['verified', 'rejected'], true)) {
+                throw ValidationException::withMessages([
+                    'verification_status' => 'The trainer must submit the verification form before a review decision can be recorded.',
+                ]);
+            }
             if (! in_array($status, self::ALLOWED_TRANSITIONS[$currentStatus] ?? [], true)) {
                 throw ValidationException::withMessages([
                     'verification_status' => sprintf(
@@ -89,22 +88,23 @@ class IndependentTrainerVerificationService
                 newValues: $trainerProfile->only(array_keys($oldValues)),
                 context: [
                     'trainer_user_id' => $trainerProfile->user_id,
-                    'independent' => true,
+                    'personal_coaching' => true,
+                    'has_gym_assignment' => $trainerProfile->gym_id !== null,
                 ],
             );
 
             if ($trainerProfile->user !== null) {
                 $reason = $trainerProfile->verification_rejection_reason;
                 $body = match ($status) {
-                    'verified' => 'Your independent trainer verification was approved. You can now invite coaching members.',
-                    'rejected' => 'Your independent trainer verification needs changes'.($reason ? ': '.$reason : '.'),
-                    'suspended' => 'Your independent coaching access was suspended'.($reason ? ': '.$reason : '.'),
-                    default => 'Your independent trainer verification was moved back to review.',
+                    'verified' => 'Your trainer verification was approved. You can now invite personal coaching members, whether or not you work with a gym.',
+                    'rejected' => 'Your trainer verification needs changes'.($reason ? ': '.$reason : '.'),
+                    'suspended' => 'Your personal coaching access was suspended'.($reason ? ': '.$reason : '.'),
+                    default => 'Your trainer verification was moved back to review.',
                 };
                 $this->notificationService->create(
                     user: $trainerProfile->user,
                     type: 'independent_trainer_verification',
-                    title: 'Independent trainer verification '.str($status)->title(),
+                    title: 'Trainer verification '.str($status)->title(),
                     body: $body,
                     createdByUserId: $request->user()->id,
                     data: [

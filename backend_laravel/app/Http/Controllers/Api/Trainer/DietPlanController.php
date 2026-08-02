@@ -11,6 +11,7 @@ use App\Http\Resources\Diet\DietPlanResource;
 use App\Http\Resources\Diet\DietPlanTemplateResource;
 use App\Models\DietPlan;
 use App\Models\DietPlanTemplate;
+use App\Models\IndependentTrainerMemberRelationship;
 use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Diet\DietPlanService;
@@ -33,8 +34,7 @@ class DietPlanController extends Controller
     public function index(Request $request)
     {
         $profile = $this->trainerScopeService->resolveTrainerProfile($request);
-        $activeRelationshipIds = $profile->gym_id === null
-            && $this->independentCoachingAccessService->isVerifiedIndependentTrainer($request->user())
+        $activeRelationshipIds = $this->independentCoachingAccessService->isVerifiedIndependentTrainer($request->user())
             ? $this->independentCoachingAccessService
                 ->activeRelationshipsForTrainer($request->user())
                 ->get(['id', 'sharing_permissions'])
@@ -44,21 +44,31 @@ class DietPlanController extends Controller
         $memberId = $request->integer('member_id') ?: null;
         if ($memberId) {
             $member = User::query()->findOrFail($memberId);
-            $profile->gym_id === null
-                ? $this->independentCoachingAccessService->resolveActiveRelationship($request->user(), $member, null, 'diets')
-                : $this->trainerScopeService->resolveAssignedMember($profile, $member);
+            $hasPersonalRelationship = IndependentTrainerMemberRelationship::query()
+                ->whereIn('id', $activeRelationshipIds)
+                ->where('member_user_id', $member->id)
+                ->exists();
+            if (! $hasPersonalRelationship) {
+                $this->trainerScopeService->resolveAssignedMember($profile, $member);
+            }
         }
 
         $paginator = DietPlan::query()
             ->with(['member', 'trainer', 'meals.items'])
             ->where('trainer_id', $request->user()->id)
-            ->where('gym_id', $profile->gym_id)
             ->where('status', 'active')
-            ->when($profile->branch_id, fn ($query) => $query->where('branch_id', $profile->branch_id))
-            ->when(
-                $profile->gym_id === null,
-                fn ($query) => $query->whereIn('independent_trainer_member_relationship_id', $activeRelationshipIds),
-            )
+            ->where(function ($query) use ($profile, $activeRelationshipIds): void {
+                if ($profile->gym_id !== null) {
+                    $query->where(function ($gymPlans) use ($profile): void {
+                        $gymPlans->where('gym_id', $profile->gym_id)
+                            ->whereNull('independent_trainer_member_relationship_id')
+                            ->when($profile->branch_id, fn ($scope) => $scope->where('branch_id', $profile->branch_id));
+                    })->orWhereIn('independent_trainer_member_relationship_id', $activeRelationshipIds);
+
+                    return;
+                }
+                $query->whereIn('independent_trainer_member_relationship_id', $activeRelationshipIds);
+            })
             ->when($memberId, fn ($query, int $id) => $query->where('member_id', $id))
             ->latest()
             ->paginate(min(max($request->integer('per_page', 50), 1), 100));
@@ -69,15 +79,16 @@ class DietPlanController extends Controller
     public function store(StoreTrainerDietPlanRequest $request)
     {
         $profile = $this->trainerScopeService->resolveTrainerProfile($request);
-        if ($profile->gym_id !== null) {
+        $data = $request->validated();
+        $personalCoaching = $profile->gym_id === null || ! empty($data['independent_trainer_member_relationship_id']);
+        if (! $personalCoaching) {
             foreach ($request->validated('member_ids') as $id) {
                 $this->trainerScopeService->resolveAssignedMember($profile, User::query()->findOrFail($id));
             }
         }
-        $data = $request->validated();
-        $data['gym_id'] = $profile->gym_id;
-        $data['branch_id'] = $profile->branch_id;
-        if ($profile->gym_id === null) {
+        $data['gym_id'] = $personalCoaching ? null : $profile->gym_id;
+        $data['branch_id'] = $personalCoaching ? null : $profile->branch_id;
+        if ($personalCoaching) {
             if (count($data['member_ids']) !== 1) {
                 throw ValidationException::withMessages([
                     'member_ids' => ['Assign an independent diet plan to one member at a time.'],

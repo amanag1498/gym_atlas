@@ -43,7 +43,7 @@
             <div class="grid gap-8 lg:grid-cols-[.75fr_1.25fr] lg:items-end"><div class="public-section-heading">
                 <p class="public-kicker">Current capabilities</p>
                 <h2 id="trainer-capabilities-heading" class="mt-4">The real coaching workflow, not a generic feature list.</h2>
-            </div><p class="max-w-2xl leading-8 text-slate-600 lg:justify-self-end">Independent trainers complete account verification before adding members or managing member plans. Gym-connected trainers retain their gym, branch, assignment, role and permission boundaries.</p></div>
+            </div><p class="max-w-2xl leading-8 text-slate-600 lg:justify-self-end">Platform verification unlocks personal member invitations for any trainer. Gym-connected trainers keep their gym, branch, assigned members, role and permission boundaries alongside that personal coaching scope.</p></div>
             <div class="ops-index mt-12">
                 @foreach ($capabilities as $capability)
                     <article class="ops-module"><span class="ops-module-number">{{ str_pad($loop->iteration,2,'0',STR_PAD_LEFT) }}</span><h3>{{ $capability['title'] }}</h3><p>{{ $capability['copy'] }}</p><div class="ops-tags"><span><i class="ti {{ $capability['icon'] }} mr-1"></i> Trainer workflow</span></div></article>
@@ -58,7 +58,7 @@
                 <p class="public-kicker">Current product scope</p>
                 <h2 id="trainer-scope-heading" class="mt-4 text-3xl font-semibold tracking-[-0.035em] text-slate-950">Choose the access path that matches how you coach.</h2>
             </div>
-            <figure class="ops-editorial"><img src="{{ asset('images/public-site/editorial/trainer-member-coaching.webp') }}" width="1800" height="948" loading="lazy" alt="Personal trainer coaching a gym member with attentive, hands-on guidance"><figcaption class="ops-editorial-caption"><span class="ops-editorial-chip"><i class="ti ti-heart-rate-monitor"></i> Human coaching, informed</span><p>Independent trainers can use Atlas after account verification. Gym-connected trainers continue to work through gym-assigned roles and permissions. Atlas is not a public trainer marketplace.</p><p class="mt-2 text-xs">Paid online coaching, live video or voice sessions, and AI-generated programs are not part of the current product promise.</p></figcaption></figure>
+            <figure class="ops-editorial"><img src="{{ asset('images/public-site/editorial/trainer-member-coaching.webp') }}" width="1800" height="948" loading="lazy" alt="Personal trainer coaching a gym member with attentive, hands-on guidance"><figcaption class="ops-editorial-caption"><span class="ops-editorial-chip"><i class="ti ti-heart-rate-monitor"></i> Human coaching, informed</span><p>A verified trainer can coach personal clients while continuing to serve members assigned by a gym. The two relationships and their data remain separate. Atlas is not a public trainer marketplace.</p><p class="mt-2 text-xs">Paid online coaching, live video or voice sessions, and AI-generated programs are not part of the current product promise.</p></figcaption></figure>
         </div>
     </section>
 

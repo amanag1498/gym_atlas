@@ -30,8 +30,7 @@ class WorkoutPlanController extends Controller
     {
         $trainer = $request->user();
         $profile = $this->trainerScopeService->resolveTrainerProfile($request);
-        $activeRelationshipIds = $profile->gym_id === null
-            && $this->independentCoachingAccessService->isVerifiedIndependentTrainer($trainer)
+        $activeRelationshipIds = $this->independentCoachingAccessService->isVerifiedIndependentTrainer($trainer)
             ? $this->independentCoachingAccessService
                 ->activeRelationshipsForTrainer($trainer)
                 ->get(['id', 'sharing_permissions'])
@@ -42,13 +41,19 @@ class WorkoutPlanController extends Controller
         $paginator = WorkoutPlan::query()
             ->with(['member', 'trainer', 'template', 'days.exercises.exercise'])
             ->where('trainer_id', $trainer->id)
-            ->where('gym_id', $profile->gym_id)
             ->where('status', 'active')
-            ->when($profile->branch_id, fn ($query) => $query->where('branch_id', $profile->branch_id))
-            ->when(
-                $profile->gym_id === null,
-                fn ($query) => $query->whereIn('independent_trainer_member_relationship_id', $activeRelationshipIds),
-            )
+            ->where(function ($query) use ($profile, $activeRelationshipIds): void {
+                if ($profile->gym_id !== null) {
+                    $query->where(function ($gymPlans) use ($profile): void {
+                        $gymPlans->where('gym_id', $profile->gym_id)
+                            ->whereNull('independent_trainer_member_relationship_id')
+                            ->when($profile->branch_id, fn ($scope) => $scope->where('branch_id', $profile->branch_id));
+                    })->orWhereIn('independent_trainer_member_relationship_id', $activeRelationshipIds);
+
+                    return;
+                }
+                $query->whereIn('independent_trainer_member_relationship_id', $activeRelationshipIds);
+            })
             ->when($request->filled('member_id'), fn ($query) => $query->where('member_id', $request->integer('member_id')))
             ->orderByDesc('id')
             ->paginate((int) $request->integer('per_page', 15));
@@ -60,9 +65,10 @@ class WorkoutPlanController extends Controller
     {
         $profile = $this->trainerScopeService->resolveTrainerProfile($request);
         $data = $request->validated();
-        $data['gym_id'] = $profile->gym_id;
-        $data['branch_id'] = $profile->branch_id;
-        if ($profile->gym_id === null) {
+        $personalCoaching = $profile->gym_id === null || ! empty($data['independent_trainer_member_relationship_id']);
+        $data['gym_id'] = $personalCoaching ? null : $profile->gym_id;
+        $data['branch_id'] = $personalCoaching ? null : $profile->branch_id;
+        if ($personalCoaching) {
             if (count($data['member_ids']) !== 1) {
                 throw ValidationException::withMessages([
                     'member_ids' => ['Assign an independent plan to one member at a time.'],

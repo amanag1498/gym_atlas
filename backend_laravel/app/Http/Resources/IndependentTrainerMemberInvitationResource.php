@@ -13,8 +13,6 @@ class IndependentTrainerMemberInvitationResource extends JsonResource
         $trainerProfile = $trainer?->managedTrainerProfile;
         $trainerEligible = $trainer?->is_active
             && $trainerProfile !== null
-            && $trainerProfile->gym_id === null
-            && $trainerProfile->branch_id === null
             && $trainerProfile->is_active
             && $trainerProfile->status === 'active'
             && $trainerProfile->verification_status === 'verified';

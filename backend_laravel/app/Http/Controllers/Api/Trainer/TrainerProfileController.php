@@ -12,6 +12,7 @@ use App\Services\Onboarding\OnboardingProgressService;
 use App\Services\Trainer\TrainerScopeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class TrainerProfileController extends Controller
 {
@@ -54,14 +55,10 @@ class TrainerProfileController extends Controller
             ->filter(fn (string $field): bool => $profile->wasChanged($field))
             ->values()
             ->all();
-        if (
-            $profile->gym_id === null
-            && $profile->branch_id === null
-            && in_array($profile->verification_status, ['verified', 'rejected'], true)
-            && $materialReviewChanges !== []
-        ) {
+        if ($profile->verification_status === 'verified' && $materialReviewChanges !== []) {
             $profile->forceFill([
                 'verification_status' => 'pending',
+                'verification_submitted_at' => now(),
                 'verification_reviewed_by_user_id' => null,
                 'verification_reviewed_at' => null,
                 'verification_verified_at' => null,
@@ -70,7 +67,7 @@ class TrainerProfileController extends Controller
             ])->save();
 
             $this->auditLogService->log(
-                event: 'trainer.independent_verification.review_required',
+                event: 'trainer.verification.review_required',
                 action: 'update',
                 request: $request,
                 subject: $profile,
@@ -100,6 +97,84 @@ class TrainerProfileController extends Controller
             'trainer_profile' => TrainerProfileResource::make($profile->fresh()->load(['user', 'gym', 'branch', 'assignedMembers'])),
             'trainer_user' => UserResource::make($freshUser),
         ]);
+    }
+
+    public function submitVerification(Request $request)
+    {
+        abort_unless($request->user()->active_role === RoleName::Trainer->value, 403);
+
+        $profile = $request->user()->managedTrainerProfile?->loadMissing(['user', 'gym', 'branch']);
+        if (! $profile) {
+            throw ValidationException::withMessages([
+                'trainer' => ['Complete trainer account setup before submitting verification.'],
+            ]);
+        }
+        if (! $request->user()->is_active || ! $profile->is_active || $profile->status !== 'active') {
+            throw ValidationException::withMessages([
+                'trainer' => ['Activate the trainer account before submitting verification.'],
+            ]);
+        }
+        if ($profile->verification_status === 'verified') {
+            throw ValidationException::withMessages([
+                'verification_status' => ['This trainer account is already verified.'],
+            ]);
+        }
+        if ($profile->verification_status === 'suspended') {
+            throw ValidationException::withMessages([
+                'verification_status' => ['Suspended verification must be reviewed by platform support.'],
+            ]);
+        }
+
+        $errors = [];
+        if (blank($profile->bio)) {
+            $errors['bio'][] = 'Add a professional bio before submitting verification.';
+        }
+        if (collect($profile->specializations ?? [])->filter(fn ($value) => filled($value))->isEmpty()) {
+            $errors['specializations'][] = 'Add at least one specialization before submitting verification.';
+        }
+        if ($profile->experience_years === null) {
+            $errors['experience_years'][] = 'Add your years of experience before submitting verification.';
+        }
+        if (collect($profile->certifications ?? [])->filter(function ($certificate): bool {
+            return is_array($certificate)
+                ? filled($certificate['name'] ?? null) || filled($certificate['file_url'] ?? null)
+                : filled($certificate);
+        })->isEmpty()) {
+            $errors['certifications'][] = 'Add at least one certification or qualification before submitting verification.';
+        }
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+
+        $oldStatus = $profile->verification_status;
+        $profile->forceFill([
+            'verification_status' => 'pending',
+            'verification_submitted_at' => now(),
+            'verification_reviewed_by_user_id' => null,
+            'verification_reviewed_at' => null,
+            'verification_verified_at' => null,
+            'verification_rejection_reason' => null,
+            'verification_review_notes' => null,
+        ])->save();
+
+        $this->auditLogService->log(
+            event: 'trainer.verification.submitted',
+            action: 'update',
+            request: $request,
+            subject: $profile,
+            gym: $profile->gym,
+            branch: $profile->branch,
+            oldValues: ['verification_status' => $oldStatus],
+            newValues: [
+                'verification_status' => 'pending',
+                'verification_submitted_at' => $profile->verification_submitted_at,
+            ],
+            context: ['has_gym_assignment' => $profile->gym_id !== null],
+        );
+
+        return $this->success([
+            'trainer_profile' => TrainerProfileResource::make($profile->fresh()->load(['user', 'gym', 'branch', 'assignedMembers'])),
+        ], 'Trainer verification application submitted successfully.');
     }
 
     public function uploadPhoto(Request $request)

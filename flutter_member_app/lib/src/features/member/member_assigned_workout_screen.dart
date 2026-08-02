@@ -774,8 +774,15 @@ class _AssignedMetricTile extends StatelessWidget {
 
 String _planSourceLabel(Map<String, dynamic> plan) {
   final scope = plan['coaching_scope']?.toString().toLowerCase();
-  return scope == 'independent' ||
-          plan['independent_trainer_member_relationship_id'] != null
-      ? 'Independent trainer plan'
-      : 'Gym trainer plan';
+  if (scope == 'independent' ||
+      plan['independent_trainer_member_relationship_id'] != null) {
+    return 'Independent trainer plan';
+  }
+  if (scope == 'personal' || plan['trainer_id'] == null) {
+    return plan['plan_origin'] == 'catalog_adopted'
+        ? 'Workout Book plan'
+        : 'Your personal plan';
+  }
+
+  return 'Gym trainer plan';
 }

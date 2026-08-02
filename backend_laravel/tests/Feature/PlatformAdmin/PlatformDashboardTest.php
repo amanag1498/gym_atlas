@@ -126,6 +126,7 @@ class PlatformDashboardTest extends TestCase
             'status' => 'active',
             'is_active' => true,
             'verification_status' => 'pending',
+            'verification_submitted_at' => now(),
         ]);
 
         TrialRequest::query()->create([

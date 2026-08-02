@@ -56,7 +56,7 @@
             <div class="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800">
                 <div>
                     <h3 class="panel-section-title">Independent Trainer Reviews</h3>
-                    <p class="panel-section-copy">Recently submitted gym-independent trainers waiting for platform verification.</p>
+                    <p class="panel-section-copy">Recently submitted trainers waiting for personal coaching verification, whether gym-assigned or not.</p>
                 </div>
                 <x-action-button as="a" variant="secondary" href="{{ route('web.admin.trainer-verifications.index', ['status' => 'pending']) }}">Open Queue</x-action-button>
             </div>
@@ -78,7 +78,7 @@
                     </table>
                 </div>
             @else
-                <div class="p-5"><x-empty-state title="No trainer reviews pending" message="Every independent trainer submission has been reviewed." /></div>
+                <div class="p-5"><x-empty-state title="No trainer reviews pending" message="Every submitted trainer application has been reviewed." /></div>
             @endif
         </x-table-wrapper>
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

@@ -30,7 +30,7 @@ class IndependentTrainerMemberService
         $profile = TrainerProfile::query()->where('user_id', $trainer->id)->first();
         $isIndependent = $profile !== null && $profile->gym_id === null && $profile->branch_id === null;
         $eligible = $trainer->is_active
-            && $isIndependent
+            && $profile !== null
             && $profile->is_active
             && $profile->status === 'active'
             && $profile->verification_status === 'verified';
@@ -38,6 +38,8 @@ class IndependentTrainerMemberService
         return [
             'eligible' => $eligible,
             'is_independent' => $isIndependent,
+            'has_gym_assignment' => $profile?->gym_id !== null,
+            'can_invite_personal_members' => $eligible,
             'verification_status' => $profile?->verification_status ?? 'missing',
             'blocking_reason' => $eligible ? null : $this->blockingReason($trainer, $profile),
         ];
@@ -325,8 +327,6 @@ class IndependentTrainerMemberService
         $profile = $query->first();
         $eligible = $trainer->is_active
             && $profile !== null
-            && $profile->gym_id === null
-            && $profile->branch_id === null
             && $profile->is_active
             && $profile->status === 'active'
             && $profile->verification_status === 'verified';
@@ -403,14 +403,11 @@ class IndependentTrainerMemberService
         if (! $trainer->is_active || $profile === null || ! $profile->is_active || $profile->status !== 'active') {
             return 'Your trainer account must be active before you can invite independent members.';
         }
-        if ($profile->gym_id !== null || $profile->branch_id !== null) {
-            return 'Independent member enrollment is available only to trainers who are not assigned to a gym.';
-        }
         if ($profile->verification_status !== 'verified') {
-            return 'Your independent trainer account must be verified before you can invite members.';
+            return 'Your trainer account must be verified before you can invite personal coaching members.';
         }
 
-        return 'Independent member enrollment is not available for this account.';
+        return 'Personal member enrollment is not available for this account.';
     }
 
     /** @param array<string, mixed> $context */

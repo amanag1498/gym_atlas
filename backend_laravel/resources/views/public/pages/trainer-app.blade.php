@@ -51,7 +51,7 @@
                         <a href="{{ route('public.contact', ['inquiry_type' => 'trainer']) }}" class="public-button public-button-primary">Request trainer access</a>
                         <a href="#trainer-features" class="public-button border border-white/20 bg-white/10 text-white hover:bg-white/15">Explore the workspace</a>
                     </div>
-                    <p class="mt-5 text-sm leading-6 text-slate-400">Independent trainers must complete account verification before adding members or managing member plans. Atlas does not operate a public trainer marketplace.</p>
+                    <p class="mt-5 text-sm leading-6 text-slate-400">Every trainer can use gym-assigned features. Platform verification separately unlocks personal member invitations and plans, even while the trainer remains connected to a gym.</p>
                 </div>
                 <figure class="atlas-app-hero-device mx-auto w-full max-w-[28rem] public-media-frame bg-white/5 p-3 sm:p-4">
                     <img src="{{ asset('images/product/trainer/dashboard-720.webp') }}" alt="Atlas Trainer dashboard showing the daily coaching workspace." class="public-app-shot rounded-[1.4rem]" width="720" height="1280" fetchpriority="high">
@@ -140,7 +140,7 @@
                     <h2 id="trainer-boundary-heading" class="mt-3 text-3xl font-semibold tracking-[-0.03em] text-slate-950">Two valid paths into the same coaching workspace.</h2>
                 </div>
                 <div class="space-y-4 leading-7 text-slate-600">
-                    <p>Independent trainers can use Atlas after creating an account, but must complete account verification before they can add members or manage member plans. Gym-connected trainers continue to work within their gym, branch, member assignments, role and granted permissions.</p>
+                    <p>Trainers can create an account and use their gym-assigned workflow immediately. After platform verification, the same account can also invite and coach personal members in a separate scope without changing gym, branch, role or assigned-member access.</p>
                     <p>Atlas does not promise public trainer discovery or hiring, paid online coaching, live video or voice sessions, or AI-generated programs. It is a coaching workspace—not a public trainer marketplace.</p>
                 </div>
             </div>

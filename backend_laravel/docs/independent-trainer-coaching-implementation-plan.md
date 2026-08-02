@@ -6,7 +6,7 @@ All ten delivery phases in this plan are implemented in the working tree:
 
 - Database migrations now cover verification review metadata, invitations, independent relationships, workout/diet attribution, and relationship-specific trainer notes.
 - Laravel now enforces verified-and-gym-less trainer eligibility, explicit member consent, coexistence with gym coaching, privacy-safe access, revocation, notifications, audit logs, and signed email review.
-- Platform Admin now has API and responsive panel workflows to review, approve, reject, and suspend eligible independent trainers.
+- Platform Admin has API and responsive panel workflows to review, approve, reject, and suspend personal-coaching verification for any trainer, including gym-assigned trainers.
 - Trainer and Member Flutter apps now expose the separate invitation, roster, plan, and chat flows without replacing the existing gym trainer experience.
 - The complete Laravel suite passes with 270 tests and 2,593 assertions. Blade compilation, route discovery, production asset compilation, migration up/down/up validation, Flutter analysis/tests, and realtime TypeScript validation also pass.
 
@@ -48,7 +48,7 @@ Allow a platform-verified trainer who is not assigned to a gym to invite and coa
 
 1. `member_profiles.assigned_trainer_user_id` remains the gym-owned trainer assignment.
 2. Independent coaching uses a separate relationship record and never writes to a gym member profile.
-3. An active gym membership and its assigned trainer can coexist with one or more independent trainer relationships.
+3. Gym assignment and platform verification are independent axes: the same trainer may serve gym-assigned members and separately invite personal members after verification.
 4. A member must accept an invitation before an independent trainer can access or create member data.
 5. Only active trainers with `verification_status = verified` and no gym/branch assignment can create independent invitations or relationships.
 6. Independent trainers cannot see gym membership, dues, payments, attendance, internal notes, or other gym-operational records by default.
@@ -303,4 +303,4 @@ They must not expose gym payment, dues, membership, branch attendance, gym staff
 
 ## Definition of done
 
-The feature is complete only when a verified gym-less trainer can invite a member, the member can explicitly accept, both apps display the relationship separately from gym context, eligible coaching plans and chat work, gym subscriptions and gym trainer assignments remain untouched, independent trainers cannot see gym-operational data, revocation works, Platform Admin decisions are auditable, and focused coexistence/security tests pass.
+The feature is complete only when a verified trainer can invite a personal member regardless of gym assignment, the member can explicitly accept, both apps display personal relationships separately from gym context, eligible coaching plans and chat work, gym subscriptions and gym trainer assignments remain untouched, personal coaching cannot expose gym-operational data, revocation works, Platform Admin decisions are auditable, and focused coexistence/security tests pass.

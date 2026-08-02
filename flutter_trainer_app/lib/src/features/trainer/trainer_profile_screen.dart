@@ -32,6 +32,7 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
   bool _loading = true;
   bool _saving = false;
   bool _uploadingPhoto = false;
+  bool _submittingVerification = false;
   bool _editing = true;
   String? _error;
   Map<String, dynamic> _profile = const {};
@@ -139,7 +140,6 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Trainer profile updated.')));
-      Navigator.of(context).pop(true);
     } catch (exception) {
       if (!mounted) {
         return;
@@ -148,6 +148,44 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(exception.toString())));
+    }
+  }
+
+  Future<void> _submitVerification() async {
+    if (_submittingVerification) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _submittingVerification = true);
+    try {
+      if (_editing) {
+        await widget.repository.updateProfile({
+          'bio': _emptyToNull(_bioController.text),
+          'specializations': _splitList(_specializationController.text),
+          'experience_years':
+              int.tryParse(_experienceController.text.trim()) ?? 0,
+          'certifications': _certificationPayload(),
+          'languages': _splitList(_languagesController.text),
+        });
+      }
+      final response = await widget.repository.submitTrainerVerification();
+      final profile = _map(_map(response['data'])['trainer_profile']);
+      if (!mounted) return;
+      setState(() {
+        if (profile.isNotEmpty) _profile = profile;
+        _editing = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Verification application submitted for review.'),
+        ),
+      );
+      await _loadProfile();
+    } catch (exception) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+    } finally {
+      if (mounted) setState(() => _submittingVerification = false);
     }
   }
 
@@ -209,6 +247,7 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
     final verificationReason = _profile['verification_rejection_reason']
         ?.toString()
         .trim();
+    final verificationSubmitted = _profile['verification_submitted'] == true;
     final displayName = _trainerUser['name']?.toString() ?? 'Trainer';
     final specialization = _profile['primary_specialization']
         ?.toString()
@@ -348,9 +387,10 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
                               ),
                               _FitChip(
                                 label:
-                                    _profile['verification_status']
-                                        ?.toString() ??
-                                    'verification pending',
+                                    verificationStatus == 'pending' &&
+                                        !verificationSubmitted
+                                    ? 'verification not submitted'
+                                    : 'verification $verificationStatus',
                                 icon: Icons.verified_outlined,
                               ),
                               _FitChip(
@@ -364,6 +404,46 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
                         ],
                       ),
                     ),
+                    const SizedBox(height: 14),
+                    _FitProfileCard(
+                      title: 'Personal coaching verification',
+                      subtitle: verificationStatus == 'verified'
+                          ? 'Verified. You can invite and coach your own members alongside members assigned by a gym.'
+                          : verificationStatus == 'suspended'
+                          ? 'Personal coaching access is suspended. Your gym assignment is separate and remains unchanged.'
+                          : verificationStatus == 'rejected'
+                          ? 'Update the requested details, save, then resubmit your application.'
+                          : verificationSubmitted
+                          ? 'Your application is under platform review. Gym membership and gym-assigned members are unaffected.'
+                          : 'Complete your bio, specialization, experience and certification details, then submit for review.',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          const Text(
+                            'Verification only unlocks personal member invitations. A trainer can be gym-assigned and verified at the same time.',
+                          ),
+                          if (verificationStatus != 'verified' &&
+                              verificationStatus != 'suspended' &&
+                              (verificationStatus == 'rejected' ||
+                                  !verificationSubmitted)) ...[
+                            const SizedBox(height: 14),
+                            GradientButton(
+                              label: _submittingVerification
+                                  ? 'Submitting...'
+                                  : verificationStatus == 'rejected'
+                                  ? 'Resubmit verification'
+                                  : 'Submit for verification',
+                              icon: Icons.verified_user_outlined,
+                              expanded: true,
+                              loading: _submittingVerification,
+                              onPressed: _submittingVerification
+                                  ? null
+                                  : _submitVerification,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                     if (verificationReason?.isNotEmpty == true) ...[
                       const SizedBox(height: 14),
                       _FitProfileCard(
@@ -372,7 +452,7 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
                             : 'Verification changes required',
                         subtitle: verificationReason!,
                         child: const Text(
-                          'Update your professional details or certification evidence, then save the profile to return it to the platform review queue.',
+                          'Update your professional details or certification evidence, save the profile, then resubmit verification.',
                         ),
                       ),
                     ],

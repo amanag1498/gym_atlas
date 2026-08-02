@@ -105,6 +105,11 @@ class WorkoutAccessService
 
         if ($actor->active_role === RoleName::Member->value) {
             $this->assertMemberSelfAccess($actor, $plan->member_id);
+            if ((int) $plan->created_by_user_id === (int) $actor->id
+                && $plan->trainer_id === null
+                && $plan->is_member_editable) {
+                return;
+            }
             if ($plan->independent_trainer_member_relationship_id !== null) {
                 $this->independentCoachingAccessService->resolveForMember(
                     $actor,
@@ -214,5 +219,16 @@ class WorkoutAccessService
             ->where('gym_id', $session->gym_id)
             ->firstOrFail();
         $this->gymMemberAccessService->assertAccessible($memberProfile);
+    }
+
+    public function assertSessionReadAccess(User $actor, WorkoutSession $session): void
+    {
+        if ($actor->active_role === RoleName::Member->value) {
+            $this->assertMemberSelfAccess($actor, $session->member_id);
+
+            return;
+        }
+
+        $this->assertSessionAccess($actor, $session);
     }
 }

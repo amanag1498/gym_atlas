@@ -19,13 +19,20 @@ class IndependentTrainerVerificationController extends Controller
     public function index(Request $request): View
     {
         $query = TrainerProfile::query()
-            ->whereNull('gym_id')
-            ->whereNull('branch_id')
-            ->with(['user', 'verificationReviewer'])
+            ->with(['user', 'gym', 'branch', 'verificationReviewer'])
             ->latest('id');
 
-        if ($request->filled('status')) {
+        if ($request->string('status')->toString() === 'not_submitted') {
+            $query->where('verification_status', 'pending')->whereNull('verification_submitted_at');
+        } elseif ($request->filled('status')) {
             $query->where('verification_status', $request->string('status')->toString());
+            if ($request->string('status')->toString() === 'pending') {
+                $query->whereNotNull('verification_submitted_at');
+            }
+        } else {
+            $query->where(fn (Builder $scope) => $scope
+                ->whereNotNull('verification_submitted_at')
+                ->orWhere('verification_status', '!=', 'pending'));
         }
 
         if ($request->filled('search')) {
@@ -39,24 +46,25 @@ class IndependentTrainerVerificationController extends Controller
         }
 
         $counts = TrainerProfile::query()
-            ->whereNull('gym_id')
-            ->whereNull('branch_id')
             ->selectRaw('verification_status, COUNT(*) as aggregate')
             ->groupBy('verification_status')
             ->pluck('aggregate', 'verification_status');
 
         return view('web.admin.trainer-verifications.index', [
-            'pageTitle' => 'Independent Trainer Verification',
-            'breadcrumbs' => ['Platform', 'Independent Trainer Verification'],
+            'pageTitle' => 'Trainer Verification',
+            'breadcrumbs' => ['Platform', 'Trainer Verification'],
             'submissions' => $query->paginate(15)->withQueryString(),
             'counts' => $counts,
+            'notSubmittedCount' => TrainerProfile::query()
+                ->where('verification_status', 'pending')
+                ->whereNull('verification_submitted_at')
+                ->count(),
         ]);
     }
 
     public function show(TrainerProfile $trainerProfile): View
     {
-        $this->ensureIndependent($trainerProfile);
-        $trainerProfile->load(['user', 'verificationReviewer']);
+        $trainerProfile->load(['user', 'gym', 'branch', 'verificationReviewer']);
 
         $auditLogs = ActivityLog::query()
             ->with('actor:id,name,email')
@@ -68,7 +76,7 @@ class IndependentTrainerVerificationController extends Controller
 
         return view('web.admin.trainer-verifications.show', [
             'pageTitle' => $trainerProfile->user?->name ?? 'Trainer Verification',
-            'breadcrumbs' => ['Platform', 'Independent Trainer Verification', $trainerProfile->user?->name ?? 'Submission'],
+            'breadcrumbs' => ['Platform', 'Trainer Verification', $trainerProfile->user?->name ?? 'Submission'],
             'trainerProfile' => $trainerProfile,
             'auditLogs' => $auditLogs,
         ]);
@@ -81,10 +89,5 @@ class IndependentTrainerVerificationController extends Controller
         return redirect()
             ->route('web.admin.trainer-verifications.show', $reviewedProfile)
             ->with('status', 'Trainer verification updated to '.str($reviewedProfile->verification_status)->title().'.');
-    }
-
-    private function ensureIndependent(TrainerProfile $trainerProfile): void
-    {
-        abort_if($trainerProfile->gym_id !== null || $trainerProfile->branch_id !== null, 404);
     }
 }

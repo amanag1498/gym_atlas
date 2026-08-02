@@ -142,7 +142,7 @@ class PublicWebsiteExperienceTest extends TestCase
 
         $this->get(route('public.trainer-app'))
             ->assertOk()
-            ->assertSee('Independent trainers must complete account verification before adding members or managing member plans')
+            ->assertSee('Platform verification separately unlocks personal member invitations and plans')
             ->assertSee($whatsappUrl, false);
 
         $this->get(route('public.for-trainers'))

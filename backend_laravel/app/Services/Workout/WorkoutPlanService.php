@@ -7,16 +7,11 @@ use App\Models\WorkoutPlan;
 use App\Models\WorkoutPlanDay;
 use App\Models\WorkoutPlanExercise;
 use App\Models\WorkoutTemplate;
-use App\Services\Member\MemberAppService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class WorkoutPlanService
 {
-    public function __construct(
-        private readonly MemberAppService $memberAppService,
-    ) {}
-
     /**
      * @param  array<string, mixed>  $payload
      * @return Collection<int, WorkoutPlan>
@@ -227,11 +222,11 @@ class WorkoutPlanService
     public function createMemberPlan(User $member, array $payload): WorkoutPlan
     {
         return DB::transaction(function () use ($member, $payload) {
-            $profile = $this->memberAppService->memberProfileFor($member);
-
             $plan = WorkoutPlan::query()->create([
-                'gym_id' => $profile?->gym_id,
-                'branch_id' => $profile?->branch_id,
+                // Member-created and public-catalog plans belong to the member,
+                // not to whichever gym happens to be selected at creation time.
+                'gym_id' => null,
+                'branch_id' => null,
                 'member_id' => $member->id,
                 'trainer_id' => null,
                 'created_by_user_id' => $member->id,

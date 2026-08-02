@@ -115,7 +115,7 @@ class IndependentCoachingRelationshipFeatureTest extends TestCase
         ]);
     }
 
-    public function test_pending_or_gym_assigned_trainer_cannot_invite_independent_members(): void
+    public function test_pending_trainer_is_blocked_but_verified_gym_trainer_can_invite_personal_members(): void
     {
         $member = $this->makeMember('blocked-member@example.com');
         $pendingTrainer = $this->makeTrainer('pending-trainer@example.com', verified: false);
@@ -129,10 +129,17 @@ class IndependentCoachingRelationshipFeatureTest extends TestCase
         $gymTrainer = $this->makeTrainer('gym-trainer-blocked@example.com', verified: true, gym: $gym, branch: $branch);
         $this->actingAs($gymTrainer, 'sanctum')
             ->postJson('/api/trainer/independent-member-invitations', ['name' => $member->name, 'email' => $member->email])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors('trainer');
+            ->assertStatus(202)
+            ->assertJsonPath('data.status', 'pending');
 
-        $this->assertDatabaseCount('independent_trainer_member_invitations', 0);
+        $this->assertDatabaseCount('independent_trainer_member_invitations', 1);
+        $this->actingAs($gymTrainer, 'sanctum')
+            ->getJson('/api/trainer/independent-context')
+            ->assertOk()
+            ->assertJsonPath('data.eligible', true)
+            ->assertJsonPath('data.is_independent', false)
+            ->assertJsonPath('data.has_gym_assignment', true)
+            ->assertJsonPath('data.can_invite_personal_members', true);
     }
 
     public function test_member_can_decline_and_invitation_cannot_be_replayed(): void

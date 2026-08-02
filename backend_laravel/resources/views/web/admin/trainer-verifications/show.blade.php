@@ -21,7 +21,7 @@
 
             return filled($value) ? (string) $value : 'Not supplied';
         };
-        $allowedRestrictiveDecisions = match ($trainerProfile->verification_status) {
+        $allowedRestrictiveDecisions = !$trainerProfile->verification_submitted_at ? [] : match ($trainerProfile->verification_status) {
             'pending' => ['rejected' => 'Reject application'],
             'verified' => ['suspended' => 'Suspend verified access'],
             'rejected', 'suspended' => ['pending' => 'Return to pending review'],
@@ -46,7 +46,7 @@
                             <x-status-badge :label="str($trainerProfile->verification_status)->title()" :tone="$tone" />
                         </div>
                         <p class="text-sm text-slate-600 dark:text-slate-300">{{ $trainerProfile->user?->email }} @if ($trainerProfile->user?->phone) · {{ $trainerProfile->user->phone }} @endif</p>
-                        <p class="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-brand-600 dark:text-brand-300">Independent trainer · no gym assignment</p>
+                        <p class="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-brand-600 dark:text-brand-300">{{ $trainerProfile->gym?->name ? 'Gym assigned · '.$trainerProfile->gym->name : 'No gym assignment' }} · personal coaching verification</p>
                     </div>
                 </div>
                 <x-action-button as="a" href="{{ route('web.admin.trainer-verifications.index') }}" variant="secondary">Back to queue</x-action-button>
@@ -108,9 +108,9 @@
             <div class="space-y-6">
                 <x-premium-card class="p-6">
                     <h3 class="panel-section-title">Review decision</h3>
-                    <p class="panel-section-copy">Approval enables independent coaching access. Rejection and suspension require a reason visible to operational reviewers.</p>
+                    <p class="panel-section-copy">Approval enables personal coaching invitations and does not change this trainer's gym assignment. Rejection and suspension require a reason.</p>
 
-                    @if ($trainerProfile->verification_status !== 'verified')
+                    @if ($trainerProfile->verification_status !== 'verified' && $trainerProfile->verification_submitted_at)
                     <form method="POST" action="{{ route('web.admin.trainer-verifications.update', $trainerProfile) }}" class="mt-5 space-y-4">
                         @csrf
                         @method('PATCH')
@@ -119,7 +119,7 @@
                             <label class="panel-label" for="approval_notes">Internal review notes</label>
                             <textarea id="approval_notes" name="notes" rows="3" class="panel-input" placeholder="Evidence checked, certification notes, or follow-up context"></textarea>
                         </div>
-                        <x-action-button type="submit" class="w-full justify-center">Approve independent trainer</x-action-button>
+                        <x-action-button type="submit" class="w-full justify-center">Approve trainer verification</x-action-button>
                     </form>
                     @endif
 
@@ -155,6 +155,7 @@
                     <h3 class="panel-section-title">Current review metadata</h3>
                     <dl class="mt-4 space-y-3 text-sm">
                         <div><dt class="text-slate-500">Reviewer</dt><dd class="font-medium text-slate-900 dark:text-white">{{ $trainerProfile->verificationReviewer?->name ?? 'Not reviewed' }}</dd></div>
+                        <div><dt class="text-slate-500">Submitted at</dt><dd class="font-medium text-slate-900 dark:text-white">{{ $trainerProfile->verification_submitted_at?->format('d M Y, h:i A') ?? 'Not submitted' }}</dd></div>
                         <div><dt class="text-slate-500">Reviewed at</dt><dd class="font-medium text-slate-900 dark:text-white">{{ $trainerProfile->verification_reviewed_at?->format('d M Y, h:i A') ?? 'Not reviewed' }}</dd></div>
                         <div><dt class="text-slate-500">First verified at</dt><dd class="font-medium text-slate-900 dark:text-white">{{ $trainerProfile->verification_verified_at?->format('d M Y, h:i A') ?? 'Not verified' }}</dd></div>
                         @if ($trainerProfile->verification_rejection_reason)

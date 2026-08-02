@@ -245,7 +245,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       } catch (exception) {
         debugPrint('[trainer-home][warn] independent context: $exception');
       }
-      if (isIndependent && isVerified) {
+      if (isVerified) {
         try {
           final response = await _repository.fetchIndependentMembers();
           independentMembersResponse = response;
@@ -498,15 +498,18 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         (contextUser['trainer_onboarding_completed'] as bool?) ?? false;
     final hasTrainerProfile = _map(_contextData['trainer_profile']).isNotEmpty;
     final trainerProfile = _map(_contextData['trainer_profile']);
-    final isIndependentTrainer = _trainerGymId(trainerProfile) == null;
     final verificationStatus =
         trainerProfile['verification_status']?.toString().toLowerCase() ??
         'pending';
+    final verificationDisplayStatus =
+        verificationStatus == 'pending' &&
+            trainerProfile['verification_submitted'] != true
+        ? 'not_submitted'
+        : verificationStatus;
     final verificationReason = trainerProfile['verification_rejection_reason']
         ?.toString()
         .trim();
-    final canInviteIndependent =
-        isIndependentTrainer && verificationStatus == 'verified';
+    final canInvitePersonalMember = verificationStatus == 'verified';
 
     final pages = <Widget>[
       _DashboardPage(
@@ -550,11 +553,11 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         onSendMessage: _openChatWithMember,
         onAddFollowUp: _openQuickNoteSheet,
         onAddMember: () => _openMemberInvitationSheet(
-          independent: isIndependentTrainer,
-          allowed: !isIndependentTrainer || canInviteIndependent,
+          independent: true,
+          allowed: canInvitePersonalMember,
         ),
-        isIndependentTrainer: isIndependentTrainer,
-        verificationStatus: verificationStatus,
+        isIndependentTrainer: true,
+        verificationStatus: verificationDisplayStatus,
         verificationReason: verificationReason,
         pendingInvitationCount: _independentInvitations
             .where(
@@ -562,7 +565,9 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                   (item['status']?.toString() ?? '').toLowerCase() == 'pending',
             )
             .length,
-        onManageInvitations: _openIndependentInvitationsSheet,
+        onManageInvitations: verificationStatus == 'verified'
+            ? _openIndependentInvitationsSheet
+            : _openProfileEditSheet,
       ),
       _WorkoutPage(
         contextData: _contextData,
@@ -1400,7 +1405,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
           icon: const Icon(Icons.verified_user_outlined),
           title: const Text('Verification required'),
           content: const Text(
-            'Independent trainers can invite members after Atlas verifies their account. Your gym assignments are not affected.',
+            'Trainers can invite personal coaching members after Atlas verifies their account. Gym assignments and gym-assigned members are not affected.',
           ),
           actions: [
             FilledButton(
@@ -1436,7 +1441,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Invite a member',
+                  independent ? 'Invite a personal member' : 'Invite a member',
                   style: Theme.of(modalContext).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 6),
@@ -5564,7 +5569,7 @@ class _MemberPageState extends State<_MemberPage> {
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    'No assigned members yet',
+                    'No members yet',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: AppColors.textPrimary,
@@ -10920,7 +10925,7 @@ class _MembersPageHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Assigned members',
+                  'Members',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -10986,7 +10991,9 @@ class _IndependentTrainerStatusCard extends StatelessWidget {
               children: [
                 Text(
                   verified
-                      ? 'Verified independent trainer'
+                      ? 'Verified for personal coaching'
+                      : verificationStatus == 'not_submitted'
+                      ? 'Verification not submitted'
                       : 'Verification ${_titleCase(verificationStatus)}',
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     color: AppColors.textPrimary,
@@ -11736,7 +11743,7 @@ bool _planMatchesAssignment(
 
 String _assignmentScopeLabel(Map<String, dynamic> assignment) {
   if (assignment['relationship_type'] == 'independent') {
-    return 'Independent coaching';
+    return 'Personal coaching';
   }
   final gym = _map(assignment['gym']);
   final branch = _map(assignment['branch']);
@@ -11855,7 +11862,7 @@ String _notificationFallbackBody(String? type) {
     case 'gym_announcement':
       return 'Your gym sent an announcement that may affect today’s coaching work.';
     case 'independent_trainer_verification':
-      return 'Your independent trainer verification status has changed.';
+      return 'Your personal coaching verification status has changed.';
     case 'independent_coaching_response':
       return 'A member responded to your independent coaching invitation.';
     case 'independent_coaching_revoked':

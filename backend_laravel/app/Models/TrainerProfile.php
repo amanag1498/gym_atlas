@@ -26,6 +26,7 @@ class TrainerProfile extends Model
         'availability_notes',
         'is_active',
         'verification_status',
+        'verification_submitted_at',
         'verification_reviewed_by_user_id',
         'verification_reviewed_at',
         'verification_verified_at',
@@ -44,6 +45,7 @@ class TrainerProfile extends Model
             'status' => 'string',
             'is_active' => 'boolean',
             'verification_reviewed_at' => 'datetime',
+            'verification_submitted_at' => 'datetime',
             'verification_verified_at' => 'datetime',
         ];
     }

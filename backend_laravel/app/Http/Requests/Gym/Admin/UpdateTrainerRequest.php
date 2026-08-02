@@ -36,7 +36,6 @@ class UpdateTrainerRequest extends FormRequest
             'availability_notes' => ['nullable', 'string', 'max:5000'],
             'is_active' => ['sometimes', 'boolean'],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
-            'verification_status' => ['nullable', 'string', 'max:80'],
         ];
     }
 

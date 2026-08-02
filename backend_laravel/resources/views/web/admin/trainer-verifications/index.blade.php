@@ -11,9 +11,10 @@
     @endphp
 
     <div class="space-y-6">
-        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <x-stat-card label="Pending" :value="(int) ($counts['pending'] ?? 0)" hint="Awaiting platform review" tone="amber" />
-            <x-stat-card label="Verified" :value="(int) ($counts['verified'] ?? 0)" hint="Independent coaching enabled" tone="emerald" />
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <x-stat-card label="Pending" :value="max(0, (int) ($counts['pending'] ?? 0) - $notSubmittedCount)" hint="Submitted for review" tone="amber" />
+            <x-stat-card label="Not submitted" :value="$notSubmittedCount" hint="Trainer action required" tone="neutral" />
+            <x-stat-card label="Verified" :value="(int) ($counts['verified'] ?? 0)" hint="Personal coaching enabled" tone="emerald" />
             <x-stat-card label="Rejected" :value="(int) ($counts['rejected'] ?? 0)" hint="Requirements not met" tone="rose" />
             <x-stat-card label="Suspended" :value="(int) ($counts['suspended'] ?? 0)" hint="Independent access blocked" tone="violet" />
         </div>
@@ -28,6 +29,7 @@
                     :options="[
                         '' => 'All statuses',
                         'pending' => 'Pending',
+                        'not_submitted' => 'Not submitted',
                         'verified' => 'Verified',
                         'rejected' => 'Rejected',
                         'suspended' => 'Suspended',
@@ -42,8 +44,8 @@
 
         <x-table-wrapper class="overflow-hidden p-0">
             <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-                <h2 class="panel-section-title">Independent trainer review queue</h2>
-                <p class="panel-section-copy">Only trainers without a gym appear here. Gym-assigned trainer records remain outside this workflow.</p>
+                <h2 class="panel-section-title">Trainer verification queue</h2>
+                <p class="panel-section-copy">Verification controls personal coaching access only. A trainer may remain assigned to a gym and also coach their own verified clients.</p>
             </div>
 
             @if ($submissions->count())
@@ -65,7 +67,7 @@
                                     <td>
                                         <div class="font-semibold text-slate-950 dark:text-white">{{ $submission->user?->name ?? 'Unknown trainer' }}</div>
                                         <div class="text-xs text-slate-500">{{ $submission->user?->email }}</div>
-                                        <div class="mt-1 text-xs text-slate-500">Independent account</div>
+                                        <div class="mt-1 text-xs text-slate-500">{{ $submission->gym?->name ? 'Gym: '.$submission->gym->name : 'No gym assignment' }}</div>
                                     </td>
                                     <td>
                                         <div class="text-sm text-slate-700 dark:text-slate-300">{{ $submission->specialization ?: 'Not supplied' }}</div>
@@ -74,7 +76,7 @@
                                     <td class="text-sm text-slate-600 dark:text-slate-300">
                                         {{ count($submission->certifications ?? []) }} certification record(s)
                                     </td>
-                                    <td><x-status-badge :label="str($submission->verification_status)->title()" :tone="$toneFor($submission->verification_status)" /></td>
+                                    <td><x-status-badge :label="$submission->verification_status === 'pending' && !$submission->verification_submitted_at ? 'Not submitted' : str($submission->verification_status)->title()" :tone="$toneFor($submission->verification_status)" /></td>
                                     <td class="text-sm text-slate-600 dark:text-slate-300">
                                         @if ($submission->verification_reviewed_at)
                                             <div>{{ $submission->verification_reviewed_at->format('d M Y, h:i A') }}</div>
@@ -92,7 +94,7 @@
                     </table>
                 </div>
             @else
-                <div class="p-5"><x-empty-state title="No verification submissions" message="No independent trainers match the selected filters." /></div>
+                <div class="p-5"><x-empty-state title="No verification submissions" message="No trainers match the selected filters." /></div>
             @endif
 
             @if ($submissions->hasPages())

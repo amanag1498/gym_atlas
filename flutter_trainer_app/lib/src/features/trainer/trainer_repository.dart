@@ -443,6 +443,8 @@ class TrainerRepository {
 
   Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> payload) =>
       _client.put('/trainer/profile', data: payload);
+  Future<Map<String, dynamic>> submitTrainerVerification() =>
+      _client.post('/trainer/profile/verification/submit');
   Future<Map<String, dynamic>> uploadProfilePhoto({
     required List<int> bytes,
     required String filename,

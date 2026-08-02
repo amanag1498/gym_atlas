@@ -29,11 +29,9 @@ class IndependentTrainerVerificationController extends Controller
 
     public function show(TrainerProfile $trainerProfile)
     {
-        $this->ensureIndependent($trainerProfile);
-
         return $this->success(
-            IndependentTrainerVerificationResource::make($trainerProfile->load(['user', 'verificationReviewer'])),
-            'Independent trainer verification submission loaded successfully.',
+            IndependentTrainerVerificationResource::make($trainerProfile->load(['user', 'gym', 'branch', 'verificationReviewer'])),
+            'Trainer verification submission loaded successfully.',
         );
     }
 
@@ -50,13 +48,20 @@ class IndependentTrainerVerificationController extends Controller
     private function query(Request $request): Builder
     {
         $query = TrainerProfile::query()
-            ->whereNull('gym_id')
-            ->whereNull('branch_id')
-            ->with(['user', 'verificationReviewer'])
+            ->with(['user', 'gym', 'branch', 'verificationReviewer'])
             ->latest('id');
 
-        if ($request->filled('status')) {
+        if ($request->string('status')->toString() === 'not_submitted') {
+            $query->where('verification_status', 'pending')->whereNull('verification_submitted_at');
+        } elseif ($request->filled('status')) {
             $query->where('verification_status', $request->string('status')->toString());
+            if ($request->string('status')->toString() === 'pending') {
+                $query->whereNotNull('verification_submitted_at');
+            }
+        } else {
+            $query->where(fn (Builder $scope) => $scope
+                ->whereNotNull('verification_submitted_at')
+                ->orWhere('verification_status', '!=', 'pending'));
         }
 
         if ($request->filled('search')) {
@@ -70,10 +75,5 @@ class IndependentTrainerVerificationController extends Controller
         }
 
         return $query;
-    }
-
-    private function ensureIndependent(TrainerProfile $trainerProfile): void
-    {
-        abort_if($trainerProfile->gym_id !== null || $trainerProfile->branch_id !== null, 404);
     }
 }

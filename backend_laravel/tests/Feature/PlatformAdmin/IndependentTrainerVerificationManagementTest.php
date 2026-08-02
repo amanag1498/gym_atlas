@@ -12,7 +12,6 @@ use App\Models\User;
 use App\Services\Users\ManagedUserService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class IndependentTrainerVerificationManagementTest extends TestCase
@@ -44,12 +43,13 @@ class IndependentTrainerVerificationManagementTest extends TestCase
         $this->actingAs($admin)
             ->get(route('web.admin.trainer-verifications.show', $pending))
             ->assertOk()
-            ->assertSee('Independent trainer')
+            ->assertSee('personal coaching verification')
             ->assertSee('Certified Personal Trainer');
 
         $this->actingAs($admin)
             ->get(route('web.admin.trainer-verifications.show', $gymTrainer))
-            ->assertNotFound();
+            ->assertOk()
+            ->assertSee('Filter Gym');
 
         $this->actingAs($admin, 'sanctum')
             ->getJson('/api/platform-admin/trainer-verifications?status=verified')
@@ -133,7 +133,7 @@ class IndependentTrainerVerificationManagementTest extends TestCase
             ->count());
     }
 
-    public function test_non_platform_admin_cannot_review_and_gym_trainer_cannot_use_independent_endpoint(): void
+    public function test_non_platform_admin_cannot_review_but_submitted_gym_trainer_can_be_verified(): void
     {
         $member = User::factory()->create([
             'active_role' => RoleName::Member->value,
@@ -158,11 +158,12 @@ class IndependentTrainerVerificationManagementTest extends TestCase
             ->patchJson('/api/platform-admin/trainer-verifications/'.$gymProfile->id, [
                 'verification_status' => 'verified',
             ])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors('trainer');
+            ->assertOk()
+            ->assertJsonPath('data.has_gym_assignment', true)
+            ->assertJsonPath('data.verification.status', 'verified');
     }
 
-    public function test_review_queue_excludes_branch_linked_profiles_and_enforces_decision_state_machine(): void
+    public function test_review_queue_includes_branch_linked_profiles_and_enforces_decision_state_machine(): void
     {
         $admin = $this->platformAdmin();
         $gym = $this->gym('Branch Source Gym');
@@ -181,7 +182,7 @@ class IndependentTrainerVerificationManagementTest extends TestCase
         $this->actingAs($admin)
             ->get(route('web.admin.trainer-verifications.index'))
             ->assertOk()
-            ->assertDontSee('Branch Linked Coach')
+            ->assertSee('Branch Linked Coach')
             ->assertSee('State Coach');
 
         $this->actingAs($admin, 'sanctum')
@@ -196,8 +197,8 @@ class IndependentTrainerVerificationManagementTest extends TestCase
             ->patchJson('/api/platform-admin/trainer-verifications/'.$branchLinked->id, [
                 'verification_status' => 'verified',
             ])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors('trainer');
+            ->assertOk()
+            ->assertJsonPath('data.verification.status', 'verified');
 
         $pending->user->forceFill(['is_active' => false])->save();
         $this->actingAs($admin, 'sanctum')
@@ -208,7 +209,7 @@ class IndependentTrainerVerificationManagementTest extends TestCase
             ->assertJsonValidationErrors('verification_status');
     }
 
-    public function test_gym_assignment_is_blocked_until_active_independent_relationships_are_ended(): void
+    public function test_gym_assignment_preserves_active_personal_relationship_and_verification(): void
     {
         $profile = $this->trainerProfile('Independent To Gym Coach', null, 'verified');
         $member = User::factory()->create(['active_role' => RoleName::Member->value, 'is_active' => true]);
@@ -229,18 +230,10 @@ class IndependentTrainerVerificationManagementTest extends TestCase
             'is_active' => true,
         ];
 
-        try {
-            $service->upsertTrainer($profile->user, $gym, $payload);
-            $this->fail('Expected active independent coaching to block gym assignment.');
-        } catch (ValidationException $exception) {
-            $this->assertArrayHasKey('email', $exception->errors());
-        }
-
-        $this->assertNull($profile->fresh()->gym_id);
-        $relationship->forceFill(['status' => 'revoked', 'revoked_at' => now()])->save();
-
         $updated = $service->upsertTrainer($profile->user, $gym, $payload);
         $this->assertSame($gym->id, $updated->managedTrainerProfile->gym_id);
+        $this->assertSame('verified', $updated->managedTrainerProfile->verification_status);
+        $this->assertSame('active', $relationship->fresh()->status);
     }
 
     public function test_verified_independent_trainer_material_profile_changes_require_re_review(): void
@@ -273,13 +266,13 @@ class IndependentTrainerVerificationManagementTest extends TestCase
         $this->assertNull($profile->verification_reviewed_at);
         $this->assertNull($profile->verification_verified_at);
         $this->assertDatabaseHas('activity_logs', [
-            'event' => 'trainer.independent_verification.review_required',
+            'event' => 'trainer.verification.review_required',
             'actor_user_id' => $trainer->id,
             'subject_id' => $profile->id,
         ]);
     }
 
-    public function test_rejected_independent_trainer_can_resubmit_by_updating_review_fields(): void
+    public function test_rejected_trainer_updates_then_explicitly_resubmits_verification(): void
     {
         $profile = $this->trainerProfile('Rejected Coach', null, 'rejected');
         $profile->forceFill([
@@ -296,17 +289,48 @@ class IndependentTrainerVerificationManagementTest extends TestCase
                 ]],
             ])
             ->assertOk()
+            ->assertJsonPath('data.trainer_profile.verification_status', 'rejected');
+
+        $this->actingAs($profile->user, 'sanctum')
+            ->postJson('/api/trainer/profile/verification/submit')
+            ->assertOk()
             ->assertJsonPath('data.trainer_profile.verification_status', 'pending')
+            ->assertJsonPath('data.trainer_profile.verification_submitted', true)
             ->assertJsonPath('data.trainer_profile.verification_rejection_reason', null);
 
         $profile->refresh();
         $this->assertNull($profile->verification_reviewed_at);
         $this->assertNull($profile->verification_rejection_reason);
         $this->assertDatabaseHas('activity_logs', [
-            'event' => 'trainer.independent_verification.review_required',
+            'event' => 'trainer.verification.submitted',
             'actor_user_id' => $profile->user_id,
             'subject_id' => $profile->id,
         ]);
+    }
+
+    public function test_gym_assigned_trainer_explicitly_submits_verification_without_changing_gym(): void
+    {
+        $gym = $this->gym('Dual Role Gym');
+        $profile = $this->trainerProfile('Dual Role Coach', $gym->id, 'pending');
+        $profile->forceFill(['verification_submitted_at' => null])->save();
+
+        $this->actingAs($profile->user, 'sanctum')
+            ->postJson('/api/trainer/profile/verification/submit')
+            ->assertOk()
+            ->assertJsonPath('data.trainer_profile.gym_id', $gym->id)
+            ->assertJsonPath('data.trainer_profile.verification_submitted', true)
+            ->assertJsonPath('data.trainer_profile.verification_status', 'pending');
+
+        $admin = $this->platformAdmin();
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/platform-admin/trainer-verifications/'.$profile->id, [
+                'verification_status' => 'verified',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.has_gym_assignment', true)
+            ->assertJsonPath('data.verification.status', 'verified');
+
+        $this->assertSame($gym->id, $profile->fresh()->gym_id);
     }
 
     public function test_suspension_immediately_hides_relationship_access_and_reverification_restores_it(): void
@@ -385,11 +409,14 @@ class IndependentTrainerVerificationManagementTest extends TestCase
             'gym_id' => $gymId,
             'branch_id' => null,
             'specialization' => 'Strength coaching',
+            'specializations' => ['Strength coaching'],
+            'bio' => 'Experienced trainer focused on safe, measurable coaching outcomes.',
             'experience_years' => 6,
             'certifications' => ['Certified Personal Trainer'],
             'status' => 'active',
             'is_active' => true,
             'verification_status' => $verificationStatus,
+            'verification_submitted_at' => $verificationStatus === 'pending' ? now() : null,
         ]);
     }
 

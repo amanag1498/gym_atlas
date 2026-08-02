@@ -62,9 +62,7 @@ class RealtimeContextController extends Controller
                 $assignedMemberIds = $this->gymMemberAccessService
                     ->scopeAccessibleProfiles($assignedMemberQuery)
                     ->pluck('user_id');
-                if ($trainerProfile->gym_id === null
-                    && $trainerProfile->branch_id === null
-                    && $trainerProfile->is_active
+                if ($trainerProfile->is_active
                     && $trainerProfile->status === 'active'
                     && $trainerProfile->verification_status === 'verified') {
                     $assignedMemberIds = $assignedMemberIds->merge(

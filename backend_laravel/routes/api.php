@@ -550,6 +550,8 @@ Route::prefix('trainer')
             ->middleware('permission:trainer.self.manage|trainer.manage');
         Route::post('profile/certifications/upload', [TrainerProfileController::class, 'uploadCertificationFile'])
             ->middleware('permission:trainer.self.manage|trainer.manage');
+        Route::post('profile/verification/submit', [TrainerProfileController::class, 'submitVerification'])
+            ->middleware('permission:trainer.self.manage');
         Route::get('assigned-members', [TrainerAssignedMemberController::class, 'index'])
             ->middleware('permission:trainer.view|member.view');
         Route::post('member-invitations', [TrainerMemberInvitationController::class, 'store'])

@@ -12,8 +12,8 @@
             [
                 'number' => '02',
                 'title' => 'Trainer App',
-                'copy' => 'Give assigned members structured coaching with the context needed for each follow-up. Independent trainers are verified before they can add members or manage plans.',
-                'features' => ['Assigned-member roster and daily queue', 'Workout and diet plan management after verification', 'Verification for independent trainer access'],
+                'copy' => 'Coach gym-assigned members and, after platform verification, invite your own personal clients without mixing the two relationships.',
+                'features' => ['Gym-assigned and personal-member roster', 'Workout and diet plans scoped to each relationship', 'Verification for personal coaching access'],
                 'href' => route('public.for-trainers'),
                 'cta' => 'Explore trainer tools',
             ],
@@ -202,7 +202,7 @@
             <div class="home-copy">
                 <span class="home-eyebrow">Trainer App</span>
                 <h2 id="trainer-title">Coach with the member context that matters next.</h2>
-                <p>Gym-connected trainers work with assigned members through their gym. Independent trainers must complete verification before they can add members or manage workout and diet plans.</p>
+                <p>Gym-connected trainers work with members assigned by their gym. Any trainer can separately complete platform verification to invite personal clients and manage their plans; verification never changes the gym relationship.</p>
                 <div class="home-detail-grid">
                     <div class="home-detail"><strong>Know the roster</strong><span>Review assigned members, today’s queue, attendance, progress, workout history and follow-up context.</span></div>
                     <div class="home-detail"><strong>Build programs</strong><span>Verified trainers can create reusable workout templates and structured member plans, then assign them.</span></div>

@@ -219,6 +219,73 @@ class IndependentCoachingPlanIntegrationTest extends TestCase
         ]);
     }
 
+    public function test_same_verified_gym_trainer_manages_gym_and_personal_members_in_parallel(): void
+    {
+        [, $trainer, , $gym] = $this->coexistingPair();
+        $personalMember = User::factory()->create([
+            'active_role' => RoleName::Member->value,
+            'is_active' => true,
+        ]);
+        $personalMember->assignRole(RoleName::Member->value);
+        $relationship = IndependentTrainerMemberRelationship::query()->create([
+            'trainer_user_id' => $trainer->id,
+            'member_user_id' => $personalMember->id,
+            'invited_email' => $personalMember->email,
+            'status' => 'active',
+            'sharing_permissions' => ['profile', 'workouts', 'diets', 'chat'],
+            'accepted_at' => now(),
+        ]);
+        $exercise = Exercise::query()->create([
+            'name' => 'Parallel coaching squat',
+            'muscle_group' => 'legs',
+            'is_global' => true,
+            'status' => 'approved',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->getJson('/api/trainer/independent-members')
+            ->assertOk()
+            ->assertJsonPath('data.0.member.id', $personalMember->id);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/trainer/workout-plans', [
+                'independent_trainer_member_relationship_id' => $relationship->id,
+                'member_ids' => [$personalMember->id],
+                'name' => 'Personal plan while gym assigned',
+                'duration_weeks' => 4,
+                'days' => [[
+                    'day_number' => 1,
+                    'exercises' => [['exercise_id' => $exercise->id, 'sets' => 3]],
+                ]],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.0.gym_id', null)
+            ->assertJsonPath('data.0.independent_trainer_member_relationship_id', $relationship->id);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/trainer/diet-plans', [
+                'independent_trainer_member_relationship_id' => $relationship->id,
+                'member_ids' => [$personalMember->id],
+                'name' => 'Personal diet while gym assigned',
+                'meals' => [['name' => 'Breakfast', 'items' => [['name' => 'Oats']]]],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.0.gym_id', null)
+            ->assertJsonPath('data.0.independent_trainer_member_relationship_id', $relationship->id);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->getJson('/api/chat/conversations')
+            ->assertOk()
+            ->assertJsonFragment(['member_id' => $personalMember->id]);
+
+        $this->assertSame($gym->id, $trainer->managedTrainerProfile->fresh()->gym_id);
+        $this->assertDatabaseHas('independent_trainer_member_relationships', [
+            'id' => $relationship->id,
+            'status' => 'active',
+        ]);
+    }
+
     public function test_capabilities_and_revocation_are_enforced_across_discovery_chat_progress_and_notes(): void
     {
         [$member, $gymTrainer, $independentTrainer, , , $relationship] = $this->coexistingPair();
