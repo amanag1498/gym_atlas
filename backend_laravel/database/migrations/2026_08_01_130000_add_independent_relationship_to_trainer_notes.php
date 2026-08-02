@@ -11,8 +11,10 @@ return new class extends Migration
         Schema::table('trainer_member_notes', function (Blueprint $table): void {
             $table->foreignId('independent_trainer_member_relationship_id')
                 ->nullable()
-                ->after('member_id')
-                ->constrained('independent_trainer_member_relationships')
+                ->after('member_id');
+            $table->foreign('independent_trainer_member_relationship_id', 'trainer_notes_independent_relationship_fk')
+                ->references('id')
+                ->on('independent_trainer_member_relationships')
                 ->nullOnDelete();
         });
     }
@@ -20,7 +22,8 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('trainer_member_notes', function (Blueprint $table): void {
-            $table->dropConstrainedForeignId('independent_trainer_member_relationship_id');
+            $table->dropForeign('trainer_notes_independent_relationship_fk');
+            $table->dropColumn('independent_trainer_member_relationship_id');
         });
     }
 };
