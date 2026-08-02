@@ -31,6 +31,10 @@
     foreach ($selectedFacilities as $slug) $activeFilterChips->push(str($slug)->replace('-', ' ')->title());
 @endphp
 
+@push('public-head')
+    <link rel="stylesheet" href="{{ asset('css/public-gyms.css') }}?v={{ filemtime(public_path('css/public-gyms.css')) }}">
+@endpush
+
 <x-public.layouts.app page-title="Find Gyms" page-description="Discover active public gyms, compare facilities and pricing, and request a trial.">
     <div class="gym-discovery-v3">
         <header class="gym-discovery-v3__hero">

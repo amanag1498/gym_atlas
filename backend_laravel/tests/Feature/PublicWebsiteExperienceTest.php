@@ -85,6 +85,7 @@ class PublicWebsiteExperienceTest extends TestCase
 
         $response
             ->assertOk()
+            ->assertSee(asset('css/public-gyms.css').'?v=', false)
             ->assertSee('data-gym-filter-open', false)
             ->assertSee('aria-controls="gym-filter-panel"', false)
             ->assertSee('aria-expanded="false"', false)
@@ -99,6 +100,12 @@ class PublicWebsiteExperienceTest extends TestCase
             ->assertSee('1 gym found')
             ->assertSee(asset('images/public-site/editorial/trainer-member-coaching.webp'))
             ->assertDontSee('images.unsplash.com');
+
+        $this->assertFileExists(public_path('css/public-gyms.css'));
+        $this->assertStringContainsString(
+            '.gym-discovery-v3',
+            file_get_contents(public_path('css/public-gyms.css')),
+        );
     }
 
     public function test_navigation_and_footer_expose_the_complete_public_information_architecture(): void
