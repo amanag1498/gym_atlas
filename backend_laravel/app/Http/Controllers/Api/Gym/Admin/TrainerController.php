@@ -176,17 +176,20 @@ class TrainerController extends Controller
         $user = $this->managedUserService->setTrainerActive($trainer, $gym, false);
 
         $this->auditLogService->log(
-            event: 'gym.trainer.status.updated',
+            event: 'gym.trainer.released',
             action: 'update',
             request: $request,
             subject: $user,
             gym: $gym,
             branch: $profile->branch,
             oldValues: $oldValues,
-            newValues: $user->managedTrainerProfile?->only(['is_active', 'status']),
+            newValues: $user->managedTrainerProfile?->only(['gym_id', 'branch_id', 'is_active', 'status', 'verification_status']),
         );
 
-        return $this->success(UserResource::make($user->load(['managedTrainerProfile.branch'])), 'Trainer deactivated successfully.');
+        return $this->success(
+            UserResource::make($user->load(['managedTrainerProfile.branch'])),
+            'Trainer released from this gym and moved to independent access.'
+        );
     }
 
     public function assignMembers(AssignTrainerMembersRequest $request, User $trainer)

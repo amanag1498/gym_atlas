@@ -57,7 +57,7 @@ class TrainerProfileController extends Controller
         if (
             $profile->gym_id === null
             && $profile->branch_id === null
-            && $profile->verification_status === 'verified'
+            && in_array($profile->verification_status, ['verified', 'rejected'], true)
             && $materialReviewChanges !== []
         ) {
             $profile->forceFill([

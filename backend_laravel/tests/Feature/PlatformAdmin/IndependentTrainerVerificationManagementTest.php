@@ -279,6 +279,36 @@ class IndependentTrainerVerificationManagementTest extends TestCase
         ]);
     }
 
+    public function test_rejected_independent_trainer_can_resubmit_by_updating_review_fields(): void
+    {
+        $profile = $this->trainerProfile('Rejected Coach', null, 'rejected');
+        $profile->forceFill([
+            'verification_reviewed_at' => now(),
+            'verification_rejection_reason' => 'Add current certification evidence.',
+        ])->save();
+
+        $this->actingAs($profile->user, 'sanctum')
+            ->putJson('/api/trainer/profile', [
+                'certifications' => [[
+                    'name' => 'Current CPT',
+                    'issuer' => 'Atlas Academy',
+                    'issued_year' => 2026,
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.trainer_profile.verification_status', 'pending')
+            ->assertJsonPath('data.trainer_profile.verification_rejection_reason', null);
+
+        $profile->refresh();
+        $this->assertNull($profile->verification_reviewed_at);
+        $this->assertNull($profile->verification_rejection_reason);
+        $this->assertDatabaseHas('activity_logs', [
+            'event' => 'trainer.independent_verification.review_required',
+            'actor_user_id' => $profile->user_id,
+            'subject_id' => $profile->id,
+        ]);
+    }
+
     public function test_suspension_immediately_hides_relationship_access_and_reverification_restores_it(): void
     {
         $admin = $this->platformAdmin();

@@ -147,7 +147,10 @@ class TrainerScopeService
             ->with(['membership', 'branch'])
             ->where('user_id', $trainerProfile->user_id)
             ->where(function (Builder $query) use ($trainerProfile): void {
-                $query->where('type', 'trainer_gym_invitation')
+                $query->whereIn('type', [
+                    'trainer_gym_invitation',
+                    'trainer_gym_assignment_removed',
+                ])
                     ->orWhere(function (Builder $scopedQuery) use ($trainerProfile): void {
                         $scopedQuery->where('gym_id', $trainerProfile->gym_id)
                             ->when(

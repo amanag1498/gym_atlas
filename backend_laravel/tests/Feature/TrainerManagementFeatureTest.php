@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\RoleName;
+use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\Gym;
 use App\Models\MemberProfile;
@@ -397,13 +398,20 @@ class TrainerManagementFeatureTest extends TestCase
         $this->actingAs($owner, 'sanctum')
             ->postJson('/api/gym/trainers/'.$trainer->id.'/deactivate', [], $headers)
             ->assertOk()
-            ->assertJsonPath('data.is_active', false);
+            ->assertJsonPath('data.is_active', true)
+            ->assertJsonPath('data.trainer_profile.gym_id', null)
+            ->assertJsonPath('data.trainer_profile.is_active', true);
 
         $this->assertDatabaseHas('trainer_profiles', [
             'user_id' => $trainer->id,
+            'gym_id' => null,
+            'branch_id' => null,
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+        $this->assertDatabaseMissing('gym_user', [
+            'user_id' => $trainer->id,
             'gym_id' => $gym->id,
-            'status' => 'inactive',
-            'is_active' => false,
         ]);
         $this->assertDatabaseHas('member_profiles', [
             'user_id' => $member->id,
@@ -416,17 +424,109 @@ class TrainerManagementFeatureTest extends TestCase
             'gym_id' => $gym->id,
             'type' => 'trainer_assignment_removed',
         ]);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $trainer->id,
+            'gym_id' => $gym->id,
+            'type' => 'trainer_gym_assignment_removed',
+        ]);
 
         $this->actingAs($trainer->refresh(), 'sanctum')
-            ->getJson('/api/public/me')
-            ->assertForbidden()
-            ->assertJsonPath('message', 'This account is inactive. Please contact support.');
+            ->getJson('/api/trainer/context')
+            ->assertOk()
+            ->assertJsonPath('data.trainer_profile.gym_id', null)
+            ->assertJsonPath('data.trainer_profile.verification_status', 'pending');
+
+        $this->actingAs($trainer->refresh(), 'sanctum')
+            ->getJson('/api/trainer/independent-context')
+            ->assertOk()
+            ->assertJsonPath('data.is_independent', true)
+            ->assertJsonPath('data.eligible', false)
+            ->assertJsonPath('data.verification_status', 'pending');
+
+        $this->actingAs($trainer->refresh(), 'sanctum')
+            ->getJson('/api/trainer/notifications')
+            ->assertOk()
+            ->assertJsonPath('data.0.type', 'trainer_gym_assignment_removed');
 
         $this->actingAs($member, 'sanctum')
             ->getJson('/api/member/trainer', ['X-Gym-Id' => (string) $gym->id])
             ->assertOk()
             ->assertJsonPath('data.assigned_trainer', null)
             ->assertJsonPath('data.enabled', false);
+    }
+
+    public function test_legacy_gym_deactivation_is_backfilled_without_overriding_platform_suspension(): void
+    {
+        $owner = $this->makeUser(RoleName::GymOwner->value, 'owner-legacy-trainer@example.com');
+        $gym = Gym::query()->create([
+            'owner_user_id' => $owner->id,
+            'name' => 'Legacy Trainer Gym',
+            'slug' => 'legacy-trainer-gym',
+            'approval_status' => 'approved',
+            'is_active' => true,
+        ]);
+        $branch = Branch::query()->create([
+            'gym_id' => $gym->id,
+            'name' => 'Legacy Branch',
+            'slug' => 'legacy-trainer-branch',
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+
+        $gymDeactivated = $this->makeUser(RoleName::Trainer->value, 'gym-deactivated@example.com');
+        $platformDeactivated = $this->makeUser(RoleName::Trainer->value, 'platform-deactivated@example.com');
+
+        foreach ([$gymDeactivated, $platformDeactivated] as $trainer) {
+            $trainer->forceFill(['is_active' => false])->save();
+            $trainer->gyms()->attach($gym->id, ['role_name' => RoleName::Trainer->value, 'status' => 'inactive']);
+            $trainer->branches()->attach($branch->id);
+            TrainerProfile::query()->create([
+                'user_id' => $trainer->id,
+                'gym_id' => $gym->id,
+                'branch_id' => $branch->id,
+                'status' => 'inactive',
+                'is_active' => false,
+                'verification_status' => 'pending',
+            ]);
+        }
+
+        ActivityLog::query()->create([
+            'actor_user_id' => $owner->id,
+            'gym_id' => $gym->id,
+            'event' => 'gym.trainer.status.updated',
+            'action' => 'update',
+            'subject_type' => $gymDeactivated->getMorphClass(),
+            'subject_id' => $gymDeactivated->id,
+            'new_values' => ['is_active' => false, 'status' => 'inactive'],
+            'occurred_at' => now()->subMinute(),
+        ]);
+        ActivityLog::query()->create([
+            'actor_user_id' => $owner->id,
+            'event' => 'web.platform.user.deactivated',
+            'action' => 'update',
+            'subject_type' => $platformDeactivated->getMorphClass(),
+            'subject_id' => $platformDeactivated->id,
+            'new_values' => ['is_active' => false],
+            'occurred_at' => now(),
+        ]);
+
+        $migration = require database_path('migrations/2026_08_02_120000_convert_gym_deactivated_trainers_to_independent.php');
+        $migration->up();
+
+        foreach ([$gymDeactivated, $platformDeactivated] as $trainer) {
+            $this->assertDatabaseHas('trainer_profiles', [
+                'user_id' => $trainer->id,
+                'gym_id' => null,
+                'branch_id' => null,
+                'status' => 'active',
+                'is_active' => true,
+            ]);
+            $this->assertDatabaseMissing('gym_user', ['user_id' => $trainer->id, 'gym_id' => $gym->id]);
+            $this->assertDatabaseMissing('branch_user', ['user_id' => $trainer->id, 'branch_id' => $branch->id]);
+        }
+
+        $this->assertTrue((bool) $gymDeactivated->fresh()->is_active);
+        $this->assertFalse((bool) $platformDeactivated->fresh()->is_active);
     }
 
     private function makeUser(string $role, string $email): User

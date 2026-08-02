@@ -297,17 +297,19 @@ class TrainerController extends Controller
         $user = $this->managedUserService->setTrainerActive($trainer, $gym, false);
 
         $this->auditLogService->log(
-            event: 'web.gym.trainer.status.updated',
+            event: 'web.gym.trainer.released',
             action: 'update',
             request: $request,
             subject: $user,
             gym: $gym,
             branch: $profile->branch,
             oldValues: $oldValues,
-            newValues: $user->managedTrainerProfile?->only(['is_active', 'status']),
+            newValues: $user->managedTrainerProfile?->only(['gym_id', 'branch_id', 'is_active', 'status', 'verification_status']),
         );
 
-        return back()->with('status', 'Trainer deactivated successfully.');
+        return redirect()
+            ->route('web.gym.trainers.index', ['gym' => $gym->id])
+            ->with('status', 'Trainer released from this gym and moved to independent access.');
     }
 
     public function assignMembers(AssignTrainerMembersRequest $request, User $trainer): RedirectResponse

@@ -69,38 +69,49 @@ class ManagedUserService
     public function setTrainerActive(User $user, Gym $gym, bool $isActive): User
     {
         return DB::transaction(function () use ($user, $gym, $isActive): User {
-            TrainerProfile::query()
+            $profile = TrainerProfile::query()
                 ->where('user_id', $user->id)
                 ->where('gym_id', $gym->id)
-                ->update([
-                    'is_active' => $isActive,
-                    'status' => $isActive ? 'active' : 'inactive',
-                ]);
-
-            if ($user->gyms()->where('gyms.id', $gym->id)->exists()) {
-                $user->gyms()->updateExistingPivot($gym->id, [
-                    'status' => $isActive ? 'active' : 'inactive',
-                ]);
-            }
+                ->lockForUpdate()
+                ->firstOrFail();
 
             if (! $isActive) {
                 $this->clearGymTrainerAssignments($user, $gym);
+                $profile->forceFill([
+                    'gym_id' => null,
+                    'branch_id' => null,
+                    'is_active' => true,
+                    'status' => 'active',
+                ])->save();
+                $this->detachFromGym($user, $gym);
+
+                $this->notificationService->create(
+                    user: $user,
+                    type: 'trainer_gym_assignment_removed',
+                    title: 'Gym trainer relationship ended',
+                    body: 'You are no longer assigned to '.$gym->name.'. Your trainer account remains available independently.',
+                    gymId: $gym->id,
+                    data: [
+                        'previous_gym_id' => $gym->id,
+                        'source' => 'gym',
+                        'status' => 'independent',
+                    ],
+                );
+
+                $this->activeRoleManager->ensureValidActiveRole($user);
+
+                return $user->fresh(['gyms', 'branches', 'roles', 'permissions', 'managedTrainerProfile']);
             }
 
-            $hasAnotherActiveMemberProfile = MemberProfile::query()
-                ->where('user_id', $user->id)
-                ->where('is_active', true)
-                ->exists();
-            $hasAnotherRole = $user->roles()
-                ->where('name', '!=', RoleName::Trainer->value)
-                ->exists();
-            $globalIsActive = $isActive || $hasAnotherActiveMemberProfile || $hasAnotherRole;
+            $profile->forceFill([
+                'is_active' => true,
+                'status' => 'active',
+            ])->save();
 
-            if ((bool) $user->is_active !== $globalIsActive) {
-                $user->update(['is_active' => $globalIsActive]);
-            }
-            if (! $globalIsActive) {
-                $user->tokens()->delete();
+            if ($user->gyms()->where('gyms.id', $gym->id)->exists()) {
+                $user->gyms()->updateExistingPivot($gym->id, [
+                    'status' => 'active',
+                ]);
             }
 
             $this->activeRoleManager->ensureValidActiveRole($user);
