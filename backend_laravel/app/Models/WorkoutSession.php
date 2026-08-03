@@ -24,6 +24,10 @@ class WorkoutSession extends Model
         'completed_at',
         'notes',
         'total_volume',
+        'current_workout_session_exercise_id',
+        'current_set_number',
+        'rest_ends_at',
+        'state_revision',
     ];
 
     protected function casts(): array
@@ -33,6 +37,8 @@ class WorkoutSession extends Model
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
             'total_volume' => 'decimal:2',
+            'rest_ends_at' => 'datetime',
+            'state_revision' => 'integer',
         ];
     }
 

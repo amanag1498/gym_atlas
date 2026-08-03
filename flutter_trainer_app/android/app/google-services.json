@@ -66,6 +66,22 @@
           }
         },
         {
+          "client_id": "707275991691-2usoaghjrub383bnt2h1lpmai4cjhejd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.techybugs.gymatlas.member",
+            "certificate_hash": "cdd3fc3a3a5d74b9e6fc3648cfaf08abaf1cc154"
+          }
+        },
+        {
+          "client_id": "707275991691-iqnv5f1rf9j8qgbamruah4grq2biu68d.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.techybugs.gymatlas.member",
+            "certificate_hash": "4992f36165871914a43146b41ef049c115dd0598"
+          }
+        },
+        {
           "client_id": "707275991691-mheei9urcte498qjdcel0v223965bgpm.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -107,6 +123,22 @@
           "android_info": {
             "package_name": "com.techybugs.gymatlas.trainer",
             "certificate_hash": "92ad77fd4f9813a512d294c064009a6f59f3e18d"
+          }
+        },
+        {
+          "client_id": "707275991691-93d9jj1fh8br5hmm7n8g41g3msch84qt.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.techybugs.gymatlas.trainer",
+            "certificate_hash": "0701d0399a6ab62b1813a92ec25d85dbde51bd39"
+          }
+        },
+        {
+          "client_id": "707275991691-ar8fgn9pjv9b2oct4gtp6fkknlr5all0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.techybugs.gymatlas.trainer",
+            "certificate_hash": "4c1c3b21147fe2877be6d4a13221a964664ff7a9"
           }
         },
         {

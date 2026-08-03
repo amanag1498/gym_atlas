@@ -1,6 +1,7 @@
 package com.techybugs.gymatlas.member
 
 import android.content.Context
+import android.content.Intent
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -8,6 +9,7 @@ import android.hardware.SensorManager
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import com.techybugs.gymatlas.member.workout.WorkoutLockScreenBridge
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -17,6 +19,8 @@ import java.time.ZoneId
 import kotlin.math.roundToInt
 
 class MainActivity : FlutterFragmentActivity() {
+    private var workoutLockScreenBridge: WorkoutLockScreenBridge? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -29,6 +33,26 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        workoutLockScreenBridge = WorkoutLockScreenBridge(
+            activity = this,
+            messenger = flutterEngine.dartExecutor.binaryMessenger,
+        ).also { bridge ->
+            bridge.register()
+            bridge.handleLaunchIntent(intent)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        workoutLockScreenBridge?.handleLaunchIntent(intent)
+    }
+
+    override fun onDestroy() {
+        workoutLockScreenBridge?.unregister()
+        workoutLockScreenBridge = null
+        super.onDestroy()
     }
 
     private fun readTodaySensorSteps(result: MethodChannel.Result) {

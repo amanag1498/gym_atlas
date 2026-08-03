@@ -22,6 +22,10 @@ class WorkoutSessionResource extends JsonResource
             'completed_at' => $this->completed_at?->toIso8601String(),
             'notes' => $this->notes,
             'total_volume' => (float) $this->total_volume,
+            'state_revision' => (int) $this->state_revision,
+            'current_workout_session_exercise_id' => $this->current_workout_session_exercise_id,
+            'current_set_number' => (int) ($this->current_set_number ?? 1),
+            'rest_ends_at' => $this->rest_ends_at?->toIso8601String(),
             'exercises' => $this->whenLoaded('exercises', fn () => $this->exercises->map(fn ($exercise) => [
                 'id' => $exercise->id,
                 'exercise_id' => $exercise->exercise_id,
@@ -40,6 +44,7 @@ class WorkoutSessionResource extends JsonResource
                     'rest_seconds' => $set->rest_seconds,
                     'notes' => $set->notes,
                     'is_completed' => $set->is_completed,
+                    'entry_source' => $set->entry_source,
                 ])->values(),
             ])->values()),
             'created_at' => $this->created_at?->toIso8601String(),

@@ -18,6 +18,7 @@ class WorkoutSet extends Model
         'rest_seconds',
         'notes',
         'is_completed',
+        'entry_source',
     ];
 
     protected function casts(): array

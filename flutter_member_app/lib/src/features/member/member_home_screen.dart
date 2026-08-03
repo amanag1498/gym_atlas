@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -27,6 +28,7 @@ import 'member_trial_requests_screen.dart';
 import 'member_workout_book_screen.dart';
 import 'member_repository.dart';
 import 'services/step_sync_service.dart';
+import 'services/workout_lock_screen_service.dart';
 import 'socket_service.dart';
 import 'health/step_health_types.dart';
 import 'widgets/step_dashboard_widget.dart';
@@ -111,6 +113,11 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
   String _stepPermissionStatus = 'unknown';
   bool _stepSyncLoading = false;
   StepSyncResult? _latestStepSyncResult;
+  final WorkoutLockScreenService _workoutLockScreen =
+      WorkoutLockScreenService();
+  final List<WorkoutLockScreenAction> _pendingWorkoutLockScreenActions = [];
+  StreamSubscription<WorkoutLockScreenAction>? _workoutLockScreenSubscription;
+  void Function(WorkoutLockScreenAction)? _workoutLockScreenActionHandler;
 
   Future<Map<String, dynamic>> _safeMapRequest(
     Future<Map<String, dynamic>> Function() request, {
@@ -129,11 +136,47 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
     super.initState();
     _index = widget.initialIndex;
     WidgetsBinding.instance.addObserver(this);
+    _workoutLockScreenSubscription = _workoutLockScreen.actions.listen(
+      _routeWorkoutLockScreenAction,
+    );
     final previewData = widget.storePreviewData;
     if (previewData == null) {
       scheduleMicrotask(_bootstrap);
     } else {
       _applyStorePreviewData(previewData);
+    }
+  }
+
+  void _routeWorkoutLockScreenAction(WorkoutLockScreenAction action) {
+    _pendingWorkoutLockScreenActions.add(action);
+    if (mounted && _index != 1) {
+      setState(() => _index = 1);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _flushWorkoutLockScreenActions();
+    });
+  }
+
+  void _registerWorkoutLockScreenActionHandler(
+    void Function(WorkoutLockScreenAction)? handler,
+  ) {
+    _workoutLockScreenActionHandler = handler;
+    if (handler != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _flushWorkoutLockScreenActions();
+      });
+    }
+  }
+
+  void _flushWorkoutLockScreenActions() {
+    final handler = _workoutLockScreenActionHandler;
+    if (!mounted || handler == null) return;
+    final actions = List<WorkoutLockScreenAction>.from(
+      _pendingWorkoutLockScreenActions,
+    );
+    _pendingWorkoutLockScreenActions.clear();
+    for (final action in actions) {
+      handler(action);
     }
   }
 
@@ -638,6 +681,7 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _workoutLockScreenSubscription?.cancel();
     _socketService.dispose();
     super.dispose();
   }
@@ -730,6 +774,9 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
         repository: _memberRepository,
         independentTrainers: _independentTrainers,
         onOpenWorkoutBook: _openWorkoutBookScreen,
+        workoutLockScreen: _workoutLockScreen,
+        onLockScreenActionHandlerChanged:
+            _registerWorkoutLockScreenActionHandler,
         initialPlanId: _preferredWorkoutPlanId,
         onPlanConsumed: () {
           if (_preferredWorkoutPlanId != null) {
@@ -5159,6 +5206,8 @@ class _WorkoutPage extends StatefulWidget {
     required this.repository,
     required this.independentTrainers,
     required this.onOpenWorkoutBook,
+    required this.workoutLockScreen,
+    required this.onLockScreenActionHandlerChanged,
     this.initialPlanId,
     this.onPlanConsumed,
   });
@@ -5170,6 +5219,9 @@ class _WorkoutPage extends StatefulWidget {
   final MemberRepository repository;
   final List<Map<String, dynamic>> independentTrainers;
   final VoidCallback onOpenWorkoutBook;
+  final WorkoutLockScreenService workoutLockScreen;
+  final ValueChanged<void Function(WorkoutLockScreenAction)?>
+  onLockScreenActionHandlerChanged;
   final int? initialPlanId;
   final VoidCallback? onPlanConsumed;
 
@@ -5177,8 +5229,10 @@ class _WorkoutPage extends StatefulWidget {
   State<_WorkoutPage> createState() => __WorkoutPageState();
 }
 
-class __WorkoutPageState extends State<_WorkoutPage> {
+class __WorkoutPageState extends State<_WorkoutPage>
+    with WidgetsBindingObserver {
   final _planIdController = TextEditingController();
+  final Map<String, Timer> _setPersistenceTimers = <String, Timer>{};
   final Map<int, List<Map<String, dynamic>>> _exerciseHistoryCache =
       <int, List<Map<String, dynamic>>>{};
   final Map<int, bool> _exerciseHistoryLoading = <int, bool>{};
@@ -5196,12 +5250,24 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   int _restRemainingSeconds = 0;
   int _restTotalSeconds = 0;
   Timer? _restTimer;
+  DateTime? _restEndsAt;
+  int _lockScreenExerciseIndex = 0;
+  int _lockScreenSetIndex = 0;
+  int _activeSessionRevision = 0;
+  String _activeWorkoutName = 'Workout session';
+  bool _lockScreenControlsEnabled = false;
+  bool _enablingLockScreenControls = false;
+  bool _lockScreenSyncWarning = false;
+  String? _lockScreenStatusMessage;
+  final List<WorkoutLockScreenAction> _pendingLockScreenActions = [];
+  Future<void> _lockScreenActionQueue = Future<void>.value();
   List<Map<String, dynamic>> _customExerciseLibrary = const [];
   int? _selectedRelationshipId;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _workoutHistory = widget.history
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
@@ -5211,6 +5277,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     if (initialPlanId != null) {
       _planIdController.text = '$initialPlanId';
     }
+    widget.onLockScreenActionHandlerChanged(_enqueueLockScreenAction);
     scheduleMicrotask(_restoreActiveSessionIfAny);
   }
 
@@ -5241,9 +5308,21 @@ class __WorkoutPageState extends State<_WorkoutPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _restTimer?.cancel();
+    for (final timer in _setPersistenceTimers.values) {
+      timer.cancel();
+    }
+    widget.onLockScreenActionHandlerChanged(null);
     _planIdController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _activeSessionId != null) {
+      unawaited(_activateLockScreenControls(requestPermissions: false));
+    }
   }
 
   @override
@@ -5429,10 +5508,28 @@ class __WorkoutPageState extends State<_WorkoutPage> {
               ),
               const SizedBox(height: 12),
               if (_activeSessionId != null)
-                _ActiveWorkoutMiniBar(
-                  duration: activeDuration ?? Duration.zero,
-                  exerciseCount: _sessionExercises.length,
-                  totalVolume: totalVolume,
+                Column(
+                  children: [
+                    _ActiveWorkoutMiniBar(
+                      duration: activeDuration ?? Duration.zero,
+                      exerciseCount: _sessionExercises.length,
+                      totalVolume: totalVolume,
+                    ),
+                    const SizedBox(height: 10),
+                    _WorkoutLockScreenStatusCard(
+                      enabled: _lockScreenControlsEnabled,
+                      loading: _enablingLockScreenControls,
+                      warning: _lockScreenSyncWarning,
+                      message: _lockScreenStatusMessage,
+                      onEnable: _enablingLockScreenControls
+                          ? null
+                          : () => unawaited(
+                              _activateLockScreenControls(
+                                requestPermissions: true,
+                              ),
+                            ),
+                    ),
+                  ],
                 )
               else if (visiblePlans.isEmpty)
                 _FitLifeEmptyPanel(
@@ -5618,6 +5715,10 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   Future<void> _startWorkout() async {
     final messenger = ScaffoldMessenger.of(context);
     final selectedPlanId = _selectedPlanId();
+    final selectedPlan = widget.plans.firstWhere(
+      (plan) => (plan['id'] as num?)?.toInt() == selectedPlanId,
+      orElse: () => const <String, dynamic>{},
+    );
 
     if (widget.plans.isNotEmpty && selectedPlanId == null) {
       messenger.showSnackBar(
@@ -5663,11 +5764,20 @@ class __WorkoutPageState extends State<_WorkoutPage> {
             DateTime.tryParse(data['started_at']?.toString() ?? '') ??
             DateTime.now();
         _sessionExercises = _normalizeSessionExercises(data['exercises']);
+        _activeSessionRevision = (data['state_revision'] as num?)?.toInt() ?? 0;
+        _activeWorkoutName =
+            selectedPlan['name']?.toString() ??
+            data['workout_name']?.toString() ??
+            'Workout session';
+        _lockScreenExerciseIndex = 0;
+        _lockScreenSetIndex = 0;
         _showPrAchievement = false;
         _restExerciseIndex = null;
         _restRemainingSeconds = 0;
         _restTotalSeconds = 0;
       });
+      await _activateLockScreenControls(requestPermissions: true);
+      if (!mounted) return;
       messenger.showSnackBar(
         const SnackBar(content: Text('Workout session started.')),
       );
@@ -5727,7 +5837,13 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         _restExerciseIndex = null;
         _restRemainingSeconds = 0;
         _restTotalSeconds = 0;
+        _restEndsAt = null;
+        _lockScreenControlsEnabled = false;
+        _lockScreenSyncWarning = false;
+        _lockScreenStatusMessage = null;
       });
+      await widget.workoutLockScreen.end(sessionId: sessionId);
+      if (!mounted) return;
       await _showCompletionCelebration(context, records.isNotEmpty);
       messenger.showSnackBar(
         SnackBar(
@@ -5887,6 +6003,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   }
 
   void _addSet(int exerciseIndex) {
+    var newSetIndex = 0;
     setState(() {
       final exercise = Map<String, dynamic>.from(
         _sessionExercises[exerciseIndex],
@@ -5902,12 +6019,23 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         'notes': null,
         'is_completed': true,
       });
+      newSetIndex = sets.length - 1;
       exercise['sets'] = sets;
       _sessionExercises = _replaceExercise(exerciseIndex, exercise);
     });
+    unawaited(_persistSet(exerciseIndex, newSetIndex));
+    unawaited(_syncWorkoutLockScreen());
   }
 
   void _duplicateLastSet(int exerciseIndex) {
+    final existingSets =
+        (_sessionExercises[exerciseIndex]['sets'] as List<dynamic>? ??
+        const []);
+    if (existingSets.isEmpty) {
+      _addSet(exerciseIndex);
+      return;
+    }
+    var newSetIndex = 0;
     setState(() {
       final exercise = Map<String, dynamic>.from(
         _sessionExercises[exerciseIndex],
@@ -5915,35 +6043,45 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       final sets = (exercise['sets'] as List<dynamic>? ?? const [])
           .map((set) => Map<String, dynamic>.from(set as Map))
           .toList();
-      if (sets.isEmpty) {
-        _addSet(exerciseIndex);
-        return;
-      }
       final previous = Map<String, dynamic>.from(sets.last);
       sets.add({...previous, 'set_number': sets.length + 1});
+      newSetIndex = sets.length - 1;
       exercise['sets'] = sets;
       _sessionExercises = _replaceExercise(exerciseIndex, exercise);
     });
+    unawaited(_persistSet(exerciseIndex, newSetIndex));
+    unawaited(_syncWorkoutLockScreen());
   }
 
   void _deleteSet(int exerciseIndex, int setIndex) {
+    final exercise = Map<String, dynamic>.from(
+      _sessionExercises[exerciseIndex],
+    );
+    final existingSets = (exercise['sets'] as List<dynamic>? ?? const [])
+        .map((set) => Map<String, dynamic>.from(set as Map))
+        .toList();
+    if (setIndex < 0 || setIndex >= existingSets.length) {
+      return;
+    }
+    final removedSet = Map<String, dynamic>.from(existingSets[setIndex]);
     setState(() {
-      final exercise = Map<String, dynamic>.from(
+      final updatedExercise = Map<String, dynamic>.from(
         _sessionExercises[exerciseIndex],
       );
-      final sets = (exercise['sets'] as List<dynamic>? ?? const [])
+      final sets = (updatedExercise['sets'] as List<dynamic>? ?? const [])
           .map((set) => Map<String, dynamic>.from(set as Map))
           .toList();
-      if (setIndex < 0 || setIndex >= sets.length) {
-        return;
-      }
       sets.removeAt(setIndex);
       for (var index = 0; index < sets.length; index++) {
         sets[index]['set_number'] = index + 1;
       }
-      exercise['sets'] = sets;
-      _sessionExercises = _replaceExercise(exerciseIndex, exercise);
+      updatedExercise['sets'] = sets;
+      _sessionExercises = _replaceExercise(exerciseIndex, updatedExercise);
     });
+    unawaited(
+      _deleteAndRenumberPersistedSets(exerciseIndex, exercise, removedSet),
+    );
+    unawaited(_syncWorkoutLockScreen());
   }
 
   void _updateExerciseNotes(int exerciseIndex, String value) {
@@ -5980,6 +6118,8 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       exercise['sets'] = sets;
       _sessionExercises = _replaceExercise(exerciseIndex, exercise);
     });
+    _queueSetPersistence(exerciseIndex, setIndex);
+    unawaited(_syncWorkoutLockScreen());
   }
 
   List<Map<String, dynamic>> _replaceExercise(
@@ -5991,31 +6131,542 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     return items;
   }
 
-  void _startRest(int exerciseIndex, int seconds) {
+  void _startRest(int exerciseIndex, int seconds, {bool persist = true}) {
     _restTimer?.cancel();
+    final durationSeconds = seconds <= 0 ? 45 : seconds;
     setState(() {
       _restExerciseIndex = exerciseIndex;
-      _restRemainingSeconds = seconds <= 0 ? 45 : seconds;
-      _restTotalSeconds = seconds <= 0 ? 45 : seconds;
+      _restRemainingSeconds = durationSeconds;
+      _restTotalSeconds = durationSeconds;
+      _restEndsAt = DateTime.now().add(Duration(seconds: durationSeconds));
     });
+    if (persist) {
+      unawaited(
+        _performSessionAction('start_rest', <String, dynamic>{
+          'rest_seconds': durationSeconds,
+          if (_sessionExerciseIdAt(exerciseIndex) case final exerciseId?)
+            'workout_session_exercise_id': exerciseId,
+        }),
+      );
+    }
+    unawaited(_syncWorkoutLockScreen());
     _restTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
       }
-      if (_restRemainingSeconds <= 1) {
+      final remaining = _restEndsAt?.difference(DateTime.now()).inSeconds ?? 0;
+      if (remaining <= 0) {
         timer.cancel();
         setState(() {
           _restRemainingSeconds = 0;
           _restExerciseIndex = null;
           _restTotalSeconds = 0;
+          _restEndsAt = null;
         });
+        unawaited(_syncWorkoutLockScreen());
         return;
       }
       setState(() {
-        _restRemainingSeconds -= 1;
+        _restRemainingSeconds = remaining;
       });
     });
+  }
+
+  void _skipRest({bool persist = true}) {
+    _restTimer?.cancel();
+    setState(() {
+      _restExerciseIndex = null;
+      _restRemainingSeconds = 0;
+      _restTotalSeconds = 0;
+      _restEndsAt = null;
+    });
+    if (persist) {
+      unawaited(_performSessionAction('skip_rest'));
+    }
+    unawaited(_syncWorkoutLockScreen());
+  }
+
+  void _queueSetPersistence(int exerciseIndex, int setIndex) {
+    final exerciseId = _sessionExerciseIdAt(exerciseIndex);
+    if (exerciseId == null) return;
+    final key = '$exerciseId:$setIndex';
+    _setPersistenceTimers[key]?.cancel();
+    _setPersistenceTimers[key] = Timer(const Duration(milliseconds: 600), () {
+      _setPersistenceTimers.remove(key);
+      unawaited(_persistSet(exerciseIndex, setIndex));
+    });
+  }
+
+  Future<void> _persistSet(
+    int exerciseIndex,
+    int setIndex, {
+    String action = 'update_set',
+  }) async {
+    if (exerciseIndex < 0 || exerciseIndex >= _sessionExercises.length) return;
+    final exercise = Map<String, dynamic>.from(
+      _sessionExercises[exerciseIndex],
+    );
+    final sets = (exercise['sets'] as List<dynamic>? ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+    if (setIndex < 0 || setIndex >= sets.length) return;
+    final sessionExerciseId = (exercise['id'] as num?)?.toInt();
+    if (sessionExerciseId == null) return;
+    final set = sets[setIndex];
+    await _performSessionAction(action, <String, dynamic>{
+      'workout_session_exercise_id': sessionExerciseId,
+      if ((set['id'] as num?)?.toInt() case final setId?) 'set_id': setId,
+      'set_number': (set['set_number'] as num?)?.toInt() ?? setIndex + 1,
+      'reps': (set['reps'] as num?)?.toInt() ?? 0,
+      'weight': (set['weight'] as num?)?.toDouble() ?? 0,
+      'rest_seconds': (set['rest_seconds'] as num?)?.toInt() ?? 0,
+    });
+  }
+
+  Future<void> _deletePersistedSet(
+    Map<String, dynamic> exercise,
+    Map<String, dynamic> set,
+  ) async {
+    final exerciseId = (exercise['id'] as num?)?.toInt();
+    if (exerciseId == null) return;
+    await _performSessionAction('delete_set', <String, dynamic>{
+      'workout_session_exercise_id': exerciseId,
+      if ((set['id'] as num?)?.toInt() case final setId?) 'set_id': setId,
+      'set_number': (set['set_number'] as num?)?.toInt() ?? 1,
+    });
+  }
+
+  Future<void> _deleteAndRenumberPersistedSets(
+    int exerciseIndex,
+    Map<String, dynamic> exercise,
+    Map<String, dynamic> removedSet,
+  ) async {
+    await _deletePersistedSet(exercise, removedSet);
+    if (exerciseIndex < 0 || exerciseIndex >= _sessionExercises.length) return;
+    final remainingSets =
+        (_sessionExercises[exerciseIndex]['sets'] as List<dynamic>? ??
+        const []);
+    for (var index = 0; index < remainingSets.length; index++) {
+      await _persistSet(exerciseIndex, index);
+    }
+  }
+
+  Future<Map<String, dynamic>?> _performSessionAction(
+    String action, [
+    Map<String, dynamic> arguments = const <String, dynamic>{},
+  ]) async {
+    final sessionId = _activeSessionId;
+    if (sessionId == null) return null;
+    final idempotencyKey =
+        '$sessionId-$action-${DateTime.now().microsecondsSinceEpoch}';
+    Object? lastException;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      if (_activeSessionId != sessionId) return null;
+      try {
+        final response = await widget.repository.performWorkoutAction(
+          sessionId,
+          {'action': action, 'idempotency_key': idempotencyKey, ...arguments},
+        );
+        final data = Map<String, dynamic>.from(
+          response['data'] as Map? ?? const {},
+        );
+        if (mounted && _activeSessionId == sessionId) {
+          final revision = (data['state_revision'] as num?)?.toInt();
+          setState(() {
+            if (revision != null) {
+              _activeSessionRevision = revision;
+            }
+            _lockScreenSyncWarning = false;
+            _sessionExercises = _mergePersistedSetIdentifiers(data);
+          });
+        }
+        return data;
+      } catch (exception) {
+        lastException = exception;
+        if (attempt < 2 && _isRetryableWorkoutActionError(exception)) {
+          await Future<void>.delayed(
+            Duration(milliseconds: 250 * (attempt + 1)),
+          );
+        } else {
+          break;
+        }
+      }
+    }
+    debugPrint('[workout-lock-screen] $action sync failed: $lastException');
+    if (mounted && _activeSessionId == sessionId) {
+      setState(() {
+        _lockScreenSyncWarning = true;
+        _lockScreenStatusMessage =
+            'A workout change could not sync. Check your connection and tap the action again.';
+      });
+    }
+    return null;
+  }
+
+  bool _isRetryableWorkoutActionError(Object exception) {
+    if (exception is! DioException) return false;
+    final status = exception.response?.statusCode;
+    return status == null || status == 408 || status == 429 || status >= 500;
+  }
+
+  List<Map<String, dynamic>> _mergePersistedSetIdentifiers(
+    Map<String, dynamic> session,
+  ) {
+    final serverExercises = (session['exercises'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    if (serverExercises.isEmpty) return _sessionExercises;
+
+    return _sessionExercises.map((localExercise) {
+      final exercise = Map<String, dynamic>.from(localExercise);
+      final exerciseId = (exercise['id'] as num?)?.toInt();
+      final serverExercise = serverExercises.firstWhere(
+        (item) => (item['id'] as num?)?.toInt() == exerciseId,
+        orElse: () => const <String, dynamic>{},
+      );
+      if (serverExercise.isEmpty) return exercise;
+      final serverSets = (serverExercise['sets'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      final localSets = (exercise['sets'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .map((localSet) {
+            final localSetId = (localSet['id'] as num?)?.toInt();
+            final setNumber = (localSet['set_number'] as num?)?.toInt();
+            final serverSet = serverSets.firstWhere(
+              (item) => localSetId != null
+                  ? (item['id'] as num?)?.toInt() == localSetId
+                  : (item['set_number'] as num?)?.toInt() == setNumber,
+              orElse: () => const <String, dynamic>{},
+            );
+            if (serverSet.isEmpty) return localSet;
+            return <String, dynamic>{
+              ...localSet,
+              'id': serverSet['id'],
+              'entry_source': serverSet['entry_source'],
+            };
+          })
+          .toList();
+      exercise['sets'] = localSets;
+      return exercise;
+    }).toList();
+  }
+
+  int? _sessionExerciseIdAt(int index) {
+    if (index < 0 || index >= _sessionExercises.length) return null;
+    return (_sessionExercises[index]['id'] as num?)?.toInt();
+  }
+
+  int? _indexForSessionExercise(Object? rawId) {
+    final id = rawId is num ? rawId.toInt() : int.tryParse('$rawId');
+    if (id == null) return null;
+    final index = _sessionExercises.indexWhere(
+      (exercise) => (exercise['id'] as num?)?.toInt() == id,
+    );
+    return index < 0 ? null : index;
+  }
+
+  Map<String, dynamic> _lockScreenState() {
+    final sessionId = _activeSessionId;
+    final startedAt = _activeStartedAt;
+    if (sessionId == null || startedAt == null) return const {};
+
+    Map<String, dynamic> exercise = const {};
+    Map<String, dynamic> set = const {};
+    if (_sessionExercises.isNotEmpty) {
+      _lockScreenExerciseIndex = _lockScreenExerciseIndex
+          .clamp(0, _sessionExercises.length - 1)
+          .toInt();
+      exercise = Map<String, dynamic>.from(
+        _sessionExercises[_lockScreenExerciseIndex],
+      );
+      final sets = (exercise['sets'] as List<dynamic>? ?? const [])
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList();
+      if (sets.isNotEmpty) {
+        _lockScreenSetIndex = _lockScreenSetIndex
+            .clamp(0, sets.length - 1)
+            .toInt();
+        set = sets[_lockScreenSetIndex];
+      } else {
+        _lockScreenSetIndex = 0;
+      }
+    }
+
+    final exerciseDetails = _recordMap(exercise['exercise']);
+    final totalSets = (exercise['sets'] as List<dynamic>? ?? const []).length;
+    return <String, dynamic>{
+      'sessionId': sessionId,
+      'revision': _activeSessionRevision,
+      'workoutName': _activeWorkoutName,
+      'startedAt': startedAt.toIso8601String(),
+      'startedAtEpochMillis': startedAt.millisecondsSinceEpoch,
+      'exerciseId': (exercise['id'] as num?)?.toInt(),
+      'exerciseName': exerciseDetails['name']?.toString() ?? 'Workout active',
+      'exerciseIndex': _lockScreenExerciseIndex,
+      'exerciseCount': _sessionExercises.length,
+      'setNumber':
+          (set['set_number'] as num?)?.toInt() ?? (_lockScreenSetIndex + 1),
+      'totalSets': totalSets,
+      'reps': (set['reps'] as num?)?.toInt() ?? 0,
+      'weight': (set['weight'] as num?)?.toDouble() ?? 0,
+      'restSeconds':
+          (set['rest_seconds'] as num?)?.toInt() ??
+          (exercise['rest_timer_seconds'] as num?)?.toInt() ??
+          0,
+      'restEndsAt': _restEndsAt?.toIso8601String(),
+      'restEndsAtEpochMillis': _restEndsAt?.millisecondsSinceEpoch,
+      'hasPrevious': _lockScreenExerciseIndex > 0 || _lockScreenSetIndex > 0,
+      'hasNext':
+          _lockScreenExerciseIndex < _sessionExercises.length - 1 ||
+          _lockScreenSetIndex < totalSets - 1,
+    };
+  }
+
+  Future<bool> _syncWorkoutLockScreen({bool start = false}) async {
+    if (!start && !_lockScreenControlsEnabled) return false;
+    final state = _lockScreenState();
+    if (state.isEmpty) return false;
+    if (start) {
+      return widget.workoutLockScreen.start(state);
+    }
+    return widget.workoutLockScreen.update(state);
+  }
+
+  Future<void> _activateLockScreenControls({
+    required bool requestPermissions,
+  }) async {
+    if (_activeSessionId == null || _enablingLockScreenControls) return;
+    if (mounted) {
+      setState(() => _enablingLockScreenControls = true);
+    }
+    try {
+      final supported = await widget.workoutLockScreen.isSupported();
+      final permissionsGranted = requestPermissions
+          ? await widget.workoutLockScreen.ensurePermissions()
+          : await widget.workoutLockScreen.hasPermissions();
+      final enabled =
+          supported &&
+          permissionsGranted &&
+          await _syncWorkoutLockScreen(start: true);
+      if (!mounted) return;
+      setState(() {
+        _lockScreenControlsEnabled = enabled;
+        _lockScreenSyncWarning = false;
+        _lockScreenStatusMessage = enabled
+            ? 'Complete sets, control rest and move exercises from your lock screen.'
+            : !supported
+            ? 'Live workout controls are unavailable or disabled on this device.'
+            : !permissionsGranted
+            ? 'Allow notifications and activity access to keep workout controls on the lock screen.'
+            : 'Workout controls could not start. Tap Enable to try again.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _enablingLockScreenControls = false);
+      }
+    }
+  }
+
+  void _enqueueLockScreenAction(WorkoutLockScreenAction event) {
+    _lockScreenActionQueue = _lockScreenActionQueue
+        .then((_) => _handleLockScreenAction(event))
+        .catchError((Object error, StackTrace stackTrace) {
+          debugPrint('[workout-lock-screen] action failed: $error');
+          debugPrintStack(stackTrace: stackTrace);
+        });
+  }
+
+  Future<void> _handleLockScreenAction(WorkoutLockScreenAction event) async {
+    if (_activeSessionId == null) {
+      _pendingLockScreenActions.add(event);
+      return;
+    }
+    if (event.sessionId != _activeSessionId) {
+      return;
+    }
+    final eventExerciseIndex = _indexForSessionExercise(event.exerciseId);
+    if (eventExerciseIndex != null) {
+      _lockScreenExerciseIndex = eventExerciseIndex;
+    }
+    if (event.setNumber != null) {
+      _lockScreenSetIndex = math.max(0, event.setNumber! - 1);
+    }
+
+    switch (event.action) {
+      case 'completeSet':
+      case 'complete_set':
+      case 'logSet':
+      case 'log_set':
+        await _completeCurrentSetFromLockScreen(event);
+        break;
+      case 'nextExercise':
+      case 'next_exercise':
+        await _moveLockScreenCursor(forward: true);
+        break;
+      case 'previousExercise':
+      case 'previous_exercise':
+        await _moveLockScreenCursor(forward: false);
+        break;
+      case 'startRest':
+      case 'start_rest':
+        final seconds = _currentLockScreenSet()['rest_seconds'] as num?;
+        _startRest(_lockScreenExerciseIndex, seconds?.toInt() ?? 60);
+        break;
+      case 'skipRest':
+      case 'skip_rest':
+        _skipRest();
+        break;
+      case 'end':
+      case 'endWorkout':
+      case 'end_workout':
+        await _confirmEndWorkoutFromLockScreen();
+        break;
+      case 'open':
+        break;
+    }
+  }
+
+  Future<void> _confirmEndWorkoutFromLockScreen() async {
+    if (!mounted || _activeSessionId == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('End this workout?'),
+        content: const Text(
+          'Your logged sets will be saved and the lock-screen session will close.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Keep training'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('End workout'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _completeWorkout();
+    }
+  }
+
+  Map<String, dynamic> _currentLockScreenSet() {
+    if (_sessionExercises.isEmpty) return const {};
+    final exerciseIndex = _lockScreenExerciseIndex
+        .clamp(0, _sessionExercises.length - 1)
+        .toInt();
+    final exercise = _sessionExercises[exerciseIndex];
+    final sets = (exercise['sets'] as List<dynamic>? ?? const []);
+    if (sets.isEmpty) return const {};
+    final setIndex = _lockScreenSetIndex.clamp(0, sets.length - 1).toInt();
+    return Map<String, dynamic>.from(sets[setIndex] as Map);
+  }
+
+  Future<void> _completeCurrentSetFromLockScreen(
+    WorkoutLockScreenAction event,
+  ) async {
+    if (_sessionExercises.isEmpty) return;
+    final exerciseIndex = _lockScreenExerciseIndex;
+    final exercise = Map<String, dynamic>.from(
+      _sessionExercises[exerciseIndex],
+    );
+    final sets = (exercise['sets'] as List<dynamic>? ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+    if (sets.isEmpty) return;
+    final setIndex = _lockScreenSetIndex.clamp(0, sets.length - 1).toInt();
+    final set = Map<String, dynamic>.from(sets[setIndex]);
+    if (event.reps != null) set['reps'] = event.reps;
+    if (event.weight != null) set['weight'] = event.weight;
+    set['is_completed'] = true;
+    final sessionExerciseId = (exercise['id'] as num?)?.toInt();
+    if (sessionExerciseId == null) return;
+    final persisted =
+        await _performSessionAction('complete_set', <String, dynamic>{
+          'workout_session_exercise_id': sessionExerciseId,
+          if ((set['id'] as num?)?.toInt() case final setId?) 'set_id': setId,
+          'set_number': (set['set_number'] as num?)?.toInt() ?? setIndex + 1,
+          'reps': (set['reps'] as num?)?.toInt() ?? 0,
+          'weight': (set['weight'] as num?)?.toDouble() ?? 0,
+          'rest_seconds': (set['rest_seconds'] as num?)?.toInt() ?? 0,
+        });
+    if (persisted == null) return;
+
+    sets[setIndex] = set;
+    exercise['sets'] = sets;
+    if (mounted) {
+      setState(() {
+        _sessionExercises = _replaceExercise(exerciseIndex, exercise);
+      });
+    }
+    final restSeconds = (set['rest_seconds'] as num?)?.toInt() ?? 0;
+    final movedToNextExercise = _advanceLockScreenSetCursor();
+    if (movedToNextExercise) {
+      final navigation = await _performSessionAction('next_exercise');
+      if (navigation == null) {
+        _lockScreenExerciseIndex = exerciseIndex;
+        _lockScreenSetIndex = setIndex;
+      }
+    }
+    await _syncWorkoutLockScreen();
+    if (restSeconds > 0) {
+      _startRest(exerciseIndex, restSeconds);
+    } else {
+      await _syncWorkoutLockScreen();
+    }
+  }
+
+  Future<void> _moveLockScreenCursor({
+    required bool forward,
+    bool persist = true,
+  }) async {
+    if (_sessionExercises.isEmpty) return;
+    if (persist) {
+      final data = await _performSessionAction(
+        forward ? 'next_exercise' : 'previous_exercise',
+      );
+      if (data == null) return;
+      final serverIndex = _indexForSessionExercise(
+        data['current_workout_session_exercise_id'],
+      );
+      if (serverIndex != null) {
+        _lockScreenExerciseIndex = serverIndex;
+        _lockScreenSetIndex = 0;
+      }
+    } else if (forward) {
+      if (_lockScreenExerciseIndex < _sessionExercises.length - 1) {
+        _lockScreenExerciseIndex += 1;
+        _lockScreenSetIndex = 0;
+      }
+    } else if (_lockScreenExerciseIndex > 0) {
+      _lockScreenExerciseIndex -= 1;
+      _lockScreenSetIndex = 0;
+    }
+    await _syncWorkoutLockScreen();
+  }
+
+  bool _advanceLockScreenSetCursor() {
+    if (_sessionExercises.isEmpty) return false;
+    final sets =
+        (_sessionExercises[_lockScreenExerciseIndex]['sets']
+            as List<dynamic>? ??
+        const []);
+    if (_lockScreenSetIndex < sets.length - 1) {
+      _lockScreenSetIndex += 1;
+      return false;
+    } else if (_lockScreenExerciseIndex < _sessionExercises.length - 1) {
+      _lockScreenExerciseIndex += 1;
+      _lockScreenSetIndex = 0;
+      return true;
+    }
+    return false;
   }
 
   double _exerciseVolume(Map<String, dynamic> exercise) {
@@ -6138,8 +6789,19 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     bool forceReloadHistory = false,
   }) async {
     List<Map<String, dynamic>> sourceHistory = _workoutHistory;
+    Map<String, dynamic>? activeSession;
 
-    if (forceReloadHistory) {
+    try {
+      final response = await widget.repository.fetchActiveWorkoutSession();
+      final data = response['data'];
+      if (data is Map) {
+        activeSession = Map<String, dynamic>.from(data);
+      }
+    } catch (_) {
+      // Fall back to history for compatibility with a server rolling deploy.
+    }
+
+    if (activeSession == null && forceReloadHistory) {
       try {
         final response = await widget.repository.fetchWorkoutHistory();
         sourceHistory = (response['data'] as List<dynamic>? ?? const [])
@@ -6151,11 +6813,12 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       }
     }
 
-    Map<String, dynamic>? activeSession;
-    for (final session in sourceHistory) {
-      if ((session['status']?.toString().toLowerCase() ?? '') == 'active') {
-        activeSession = session;
-        break;
+    if (activeSession == null) {
+      for (final session in sourceHistory) {
+        if ((session['status']?.toString().toLowerCase() ?? '') == 'active') {
+          activeSession = session;
+          break;
+        }
       }
     }
 
@@ -6178,7 +6841,39 @@ class __WorkoutPageState extends State<_WorkoutPage> {
             DateTime.tryParse(data['started_at']?.toString() ?? '') ??
             DateTime.now();
         _sessionExercises = _normalizeSessionExercises(data['exercises']);
+        _activeSessionRevision = (data['state_revision'] as num?)?.toInt() ?? 0;
+        _activeWorkoutName =
+            _recordMap(data['workout_plan'])['name']?.toString() ??
+            data['workout_name']?.toString() ??
+            'Workout session';
+        _lockScreenExerciseIndex =
+            _indexForSessionExercise(
+              data['current_workout_session_exercise_id'],
+            ) ??
+            0;
+        _lockScreenSetIndex = math.max(
+          0,
+          ((data['current_set_number'] as num?)?.toInt() ?? 1) - 1,
+        );
       });
+      final restEndsAt = DateTime.tryParse(
+        data['rest_ends_at']?.toString() ?? '',
+      );
+      if (restEndsAt != null && restEndsAt.isAfter(DateTime.now())) {
+        _startRest(
+          _lockScreenExerciseIndex,
+          restEndsAt.difference(DateTime.now()).inSeconds,
+          persist: false,
+        );
+      }
+      await _activateLockScreenControls(requestPermissions: false);
+      final pendingActions = List<WorkoutLockScreenAction>.from(
+        _pendingLockScreenActions,
+      );
+      _pendingLockScreenActions.clear();
+      for (final pendingAction in pendingActions) {
+        await _handleLockScreenAction(pendingAction);
+      }
     } catch (_) {
       // Ignore stale references and let the user start fresh.
     }
@@ -7127,6 +7822,103 @@ class _FitLifeHistoryRow extends StatelessWidget {
             ),
           ),
           const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkoutLockScreenStatusCard extends StatelessWidget {
+  const _WorkoutLockScreenStatusCard({
+    required this.enabled,
+    required this.loading,
+    required this.warning,
+    required this.message,
+    required this.onEnable,
+  });
+
+  final bool enabled;
+  final bool loading;
+  final bool warning;
+  final String? message;
+  final VoidCallback? onEnable;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = warning
+        ? const Color(0xFFE07A18)
+        : enabled
+        ? const Color(0xFF16A36A)
+        : AppColors.primary;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: accent.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: loading
+                ? Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      color: accent,
+                    ),
+                  )
+                : Icon(
+                    warning
+                        ? Icons.cloud_off_rounded
+                        : enabled
+                        ? Icons.lock_clock_rounded
+                        : Icons.notifications_active_outlined,
+                    color: accent,
+                    size: 21,
+                  ),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  loading
+                      ? 'Starting lock-screen controls'
+                      : warning
+                      ? 'Workout sync needs attention'
+                      : enabled
+                      ? 'Lock-screen controls active'
+                      : 'Lock-screen controls are off',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  message ??
+                      'Enable controls to log sets while the screen is locked.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (!enabled && !loading) ...[
+            const SizedBox(width: 8),
+            TextButton(onPressed: onEnable, child: const Text('Enable')),
+          ],
         ],
       ),
     );
