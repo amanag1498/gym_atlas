@@ -31,16 +31,6 @@
 		<dict>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
-			<key>CFBundleURLName</key>
-			<string>com.techybugs.gymatlas.member.workout</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>gymatlas-member</string>
-			</array>
-		</dict>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>com.googleusercontent.apps.707275991691-catqhsa9ln8j9e87975oikl7ds8gdcs3</string>
@@ -48,8 +38,6 @@
 		</dict>
 	</array>
 	<key>LSRequiresIPhoneOS</key>
-	<true/>
-	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIBackgroundModes</key>
 	<array>

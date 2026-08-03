@@ -10,7 +10,6 @@ use App\Http\Requests\Workout\DuplicateMemberWorkoutPlanRequest;
 use App\Http\Requests\Workout\StartWorkoutSessionRequest;
 use App\Http\Requests\Workout\StoreMemberWorkoutPlanRequest;
 use App\Http\Requests\Workout\UpdateMemberWorkoutPlanRequest;
-use App\Http\Requests\Workout\WorkoutSessionActionRequest;
 use App\Http\Resources\Workout\ExerciseResource;
 use App\Http\Resources\Workout\PersonalRecordResource;
 use App\Http\Resources\Workout\WorkoutBookResource;
@@ -392,48 +391,6 @@ class WorkoutController extends Controller
         $this->workoutAccessService->assertSessionReadAccess($request->user(), $workoutSession);
 
         return $this->success(WorkoutSessionResource::make($workoutSession->load('exercises.exercise', 'exercises.sets')));
-    }
-
-    public function activeSession(Request $request)
-    {
-        $session = WorkoutSession::query()
-            ->with('exercises.exercise', 'exercises.sets')
-            ->where('member_id', $request->user()->id)
-            ->where('status', 'active')
-            ->latest('started_at')
-            ->latest('id')
-            ->first();
-
-        return $this->success(
-            $session === null ? null : WorkoutSessionResource::make($session),
-            $session === null ? 'No active workout session.' : 'Active workout session fetched successfully.',
-        );
-    }
-
-    public function action(WorkoutSessionActionRequest $request, WorkoutSession $workoutSession)
-    {
-        $this->workoutAccessService->assertSessionAccess($request->user(), $workoutSession);
-        $result = $this->workoutSessionService->applyAction($request->user(), $workoutSession, $request->validated());
-
-        if (! $result['replayed']) {
-            $this->auditLogService->log(
-                event: 'workout_session.action_applied',
-                action: 'update',
-                request: $request,
-                subject: $result['session'],
-                gym: $result['session']->gym,
-                branch: $result['session']->branch,
-                newValues: [
-                    'action' => $request->validated('action'),
-                    'state_revision' => $result['session']->state_revision,
-                ],
-            );
-        }
-
-        return $this->success(
-            WorkoutSessionResource::make($result['session']),
-            $result['replayed'] ? 'Workout action already applied.' : 'Workout action applied successfully.',
-        );
     }
 
     public function complete(CompleteWorkoutSessionRequest $request, WorkoutSession $workoutSession)

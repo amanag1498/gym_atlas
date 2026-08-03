@@ -15,7 +15,6 @@ class CompleteWorkoutSessionRequest extends FormRequest
     {
         return [
             'notes' => ['nullable', 'string'],
-            'expected_revision' => ['nullable', 'integer', 'min:0'],
             'exercises' => ['present', 'array'],
             'exercises.*.id' => ['nullable', 'integer', 'exists:workout_session_exercises,id'],
             'exercises.*.exercise_id' => ['required', 'integer', 'exists:exercises,id'],

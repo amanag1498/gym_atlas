@@ -17,23 +17,10 @@
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		A11E00010000000000000001 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A11E00020000000000000002 /* GoogleService-Info.plist */; };
 		A11E00040000000000000004 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A11E00030000000000000003 /* PrivacyInfo.xcprivacy */; };
-		AA1000010000000000000001 /* WorkoutLiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000010000000000000001 /* WorkoutLiveActivityManager.swift */; };
-		AA1000020000000000000002 /* WorkoutActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000020000000000000002 /* WorkoutActivityAttributes.swift */; };
-		AA1000030000000000000003 /* WorkoutLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000030000000000000003 /* WorkoutLiveActivityWidget.swift */; };
-		AA1000040000000000000004 /* WorkoutActionIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000040000000000000004 /* WorkoutActionIntents.swift */; };
-		AA1000050000000000000005 /* WorkoutActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000020000000000000002 /* WorkoutActivityAttributes.swift */; };
-		AA1000060000000000000006 /* WorkoutLiveActivity.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = AA2000080000000000000008 /* WorkoutLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		EA993F6DC93FCE23915CC9B6 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 71F46434863856E62ED460C1 /* Pods_Runner.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		AA3000010000000000000001 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = AA6000010000000000000001;
-			remoteInfo = WorkoutLiveActivity;
-		};
 		331C8085294A63A400263BE5 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
@@ -44,17 +31,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		AA4000010000000000000001 /* Embed App Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				AA1000060000000000000006 /* WorkoutLiveActivity.appex in Embed App Extensions */,
-			);
-			name = "Embed App Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		9705A1C41CF9048500538489 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -79,7 +55,6 @@
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Flutter/Release.xcconfig; sourceTree = "<group>"; };
-		AA2000090000000000000009 /* WorkoutLiveActivity.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = WorkoutLiveActivity.xcconfig; path = Flutter/WorkoutLiveActivity.xcconfig; sourceTree = "<group>"; };
 		858B12DCC4DBA978E30A71A0 /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
 		86D3F0D0D4B74E4D98ACBB7E /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		8C1DA8AF329297139424A302 /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
@@ -95,23 +70,9 @@
 		CDFE5D1CFBF8C15ACDCE07AC /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 		DCEF93BD8E3C72A2DD1F8E23 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E127A186B36849477C23D2A1 /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
-		AA2000010000000000000001 /* WorkoutLiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutLiveActivityManager.swift; sourceTree = "<group>"; };
-		AA2000020000000000000002 /* WorkoutActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutActivityAttributes.swift; sourceTree = "<group>"; };
-		AA2000030000000000000003 /* WorkoutLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutLiveActivityWidget.swift; sourceTree = "<group>"; };
-		AA2000040000000000000004 /* WorkoutActionIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutActionIntents.swift; sourceTree = "<group>"; };
-		AA2000050000000000000005 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		AA2000060000000000000006 /* WorkoutLiveActivity.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WorkoutLiveActivity.entitlements; sourceTree = "<group>"; };
-		AA2000080000000000000008 /* WorkoutLiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = WorkoutLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		AA5000010000000000000001 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		97C146EB1CF9000F007C117D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -154,7 +115,6 @@
 				3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */,
 				9740EEB21CF90195004384FC /* Debug.xcconfig */,
 				7AFA3C8E1D35360C0083082E /* Release.xcconfig */,
-				AA2000090000000000000009 /* WorkoutLiveActivity.xcconfig */,
 				9740EEB31CF90195004384FC /* Generated.xcconfig */,
 			);
 			name = Flutter;
@@ -165,8 +125,6 @@
 			children = (
 				9740EEB11CF90186004384FC /* Flutter */,
 				97C146F01CF9000F007C117D /* Runner */,
-				AA7000010000000000000001 /* WorkoutShared */,
-				AA7000020000000000000002 /* WorkoutLiveActivity */,
 				97C146EF1CF9000F007C117D /* Products */,
 				331C8082294A63A400263BE5 /* RunnerTests */,
 				C97370608441D75F5067BFF9 /* Pods */,
@@ -179,7 +137,6 @@
 			children = (
 				97C146EE1CF9000F007C117D /* Runner.app */,
 				331C8081294A63A400263BE5 /* RunnerTests.xctest */,
-				AA2000080000000000000008 /* WorkoutLiveActivity.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -197,29 +154,9 @@
 				1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */,
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
-				AA2000010000000000000001 /* WorkoutLiveActivityManager.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 			);
 			path = Runner;
-			sourceTree = "<group>";
-		};
-		AA7000010000000000000001 /* WorkoutShared */ = {
-			isa = PBXGroup;
-			children = (
-				AA2000020000000000000002 /* WorkoutActivityAttributes.swift */,
-			);
-			path = WorkoutShared;
-			sourceTree = "<group>";
-		};
-		AA7000020000000000000002 /* WorkoutLiveActivity */ = {
-			isa = PBXGroup;
-			children = (
-				AA2000030000000000000003 /* WorkoutLiveActivityWidget.swift */,
-				AA2000040000000000000004 /* WorkoutActionIntents.swift */,
-				AA2000050000000000000005 /* Info.plist */,
-				AA2000060000000000000006 /* WorkoutLiveActivity.entitlements */,
-			);
-			path = WorkoutLiveActivity;
 			sourceTree = "<group>";
 		};
 		C97370608441D75F5067BFF9 /* Pods */ = {
@@ -239,23 +176,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		AA6000010000000000000001 /* WorkoutLiveActivity */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = AA9000010000000000000001 /* Build configuration list for PBXNativeTarget "WorkoutLiveActivity" */;
-			buildPhases = (
-				AA8000010000000000000001 /* Sources */,
-				AA5000010000000000000001 /* Frameworks */,
-				AA8000020000000000000002 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = WorkoutLiveActivity;
-			productName = WorkoutLiveActivity;
-			productReference = AA2000080000000000000008 /* WorkoutLiveActivity.appex */;
-			productType = "com.apple.product-type.app-extension";
-		};
 		331C8080294A63A400263BE5 /* RunnerTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 331C8087294A63A400263BE5 /* Build configuration list for PBXNativeTarget "RunnerTests" */;
@@ -284,7 +204,6 @@
 				97C146EA1CF9000F007C117D /* Sources */,
 				97C146EB1CF9000F007C117D /* Frameworks */,
 				97C146EC1CF9000F007C117D /* Resources */,
-				AA4000010000000000000001 /* Embed App Extensions */,
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
 				342F26F3E7119E71E5E245E8 /* [CP] Embed Pods Frameworks */,
@@ -293,7 +212,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				AA3000030000000000000003 /* PBXTargetDependency */,
 			);
 			name = Runner;
 			productName = Runner;
@@ -310,9 +228,6 @@
 				LastUpgradeCheck = 1510;
 				ORGANIZATIONNAME = "";
 				TargetAttributes = {
-					AA6000010000000000000001 = {
-						CreatedOnToolsVersion = 15.0;
-					};
 					331C8080294A63A400263BE5 = {
 						CreatedOnToolsVersion = 14.0;
 						TestTargetID = 97C146ED1CF9000F007C117D;
@@ -352,19 +267,11 @@
 			targets = (
 				97C146ED1CF9000F007C117D /* Runner */,
 				331C8080294A63A400263BE5 /* RunnerTests */,
-				AA6000010000000000000001 /* WorkoutLiveActivity */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		AA8000020000000000000002 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		331C807F294A63A400263BE5 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -500,16 +407,6 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		AA8000010000000000000001 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				AA1000030000000000000003 /* WorkoutLiveActivityWidget.swift in Sources */,
-				AA1000040000000000000004 /* WorkoutActionIntents.swift in Sources */,
-				AA1000050000000000000005 /* WorkoutActivityAttributes.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		331C807D294A63A400263BE5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -523,8 +420,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
-				AA1000010000000000000001 /* WorkoutLiveActivityManager.swift in Sources */,
-				AA1000020000000000000002 /* WorkoutActivityAttributes.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -532,11 +427,6 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		AA3000030000000000000003 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = AA6000010000000000000001 /* WorkoutLiveActivity */;
-			targetProxy = AA3000010000000000000001 /* PBXContainerItemProxy */;
-		};
 		331C8086294A63A400263BE5 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 97C146ED1CF9000F007C117D /* Runner */;
@@ -564,73 +454,6 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
-		AA9100010000000000000001 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = AA2000090000000000000009 /* WorkoutLiveActivity.xcconfig */;
-			buildSettings = {
-				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = WorkoutLiveActivity/WorkoutLiveActivity.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = 9BQZB27JWV;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = WorkoutLiveActivity/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
-				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
-				PRODUCT_BUNDLE_IDENTIFIER = com.techybugs.gymatlas.member.WorkoutLiveActivity;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Debug;
-		};
-		AA9100020000000000000002 /* Release */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = AA2000090000000000000009 /* WorkoutLiveActivity.xcconfig */;
-			buildSettings = {
-				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = WorkoutLiveActivity/WorkoutLiveActivity.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = 9BQZB27JWV;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = WorkoutLiveActivity/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
-				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
-				PRODUCT_BUNDLE_IDENTIFIER = com.techybugs.gymatlas.member.WorkoutLiveActivity;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Release;
-		};
-		AA9100030000000000000003 /* Profile */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = AA2000090000000000000009 /* WorkoutLiveActivity.xcconfig */;
-			buildSettings = {
-				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = WorkoutLiveActivity/WorkoutLiveActivity.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = 9BQZB27JWV;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = WorkoutLiveActivity/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
-				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
-				PRODUCT_BUNDLE_IDENTIFIER = com.techybugs.gymatlas.member.WorkoutLiveActivity;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Profile;
-		};
 		249021D3217E4FDB00AE95B9 /* Profile */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -920,16 +743,6 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		AA9000010000000000000001 /* Build configuration list for PBXNativeTarget "WorkoutLiveActivity" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				AA9100010000000000000001 /* Debug */,
-				AA9100020000000000000002 /* Release */,
-				AA9100030000000000000003 /* Profile */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		331C8087294A63A400263BE5 /* Build configuration list for PBXNativeTarget "RunnerTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

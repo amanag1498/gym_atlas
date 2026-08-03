@@ -731,13 +731,9 @@ Route::prefix('member')
             ->middleware('permission:workout_plan.manage|workout_session.manage');
         Route::post('workout-sessions/start', [MemberWorkoutController::class, 'start'])
             ->middleware('permission:workout_session.manage');
-        Route::get('workout-sessions/active', [MemberWorkoutController::class, 'activeSession'])
-            ->middleware('permission:workout_session.view|workout_session.manage');
         Route::get('workout-sessions/{workoutSession}', [MemberWorkoutController::class, 'showSession'])
             ->middleware('permission:workout_session.view|workout_session.manage');
         Route::post('workout-sessions/{workoutSession}/exercises', [MemberWorkoutController::class, 'addExercise'])
-            ->middleware('permission:workout_session.manage');
-        Route::post('workout-sessions/{workoutSession}/actions', [MemberWorkoutController::class, 'action'])
             ->middleware('permission:workout_session.manage');
         Route::post('workout-sessions/{workoutSession}/complete', [MemberWorkoutController::class, 'complete'])
             ->middleware('permission:workout_session.manage');
