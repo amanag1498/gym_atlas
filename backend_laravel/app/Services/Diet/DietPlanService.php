@@ -3,8 +3,10 @@
 namespace App\Services\Diet;
 
 use App\Models\DietPlan;
+use App\Models\FoodCatalogItem;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class DietPlanService
 {
@@ -72,6 +74,18 @@ class DietPlanService
                     $item = null;
                 }
                 $item ??= $meal->items()->make();
+                $catalogItemId = isset($itemData['food_catalog_item_id'])
+                    ? (int) $itemData['food_catalog_item_id']
+                    : null;
+                if ($catalogItemId !== null
+                    && (int) $item->food_catalog_item_id !== $catalogItemId
+                    && ! FoodCatalogItem::query()->active()->whereKey($catalogItemId)->exists()) {
+                    throw ValidationException::withMessages([
+                        "meals.{$mealIndex}.items.{$itemIndex}.food_catalog_item_id" => [
+                            'The selected catalog food is no longer active. Choose another food or add it as a custom item.',
+                        ],
+                    ]);
+                }
                 $item->fill(
                     collect($itemData)->except('id')->all()
                     + ['sort_order' => $itemIndex]

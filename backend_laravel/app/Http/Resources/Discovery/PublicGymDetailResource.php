@@ -11,6 +11,10 @@ class PublicGymDetailResource extends JsonResource
     public function toArray(Request $request): array
     {
         $pricingVisible = (bool) ($this->show_pricing ?? $this->pricing_visible);
+        $photoUrls = $this->photoUrls(
+            $this->photo_urls ?? [],
+            $this->whenLoaded('gymPhotos', fn () => $this->gymPhotos->whereNull('branch_id'), collect()),
+        );
         $activeTrainers = $this->trainerProfiles
             ->merge($this->branches->flatMap(fn ($branch) => $branch->trainerProfiles))
             ->filter(fn ($trainer) => $trainer->is_active)
@@ -34,7 +38,7 @@ class PublicGymDetailResource extends JsonResource
             'description' => $this->description,
             'logo_url' => $this->logo_url,
             'cover_image_url' => $this->cover_image_url,
-            'photo_urls' => $this->photo_urls ?? [],
+            'photo_urls' => $photoUrls,
             'city' => $this->city,
             'state' => $this->state,
             'country' => $this->country,
@@ -87,10 +91,23 @@ class PublicGymDetailResource extends JsonResource
                 'state' => $branch->state,
                 'timings' => $branch->timings ?? [],
                 'weekly_off' => $branch->weekly_off ?? [],
-                'photo_urls' => $branch->photo_urls ?? [],
+                'photo_urls' => $this->photoUrls($branch->photo_urls ?? [], $branch->gymPhotos),
                 'facilities' => FacilityResource::collection($branch->facilities),
             ]),
             'trainers' => PublicTrainerResource::collection($activeTrainers),
         ];
+    }
+
+    private function photoUrls(iterable $legacyUrls, iterable $photos): array
+    {
+        return collect($legacyUrls)
+            ->merge(collect($photos)
+                ->where('type', 'gallery')
+                ->sortBy('sort_order')
+                ->pluck('image_url'))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 }

@@ -1,4 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
+typedef FoodCatalogSearch =
+    Future<List<Map<String, dynamic>>> Function(String query);
 
 class DietPlanDetailsEditor extends StatefulWidget {
   const DietPlanDetailsEditor({
@@ -192,11 +197,15 @@ class DietPlanMealsEditor extends StatefulWidget {
     required this.initialMeals,
     required this.onChanged,
     this.enabled = true,
+    this.foodCatalog = const [],
+    this.onSearchFoodCatalog,
   });
 
   final List<Map<String, dynamic>> initialMeals;
   final ValueChanged<List<Map<String, dynamic>>> onChanged;
   final bool enabled;
+  final List<Map<String, dynamic>> foodCatalog;
+  final FoodCatalogSearch? onSearchFoodCatalog;
 
   @override
   State<DietPlanMealsEditor> createState() => _DietPlanMealsEditorState();
@@ -204,6 +213,7 @@ class DietPlanMealsEditor extends StatefulWidget {
 
 class _DietPlanMealsEditorState extends State<DietPlanMealsEditor> {
   late final List<_MealDraft> _meals;
+  Timer? _foodSearchDebounce;
 
   @override
   void initState() {
@@ -215,6 +225,7 @@ class _DietPlanMealsEditorState extends State<DietPlanMealsEditor> {
 
   @override
   void dispose() {
+    _foodSearchDebounce?.cancel();
     for (final meal in _meals) {
       meal.dispose();
     }
@@ -270,6 +281,128 @@ class _DietPlanMealsEditorState extends State<DietPlanMealsEditor> {
 
   void _addItem(_MealDraft meal) {
     setState(() => meal.items.add(_FoodDraft.empty()));
+    _emit();
+  }
+
+  Future<void> _chooseCatalogFood(_MealDraft meal) async {
+    var search = '';
+    var remoteFoods = widget.foodCatalog;
+    var loading = false;
+    final selected = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final query = search.trim().toLowerCase();
+          final foods = widget.onSearchFoodCatalog != null
+              ? remoteFoods
+              : widget.foodCatalog.where((food) {
+                  if (query.isEmpty) return true;
+                  return '${food['name'] ?? ''} ${food['category'] ?? ''}'
+                      .toLowerCase()
+                      .contains(query);
+                }).toList();
+          return SizedBox(
+            height: MediaQuery.sizeOf(context).height * 0.78,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: TextField(
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Search food catalog',
+                      prefixIcon: Icon(Icons.search_rounded),
+                    ),
+                    onChanged: (value) {
+                      setSheetState(() {
+                        search = value;
+                        loading = widget.onSearchFoodCatalog != null;
+                      });
+                      _foodSearchDebounce?.cancel();
+                      if (widget.onSearchFoodCatalog == null) return;
+                      _foodSearchDebounce = Timer(
+                        const Duration(milliseconds: 350),
+                        () async {
+                          try {
+                            final results = await widget.onSearchFoodCatalog!(
+                              value,
+                            );
+                            if (!sheetContext.mounted || search != value) {
+                              return;
+                            }
+                            setSheetState(() {
+                              remoteFoods = results;
+                              loading = false;
+                            });
+                          } catch (_) {
+                            if (!sheetContext.mounted || search != value) {
+                              return;
+                            }
+                            setSheetState(() {
+                              remoteFoods = const [];
+                              loading = false;
+                            });
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ),
+                if (loading) const LinearProgressIndicator(minHeight: 2),
+                Expanded(
+                  child: foods.isEmpty
+                      ? const Center(child: Text('No matching catalog food'))
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+                          itemCount: foods.length,
+                          separatorBuilder: (_, _) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final food = foods[index];
+                            final category = food['category']?.toString() ?? '';
+                            final calories = food['calories'];
+                            final tags =
+                                (food['dietary_tags'] as List<dynamic>? ??
+                                        const [])
+                                    .map((tag) => tag.toString())
+                                    .where((tag) => tag.isNotEmpty)
+                                    .toList();
+                            final allergens =
+                                (food['allergens'] as List<dynamic>? ??
+                                        const [])
+                                    .map((allergen) => allergen.toString())
+                                    .where((allergen) => allergen.isNotEmpty)
+                                    .toList();
+                            return ListTile(
+                              leading: const CircleAvatar(
+                                child: Icon(Icons.restaurant_rounded),
+                              ),
+                              title: Text(food['name']?.toString() ?? 'Food'),
+                              subtitle: Text(
+                                [
+                                  if (category.isNotEmpty) category,
+                                  if (food['default_quantity'] != null)
+                                    food['default_quantity'].toString(),
+                                  if (calories != null) '$calories kcal',
+                                  if (tags.isNotEmpty) tags.join(', '),
+                                  if (allergens.isNotEmpty)
+                                    'Contains ${allergens.join(', ')}',
+                                ].join(' · '),
+                              ),
+                              onTap: () => Navigator.of(sheetContext).pop(food),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    if (selected == null || !mounted) return;
+    setState(() => meal.items.add(_FoodDraft.fromCatalog(selected)));
     _emit();
   }
 
@@ -395,18 +528,33 @@ class _DietPlanMealsEditorState extends State<DietPlanMealsEditor> {
             ],
           ),
           const SizedBox(height: 14),
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  'Food and products',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
+              Text(
+                'Food and products',
+                style: Theme.of(context).textTheme.titleSmall,
               ),
-              TextButton.icon(
-                onPressed: widget.enabled ? () => _addItem(meal) : null,
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Add product'),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  if (widget.foodCatalog.isNotEmpty ||
+                      widget.onSearchFoodCatalog != null)
+                    TextButton.icon(
+                      onPressed: widget.enabled
+                          ? () => _chooseCatalogFood(meal)
+                          : null,
+                      icon: const Icon(Icons.menu_book_rounded),
+                      label: const Text('Choose catalog food'),
+                    ),
+                  TextButton.icon(
+                    onPressed: widget.enabled ? () => _addItem(meal) : null,
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('Add custom food'),
+                  ),
+                ],
               ),
             ],
           ),
@@ -442,6 +590,25 @@ class _DietPlanMealsEditorState extends State<DietPlanMealsEditor> {
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
+            if (item.catalogItemId != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Chip(
+                    visualDensity: VisualDensity.compact,
+                    avatar: const Icon(Icons.verified_rounded, size: 16),
+                    label: const Text('From food catalog'),
+                    deleteIcon: const Icon(Icons.link_off_rounded, size: 17),
+                    onDeleted: widget.enabled
+                        ? () {
+                            setState(() => item.catalogItemId = null);
+                            _emit();
+                          }
+                        : null,
+                  ),
+                ),
+              ),
             Row(
               children: [
                 Expanded(
@@ -477,6 +644,7 @@ class _DietPlanMealsEditorState extends State<DietPlanMealsEditor> {
                   protein: item.protein,
                   carbs: item.carbs,
                   fats: item.fats,
+                  fiber: item.fiber,
                 ),
                 const SizedBox(height: 10),
                 _textField(
@@ -498,6 +666,7 @@ class _DietPlanMealsEditorState extends State<DietPlanMealsEditor> {
     required TextEditingController protein,
     required TextEditingController carbs,
     required TextEditingController fats,
+    TextEditingController? fiber,
   }) {
     return Column(
       children: [
@@ -505,6 +674,10 @@ class _DietPlanMealsEditorState extends State<DietPlanMealsEditor> {
           _numberField(calories, 'Calories', integer: true),
           _numberField(protein, 'Protein g'),
         ),
+        if (fiber != null) ...[
+          const SizedBox(height: 10),
+          _numberField(fiber, 'Fiber g'),
+        ],
         const SizedBox(height: 10),
         _twoColumns(
           _numberField(carbs, 'Carbs g'),
@@ -733,12 +906,14 @@ class _MealDraft {
 class _FoodDraft {
   _FoodDraft({
     required this.id,
+    required this.catalogItemId,
     required this.name,
     required this.quantity,
     required this.calories,
     required this.protein,
     required this.carbs,
     required this.fats,
+    required this.fiber,
     required this.notes,
   });
 
@@ -747,33 +922,53 @@ class _FoodDraft {
   factory _FoodDraft.fromMap(Map<String, dynamic> item) {
     return _FoodDraft(
       id: (item['id'] as num?)?.toInt(),
+      catalogItemId: (item['food_catalog_item_id'] as num?)?.toInt(),
       name: _controller(item['name']),
       quantity: _controller(item['quantity']),
       calories: _controller(item['calories']),
       protein: _controller(item['protein_g']),
       carbs: _controller(item['carbs_g']),
       fats: _controller(item['fats_g']),
+      fiber: _controller(item['fiber_g']),
       notes: _controller(item['notes']),
     );
   }
 
+  factory _FoodDraft.fromCatalog(Map<String, dynamic> food) {
+    return _FoodDraft.fromMap({
+      'food_catalog_item_id': food['id'],
+      'name': food['name'],
+      'quantity': food['default_quantity'],
+      'calories': food['calories'],
+      'protein_g': food['protein_g'],
+      'carbs_g': food['carbs_g'],
+      'fats_g': food['fats_g'],
+      'fiber_g': food['fiber_g'],
+      'notes': food['notes'],
+    });
+  }
+
   final int? id;
+  int? catalogItemId;
   final TextEditingController name;
   final TextEditingController quantity;
   final TextEditingController calories;
   final TextEditingController protein;
   final TextEditingController carbs;
   final TextEditingController fats;
+  final TextEditingController fiber;
   final TextEditingController notes;
 
   Map<String, dynamic> toPayload() => {
     if (id != null) 'id': id,
+    if (catalogItemId != null) 'food_catalog_item_id': catalogItemId,
     'name': name.text.trim(),
     'quantity': _nullableText(quantity),
     'calories': _integer(calories),
     'protein_g': _decimal(protein),
     'carbs_g': _decimal(carbs),
     'fats_g': _decimal(fats),
+    'fiber_g': _decimal(fiber),
     'notes': _nullableText(notes),
   };
 
@@ -784,6 +979,7 @@ class _FoodDraft {
     protein.dispose();
     carbs.dispose();
     fats.dispose();
+    fiber.dispose();
     notes.dispose();
   }
 }

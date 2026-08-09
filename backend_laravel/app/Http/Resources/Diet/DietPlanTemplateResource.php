@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Diet;
 
+use App\Enums\RoleName;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -9,6 +10,12 @@ class DietPlanTemplateResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $isOwned = (int) $this->created_by_user_id === (int) $request->user()?->id;
+        $source = $isOwned
+            && $request->user()?->active_role !== RoleName::PlatformAdmin->value
+                ? 'trainer'
+                : 'atlas';
+
         return [
             'id' => $this->id,
             'name' => $this->name,
@@ -22,10 +29,8 @@ class DietPlanTemplateResource extends JsonResource
             'notes' => $this->notes,
             'meals' => collect($this->meals ?? [])->values(),
             'status' => $this->status,
-            'is_owned' => (int) $this->created_by_user_id === (int) $request->user()?->id,
-            'source' => (int) $this->created_by_user_id === (int) $request->user()?->id
-                ? 'trainer'
-                : 'atlas',
+            'is_owned' => $isOwned,
+            'source' => $source,
         ];
     }
 

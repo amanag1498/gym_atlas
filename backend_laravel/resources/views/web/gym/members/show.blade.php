@@ -274,6 +274,42 @@
                 </x-premium-card>
 
                 <x-premium-card class="p-6">
+                    <h3 class="panel-section-title">Recent Workouts</h3>
+                    <p class="panel-section-copy">Latest sessions with the exact plan day selected by the member.</p>
+                    <div class="mt-5 overflow-x-auto">
+                        <table class="panel-table min-w-[620px]">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Plan</th>
+                                    <th>Selected Day</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse ($recentWorkoutSessions as $session)
+                                    @php
+                                        $dayLabel = filled($session->plan_day_label)
+                                            ? (($session->plan_day_number ? 'Day '.$session->plan_day_number.' — ' : '').$session->plan_day_label)
+                                            : ($session->plan_day_number ? 'Day '.$session->plan_day_number : null);
+                                    @endphp
+                                    <tr>
+                                        <td>{{ optional($session->session_date)->format('d M Y') ?: 'N/A' }}</td>
+                                        <td>{{ $session->plan?->name ?? 'Custom workout' }}</td>
+                                        <td>{{ $dayLabel ?? 'Legacy session' }}</td>
+                                        <td>{{ ucfirst((string) $session->status) }}</td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="4">No workout history found.</td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </x-premium-card>
+
+                <x-premium-card class="p-6">
                     <h3 class="panel-section-title">Recent Attendance</h3>
                     <p class="panel-section-copy">Latest check-ins only.</p>
                     <div class="mt-5 overflow-x-auto">

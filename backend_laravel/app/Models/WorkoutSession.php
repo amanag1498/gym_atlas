@@ -17,6 +17,10 @@ class WorkoutSession extends Model
         'member_id',
         'trainer_id',
         'workout_plan_id',
+        'workout_plan_day_id',
+        'plan_day_number',
+        'plan_day_label',
+        'day_selection_mode',
         'started_by_user_id',
         'session_date',
         'status',
@@ -59,6 +63,11 @@ class WorkoutSession extends Model
     public function plan(): BelongsTo
     {
         return $this->belongsTo(WorkoutPlan::class, 'workout_plan_id');
+    }
+
+    public function planDay(): BelongsTo
+    {
+        return $this->belongsTo(WorkoutPlanDay::class, 'workout_plan_day_id');
     }
 
     public function starter(): BelongsTo

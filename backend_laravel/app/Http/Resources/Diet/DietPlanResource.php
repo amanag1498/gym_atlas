@@ -57,12 +57,15 @@ class DietPlanResource extends JsonResource
                         'items' => $meal->items
                             ->map(fn ($item) => [
                                 'id' => $item->id,
+                                'food_catalog_item_id' => $item->food_catalog_item_id,
+                                'food_source' => $item->food_catalog_item_id !== null ? 'catalog' : 'custom',
                                 'name' => $item->name,
                                 'quantity' => $item->quantity,
                                 'calories' => $item->calories,
                                 'protein_g' => $this->decimalOrNull($item->protein_g),
                                 'carbs_g' => $this->decimalOrNull($item->carbs_g),
                                 'fats_g' => $this->decimalOrNull($item->fats_g),
+                                'fiber_g' => $this->decimalOrNull($item->fiber_g),
                                 'notes' => $item->notes,
                             ])
                             ->values(),

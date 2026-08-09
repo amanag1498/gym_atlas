@@ -195,6 +195,14 @@ class MemberController extends Controller
             'workoutSummary' => [
                 'total_sessions' => WorkoutSession::query()->where('member_id', $member->id)->where('gym_id', $gym->id)->count(),
             ],
+            'recentWorkoutSessions' => WorkoutSession::query()
+                ->with('plan:id,name')
+                ->where('member_id', $member->id)
+                ->where('gym_id', $gym->id)
+                ->latest('session_date')
+                ->latest('id')
+                ->take(5)
+                ->get(),
             'memberAuditTimeline' => $timeline['activity_timeline'],
             'memberStatusTimeline' => $timeline['status_timeline'],
             'membershipTimeline' => $timeline['member_timeline'],

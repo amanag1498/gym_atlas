@@ -21,7 +21,7 @@
                 <textarea name="dietary_preferences" class="panel-textarea" placeholder="Dietary preferences">{{ old('dietary_preferences', $template->dietary_preferences) }}</textarea>
                 <textarea name="allergies_and_restrictions" class="panel-textarea" placeholder="Allergies and restrictions">{{ old('allergies_and_restrictions', $template->allergies_and_restrictions) }}</textarea>
                 <textarea name="notes" class="panel-textarea" placeholder="Notes">{{ old('notes', $template->notes) }}</textarea>
-                <x-diet-builder :meals="old('meals', $template->meals ?? [])" />
+                <x-diet-builder :meals="old('meals', $template->meals ?? [])" :food-catalog="$foodCatalog" />
                 <div class="flex gap-3">
                     <x-action-button type="submit">{{ $editing ? 'Save Template' : 'Create Template' }}</x-action-button>
                     <x-action-button as="a" variant="secondary" href="{{ route('web.admin.diet-templates.index') }}">Cancel</x-action-button>

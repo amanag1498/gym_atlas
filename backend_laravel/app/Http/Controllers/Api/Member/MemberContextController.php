@@ -71,6 +71,10 @@ class MemberContextController extends Controller
                 ],
             'attendance_status' => $attendanceStatus,
             'steps' => $steps,
+            'capabilities' => [
+                'workout_day_selection' => true,
+                'food_catalog' => true,
+            ],
             'gym_invitations' => [
                 'pending_count' => $pendingInvitations->count(),
                 'pending' => MemberGymInvitationResource::collection($pendingInvitations),

@@ -45,7 +45,7 @@
                             <textarea name="dietary_preferences" class="panel-textarea" placeholder="Dietary preferences (vegetarian, halal, etc.)">{{ old('dietary_preferences') }}</textarea>
                             <textarea name="allergies_and_restrictions" class="panel-textarea" placeholder="Allergies and restrictions">{{ old('allergies_and_restrictions') }}</textarea>
                             <textarea name="notes" class="panel-textarea" placeholder="Coach notes for the member">{{ old('notes') }}</textarea>
-                            <x-diet-builder :meals="old('meals', [])" />
+                            <x-diet-builder :meals="old('meals', [])" :food-catalog="$foodCatalog" />
                         </div>
                         <x-action-button type="submit" class="w-full justify-center">Assign Diet Plan</x-action-button>
                     </form>

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Diet;
 
+use App\Models\FoodCatalogItem;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -15,12 +16,27 @@ class SaveDietPlanTemplateRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $activeCatalogIds = FoodCatalogItem::query()
+            ->active()
+            ->whereKey(
+                collect($this->input('meals', []))
+                    ->flatMap(fn ($meal) => is_array($meal) ? ($meal['items'] ?? []) : [])
+                    ->filter(fn ($item) => is_array($item))
+                    ->pluck('food_catalog_item_id')
+                    ->filter()
+                    ->map(fn ($id) => (int) $id)
+                    ->unique(),
+            )
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
         $this->merge([
             'status' => $this->input('status', 'active'),
             'meals' => collect($this->input('meals', []))
                 ->filter(fn ($meal) => is_array($meal))
                 ->values()
-                ->map(function (array $meal, int $index): array {
+                ->map(function (array $meal, int $index) use ($activeCatalogIds): array {
                     $name = trim((string) ($meal['name'] ?? ''));
                     $meal['name'] = $name !== '' ? $name : 'Meal '.($index + 1);
                     $meal['meal_type'] = filled($meal['meal_type'] ?? null)
@@ -31,6 +47,14 @@ class SaveDietPlanTemplateRequest extends FormRequest
                             fn ($item) => is_array($item)
                                 && filled($item['name'] ?? null)
                         )
+                        ->map(function (array $item) use ($activeCatalogIds): array {
+                            if (isset($item['food_catalog_item_id'])
+                                && ! in_array((int) $item['food_catalog_item_id'], $activeCatalogIds, true)) {
+                                unset($item['food_catalog_item_id']);
+                            }
+
+                            return $item;
+                        })
                         ->values()
                         ->all();
 
@@ -64,12 +88,14 @@ class SaveDietPlanTemplateRequest extends FormRequest
             'meals.*.fats_g' => ['nullable', 'numeric', 'min:0'],
             'meals.*.notes' => ['nullable', 'string', 'max:2000'],
             'meals.*.items' => ['nullable', 'array', 'max:30'],
+            'meals.*.items.*.food_catalog_item_id' => ['nullable', 'integer', Rule::exists('food_catalog_items', 'id')->where('is_active', true)],
             'meals.*.items.*.name' => ['required', 'string', 'max:255'],
             'meals.*.items.*.quantity' => ['nullable', 'string', 'max:120'],
             'meals.*.items.*.calories' => ['nullable', 'integer', 'min:0'],
             'meals.*.items.*.protein_g' => ['nullable', 'numeric', 'min:0'],
             'meals.*.items.*.carbs_g' => ['nullable', 'numeric', 'min:0'],
             'meals.*.items.*.fats_g' => ['nullable', 'numeric', 'min:0'],
+            'meals.*.items.*.fiber_g' => ['nullable', 'numeric', 'min:0'],
             'meals.*.items.*.notes' => ['nullable', 'string', 'max:1000'],
         ];
     }

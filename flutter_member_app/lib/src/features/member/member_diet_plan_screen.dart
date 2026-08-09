@@ -25,6 +25,8 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
   String? _error;
   List<Map<String, dynamic>> _plans = const [];
   List<Map<String, dynamic>> _templates = const [];
+  List<Map<String, dynamic>> _foodCatalog = const [];
+  bool _foodCatalogAvailable = false;
   ApiPagination _planPage = const ApiPagination.singlePage();
   int? _selectedPlanId;
   final Set<int> _completedMealIds = <int>{};
@@ -48,6 +50,14 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
         _templates = await _fetchAllTemplates();
       } catch (_) {
         _templates = const [];
+      }
+      try {
+        _foodCatalog = await _fetchInitialFoods();
+        _foodCatalogAvailable = true;
+      } catch (_) {
+        // Older backends do not expose the catalog; custom foods remain usable.
+        _foodCatalog = const [];
+        _foodCatalogAvailable = false;
       }
       _selectedPlanId ??= (_plans.isNotEmpty
           ? (_plans.first['id'] as num?)?.toInt()
@@ -80,6 +90,12 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
 
     return templates;
   }
+
+  Future<List<Map<String, dynamic>>> _fetchInitialFoods() async =>
+      apiPageItems(await widget.repository.fetchFoodCatalog());
+
+  Future<List<Map<String, dynamic>>> _searchFoods(String query) async =>
+      apiPageItems(await widget.repository.fetchFoodCatalog(search: query));
 
   Future<void> _loadMorePlans() async {
     if (_loadingMore || !_planPage.hasMore) return;
@@ -153,6 +169,10 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                   const SizedBox(height: AppSpacing.lg),
                   DietPlanMealsEditor(
                     initialMeals: editedMeals,
+                    foodCatalog: _foodCatalog,
+                    onSearchFoodCatalog: _foodCatalogAvailable
+                        ? _searchFoods
+                        : null,
                     onChanged: (value) => editedMeals = value,
                   ),
                   const SizedBox(height: AppSpacing.md),
@@ -234,6 +254,8 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
         builder: (_) => _MemberDietCreationStudio(
           repository: widget.repository,
           templates: _templates,
+          foodCatalog: _foodCatalog,
+          onSearchFoodCatalog: _foodCatalogAvailable ? _searchFoods : null,
         ),
       ),
     );
@@ -670,10 +692,14 @@ class _MemberDietCreationStudio extends StatefulWidget {
   const _MemberDietCreationStudio({
     required this.repository,
     required this.templates,
+    required this.foodCatalog,
+    this.onSearchFoodCatalog,
   });
 
   final MemberRepository repository;
   final List<Map<String, dynamic>> templates;
+  final List<Map<String, dynamic>> foodCatalog;
+  final FoodCatalogSearch? onSearchFoodCatalog;
 
   @override
   State<_MemberDietCreationStudio> createState() =>
@@ -854,6 +880,8 @@ class _MemberDietCreationStudioState extends State<_MemberDietCreationStudio> {
             child: DietPlanMealsEditor(
               key: ValueKey('member-diet-meals-$_editorRevision'),
               initialMeals: _draftMeals,
+              foodCatalog: widget.foodCatalog,
+              onSearchFoodCatalog: widget.onSearchFoodCatalog,
               onChanged: (value) => _draftMeals = value,
             ),
           ),

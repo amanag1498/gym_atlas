@@ -10,7 +10,7 @@ class PublicTrainerResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        return TrainerProfilePresenter::present($this->resource, $this->user, [
+        $trainer = TrainerProfilePresenter::present($this->resource, $this->user, [
             'public' => true,
             'include_client_count' => false,
             'contact_enabled' => true,
@@ -20,5 +20,9 @@ class PublicTrainerResource extends JsonResource
             'request_mode' => 'trial_request_via_gym',
             'request_label' => 'Request via gym',
         ]) ?? [];
+
+        return $trainer + [
+            'photo_url' => $trainer['profile_photo_url'] ?? $trainer['photo'] ?? null,
+        ];
     }
 }

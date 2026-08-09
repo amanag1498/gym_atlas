@@ -309,6 +309,7 @@ class _FoodItemSummary extends StatelessWidget {
       if (item['protein_g'] != null) 'P ${_number(item['protein_g'])}g',
       if (item['carbs_g'] != null) 'C ${_number(item['carbs_g'])}g',
       if (item['fats_g'] != null) 'F ${_number(item['fats_g'])}g',
+      if (item['fiber_g'] != null) 'Fiber ${_number(item['fiber_g'])}g',
     ];
 
     return Padding(

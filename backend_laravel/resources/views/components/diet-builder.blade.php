@@ -1,4 +1,4 @@
-@props(['meals' => []])
+@props(['meals' => [], 'foodCatalog' => []])
 @php
     $builderId = 'diet-builder-'.\Illuminate\Support\Str::random(8);
     $mealRows = collect($meals)->values()->all();
@@ -9,13 +9,36 @@
             ['name' => 'Dinner', 'meal_type' => 'dinner', 'items' => []],
         ];
     }
+    $catalogRows = collect($foodCatalog)->map(fn ($food) => [
+        'id' => $food->id,
+        'label' => $food->name.($food->category ? ' · '.$food->category : '').' (#'.$food->id.')',
+        'name' => $food->name,
+        'category' => $food->category,
+        'default_quantity' => $food->default_quantity,
+        'calories' => $food->calories,
+        'protein_g' => $food->protein_g,
+        'carbs_g' => $food->carbs_g,
+        'fats_g' => $food->fats_g,
+        'fiber_g' => $food->fiber_g,
+        'dietary_tags' => $food->dietary_tags ?? [],
+        'allergens' => $food->allergens ?? [],
+        'notes' => $food->notes,
+    ])->values()->all();
 @endphp
 
 <div id="{{ $builderId }}" class="space-y-4" data-diet-builder>
+    <span class="sr-only">Add food/product</span>
+    @if($catalogRows !== [])
+        <datalist id="{{ $builderId }}-food-options">
+            @foreach($catalogRows as $food)
+                <option value="{{ $food['label'] }}">{{ $food['allergens'] !== [] ? 'Contains '.collect($food['allergens'])->join(', ') : collect($food['dietary_tags'])->join(', ') }}</option>
+            @endforeach
+        </datalist>
+    @endif
     <div class="flex items-center justify-between gap-3">
         <div>
             <p class="panel-label">Meals and food products</p>
-            <p class="text-xs text-slate-500 dark:text-slate-400">Add meals, then add as many food/product lines as needed.</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Choose a platform food for prefilled nutrition or add your own custom food.</p>
         </div>
         <button type="button" class="panel-btn-secondary" data-add-meal>Add meal</button>
     </div>
@@ -43,20 +66,27 @@
                     @foreach (collect($meal['items'] ?? [])->values() as $itemIndex => $item)
                         <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/70" data-item>
                             @if (isset($item['id']))<input type="hidden" name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][id]" value="{{ $item['id'] }}">@endif
+                            <input type="hidden" data-item-field="food_catalog_item_id" name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][food_catalog_item_id]" value="{{ $item['food_catalog_item_id'] ?? '' }}">
                             <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                                <input name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][name]" class="panel-input" placeholder="Food/product" value="{{ $item['name'] ?? '' }}">
-                                <input name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][quantity]" class="panel-input" placeholder="Quantity" value="{{ $item['quantity'] ?? '' }}">
-                                <input name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][calories]" type="number" min="0" class="panel-input" placeholder="kcal" value="{{ $item['calories'] ?? '' }}">
-                                <input name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][protein_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Protein g" value="{{ $item['protein_g'] ?? '' }}">
-                                <input name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][carbs_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Carbs g" value="{{ $item['carbs_g'] ?? '' }}">
-                                <input name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][fats_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Fats g" value="{{ $item['fats_g'] ?? '' }}">
-                                <input name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][notes]" class="panel-input" placeholder="Product notes" value="{{ $item['notes'] ?? '' }}">
+                                <input data-item-field="name" name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][name]" class="panel-input" placeholder="Food/product" value="{{ $item['name'] ?? '' }}">
+                                <input data-item-field="quantity" name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][quantity]" class="panel-input" placeholder="Quantity" value="{{ $item['quantity'] ?? '' }}">
+                                <input data-item-field="calories" name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][calories]" type="number" min="0" class="panel-input" placeholder="kcal" value="{{ $item['calories'] ?? '' }}">
+                                <input data-item-field="protein_g" name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][protein_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Protein g" value="{{ $item['protein_g'] ?? '' }}">
+                                <input data-item-field="carbs_g" name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][carbs_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Carbs g" value="{{ $item['carbs_g'] ?? '' }}">
+                                <input data-item-field="fats_g" name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][fats_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Fats g" value="{{ $item['fats_g'] ?? '' }}">
+                                <input data-item-field="fiber_g" name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][fiber_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Fiber g" value="{{ $item['fiber_g'] ?? '' }}">
+                                <input data-item-field="notes" name="meals[{{ $mealIndex }}][items][{{ $itemIndex }}][notes]" class="panel-input" placeholder="Product notes" value="{{ $item['notes'] ?? '' }}">
                                 <button type="button" class="panel-btn-secondary" data-remove-item>Remove product</button>
                             </div>
                         </div>
                     @endforeach
                 </div>
-                <button type="button" class="panel-btn-secondary" data-add-item>Add food/product</button>
+                <div class="flex flex-wrap gap-2">
+                    @if($catalogRows !== [])
+                        <input class="panel-input max-w-sm" list="{{ $builderId }}-food-options" data-add-catalog-item placeholder="Search catalog food...">
+                    @endif
+                    <button type="button" class="panel-btn-secondary" data-add-item>Add custom food</button>
+                </div>
             </div>
         @endforeach
     </div>
@@ -66,11 +96,11 @@
             <div class="flex items-center justify-between gap-3"><p class="font-medium text-slate-950 dark:text-white" data-meal-title>Meal</p><button type="button" class="text-sm font-medium text-rose-600" data-remove-meal>Remove meal</button></div>
             <div class="grid gap-3 md:grid-cols-3"><input name="meals[0][name]" class="panel-input" placeholder="Meal name" required><input name="meals[0][meal_type]" class="panel-input" placeholder="Type"><input name="meals[0][scheduled_time]" type="time" class="panel-input"></div>
             <div class="grid grid-cols-2 gap-3 md:grid-cols-4"><input name="meals[0][calories]" type="number" min="0" class="panel-input" placeholder="Meal kcal"><input name="meals[0][protein_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Protein g"><input name="meals[0][carbs_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Carbs g"><input name="meals[0][fats_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Fats g"></div>
-            <textarea name="meals[0][notes]" class="panel-textarea" placeholder="Meal instructions or substitutions"></textarea><div class="space-y-3" data-items></div><button type="button" class="panel-btn-secondary" data-add-item>Add food/product</button>
+            <textarea name="meals[0][notes]" class="panel-textarea" placeholder="Meal instructions or substitutions"></textarea><div class="space-y-3" data-items></div><div class="flex flex-wrap gap-2">@if($catalogRows !== [])<input class="panel-input max-w-sm" list="{{ $builderId }}-food-options" data-add-catalog-item placeholder="Search catalog food...">@endif<button type="button" class="panel-btn-secondary" data-add-item>Add custom food</button></div>
         </div>
     </template>
     <template data-item-template>
-        <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/70" data-item><div class="grid grid-cols-2 gap-3 lg:grid-cols-4"><input name="meals[0][items][0][name]" class="panel-input" placeholder="Food/product"><input name="meals[0][items][0][quantity]" class="panel-input" placeholder="Quantity"><input name="meals[0][items][0][calories]" type="number" min="0" class="panel-input" placeholder="kcal"><input name="meals[0][items][0][protein_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Protein g"><input name="meals[0][items][0][carbs_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Carbs g"><input name="meals[0][items][0][fats_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Fats g"><input name="meals[0][items][0][notes]" class="panel-input" placeholder="Product notes"><button type="button" class="panel-btn-secondary" data-remove-item>Remove product</button></div></div>
+        <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/70" data-item><input type="hidden" data-item-field="food_catalog_item_id" name="meals[0][items][0][food_catalog_item_id]"><div class="grid grid-cols-2 gap-3 lg:grid-cols-4"><input data-item-field="name" name="meals[0][items][0][name]" class="panel-input" placeholder="Food/product"><input data-item-field="quantity" name="meals[0][items][0][quantity]" class="panel-input" placeholder="Quantity"><input data-item-field="calories" name="meals[0][items][0][calories]" type="number" min="0" class="panel-input" placeholder="kcal"><input data-item-field="protein_g" name="meals[0][items][0][protein_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Protein g"><input data-item-field="carbs_g" name="meals[0][items][0][carbs_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Carbs g"><input data-item-field="fats_g" name="meals[0][items][0][fats_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Fats g"><input data-item-field="fiber_g" name="meals[0][items][0][fiber_g]" type="number" min="0" step="0.1" class="panel-input" placeholder="Fiber g"><input data-item-field="notes" name="meals[0][items][0][notes]" class="panel-input" placeholder="Product notes"><button type="button" class="panel-btn-secondary" data-remove-item>Remove product</button></div></div>
     </template>
 </div>
 
@@ -79,6 +109,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const root = document.getElementById(@json($builderId));
     if (!root) return;
+    const catalog = new Map(@json($catalogRows).map(food => [food.label, food]));
     const meals = root.querySelector('[data-meals]');
     const reindex = () => {
         [...meals.querySelectorAll(':scope > [data-meal]')].forEach((meal, mealIndex) => {
@@ -97,6 +128,32 @@ document.addEventListener('DOMContentLoaded', () => {
         if (removeItem) removeItem.closest('[data-item]').remove();
         const removeMeal = event.target.closest('[data-remove-meal]');
         if (removeMeal && meals.querySelectorAll(':scope > [data-meal]').length > 1) removeMeal.closest('[data-meal]').remove();
+        reindex();
+    });
+    root.addEventListener('change', event => {
+        const select = event.target.closest('[data-add-catalog-item]');
+        if (!select || !select.value) return;
+        const food = catalog.get(select.value);
+        if (!food) return;
+        const fragment = root.querySelector('[data-item-template]').content.cloneNode(true);
+        const item = fragment.querySelector('[data-item]');
+        const values = {
+            food_catalog_item_id: food.id,
+            name: food.name,
+            quantity: food.default_quantity,
+            calories: food.calories,
+            protein_g: food.protein_g,
+            carbs_g: food.carbs_g,
+            fats_g: food.fats_g,
+            fiber_g: food.fiber_g,
+            notes: food.notes,
+        };
+        Object.entries(values).forEach(([field, value]) => {
+            const input = item.querySelector(`[data-item-field="${field}"]`);
+            if (input) input.value = value ?? '';
+        });
+        select.closest('[data-meal]').querySelector('[data-items]').append(fragment);
+        select.value = '';
         reindex();
     });
     reindex();

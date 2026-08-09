@@ -72,6 +72,7 @@ class DietPlanController extends Controller
         $this->assertScope($request, (int) $gymId, $branchId);
 
         $paginator = DietPlanTemplate::query()
+            ->globalCatalog()
             ->where('status', 'active')
             ->orderBy('name')
             ->orderBy('id')
@@ -86,6 +87,11 @@ class DietPlanController extends Controller
 
     public function assignTemplate(Request $request, DietPlanTemplate $dietPlanTemplate)
     {
+        if (! $dietPlanTemplate->isGlobalCatalog()) {
+            throw ValidationException::withMessages([
+                'diet_template_id' => ['Only global diet templates can be assigned from the gym catalog.'],
+            ]);
+        }
         $data = $request->validate([
             'gym_id' => ['required', 'integer', 'exists:gyms,id'],
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],

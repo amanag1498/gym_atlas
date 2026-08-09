@@ -52,6 +52,9 @@ class TrainerContextController extends Controller
             'assigned_gym' => $assignedGym
                 ? GymResource::make($assignedGym)
                 : null,
+            'capabilities' => [
+                'food_catalog' => true,
+            ],
         ]);
     }
 }

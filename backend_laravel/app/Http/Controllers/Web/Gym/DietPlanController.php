@@ -6,6 +6,7 @@ use App\Enums\PermissionName;
 use App\Http\Controllers\Controller;
 use App\Models\DietPlan;
 use App\Models\DietPlanTemplate;
+use App\Models\FoodCatalogItem;
 use App\Models\MemberProfile;
 use App\Services\Audit\AuditLogService;
 use App\Services\Diet\DietPlanService;
@@ -61,7 +62,8 @@ class DietPlanController extends Controller
             'branch' => $branch,
             'plans' => $plans,
             'members' => $members,
-            'templates' => DietPlanTemplate::query()->where('status', 'active')->orderBy('name')->get(),
+            'templates' => DietPlanTemplate::query()->globalCatalog()->where('status', 'active')->orderBy('name')->get(),
+            'foodCatalog' => FoodCatalogItem::query()->active()->orderBy('category')->orderBy('name')->get(),
             'canManageDietPlans' => $this->gymWebPanelService->canPermission($request, PermissionName::DietPlansManage->value, $gym, $branch?->id),
         ]);
     }
@@ -75,6 +77,7 @@ class DietPlanController extends Controller
         if ($request->filled('diet_template_id')) {
             $customName = $request->string('name')->trim()->toString();
             $template = DietPlanTemplate::query()
+                ->globalCatalog()
                 ->where('status', 'active')
                 ->findOrFail($request->integer('diet_template_id'));
 
@@ -134,6 +137,7 @@ class DietPlanController extends Controller
             'gym' => $gym,
             'branch' => $dietPlan->branch,
             'plan' => $dietPlan->load(['member', 'meals.items']),
+            'foodCatalog' => FoodCatalogItem::query()->active()->orderBy('category')->orderBy('name')->get(),
         ]);
     }
 
@@ -254,12 +258,18 @@ class DietPlanController extends Controller
             'meals.*.notes' => ['nullable', 'string', 'max:2000'],
             'meals.*.items' => ['nullable', 'array', 'max:30'],
             'meals.*.items.*.id' => ['nullable', 'integer'],
+            'meals.*.items.*.food_catalog_item_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('food_catalog_items', 'id'),
+            ],
             'meals.*.items.*.name' => ['required', 'string', 'max:255'],
             'meals.*.items.*.quantity' => ['nullable', 'string', 'max:120'],
             'meals.*.items.*.calories' => ['nullable', 'integer', 'min:0'],
             'meals.*.items.*.protein_g' => ['nullable', 'numeric', 'min:0'],
             'meals.*.items.*.carbs_g' => ['nullable', 'numeric', 'min:0'],
             'meals.*.items.*.fats_g' => ['nullable', 'numeric', 'min:0'],
+            'meals.*.items.*.fiber_g' => ['nullable', 'numeric', 'min:0'],
             'meals.*.items.*.notes' => ['nullable', 'string', 'max:1000'],
         ];
     }

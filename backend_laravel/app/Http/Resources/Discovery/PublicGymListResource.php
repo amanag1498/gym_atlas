@@ -11,6 +11,17 @@ class PublicGymListResource extends JsonResource
     public function toArray(Request $request): array
     {
         $pricingVisible = (bool) ($this->show_pricing ?? $this->pricing_visible);
+        $photoUrls = collect($this->photo_urls ?? [])
+            ->merge($this->whenLoaded('gymPhotos', fn () => $this->gymPhotos
+                ->whereNull('branch_id')
+                ->where('type', 'gallery')
+                ->sortBy('sort_order')
+                ->pluck('image_url'), []))
+            ->filter()
+            ->unique()
+            ->take(3)
+            ->values()
+            ->all();
 
         return [
             'id' => $this->id,
@@ -19,7 +30,7 @@ class PublicGymListResource extends JsonResource
             'description' => $this->description,
             'logo_url' => $this->logo_url,
             'cover_image_url' => $this->cover_image_url,
-            'photo_urls' => collect($this->photo_urls ?? [])->take(3)->values()->all(),
+            'photo_urls' => $photoUrls,
             'city' => $this->city,
             'state' => $this->state,
             'country' => $this->country,

@@ -18,6 +18,7 @@ import 'socket_service.dart';
 import 'trainer_member_detail_screen.dart';
 import 'trainer_onboarding_flow.dart';
 import 'trainer_profile_screen.dart';
+import 'trainer_coaching_mode.dart';
 import 'trainer_repository.dart';
 import 'trainer_diet_plan_screen.dart';
 import 'trainer_settings_screen.dart';
@@ -184,7 +185,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       final contextData = _map(contextResponse['data']);
       final trainerProfile = _map(contextData['trainer_profile']);
       final hasTrainerProfile = trainerProfile.isNotEmpty;
-      final isIndependent = _trainerGymId(trainerProfile) == null;
+      final isIndependent = trainerIsIndependent(trainerProfile);
       final isVerified =
           (trainerProfile['verification_status']?.toString() ?? '')
               .toLowerCase() ==
@@ -498,6 +499,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         (contextUser['trainer_onboarding_completed'] as bool?) ?? false;
     final hasTrainerProfile = _map(_contextData['trainer_profile']).isNotEmpty;
     final trainerProfile = _map(_contextData['trainer_profile']);
+    final isIndependentTrainer = trainerIsIndependent(trainerProfile);
     final verificationStatus =
         trainerProfile['verification_status']?.toString().toLowerCase() ??
         'pending';
@@ -510,6 +512,17 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         ?.toString()
         .trim();
     final canInvitePersonalMember = verificationStatus == 'verified';
+    final pendingInvitationCount = _independentInvitations
+        .where(
+          (item) =>
+              (item['status']?.toString() ?? '').toLowerCase() == 'pending',
+        )
+        .length;
+    final memberAction = trainerMemberAction(
+      isIndependent: isIndependentTrainer,
+      verificationStatus: verificationStatus,
+      pendingInvitationCount: pendingInvitationCount,
+    );
 
     final pages = <Widget>[
       _DashboardPage(
@@ -553,21 +566,24 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         onSendMessage: _openChatWithMember,
         onAddFollowUp: _openQuickNoteSheet,
         onAddMember: () => _openMemberInvitationSheet(
-          independent: true,
-          allowed: canInvitePersonalMember,
+          independent: isIndependentTrainer,
+          allowed: !isIndependentTrainer || canInvitePersonalMember,
         ),
-        isIndependentTrainer: true,
+        isIndependentTrainer: isIndependentTrainer,
         verificationStatus: verificationDisplayStatus,
         verificationReason: verificationReason,
-        pendingInvitationCount: _independentInvitations
-            .where(
-              (item) =>
-                  (item['status']?.toString() ?? '').toLowerCase() == 'pending',
-            )
-            .length,
-        onManageInvitations: verificationStatus == 'verified'
-            ? _openIndependentInvitationsSheet
-            : _openProfileEditSheet,
+        pendingInvitationCount: pendingInvitationCount,
+        onManageInvitations: switch (memberAction) {
+          TrainerMemberAction.verification => _openProfileEditSheet,
+          TrainerMemberAction.independentInvitation =>
+            () => _openMemberInvitationSheet(independent: true, allowed: true),
+          TrainerMemberAction.manageIndependentInvitations =>
+            _openIndependentInvitationsSheet,
+          TrainerMemberAction.gymInvitation => () => _openMemberInvitationSheet(
+            independent: false,
+            allowed: true,
+          ),
+        },
       ),
       _WorkoutPage(
         contextData: _contextData,
@@ -11665,11 +11681,6 @@ String _titleCase(String value) {
       .where((part) => part.isNotEmpty)
       .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
       .join(' ');
-}
-
-int? _trainerGymId(Map<String, dynamic> profile) {
-  final value = _map(profile['assigned_gym'])['id'] ?? profile['gym_id'];
-  return _intValue(value);
 }
 
 List<Map<String, dynamic>> _recordsFromResponse(Map<String, dynamic> response) {

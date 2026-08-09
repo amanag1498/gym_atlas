@@ -51,8 +51,8 @@ class StoreDietPlanRequest extends FormRequest
             'status' => ['nullable', Rule::in(['active', 'inactive'])], 'starts_on' => ['nullable', 'date'], 'ends_on' => ['nullable', 'date', 'after_or_equal:starts_on'],
             'meals' => ['required', 'array', 'min:1', 'max:12'], 'meals.*.id' => ['nullable', 'integer'], 'meals.*.name' => ['required', 'string', 'max:255'], 'meals.*.meal_type' => ['nullable', 'string', 'max:80'], 'meals.*.scheduled_time' => ['nullable', 'date_format:H:i'],
             'meals.*.calories' => ['nullable', 'integer', 'min:0'], 'meals.*.protein_g' => ['nullable', 'numeric', 'min:0'], 'meals.*.carbs_g' => ['nullable', 'numeric', 'min:0'], 'meals.*.fats_g' => ['nullable', 'numeric', 'min:0'], 'meals.*.notes' => ['nullable', 'string', 'max:2000'],
-            'meals.*.items' => ['nullable', 'array', 'max:30'], 'meals.*.items.*.id' => ['nullable', 'integer'], 'meals.*.items.*.name' => ['required', 'string', 'max:255'], 'meals.*.items.*.quantity' => ['nullable', 'string', 'max:120'],
-            'meals.*.items.*.calories' => ['nullable', 'integer', 'min:0'], 'meals.*.items.*.protein_g' => ['nullable', 'numeric', 'min:0'], 'meals.*.items.*.carbs_g' => ['nullable', 'numeric', 'min:0'], 'meals.*.items.*.fats_g' => ['nullable', 'numeric', 'min:0'], 'meals.*.items.*.notes' => ['nullable', 'string', 'max:1000'],
+            'meals.*.items' => ['nullable', 'array', 'max:30'], 'meals.*.items.*.id' => ['nullable', 'integer'], 'meals.*.items.*.food_catalog_item_id' => ['nullable', 'integer', Rule::exists('food_catalog_items', 'id')->where('is_active', true)], 'meals.*.items.*.name' => ['required', 'string', 'max:255'], 'meals.*.items.*.quantity' => ['nullable', 'string', 'max:120'],
+            'meals.*.items.*.calories' => ['nullable', 'integer', 'min:0'], 'meals.*.items.*.protein_g' => ['nullable', 'numeric', 'min:0'], 'meals.*.items.*.carbs_g' => ['nullable', 'numeric', 'min:0'], 'meals.*.items.*.fats_g' => ['nullable', 'numeric', 'min:0'], 'meals.*.items.*.fiber_g' => ['nullable', 'numeric', 'min:0'], 'meals.*.items.*.notes' => ['nullable', 'string', 'max:1000'],
         ];
     }
 }

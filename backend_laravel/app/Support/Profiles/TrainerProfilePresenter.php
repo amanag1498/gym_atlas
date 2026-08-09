@@ -4,6 +4,7 @@ namespace App\Support\Profiles;
 
 use App\Models\TrainerProfile;
 use App\Models\User;
+use App\Support\Media\StoredImage;
 use Illuminate\Support\Str;
 
 class TrainerProfilePresenter
@@ -24,14 +25,16 @@ class TrainerProfilePresenter
         $availabilitySlots = self::availabilitySlots($profile->availability_notes);
         $programsOffered = self::programsOffered($specializations);
         $clientCount = self::clientCount($profile, (bool) ($options['include_client_count'] ?? true));
+        $userPhotoUrl = StoredImage::publicUrl(null, $user?->avatar);
+        $profilePhotoUrl = StoredImage::publicUrl(null, $profile->profile_photo_url ?: $user?->avatar);
 
         return [
             'id' => $profile->user_id,
             'trainer_profile_id' => $profile->id,
             'name' => $user?->name,
             'email' => $options['public'] ?? false ? null : $user?->email,
-            'photo' => $user?->avatar,
-            'profile_photo_url' => $profile->profile_photo_url ?: $user?->avatar,
+            'photo' => $userPhotoUrl,
+            'profile_photo_url' => $profilePhotoUrl,
             'bio' => $profile->bio,
             'primary_specialization' => $specializations[0] ?? null,
             'specializations' => $specializations,

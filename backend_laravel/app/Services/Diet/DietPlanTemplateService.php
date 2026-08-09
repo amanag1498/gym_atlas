@@ -3,6 +3,7 @@
 namespace App\Services\Diet;
 
 use App\Models\DietPlanTemplate;
+use App\Models\FoodCatalogItem;
 use Illuminate\Validation\ValidationException;
 
 class DietPlanTemplateService
@@ -21,6 +22,31 @@ class DietPlanTemplateService
             ]);
         }
 
+        $meals = collect($template->meals ?? [])->values();
+        $catalogIds = $meals
+            ->flatMap(fn (array $meal) => collect($meal['items'] ?? [])->pluck('food_catalog_item_id'))
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique();
+        $activeCatalogIds = FoodCatalogItem::query()
+            ->active()
+            ->whereKey($catalogIds)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $meals = $meals->map(function (array $meal) use ($activeCatalogIds): array {
+            $meal['items'] = collect($meal['items'] ?? [])->map(function (array $item) use ($activeCatalogIds): array {
+                if (isset($item['food_catalog_item_id'])
+                    && ! in_array((int) $item['food_catalog_item_id'], $activeCatalogIds, true)) {
+                    unset($item['food_catalog_item_id']);
+                }
+
+                return $item;
+            })->values()->all();
+
+            return $meal;
+        })->values()->all();
+
         return [
             'name' => $template->name,
             'goal' => $template->goal,
@@ -31,7 +57,7 @@ class DietPlanTemplateService
             'dietary_preferences' => $template->dietary_preferences,
             'allergies_and_restrictions' => $template->allergies_and_restrictions,
             'notes' => $template->notes,
-            'meals' => collect($template->meals ?? [])->values()->all(),
+            'meals' => $meals,
         ];
     }
 }

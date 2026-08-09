@@ -8,6 +8,7 @@ use App\Models\Branch;
 use App\Models\DietMealLog;
 use App\Models\DietPlan;
 use App\Models\DietPlanTemplate;
+use App\Models\FoodCatalogItem;
 use App\Models\Gym;
 use App\Models\MemberProfile;
 use App\Models\TrainerProfile;
@@ -20,6 +21,205 @@ use Tests\TestCase;
 class DietTemplateAssignmentTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_platform_admin_controls_the_food_catalog_and_all_diet_creators_only_list_active_foods(): void
+    {
+        $this->withoutVite();
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch, $trainer, $member, $owner] = $this->context();
+        $admin = User::factory()->create(['active_role' => RoleName::PlatformAdmin->value]);
+        $admin->assignRole(RoleName::PlatformAdmin->value);
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/platform-admin/food-catalog', [
+                'name' => 'Rolled oats',
+                'category' => 'Grains',
+                'default_quantity' => '80 g',
+                'calories' => 300,
+                'protein_g' => 10,
+                'carbs_g' => 54,
+                'fats_g' => 6,
+                'dietary_tags' => ['vegetarian', 'vegan'],
+                'allergens' => ['gluten'],
+                'is_active' => true,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.name', 'Rolled oats')
+            ->assertJsonPath('data.default_quantity', '80 g')
+            ->assertJsonPath('data.dietary_tags.0', 'vegetarian');
+
+        $activeId = $response->json('data.id');
+        FoodCatalogItem::query()->create([
+            'created_by_user_id' => $admin->id,
+            'name' => 'Retired food',
+            'is_active' => false,
+        ]);
+
+        $this->actingAs($member, 'sanctum')
+            ->getJson('/api/member/food-catalog')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $activeId);
+        $this->actingAs($trainer, 'sanctum')
+            ->getJson('/api/trainer/food-catalog')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+        $this->actingAs($owner, 'sanctum')
+            ->getJson("/api/gym/food-catalog?gym_id={$gym->id}&branch_id={$branch->id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        $this->actingAs($admin)
+            ->get(route('web.admin.food-catalog.index'))
+            ->assertOk()
+            ->assertSee('Rolled oats')
+            ->assertSee('Retired food');
+
+        $this->actingAs($owner)
+            ->get(route('web.gym.diet-plans.index', [
+                'gym' => $gym->id,
+                'branch' => $branch->id,
+            ]))
+            ->assertOk()
+            ->assertSee('Search catalog food...');
+    }
+
+    public function test_member_can_mix_catalog_and_custom_foods_and_plan_keeps_catalog_snapshot(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [, , , $member] = $this->context();
+        $food = FoodCatalogItem::query()->create([
+            'name' => 'Paneer',
+            'category' => 'Protein',
+            'default_quantity' => '100 g',
+            'calories' => 265,
+            'protein_g' => 18,
+            'fiber_g' => 2,
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/diet-plans', [
+                'name' => 'Mixed source plan',
+                'meals' => [[
+                    'name' => 'Lunch',
+                    'items' => [[
+                        'food_catalog_item_id' => $food->id,
+                        'name' => 'Paneer',
+                        'quantity' => '150 g',
+                        'calories' => 398,
+                        'protein_g' => 27,
+                        'fiber_g' => 3,
+                    ], [
+                        'name' => 'Family chutney',
+                        'quantity' => '2 tbsp',
+                    ]],
+                ]],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.meals.0.items.0.food_catalog_item_id', $food->id)
+            ->assertJsonPath('data.meals.0.items.0.food_source', 'catalog')
+            ->assertJsonPath('data.meals.0.items.0.fiber_g', 3)
+            ->assertJsonPath('data.meals.0.items.1.food_catalog_item_id', null)
+            ->assertJsonPath('data.meals.0.items.1.food_source', 'custom');
+
+        $itemId = $response->json('data.meals.0.items.0.id');
+        $food->update(['name' => 'Paneer updated', 'calories' => 280]);
+        $this->assertDatabaseHas('diet_plan_meal_items', [
+            'id' => $itemId,
+            'food_catalog_item_id' => $food->id,
+            'name' => 'Paneer',
+            'quantity' => '150 g',
+            'calories' => 398,
+            'fiber_g' => 3,
+        ]);
+    }
+
+    public function test_deactivating_catalog_food_blocks_new_selection_but_does_not_break_existing_plan_edits(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [, , , $member] = $this->context();
+        $food = FoodCatalogItem::query()->create(['name' => 'Banana', 'is_active' => true]);
+
+        $created = $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/diet-plans', [
+                'name' => 'Catalog plan',
+                'meals' => [[
+                    'name' => 'Snack',
+                    'items' => [[
+                        'food_catalog_item_id' => $food->id,
+                        'name' => 'Banana',
+                    ]],
+                ]],
+            ])->assertCreated();
+        $planId = $created->json('data.id');
+        $mealId = $created->json('data.meals.0.id');
+        $itemId = $created->json('data.meals.0.items.0.id');
+        $food->update(['is_active' => false]);
+
+        $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/diet-plans', [
+                'name' => 'Rejected plan',
+                'meals' => [[
+                    'name' => 'Snack',
+                    'items' => [[
+                        'food_catalog_item_id' => $food->id,
+                        'name' => 'Banana',
+                    ]],
+                ]],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('meals.0.items.0.food_catalog_item_id');
+
+        $this->actingAs($member, 'sanctum')
+            ->putJson("/api/member/diet-plans/{$planId}", [
+                'name' => 'Catalog plan edited',
+                'meals' => [[
+                    'id' => $mealId,
+                    'name' => 'Snack',
+                    'items' => [[
+                        'id' => $itemId,
+                        'food_catalog_item_id' => $food->id,
+                        'name' => 'Banana',
+                        'quantity' => '2 medium',
+                    ]],
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.meals.0.items.0.quantity', '2 medium');
+    }
+
+    public function test_active_template_with_retired_catalog_food_still_assigns_from_its_snapshot(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [, , , $member] = $this->context();
+        $food = FoodCatalogItem::query()->create([
+            'name' => 'Seasonal fruit',
+            'calories' => 90,
+            'is_active' => false,
+        ]);
+        $template = DietPlanTemplate::query()->create([
+            'name' => 'Seasonal template',
+            'status' => 'active',
+            'meals' => [[
+                'name' => 'Snack',
+                'items' => [[
+                    'food_catalog_item_id' => $food->id,
+                    'name' => 'Seasonal fruit',
+                    'quantity' => '1 bowl',
+                    'calories' => 90,
+                ]],
+            ]],
+        ]);
+
+        $this->actingAs($member, 'sanctum')
+            ->postJson("/api/member/diet-templates/{$template->id}/adopt")
+            ->assertCreated()
+            ->assertJsonPath('data.meals.0.items.0.food_catalog_item_id', null)
+            ->assertJsonPath('data.meals.0.items.0.food_source', 'custom')
+            ->assertJsonPath('data.meals.0.items.0.name', 'Seasonal fruit')
+            ->assertJsonPath('data.meals.0.items.0.calories', 90);
+    }
 
     public function test_trainer_diet_builder_accepts_custom_meals_and_ignores_blank_food_rows(): void
     {
@@ -164,7 +364,8 @@ class DietTemplateAssignmentTest extends TestCase
             ])
             ->assertCreated()
             ->assertJsonPath('data.meals.0.items.0.name', 'Idli')
-            ->assertJsonPath('data.status', 'active');
+            ->assertJsonPath('data.status', 'active')
+            ->assertJsonPath('data.source', 'atlas');
 
         $templateId = $response->json('data.id');
 
@@ -454,7 +655,8 @@ class DietTemplateAssignmentTest extends TestCase
     public function test_member_catalog_hides_trainer_templates_until_they_are_assigned(): void
     {
         $this->seed(PermissionSeeder::class);
-        [$gym, $branch, $trainer, $assignedMember] = $this->context();
+        $this->withoutVite();
+        [$gym, $branch, $trainer, $assignedMember, $owner] = $this->context();
         $globalTemplate = $this->template();
         $trainerTemplate = DietPlanTemplate::query()->create([
             'created_by_user_id' => $trainer->id,
@@ -479,6 +681,10 @@ class DietTemplateAssignmentTest extends TestCase
             'membership_status' => 'active',
             'is_active' => true,
         ]);
+        $admin = User::factory()->create([
+            'active_role' => RoleName::PlatformAdmin->value,
+        ]);
+        $admin->assignRole(RoleName::PlatformAdmin->value);
 
         $this->actingAs($assignedMember, 'sanctum')
             ->getJson('/api/member/diet-templates')
@@ -487,6 +693,73 @@ class DietTemplateAssignmentTest extends TestCase
             ->assertJsonPath('data.0.id', $globalTemplate->id)
             ->assertJsonPath('meta.pagination.current_page', 1)
             ->assertJsonMissing(['id' => $trainerTemplate->id]);
+
+        $this->actingAs($owner, 'sanctum')
+            ->getJson("/api/gym/diet-templates?gym_id={$gym->id}&branch_id={$branch->id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $globalTemplate->id);
+        $this->actingAs($owner, 'sanctum')
+            ->postJson("/api/gym/diet-templates/{$trainerTemplate->id}/assign", [
+                'gym_id' => $gym->id,
+                'branch_id' => $branch->id,
+                'member_ids' => [$assignedMember->id],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'errors.diet_template_id.0',
+                'Only global diet templates can be assigned from the gym catalog.',
+            );
+
+        $this->actingAs($owner)
+            ->get(route('web.gym.diet-plans.index', [
+                'gym' => $gym->id,
+                'branch' => $branch->id,
+            ]))
+            ->assertOk()
+            ->assertSee($globalTemplate->name)
+            ->assertDontSee($trainerTemplate->name);
+        $this->actingAs($owner)
+            ->post(route('web.gym.diet-plans.store', [
+                'gym' => $gym->id,
+                'branch' => $branch->id,
+            ]), [
+                'diet_template_id' => $trainerTemplate->id,
+                'member_id' => $assignedMember->id,
+            ])
+            ->assertNotFound();
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/platform-admin/diet-templates')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $globalTemplate->id);
+        $this->actingAs($admin, 'sanctum')
+            ->getJson("/api/platform-admin/diet-templates/{$trainerTemplate->id}")
+            ->assertNotFound();
+        $this->actingAs($admin)
+            ->get(route('web.admin.diet-templates.edit', $trainerTemplate))
+            ->assertNotFound();
+
+        $otherTrainer = User::factory()->create([
+            'active_role' => RoleName::Trainer->value,
+        ]);
+        $otherTrainer->assignRole(RoleName::Trainer->value);
+        $otherTrainerTemplate = DietPlanTemplate::query()->create([
+            'created_by_user_id' => $otherTrainer->id,
+            'name' => 'Another Trainer Private Nutrition',
+            'status' => 'active',
+            'meals' => [['name' => 'Private meal', 'items' => []]],
+        ]);
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson("/api/trainer/diet-templates/{$otherTrainerTemplate->id}/assign", [
+                'member_ids' => [$assignedMember->id],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'errors.diet_template_id.0',
+                'You can assign only your own or global diet templates.',
+            );
 
         $this->actingAs($assignedMember, 'sanctum')
             ->postJson("/api/member/diet-templates/{$trainerTemplate->id}/adopt")

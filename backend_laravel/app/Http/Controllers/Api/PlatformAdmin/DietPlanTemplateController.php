@@ -18,6 +18,7 @@ class DietPlanTemplateController extends Controller
     public function index(Request $request)
     {
         $paginator = DietPlanTemplate::query()
+            ->globalCatalog()
             ->when($request->filled('search'), function ($query) use ($request): void {
                 $search = '%'.$request->string('search')->trim().'%';
                 $query->where(
@@ -64,6 +65,8 @@ class DietPlanTemplateController extends Controller
 
     public function show(DietPlanTemplate $dietPlanTemplate)
     {
+        abort_unless($dietPlanTemplate->isGlobalCatalog(), 404);
+
         return $this->success(DietPlanTemplateResource::make($dietPlanTemplate));
     }
 
@@ -71,6 +74,7 @@ class DietPlanTemplateController extends Controller
         SaveDietPlanTemplateRequest $request,
         DietPlanTemplate $dietPlanTemplate,
     ) {
+        abort_unless($dietPlanTemplate->isGlobalCatalog(), 404);
         $oldValues = $dietPlanTemplate->toArray();
         $dietPlanTemplate->update($request->validated());
 

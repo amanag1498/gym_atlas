@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Diet\SaveDietPlanTemplateRequest;
 use App\Models\DietPlanTemplate;
+use App\Models\FoodCatalogItem;
 use App\Services\Audit\AuditLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,6 +20,7 @@ class DietPlanTemplateController extends Controller
     public function index(Request $request): View
     {
         $templates = DietPlanTemplate::query()
+            ->globalCatalog()
             ->with('creator')
             ->when(
                 $request->filled('search'),
@@ -45,6 +47,7 @@ class DietPlanTemplateController extends Controller
             'pageTitle' => 'Create Global Diet Template',
             'breadcrumbs' => ['Platform', 'Diet Templates', 'Create'],
             'template' => new DietPlanTemplate,
+            'foodCatalog' => $this->foodCatalog(),
         ]);
     }
 
@@ -69,15 +72,19 @@ class DietPlanTemplateController extends Controller
 
     public function edit(DietPlanTemplate $dietTemplate): View
     {
+        abort_unless($dietTemplate->isGlobalCatalog(), 404);
+
         return view('web.admin.diet-templates.form', [
             'pageTitle' => 'Edit Global Diet Template',
             'breadcrumbs' => ['Platform', 'Diet Templates', $dietTemplate->name],
             'template' => $dietTemplate,
+            'foodCatalog' => $this->foodCatalog(),
         ]);
     }
 
     public function update(SaveDietPlanTemplateRequest $request, DietPlanTemplate $dietTemplate): RedirectResponse
     {
+        abort_unless($dietTemplate->isGlobalCatalog(), 404);
         $oldValues = $dietTemplate->toArray();
 
         $dietTemplate->update($request->validated());
@@ -94,5 +101,10 @@ class DietPlanTemplateController extends Controller
         return redirect()
             ->route('web.admin.diet-templates.index')
             ->with('status', 'Global diet template updated.');
+    }
+
+    private function foodCatalog()
+    {
+        return FoodCatalogItem::query()->active()->orderBy('category')->orderBy('name')->get();
     }
 }

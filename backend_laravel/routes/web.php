@@ -7,6 +7,7 @@ use App\Http\Controllers\Web\Admin\DashboardController as AdminDashboardControll
 use App\Http\Controllers\Web\Admin\DietPlanController as AdminDietPlanController;
 use App\Http\Controllers\Web\Admin\DietPlanTemplateController as AdminDietPlanTemplateController;
 use App\Http\Controllers\Web\Admin\EnquiryController as AdminEnquiryController;
+use App\Http\Controllers\Web\Admin\FoodCatalogController as AdminFoodCatalogController;
 use App\Http\Controllers\Web\Admin\GymController as AdminGymController;
 use App\Http\Controllers\Web\Admin\GymOwnerController as AdminGymOwnerController;
 use App\Http\Controllers\Web\Admin\GymPlatformSubscriptionController as AdminGymPlatformSubscriptionController;
@@ -333,6 +334,11 @@ Route::prefix('admin')
         Route::post('/diet-templates', [AdminDietPlanTemplateController::class, 'store'])->name('diet-templates.store');
         Route::get('/diet-templates/{dietTemplate}/edit', [AdminDietPlanTemplateController::class, 'edit'])->name('diet-templates.edit');
         Route::put('/diet-templates/{dietTemplate}', [AdminDietPlanTemplateController::class, 'update'])->name('diet-templates.update');
+        Route::get('/food-catalog', [AdminFoodCatalogController::class, 'index'])->name('food-catalog.index');
+        Route::get('/food-catalog/create', [AdminFoodCatalogController::class, 'create'])->name('food-catalog.create');
+        Route::post('/food-catalog', [AdminFoodCatalogController::class, 'store'])->name('food-catalog.store');
+        Route::get('/food-catalog/{foodCatalogItem}/edit', [AdminFoodCatalogController::class, 'edit'])->name('food-catalog.edit');
+        Route::put('/food-catalog/{foodCatalogItem}', [AdminFoodCatalogController::class, 'update'])->name('food-catalog.update');
 
         Route::get('/gyms', [AdminGymController::class, 'index'])->name('gyms.index');
         Route::get('/gyms/create', [AdminGymController::class, 'create'])->name('gyms.create');

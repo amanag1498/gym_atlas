@@ -95,6 +95,18 @@ class MemberRepository {
     '/member/diet-templates',
     queryParameters: {'page': page, 'per_page': perPage},
   );
+  Future<Map<String, dynamic>> fetchFoodCatalog({
+    int page = 1,
+    int perPage = 100,
+    String? search,
+  }) => _client.get(
+    '/member/food-catalog',
+    queryParameters: {
+      'page': page,
+      'per_page': perPage,
+      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+    },
+  );
   Future<Map<String, dynamic>> adoptDietTemplate(
     int templateId, {
     String? name,

@@ -47,6 +47,7 @@
                 'items' => [
                     ['label' => 'Facilities', 'icon' => 'ti-activity', 'route' => 'web.admin.facilities.index', 'active' => ['web.admin.facilities.*']],
                     ['label' => 'Exercise Book', 'icon' => 'ti-clipboard-list', 'route' => 'web.admin.exercises.index', 'active' => ['web.admin.exercises.*']],
+                    ['label' => 'Food Catalog', 'icon' => 'ti-apple', 'route' => 'web.admin.food-catalog.index', 'active' => ['web.admin.food-catalog.*']],
                     ['label' => 'Workout Books', 'icon' => 'ti-book', 'route' => 'web.admin.workout-books.index', 'active' => ['web.admin.workout-books.*']],
                     ['label' => 'Diet Plans', 'icon' => 'ti-apple', 'route' => 'web.admin.diet-plans.index', 'active' => ['web.admin.diet-plans.*']],
                     ['label' => 'Diet Templates', 'icon' => 'ti-notebook', 'route' => 'web.admin.diet-templates.index', 'active' => ['web.admin.diet-templates.*']],

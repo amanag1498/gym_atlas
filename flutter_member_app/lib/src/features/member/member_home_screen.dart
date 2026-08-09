@@ -26,6 +26,7 @@ import 'member_settings_screen.dart';
 import 'member_trial_requests_screen.dart';
 import 'member_workout_book_screen.dart';
 import 'member_repository.dart';
+import 'workout_day_selection.dart';
 import 'services/step_sync_service.dart';
 import 'socket_service.dart';
 import 'health/step_health_types.dart';
@@ -229,11 +230,11 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
           label: 'attendance history',
         ),
         _safeMapRequest(
-          _memberRepository.fetchWorkoutPlans,
+          () => _memberRepository.fetchWorkoutPlans(perPage: 100),
           label: 'workout plans',
         ),
         _safeMapRequest(
-          _memberRepository.fetchWorkoutHistory,
+          () => _memberRepository.fetchWorkoutHistory(perPage: 100),
           label: 'workout history',
         ),
         _safeMapRequest(
@@ -684,6 +685,7 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
             localStepSnapshot,
             readAt: localStepReadAt,
           );
+    final capabilities = _recordMap(_contextData['capabilities']);
 
     final pages = [
       _DashboardPage(
@@ -729,6 +731,8 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
         logbookSummary: _logbookSummary,
         repository: _memberRepository,
         independentTrainers: _independentTrainers,
+        workoutDaySelectionEnabled:
+            capabilities['workout_day_selection'] == true,
         onOpenWorkoutBook: _openWorkoutBookScreen,
         initialPlanId: _preferredWorkoutPlanId,
         onPlanConsumed: () {
@@ -5158,6 +5162,7 @@ class _WorkoutPage extends StatefulWidget {
     required this.logbookSummary,
     required this.repository,
     required this.independentTrainers,
+    required this.workoutDaySelectionEnabled,
     required this.onOpenWorkoutBook,
     this.initialPlanId,
     this.onPlanConsumed,
@@ -5169,6 +5174,7 @@ class _WorkoutPage extends StatefulWidget {
   final Map<String, dynamic> logbookSummary;
   final MemberRepository repository;
   final List<Map<String, dynamic>> independentTrainers;
+  final bool workoutDaySelectionEnabled;
   final VoidCallback onOpenWorkoutBook;
   final int? initialPlanId;
   final VoidCallback? onPlanConsumed;
@@ -5186,6 +5192,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   List<Map<String, dynamic>> _workoutHistory = const [];
   int? _activeSessionId;
   DateTime? _activeStartedAt;
+  String? _activePlanDayLabel;
   List<Map<String, dynamic>> _sessionExercises = const [];
   bool _startingWorkout = false;
   bool _completingWorkout = false;
@@ -5248,16 +5255,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
 
   @override
   Widget build(BuildContext context) {
-    final visiblePlans = _selectedRelationshipId == null
-        ? widget.plans
-        : widget.plans
-              .where(
-                (plan) =>
-                    (plan['independent_trainer_member_relationship_id'] as num?)
-                        ?.toInt() ==
-                    _selectedRelationshipId,
-              )
-              .toList();
+    final visiblePlans = _visiblePlans();
     final personalRecords =
         (widget.logbookSummary['personal_records'] as List<dynamic>? ??
                 const [])
@@ -5290,7 +5288,13 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         selectedPlan['goal']?.toString() ?? 'Build a stronger routine';
     final selectedPlanId = _selectedPlanId();
     final hasAssignedPlans = visiblePlans.isNotEmpty;
-    final canStartWorkout = !_startingWorkout && _activeSessionId == null;
+    final selectedPlanNeedsDays =
+        widget.workoutDaySelectionEnabled &&
+        hasAssignedPlans &&
+        selectedPlan.isNotEmpty &&
+        selectedPlanDays == 0;
+    final canStartWorkout =
+        !_startingWorkout && _activeSessionId == null && !selectedPlanNeedsDays;
     final historyPreview = _workoutHistory.take(4).toList();
     final firstName = firstNameFromFullName(widget.userName);
 
@@ -5433,6 +5437,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                   duration: activeDuration ?? Duration.zero,
                   exerciseCount: _sessionExercises.length,
                   totalVolume: totalVolume,
+                  dayLabel: _activePlanDayLabel,
                 )
               else if (visiblePlans.isEmpty)
                 _FitLifeEmptyPanel(
@@ -5468,7 +5473,10 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                     : _activeSessionId == null
                     ? (hasAssignedPlans
                           ? (selectedPlanId != null
-                                ? 'Start Workout'
+                                ? (widget.workoutDaySelectionEnabled &&
+                                          selectedPlanDays > 1
+                                      ? 'Choose Day & Start'
+                                      : 'Start Workout')
                                 : 'Select Workout Plan')
                           : 'Start Custom Workout')
                     : 'Workout Active',
@@ -5496,6 +5504,14 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                     StatusBadge(label: selectedGoal, color: AppColors.primary),
                   ],
                 ),
+                if (selectedPlanNeedsDays) ...[
+                  const SizedBox(height: 10),
+                  _WorkoutPlanWarning(
+                    message: selectedPlan['is_member_editable'] == true
+                        ? 'Add at least one workout day to this personal plan before starting.'
+                        : 'This plan has no workout days yet. Ask your trainer or gym to complete it.',
+                  ),
+                ],
               ],
               if (_activeSessionId != null) ...[
                 const SizedBox(height: 24),
@@ -5630,6 +5646,29 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       return;
     }
 
+    Map<String, dynamic>? selectedDay;
+    if (selectedPlanId != null && widget.workoutDaySelectionEnabled) {
+      final selectedPlan = widget.plans.firstWhere(
+        (plan) => (plan['id'] as num?)?.toInt() == selectedPlanId,
+        orElse: () => const <String, dynamic>{},
+      );
+      final selectableDays = _planDays(selectedPlan);
+      if (selectableDays.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'This workout plan has no workout days. Update the plan or ask your trainer for help.',
+            ),
+          ),
+        );
+        return;
+      }
+      selectedDay = await _chooseWorkoutDay(selectedPlan);
+      if (selectedDay == null) {
+        return;
+      }
+    }
+
     setState(() => _startingWorkout = true);
 
     try {
@@ -5639,10 +5678,13 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         );
         return;
       }
-      final response = await widget.repository.startWorkout({
-        if (selectedPlanId != null) 'workout_plan_id': selectedPlanId,
-        'session_date': DateTime.now().toIso8601String().split('T').first,
-      });
+      final response = await widget.repository.startWorkout(
+        workoutStartPayload(
+          workoutPlanId: selectedPlanId,
+          workoutPlanDayId: (selectedDay?['id'] as num?)?.toInt(),
+          sessionDate: DateTime.now().toIso8601String().split('T').first,
+        ),
+      );
       final data = Map<String, dynamic>.from(
         response['data'] as Map? ?? const {},
       );
@@ -5662,6 +5704,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         _activeStartedAt =
             DateTime.tryParse(data['started_at']?.toString() ?? '') ??
             DateTime.now();
+        _activePlanDayLabel = _sessionDayLabel(data);
         _sessionExercises = _normalizeSessionExercises(data['exercises']);
         _showPrAchievement = false;
         _restExerciseIndex = null;
@@ -5716,6 +5759,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       setState(() {
         _activeSessionId = null;
         _activeStartedAt = null;
+        _activePlanDayLabel = null;
         _workoutHistory = [
           Map<String, dynamic>.from(response['data'] as Map? ?? const {}),
           ..._workoutHistory.where(
@@ -6040,7 +6084,13 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       (session['total_volume'] as num?)?.toDouble() ?? 0,
     );
     final duration = _historyDurationLabel(session);
-    return '$status • $duration • Volume $volume';
+    final day = _sessionDayLabel(session);
+    return [
+      if (day != null) day,
+      status,
+      duration,
+      'Volume $volume',
+    ].join(' • ');
   }
 
   String _historyDurationLabel(Map<String, dynamic> session) {
@@ -6066,11 +6116,50 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   }
 
   int? _selectedPlanId() {
-    if (_planIdController.text.trim().isNotEmpty) {
-      return int.tryParse(_planIdController.text.trim());
+    return selectedWorkoutPlanId(
+      plans: widget.plans,
+      relationshipId: _selectedRelationshipId,
+      requestedPlanId: int.tryParse(_planIdController.text.trim()),
+    );
+  }
+
+  List<Map<String, dynamic>> _visiblePlans() =>
+      workoutPlansForRelationship(widget.plans, _selectedRelationshipId);
+
+  List<Map<String, dynamic>> _planDays(Map<String, dynamic> plan) {
+    return workoutPlanDays(plan);
+  }
+
+  Map<String, dynamic>? _recommendedDay(Map<String, dynamic> plan) {
+    return recommendedWorkoutDay(plan: plan, history: _workoutHistory);
+  }
+
+  Future<Map<String, dynamic>?> _chooseWorkoutDay(
+    Map<String, dynamic> plan,
+  ) async {
+    final days = _planDays(plan);
+    if (days.isEmpty) {
+      return null;
+    }
+    if (days.length == 1) {
+      return days.first;
     }
 
-    return (widget.plans.firstOrNull?['id'] as num?)?.toInt();
+    final recommended = _recommendedDay(plan);
+    return showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _WorkoutDaySelectionSheet(
+        planName: plan['name']?.toString() ?? 'Workout plan',
+        days: days,
+        recommendedDayId: (recommended?['id'] as num?)?.toInt(),
+      ),
+    );
+  }
+
+  String? _sessionDayLabel(Map<String, dynamic> session) {
+    return workoutSessionDayLabel(session);
   }
 
   Future<void> _ensureCustomExerciseLibraryLoaded() async {
@@ -6177,6 +6266,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         _activeStartedAt =
             DateTime.tryParse(data['started_at']?.toString() ?? '') ??
             DateTime.now();
+        _activePlanDayLabel = _sessionDayLabel(data);
         _sessionExercises = _normalizeSessionExercises(data['exercises']);
       });
     } catch (_) {
@@ -6788,6 +6878,45 @@ class _FitLifeMiniBadge extends StatelessWidget {
   }
 }
 
+class _WorkoutPlanWarning extends StatelessWidget {
+  const _WorkoutPlanWarning({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.warning_amber_rounded,
+            size: 19,
+            color: AppColors.warning,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _FitLifePrimaryAction extends StatelessWidget {
   const _FitLifePrimaryAction({
     required this.label,
@@ -7138,11 +7267,13 @@ class _ActiveWorkoutMiniBar extends StatelessWidget {
     required this.duration,
     required this.exerciseCount,
     required this.totalVolume,
+    this.dayLabel,
   });
 
   final Duration duration;
   final int exerciseCount;
   final double totalVolume;
+  final String? dayLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -7169,6 +7300,12 @@ class _ActiveWorkoutMiniBar extends StatelessWidget {
             label: 'Workout active',
             emphasized: true,
           ),
+          if (dayLabel != null)
+            _WorkoutInfoPill(
+              icon: Icons.calendar_view_day_rounded,
+              label: dayLabel!,
+              emphasized: true,
+            ),
           _WorkoutInfoPill(
             icon: Icons.schedule_rounded,
             label: '${duration.inMinutes} min',
@@ -7182,6 +7319,199 @@ class _ActiveWorkoutMiniBar extends StatelessWidget {
             label: '${totalVolume.toStringAsFixed(0)} kg',
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _WorkoutDaySelectionSheet extends StatelessWidget {
+  const _WorkoutDaySelectionSheet({
+    required this.planName,
+    required this.days,
+    required this.recommendedDayId,
+  });
+
+  final String planName;
+  final List<Map<String, dynamic>> days;
+  final int? recommendedDayId;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.82,
+        ),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 54,
+              height: 5,
+              decoration: BoxDecoration(
+                color: AppColors.stroke,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Choose today\'s workout',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    planName,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                itemCount: days.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final day = days[index];
+                  final dayId = (day['id'] as num?)?.toInt();
+                  final dayNumber =
+                      (day['day_number'] as num?)?.toInt() ?? index + 1;
+                  final label = day['label']?.toString().trim() ?? '';
+                  final focus = day['focus']?.toString().trim() ?? '';
+                  final exercises =
+                      (day['exercises'] as List<dynamic>? ?? const [])
+                          .whereType<Map>()
+                          .map((exercise) {
+                            final details = _recordMap(exercise['exercise']);
+                            return details['name']?.toString().trim() ?? '';
+                          })
+                          .where((name) => name.isNotEmpty)
+                          .toList();
+                  final recommended = dayId == recommendedDayId;
+                  final title = label.isEmpty
+                      ? 'Day $dayNumber'
+                      : 'Day $dayNumber — $label';
+                  final summary = exercises.isEmpty
+                      ? '${exercises.length} exercises'
+                      : '${exercises.length} exercises • ${exercises.take(3).join(', ')}';
+
+                  return InkWell(
+                    onTap: dayId == null
+                        ? null
+                        : () => Navigator.of(context).pop(day),
+                    borderRadius: BorderRadius.circular(22),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: recommended
+                            ? AppColors.primaryBright.withValues(alpha: 0.08)
+                            : AppColors.surfaceSoft,
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(
+                          color: recommended
+                              ? AppColors.primaryBright.withValues(alpha: 0.35)
+                              : AppColors.stroke,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppColors.stroke),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '$dayNumber',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        title,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleSmall
+                                            ?.copyWith(
+                                              color: AppColors.textPrimary,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                      ),
+                                    ),
+                                    if (recommended)
+                                      const _FitLifeMiniBadge(
+                                        label: 'Recommended',
+                                        selected: true,
+                                      ),
+                                  ],
+                                ),
+                                if (focus.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    focus,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: AppColors.textSecondary,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                  ),
+                                ],
+                                const SizedBox(height: 5),
+                                Text(
+                                  summary,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(color: AppColors.textMuted),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.textMuted,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

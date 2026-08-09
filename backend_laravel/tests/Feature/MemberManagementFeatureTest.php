@@ -13,6 +13,7 @@ use App\Models\MembershipPlan;
 use App\Models\Payment;
 use App\Models\TrainerProfile;
 use App\Models\User;
+use App\Models\WorkoutSession;
 use App\Services\Members\MemberEmailInvitationService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -575,11 +576,27 @@ class MemberManagementFeatureTest extends TestCase
             'payment_status' => 'partial',
             'paid_at' => now(),
         ]);
+        WorkoutSession::query()->create([
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_id' => $member->id,
+            'trainer_id' => $trainer->id,
+            'plan_day_number' => 2,
+            'plan_day_label' => 'Pull',
+            'day_selection_mode' => 'member_selected',
+            'started_by_user_id' => $member->id,
+            'session_date' => now()->toDateString(),
+            'status' => 'completed',
+            'started_at' => now()->subHour(),
+            'completed_at' => now(),
+        ]);
 
         $this->loginGymUser($owner);
         $this->get(route('web.gym.members.show', ['gym' => $gym->id, 'member' => $member->id]))
             ->assertOk()
             ->assertSee('Member Detail Monthly')
+            ->assertSee('Recent Workouts')
+            ->assertSee('Day 2 — Pull')
             ->assertSee('Invoice PDF');
 
         $headers = [

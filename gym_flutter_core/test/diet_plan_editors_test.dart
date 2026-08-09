@@ -25,7 +25,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Add product'));
+    await tester.tap(find.text('Add custom food'));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Food or product'),
@@ -35,6 +35,7 @@ void main() {
       find.widgetWithText(TextFormField, 'Quantity or serving'),
       '80g',
     );
+    await tester.ensureVisible(find.text('Optional nutrition'));
     await tester.tap(find.text('Optional nutrition'));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -54,6 +55,62 @@ void main() {
     expect(items.single['quantity'], '80g');
     expect(items.single['calories'], 302);
     expect(items.single['protein_g'], 10.5);
+  });
+
+  testWidgets('meal editor copies catalog nutrition and keeps catalog id', (
+    tester,
+  ) async {
+    List<Map<String, dynamic>> payload = const [];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: DietPlanMealsEditor(
+              initialMeals: const [
+                {'name': 'Breakfast', 'items': []},
+              ],
+              foodCatalog: const [
+                {
+                  'id': 44,
+                  'name': 'Rolled oats',
+                  'category': 'Grains',
+                  'default_quantity': '80 g',
+                  'calories': 300,
+                  'protein_g': 10,
+                  'fiber_g': 8,
+                  'dietary_tags': ['vegan'],
+                  'allergens': ['gluten'],
+                },
+              ],
+              onChanged: (value) => payload = value,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Choose catalog food'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'Rolled oats'));
+    await tester.pumpAndSettle();
+
+    final items = payload.single['items'] as List<dynamic>;
+    expect(items, hasLength(1));
+    expect(items.single['food_catalog_item_id'], 44);
+    expect(items.single['name'], 'Rolled oats');
+    expect(items.single['quantity'], '80 g');
+    expect(items.single['calories'], 300);
+    expect(items.single['protein_g'], 10);
+    expect(items.single['fiber_g'], 8);
+    expect(find.text('From food catalog'), findsOneWidget);
+    expect(find.text('Add custom food'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.link_off_rounded));
+    await tester.pump();
+    final customItems = payload.single['items'] as List<dynamic>;
+    expect(customItems.single.containsKey('food_catalog_item_id'), isFalse);
+    expect(customItems.single['name'], 'Rolled oats');
   });
 
   testWidgets('meal editor adds a freely named meal instead of fixed slots', (

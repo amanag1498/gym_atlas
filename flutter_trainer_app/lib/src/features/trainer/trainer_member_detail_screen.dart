@@ -1581,6 +1581,7 @@ class _LogbookTab extends StatelessWidget {
               else
                 ...history.take(8).map((session) {
                   final exercises = _mapList(session['exercises']);
+                  final dayLabel = _workoutSessionDayLabel(session);
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _TimelineTile(
@@ -1588,8 +1589,14 @@ class _LogbookTab extends StatelessWidget {
                           session['name']?.toString().trim().isNotEmpty == true
                           ? session['name'].toString()
                           : 'Workout on ${_prettyDate(session['session_date'])}',
-                      subtitle:
-                          '${_titleCase(session['status']?.toString() ?? 'completed')} • ${exercises.length} exercises • volume ${session['total_volume'] ?? 0}',
+                      subtitle: [
+                        if (dayLabel != null) dayLabel,
+                        _titleCase(
+                          session['status']?.toString() ?? 'completed',
+                        ),
+                        '${exercises.length} exercises',
+                        'volume ${session['total_volume'] ?? 0}',
+                      ].join(' • '),
                       icon: Icons.fitness_center_rounded,
                       accent: AppColors.primary,
                     ),
@@ -1773,6 +1780,15 @@ List<Map<String, dynamic>> _mapList(dynamic value) {
     return value.map((item) => _map(item)).toList();
   }
   return const <Map<String, dynamic>>[];
+}
+
+String? _workoutSessionDayLabel(Map<String, dynamic> session) {
+  final label = session['plan_day_label']?.toString().trim() ?? '';
+  final number = (session['plan_day_number'] as num?)?.toInt();
+  if (label.isNotEmpty && number != null) return 'Day $number — $label';
+  if (label.isNotEmpty) return label;
+  if (number != null) return 'Day $number';
+  return null;
 }
 
 String _titleCase(String value) {

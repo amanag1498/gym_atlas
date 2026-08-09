@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\RoleName;
 use App\Models\Branch;
 use App\Models\Gym;
+use App\Models\GymPhoto;
 use App\Models\MemberMembership;
 use App\Models\MemberProfile;
 use App\Models\MembershipPlan;
@@ -112,6 +113,62 @@ class MemberDiscoveryFeatureTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.slug', 'public-gym');
+    }
+
+    public function test_public_discovery_exposes_uploaded_gym_and_trainer_photos(): void
+    {
+        $gym = Gym::query()->create([
+            'name' => 'Photo Discovery Gym',
+            'slug' => 'photo-discovery-gym',
+            'timezone' => 'Asia/Kolkata',
+            'status' => 'active',
+            'approval_status' => 'approved',
+            'is_active' => true,
+            'public_listing_enabled' => true,
+            'public_listing_approval_status' => 'approved',
+            'photo_urls' => [],
+        ]);
+        $branch = Branch::query()->create([
+            'gym_id' => $gym->id,
+            'name' => 'Photo Branch',
+            'slug' => 'photo-branch',
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+        GymPhoto::query()->create([
+            'gym_id' => $gym->id,
+            'image_path' => 'gym-images/discovery-gallery.jpg',
+            'type' => 'gallery',
+            'sort_order' => 1,
+        ]);
+        GymPhoto::query()->create([
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'image_path' => 'gym-images/branch-gallery.jpg',
+            'type' => 'gallery',
+            'sort_order' => 1,
+        ]);
+
+        $trainer = User::factory()->create(['name' => 'Visible Photo Trainer']);
+        TrainerProfile::query()->create([
+            'user_id' => $trainer->id,
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'profile_photo_url' => 'https://old-host.example/storage/trainer-profile-photos/coach.jpg',
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+
+        $this->getJson('/api/public/discovery/gyms')
+            ->assertOk()
+            ->assertJsonPath('data.0.photo_urls.0', '/storage/gym-images/discovery-gallery.jpg');
+
+        $this->getJson('/api/public/discovery/gyms/photo-discovery-gym')
+            ->assertOk()
+            ->assertJsonPath('data.photo_urls.0', '/storage/gym-images/discovery-gallery.jpg')
+            ->assertJsonPath('data.branches.0.photo_urls.0', '/storage/gym-images/branch-gallery.jpg')
+            ->assertJsonPath('data.trainers.0.profile_photo_url', '/storage/trainer-profile-photos/coach.jpg')
+            ->assertJsonPath('data.trainers.0.photo_url', '/storage/trainer-profile-photos/coach.jpg');
     }
 
     public function test_public_discovery_api_supports_search_and_listing_filters(): void

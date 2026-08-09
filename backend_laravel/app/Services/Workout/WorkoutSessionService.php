@@ -6,6 +6,7 @@ use App\Enums\WorkoutSessionStatus;
 use App\Models\PersonalRecord;
 use App\Models\User;
 use App\Models\WorkoutPlan;
+use App\Models\WorkoutPlanDay;
 use App\Models\WorkoutSession;
 use App\Models\WorkoutSessionExercise;
 use App\Services\Member\MemberAppService;
@@ -16,6 +17,7 @@ class WorkoutSessionService
 {
     public function __construct(
         private readonly MemberAppService $memberAppService,
+        private readonly WorkoutAccessService $workoutAccessService,
     ) {}
 
     /**
@@ -46,10 +48,30 @@ class WorkoutSessionService
                 ? WorkoutPlan::query()->with('days.exercises')->findOrFail($payload['workout_plan_id'])
                 : null;
 
-            if ($plan && (int) $plan->member_id !== (int) $member->id) {
+            if ($plan === null && isset($payload['workout_plan_day_id'])) {
                 throw ValidationException::withMessages([
-                    'workout_plan_id' => ['You do not have access to this workout plan.'],
+                    'workout_plan_day_id' => ['Select a workout plan before selecting a workout day.'],
                 ]);
+            }
+
+            if ($plan !== null) {
+                $this->workoutAccessService->assertPlanAccess($member, $plan);
+            }
+
+            $selectedDay = null;
+            if ($plan !== null && isset($payload['workout_plan_day_id'])) {
+                $selectedDay = WorkoutPlanDay::query()
+                    ->with('exercises')
+                    ->where('workout_plan_id', $plan->id)
+                    ->whereKey((int) $payload['workout_plan_day_id'])
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($selectedDay === null) {
+                    throw ValidationException::withMessages([
+                        'workout_plan_day_id' => ['The selected workout day does not belong to this workout plan.'],
+                    ]);
+                }
             }
 
             if ($plan !== null && $plan->gym_id === null) {
@@ -83,6 +105,14 @@ class WorkoutSessionService
                 'member_id' => $member->id,
                 'trainer_id' => $plan?->trainer_id,
                 'workout_plan_id' => $plan?->id,
+                'workout_plan_day_id' => $selectedDay?->id,
+                'plan_day_number' => $selectedDay?->day_number,
+                'plan_day_label' => $selectedDay?->label,
+                'day_selection_mode' => $plan === null
+                    ? 'custom_session'
+                    : ($selectedDay === null
+                        ? 'legacy_all_days'
+                        : ($plan->days->count() === 1 ? 'single_day_default' : 'member_selected')),
                 'started_by_user_id' => $member->id,
                 'session_date' => $payload['session_date'],
                 'status' => WorkoutSessionStatus::Active->value,
@@ -91,7 +121,8 @@ class WorkoutSessionService
             ]);
 
             if ($plan) {
-                foreach ($plan->days as $day) {
+                $sessionDays = $selectedDay !== null ? collect([$selectedDay]) : $plan->days;
+                foreach ($sessionDays as $day) {
                     foreach ($day->exercises as $planExercise) {
                         $session->exercises()->create([
                             'workout_plan_exercise_id' => $planExercise->id,

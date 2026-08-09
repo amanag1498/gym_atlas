@@ -216,6 +216,12 @@ class DietPlanController extends Controller
     public function assignTemplate(Request $request, DietPlanTemplate $dietPlanTemplate)
     {
         $profile = $this->trainerScopeService->resolveTrainerProfile($request);
+        if ((int) $dietPlanTemplate->created_by_user_id !== (int) $request->user()->id
+            && ! $dietPlanTemplate->isGlobalCatalog()) {
+            throw ValidationException::withMessages([
+                'diet_template_id' => ['You can assign only your own or global diet templates.'],
+            ]);
+        }
         $data = $request->validate([
             'member_ids' => ['required', 'array', 'min:1'],
             'member_ids.*' => ['integer', 'exists:users,id'],

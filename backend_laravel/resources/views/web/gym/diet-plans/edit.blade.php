@@ -37,7 +37,7 @@
                 <textarea name="allergies_and_restrictions" class="panel-textarea" placeholder="Allergies and restrictions">{{ old('allergies_and_restrictions', $plan->allergies_and_restrictions) }}</textarea>
                 <textarea name="notes" class="panel-textarea" placeholder="Coach notes">{{ old('notes', $plan->notes) }}</textarea>
 
-                <x-diet-builder :meals="old('meals', $plan->meals->map(fn ($meal) => $meal->toArray() + ['items' => $meal->items->toArray()])->all())" />
+                <x-diet-builder :meals="old('meals', $plan->meals->map(fn ($meal) => $meal->toArray() + ['items' => $meal->items->toArray()])->all())" :food-catalog="$foodCatalog" />
 
                 <div class="flex flex-wrap gap-3">
                     <x-action-button type="submit">Save Diet Plan</x-action-button>

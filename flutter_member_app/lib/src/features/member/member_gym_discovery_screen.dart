@@ -11,6 +11,7 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/premium_card.dart';
 import 'member_repository.dart';
 import 'member_trial_requests_screen.dart';
+import 'discovery_media.dart';
 
 class MemberGymDiscoveryScreen extends StatefulWidget {
   const MemberGymDiscoveryScreen({
@@ -1077,7 +1078,7 @@ class _SavedGymPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final heroImage = _gymHeroImage(gym);
+    final heroImage = gymDiscoveryHeroImage(gym);
     return SizedBox(
       width: 260,
       child: PremiumCard(
@@ -1328,13 +1329,7 @@ class _MemberGymDetailScreenState extends State<MemberGymDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final detail = _detail;
-    final gallery = {
-      if ((detail['cover_image_url']?.toString() ?? '').isNotEmpty)
-        detail['cover_image_url'].toString(),
-      ...((detail['photo_urls'] as List<dynamic>? ?? const [])
-          .map((item) => item.toString())
-          .where((item) => item.isNotEmpty)),
-    }.toList();
+    final gallery = gymDiscoveryGallery(detail);
     final facilities = (detail['facilities'] as List<dynamic>? ?? const [])
         .map(
           (item) => item is Map
@@ -1373,7 +1368,9 @@ class _MemberGymDetailScreenState extends State<MemberGymDetailScreen> {
         children: [
           _GymDetailHero(
             detail: detail,
-            imageUrl: gallery.isEmpty ? null : gallery.first,
+            imageUrl: gallery.isEmpty
+                ? gymDiscoveryHeroImage(detail)
+                : gallery.first,
             isOpen: isOpen,
             canShowPricing: canShowPricing,
             feeSummary: feeSummary,
@@ -1868,7 +1865,7 @@ class _NearbyGymCard extends StatelessWidget {
         .toList();
     final showPricing = gym['pricing_visible'] == true && feeSummary.isNotEmpty;
     final isOpen = gym['is_open_now'] == true;
-    final heroImage = _gymHeroImage(gym);
+    final heroImage = gymDiscoveryHeroImage(gym);
 
     return PremiumCard(
       padding: EdgeInsets.zero,
@@ -2748,7 +2745,7 @@ class _TrainerCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AppNetworkImage(
-            imageUrl: trainer['photo_url']?.toString(),
+            imageUrl: trainerDiscoveryPhotoUrl(trainer),
             height: 72,
             width: 72,
             borderRadius: 20,
@@ -3015,15 +3012,6 @@ String _fullAddress(Map<String, dynamic> detail) {
     detail['state']?.toString() ?? '',
     detail['country']?.toString() ?? '',
   ].where((item) => item.trim().isNotEmpty).join(', ');
-}
-
-String? _gymHeroImage(Map<String, dynamic> gym) {
-  final cover = gym['cover_image_url']?.toString() ?? '';
-  if (cover.isNotEmpty) {
-    return cover;
-  }
-  final logo = gym['logo_url']?.toString() ?? '';
-  return logo.isEmpty ? null : logo;
 }
 
 String _timingSummary(dynamic value) {

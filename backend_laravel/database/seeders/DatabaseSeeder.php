@@ -22,7 +22,11 @@ class DatabaseSeeder extends Seeder
             FitnessGoalSeeder::class,
             TrainerSpecializationSeeder::class,
             WorkoutBookSeeder::class,
+            ComprehensiveExerciseCatalogSeeder::class,
+            AdvancedWorkoutPlanSeeder::class,
+            FoodCatalogSeeder::class,
             DietPlanTemplateSeeder::class,
+            ExpandedDietPlanTemplateSeeder::class,
             PlatformSubscriptionSeeder::class,
             PlatformBannerSeeder::class,
         ]);

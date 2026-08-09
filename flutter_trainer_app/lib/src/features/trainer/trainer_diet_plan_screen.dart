@@ -43,6 +43,8 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
   int _editorRevision = 0;
   String? _error;
   List<Map<String, dynamic>> _templates = const [];
+  List<Map<String, dynamic>> _foodCatalog = const [];
+  bool _foodCatalogAvailable = false;
   ApiPagination _templatePage = const ApiPagination.singlePage();
   Map<String, dynamic> _draftDetails = {'status': 'active'};
   List<Map<String, dynamic>> _draftMeals = _defaultMeals();
@@ -62,6 +64,14 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
       final response = await widget.repository.fetchDietTemplates();
       _templates = apiPageItems(response);
       _templatePage = ApiPagination.fromResponse(response);
+      try {
+        _foodCatalog = await _fetchInitialFoods();
+        _foodCatalogAvailable = true;
+      } catch (_) {
+        // Older backends do not expose the catalog; custom foods remain usable.
+        _foodCatalog = const [];
+        _foodCatalogAvailable = false;
+      }
     } catch (error) {
       _error = _dietErrorMessage(error);
     }
@@ -69,6 +79,12 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
       setState(() => _loading = false);
     }
   }
+
+  Future<List<Map<String, dynamic>>> _fetchInitialFoods() async =>
+      apiPageItems(await widget.repository.fetchFoodCatalog());
+
+  Future<List<Map<String, dynamic>>> _searchFoods(String query) async =>
+      apiPageItems(await widget.repository.fetchFoodCatalog(search: query));
 
   Future<void> _loadMoreTemplates() async {
     if (_loadingMore || !_templatePage.hasMore) return;
@@ -256,6 +272,10 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
                   const SizedBox(height: AppSpacing.lg),
                   DietPlanMealsEditor(
                     initialMeals: meals,
+                    foodCatalog: _foodCatalog,
+                    onSearchFoodCatalog: _foodCatalogAvailable
+                        ? _searchFoods
+                        : null,
                     onChanged: (value) => meals = value,
                   ),
                   const SizedBox(height: AppSpacing.lg),
@@ -720,6 +740,8 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
             child: DietPlanMealsEditor(
               key: ValueKey('meals-$_editorRevision'),
               initialMeals: _draftMeals,
+              foodCatalog: _foodCatalog,
+              onSearchFoodCatalog: _foodCatalogAvailable ? _searchFoods : null,
               onChanged: (value) => _draftMeals = value,
             ),
           ),

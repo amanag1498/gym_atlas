@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Chat\TrainerMemberChatController;
+use App\Http\Controllers\Api\FoodCatalogController;
 use App\Http\Controllers\Api\Gym\Admin\AttendanceController;
 use App\Http\Controllers\Api\Gym\Admin\AuditLogController as GymAuditLogController;
 use App\Http\Controllers\Api\Gym\Admin\BranchController as GymBranchController;
@@ -40,6 +41,7 @@ use App\Http\Controllers\Api\PlatformAdmin\CatalogController;
 use App\Http\Controllers\Api\PlatformAdmin\DashboardController as PlatformDashboardController;
 use App\Http\Controllers\Api\PlatformAdmin\DietPlanTemplateController as PlatformDietPlanTemplateController;
 use App\Http\Controllers\Api\PlatformAdmin\ExerciseController as PlatformExerciseController;
+use App\Http\Controllers\Api\PlatformAdmin\FoodCatalogController as PlatformFoodCatalogController;
 use App\Http\Controllers\Api\PlatformAdmin\GymController as PlatformGymController;
 use App\Http\Controllers\Api\PlatformAdmin\GymOwnerController as PlatformGymOwnerController;
 use App\Http\Controllers\Api\PlatformAdmin\IndependentTrainerVerificationController as PlatformIndependentTrainerVerificationController;
@@ -242,6 +244,12 @@ Route::prefix('platform-admin')
             ->middleware('permission:diet_plan.view|diet_plan.manage');
         Route::put('diet-templates/{dietPlanTemplate}', [PlatformDietPlanTemplateController::class, 'update'])
             ->middleware('permission:diet_plan.manage');
+        Route::get('food-catalog', [PlatformFoodCatalogController::class, 'index'])
+            ->middleware('permission:diet_plan.view|diet_plan.manage');
+        Route::post('food-catalog', [PlatformFoodCatalogController::class, 'store'])
+            ->middleware('permission:diet_plan.manage');
+        Route::put('food-catalog/{foodCatalogItem}', [PlatformFoodCatalogController::class, 'update'])
+            ->middleware('permission:diet_plan.manage');
         Route::post('users/{user}/activate', [PlatformUserController::class, 'activate'])
             ->middleware('permission:platform.users.view');
         Route::post('users/{user}/deactivate', [PlatformUserController::class, 'deactivate'])
@@ -324,6 +332,7 @@ Route::prefix('gym')
         Route::get('dashboard', GymDashboardController::class)
             ->middleware('permission:gym.dashboard.view');
         Route::get('diet-plans', [GymDietPlanController::class, 'index'])->middleware('permission:diet_plan.view|diet_plan.manage');
+        Route::get('food-catalog', FoodCatalogController::class)->middleware('permission:diet_plan.view|diet_plan.manage');
         Route::post('diet-plans', [GymDietPlanController::class, 'store'])->middleware('permission:diet_plan.manage');
         Route::get('diet-templates', [GymDietPlanController::class, 'templates'])->middleware('permission:diet_plan.view|diet_plan.manage');
         Route::post('diet-templates/{dietPlanTemplate}/assign', [GymDietPlanController::class, 'assignTemplate'])->middleware('permission:diet_plan.manage');
@@ -626,6 +635,7 @@ Route::prefix('trainer')
         Route::delete('workout-plans/{workoutPlan}', [TrainerWorkoutPlanController::class, 'destroy'])
             ->middleware('permission:workout_plan.manage');
         Route::get('diet-plans', [TrainerDietPlanController::class, 'index'])->middleware('permission:diet_plan.view|diet_plan.manage');
+        Route::get('food-catalog', FoodCatalogController::class)->middleware('permission:diet_plan.view|diet_plan.manage');
         Route::post('diet-plans', [TrainerDietPlanController::class, 'store'])->middleware('permission:diet_plan.manage');
         Route::get('diet-templates', [TrainerDietPlanController::class, 'templates'])->middleware('permission:diet_plan.view|diet_plan.manage');
         Route::post('diet-templates', [TrainerDietPlanController::class, 'storeTemplate'])->middleware('permission:diet_plan.manage');
@@ -704,6 +714,7 @@ Route::prefix('member')
         Route::get('workout-plans', [MemberWorkoutController::class, 'plans'])
             ->middleware('permission:workout_plan.view');
         Route::get('diet-plans', [MemberDietPlanController::class, 'index']);
+        Route::get('food-catalog', FoodCatalogController::class);
         Route::post('diet-plans', [MemberDietPlanController::class, 'store']);
         Route::get('diet-templates', [MemberDietPlanController::class, 'templates']);
         Route::post('diet-templates/{dietPlanTemplate}/adopt', [MemberDietPlanController::class, 'adoptTemplate']);

@@ -287,6 +287,18 @@ class TrainerRepository {
         '/trainer/diet-templates',
         queryParameters: {'page': page, 'per_page': 20},
       );
+  Future<Map<String, dynamic>> fetchFoodCatalog({
+    int page = 1,
+    int perPage = 100,
+    String? search,
+  }) => _client.get(
+    '/trainer/food-catalog',
+    queryParameters: {
+      'page': page,
+      'per_page': perPage,
+      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+    },
+  );
   Future<Map<String, dynamic>> createDietTemplate(
     Map<String, dynamic> payload,
   ) => _client.post('/trainer/diet-templates', data: payload);
