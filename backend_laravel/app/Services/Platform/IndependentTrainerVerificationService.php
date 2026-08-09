@@ -5,6 +5,7 @@ namespace App\Services\Platform;
 use App\Models\TrainerProfile;
 use App\Services\Audit\AuditLogService;
 use App\Services\Notification\NotificationService;
+use App\Support\TrainerVerificationRequirements;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -56,6 +57,14 @@ class IndependentTrainerVerificationService
                 throw ValidationException::withMessages([
                     'verification_status' => 'Only an active trainer profile with an active user account can be verified.',
                 ]);
+            }
+            if ($status === 'verified') {
+                $missingRequirements = TrainerVerificationRequirements::missing($trainerProfile);
+                if ($missingRequirements !== []) {
+                    throw ValidationException::withMessages([
+                        'verification_status' => 'Complete the missing trainer evidence before approval: '.implode(', ', array_keys($missingRequirements)).'.',
+                    ]);
+                }
             }
 
             $oldValues = $trainerProfile->only([

@@ -333,6 +333,54 @@ class IndependentTrainerVerificationManagementTest extends TestCase
         $this->assertSame($gym->id, $profile->fresh()->gym_id);
     }
 
+    public function test_legacy_app_can_submit_incomplete_profile_but_it_cannot_be_approved(): void
+    {
+        $profile = $this->trainerProfile('Legacy App Coach', null, 'pending');
+        $profile->forceFill([
+            'bio' => null,
+            'specializations' => [],
+            'experience_years' => 0,
+            'certifications' => [],
+            'verification_submitted_at' => null,
+        ])->save();
+
+        $this->actingAs($profile->user, 'sanctum')
+            ->postJson('/api/trainer/profile/verification/submit')
+            ->assertOk()
+            ->assertJsonPath('data.trainer_profile.verification_submitted', true)
+            ->assertJsonPath('data.verification_requirements.complete', false)
+            ->assertJsonPath('data.verification_requirements.missing_fields', [
+                'bio',
+                'specializations',
+                'certifications',
+            ]);
+
+        $submissionLog = ActivityLog::query()
+            ->where('event', 'trainer.verification.submitted')
+            ->where('subject_id', $profile->id)
+            ->latest('id')
+            ->firstOrFail();
+        $this->assertSame([
+            'bio',
+            'specializations',
+            'certifications',
+        ], $submissionLog->context['missing_requirements']);
+
+        $admin = $this->platformAdmin();
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/platform-admin/trainer-verifications/'.$profile->id, [
+                'verification_status' => 'verified',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('verification_status');
+
+        $this->actingAs($admin)
+            ->get(route('web.admin.trainer-verifications.show', $profile))
+            ->assertOk()
+            ->assertSee('Legacy incomplete submission')
+            ->assertDontSee('Approve trainer verification');
+    }
+
     public function test_suspension_immediately_hides_relationship_access_and_reverification_restores_it(): void
     {
         $admin = $this->platformAdmin();

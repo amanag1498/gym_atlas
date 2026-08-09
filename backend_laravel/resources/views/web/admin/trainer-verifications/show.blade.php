@@ -53,6 +53,18 @@
             </div>
         </x-premium-card>
 
+        @if ($missingVerificationRequirements !== [] && $trainerProfile->verification_submitted_at)
+            <x-premium-card class="border border-amber-300 bg-amber-50 p-6 dark:border-amber-700 dark:bg-amber-950/30">
+                <h3 class="font-semibold text-amber-900 dark:text-amber-200">Legacy incomplete submission</h3>
+                <p class="mt-2 text-sm text-amber-800 dark:text-amber-300">This application came from an older app version. It is safely in the review queue, but approval is blocked until the trainer supplies:</p>
+                <ul class="mt-3 list-disc space-y-1 pl-5 text-sm text-amber-800 dark:text-amber-300">
+                    @foreach ($missingVerificationRequirements as $message)
+                        <li>{{ $message }}</li>
+                    @endforeach
+                </ul>
+            </x-premium-card>
+        @endif
+
         <div class="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
             <div class="space-y-6">
                 <x-premium-card class="p-6">
@@ -110,7 +122,7 @@
                     <h3 class="panel-section-title">Review decision</h3>
                     <p class="panel-section-copy">Approval enables personal coaching invitations and does not change this trainer's gym assignment. Rejection and suspension require a reason.</p>
 
-                    @if ($trainerProfile->verification_status !== 'verified' && $trainerProfile->verification_submitted_at)
+                    @if ($trainerProfile->verification_status !== 'verified' && $trainerProfile->verification_submitted_at && $missingVerificationRequirements === [])
                     <form method="POST" action="{{ route('web.admin.trainer-verifications.update', $trainerProfile) }}" class="mt-5 space-y-4">
                         @csrf
                         @method('PATCH')

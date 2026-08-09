@@ -10,6 +10,7 @@ use App\Http\Resources\User\UserResource;
 use App\Services\Audit\AuditLogService;
 use App\Services\Onboarding\OnboardingProgressService;
 use App\Services\Trainer\TrainerScopeService;
+use App\Support\TrainerVerificationRequirements;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -125,26 +126,10 @@ class TrainerProfileController extends Controller
             ]);
         }
 
-        $errors = [];
-        if (blank($profile->bio)) {
-            $errors['bio'][] = 'Add a professional bio before submitting verification.';
-        }
-        if (collect($profile->specializations ?? [])->filter(fn ($value) => filled($value))->isEmpty()) {
-            $errors['specializations'][] = 'Add at least one specialization before submitting verification.';
-        }
-        if ($profile->experience_years === null) {
-            $errors['experience_years'][] = 'Add your years of experience before submitting verification.';
-        }
-        if (collect($profile->certifications ?? [])->filter(function ($certificate): bool {
-            return is_array($certificate)
-                ? filled($certificate['name'] ?? null) || filled($certificate['file_url'] ?? null)
-                : filled($certificate);
-        })->isEmpty()) {
-            $errors['certifications'][] = 'Add at least one certification or qualification before submitting verification.';
-        }
-        if ($errors !== []) {
-            throw ValidationException::withMessages($errors);
-        }
+        // Older Trainer app versions did not validate these fields before
+        // submitting. Accept their application into the manual review queue,
+        // but retain the missing requirements so approval remains protected.
+        $missingRequirements = TrainerVerificationRequirements::missing($profile);
 
         $oldStatus = $profile->verification_status;
         $profile->forceFill([
@@ -169,11 +154,19 @@ class TrainerProfileController extends Controller
                 'verification_status' => 'pending',
                 'verification_submitted_at' => $profile->verification_submitted_at,
             ],
-            context: ['has_gym_assignment' => $profile->gym_id !== null],
+            context: [
+                'has_gym_assignment' => $profile->gym_id !== null,
+                'missing_requirements' => array_keys($missingRequirements),
+            ],
         );
 
         return $this->success([
             'trainer_profile' => TrainerProfileResource::make($profile->fresh()->load(['user', 'gym', 'branch', 'assignedMembers'])),
+            'verification_requirements' => [
+                'complete' => $missingRequirements === [],
+                'missing_fields' => array_keys($missingRequirements),
+                'messages' => $missingRequirements,
+            ],
         ], 'Trainer verification application submitted successfully.');
     }
 

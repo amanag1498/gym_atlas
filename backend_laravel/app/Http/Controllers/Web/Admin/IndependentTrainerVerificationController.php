@@ -7,6 +7,7 @@ use App\Http\Requests\PlatformAdmin\ReviewIndependentTrainerRequest;
 use App\Models\ActivityLog;
 use App\Models\TrainerProfile;
 use App\Services\Platform\IndependentTrainerVerificationService;
+use App\Support\TrainerVerificationRequirements;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -79,6 +80,7 @@ class IndependentTrainerVerificationController extends Controller
             'breadcrumbs' => ['Platform', 'Trainer Verification', $trainerProfile->user?->name ?? 'Submission'],
             'trainerProfile' => $trainerProfile,
             'auditLogs' => $auditLogs,
+            'missingVerificationRequirements' => TrainerVerificationRequirements::missing($trainerProfile),
         ]);
     }
 

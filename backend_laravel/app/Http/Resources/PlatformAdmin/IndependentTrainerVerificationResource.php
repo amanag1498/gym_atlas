@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\PlatformAdmin;
 
+use App\Support\TrainerVerificationRequirements;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -9,6 +10,8 @@ class IndependentTrainerVerificationResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $missingRequirements = TrainerVerificationRequirements::missing($this->resource);
+
         return [
             'id' => $this->id,
             'trainer_user_id' => $this->user_id,
@@ -40,6 +43,11 @@ class IndependentTrainerVerificationResource extends JsonResource
                 'verified_at' => $this->verification_verified_at?->toIso8601String(),
                 'rejection_reason' => $this->verification_rejection_reason,
                 'notes' => $this->verification_review_notes,
+                'requirements' => [
+                    'complete' => $missingRequirements === [],
+                    'missing_fields' => array_keys($missingRequirements),
+                    'messages' => $missingRequirements,
+                ],
                 'reviewer' => $this->whenLoaded('verificationReviewer', fn () => $this->verificationReviewer ? [
                     'id' => $this->verificationReviewer->id,
                     'name' => $this->verificationReviewer->name,
