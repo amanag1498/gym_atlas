@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/widgets/common_widgets.dart';
 import 'trainer_photo_picker.dart';
 import 'trainer_repository.dart';
+import 'trainer_verification_requirements.dart';
 
 class TrainerProfileScreen extends StatefulWidget {
   const TrainerProfileScreen({super.key, required this.repository});
@@ -154,6 +155,25 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
   Future<void> _submitVerification() async {
     if (_submittingVerification) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final missingRequirements = missingTrainerVerificationRequirements(
+      bio: _bioController.text,
+      specializations: _splitList(_specializationController.text),
+      experienceYears: _experienceController.text,
+      certifications: _certificationPayload(),
+    );
+    if (missingRequirements.isNotEmpty) {
+      setState(() => _editing = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Complete before submitting: ${missingRequirements.join(', ')}.',
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() => _submittingVerification = true);
     try {
       if (_editing) {

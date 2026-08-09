@@ -80,26 +80,32 @@ class TrainerApiClient {
     String path, {
     Map<String, dynamic>? queryParameters,
   }) async {
-    final response = await _dio.get<dynamic>(
-      path,
-      queryParameters: queryParameters,
+    return _request(
+      () => _dio.get<dynamic>(path, queryParameters: queryParameters),
     );
-    return Map<String, dynamic>.from(response.data as Map);
   }
 
   Future<Map<String, dynamic>> post(String path, {Object? data}) async {
-    final response = await _dio.post<dynamic>(path, data: data);
-    return Map<String, dynamic>.from(response.data as Map);
+    return _request(() => _dio.post<dynamic>(path, data: data));
   }
 
   Future<Map<String, dynamic>> put(String path, {Object? data}) async {
-    final response = await _dio.put<dynamic>(path, data: data);
-    return Map<String, dynamic>.from(response.data as Map);
+    return _request(() => _dio.put<dynamic>(path, data: data));
   }
 
   Future<Map<String, dynamic>> delete(String path, {Object? data}) async {
-    final response = await _dio.delete<dynamic>(path, data: data);
-    return Map<String, dynamic>.from(response.data as Map);
+    return _request(() => _dio.delete<dynamic>(path, data: data));
+  }
+
+  Future<Map<String, dynamic>> _request(
+    Future<Response<dynamic>> Function() execute,
+  ) async {
+    try {
+      final response = await execute();
+      return Map<String, dynamic>.from(response.data as Map);
+    } on DioException catch (error) {
+      throw TrainerApiException.fromDio(error);
+    }
   }
 
   bool _canRecoverForbiddenRole(DioException error) {
@@ -182,4 +188,61 @@ class TrainerApiClient {
     final text = value.toString();
     return text.length <= 120 ? text : '${text.substring(0, 120)}...';
   }
+}
+
+class TrainerApiException implements Exception {
+  const TrainerApiException({required this.message, this.statusCode});
+
+  factory TrainerApiException.fromDio(DioException error) {
+    final responseBody = error.response?.data;
+    final body = responseBody is Map
+        ? responseBody.map((key, value) => MapEntry(key.toString(), value))
+        : const <String, dynamic>{};
+    final validationMessages = _flattenApiMessages(body['errors']);
+    final responseMessage = body['message']?.toString().trim() ?? '';
+    final dioMessage = error.message?.trim() ?? '';
+
+    return TrainerApiException(
+      message: validationMessages.isNotEmpty
+          ? validationMessages.join('\n')
+          : responseMessage.isNotEmpty
+          ? responseMessage
+          : dioMessage.isNotEmpty
+          ? dioMessage
+          : 'Network request failed. Please try again.',
+      statusCode: error.response?.statusCode,
+    );
+  }
+
+  final String message;
+  final int? statusCode;
+
+  @override
+  String toString() => message;
+}
+
+List<String> _flattenApiMessages(dynamic value) {
+  final messages = <String>[];
+
+  void collect(dynamic item) {
+    if (item is Map) {
+      for (final nested in item.values) {
+        collect(nested);
+      }
+      return;
+    }
+    if (item is Iterable) {
+      for (final nested in item) {
+        collect(nested);
+      }
+      return;
+    }
+    final message = item?.toString().trim() ?? '';
+    if (message.isNotEmpty && !messages.contains(message)) {
+      messages.add(message);
+    }
+  }
+
+  collect(value);
+  return messages;
 }
