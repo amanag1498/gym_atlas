@@ -1078,7 +1078,7 @@ IconData _iconForLabel(String label) {
     return Icons.sports_rounded;
   }
   if (normalized.contains('attendance') || normalized.contains('check')) {
-    return Icons.qr_code_scanner_rounded;
+    return Icons.fingerprint_rounded;
   }
   if (normalized.contains('workout') || normalized.contains('training')) {
     return Icons.fitness_center_rounded;

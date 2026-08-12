@@ -135,27 +135,17 @@ class AttendanceController extends Controller
         $branch = $this->resolveBranchForGym($request, $gym);
         $this->assertAttendanceManageAccess($request, $gym, $branch->id);
 
-        $isQrScan = filled($request->validated('qr_payload'));
-        $log = $isQrScan
-            ? $this->attendanceService->qrCheckIn(
-                gym: $gym,
-                branch: $branch,
-                qrPayload: $request->validated('qr_payload'),
-                checkedInBy: $request->user(),
-                notes: $request->validated('notes'),
-                sourceDevice: $request->validated('source_device'),
-            )
-            : $this->attendanceService->biometricCheckIn(
-                gym: $gym,
-                branch: $branch,
-                biometricIdentifier: $request->validated('biometric_identifier'),
-                checkedInBy: $request->user(),
-                notes: $request->validated('notes'),
-                sourceDevice: $request->validated('source_device'),
-            );
+        $log = $this->attendanceService->biometricCheckIn(
+            gym: $gym,
+            branch: $branch,
+            biometricIdentifier: $request->validated('biometric_identifier'),
+            checkedInBy: $request->user(),
+            notes: $request->validated('notes'),
+            sourceDevice: $request->validated('source_device'),
+        );
 
         $this->auditLogService->log(
-            event: $isQrScan ? 'attendance.qr.created' : 'attendance.biometric.created',
+            event: 'attendance.biometric.created',
             action: 'create',
             request: $request,
             subject: $log,
@@ -166,7 +156,7 @@ class AttendanceController extends Controller
 
         return $this->success(
             AttendanceLogResource::make($log->load(['member', 'checkedInByUser'])),
-            $isQrScan ? 'QR attendance recorded successfully.' : 'Biometric attendance recorded successfully.',
+            'Biometric attendance recorded successfully.',
             201,
         );
     }

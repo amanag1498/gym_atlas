@@ -20,7 +20,6 @@ class AttendanceLog extends Model
         'checked_in_at',
         'notes',
         'source_device',
-        'scan_reference_hash',
     ];
 
     protected function casts(): array

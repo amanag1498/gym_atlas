@@ -11,7 +11,6 @@ class MemberRepository {
   Future<void> updateProfile(JsonMap payload) => _apiClient.put<dynamic>('/member/profile', data: payload);
   Future<ApiRecord> membership() => _record('/member/membership');
   Future<ApiRecord> trainer() => _record('/member/trainer');
-  Future<ApiRecord> qrCode() => _record('/member/attendance/qr-code');
   Future<ApiRecord> attendanceStatus() => _record('/member/attendance/status');
   Future<ApiRecord> progressSummary() => _record('/member/progress/summary');
   Future<ApiRecord> logbookSummary() => _record('/member/logbook-summary');

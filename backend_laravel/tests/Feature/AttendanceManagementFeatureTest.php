@@ -82,39 +82,6 @@ class AttendanceManagementFeatureTest extends TestCase
         $this->assertNotSame($firstId, $secondId);
     }
 
-    public function test_qr_scan_alias_records_attendance_and_blocks_duplicate_same_day(): void
-    {
-        [$owner, $member, $gym, $branch] = $this->makeGymScope(RoleName::GymOwner->value);
-
-        $qrPayload = $this->actingAs($member, 'sanctum')
-            ->getJson('/api/member/qr-code')
-            ->assertOk()
-            ->json('data.qr_payload');
-
-        $headers = [
-            'X-Gym-Id' => (string) $gym->id,
-            'X-Branch-Id' => (string) $branch->id,
-        ];
-
-        $this->actingAs($owner, 'sanctum')
-            ->postJson('/api/gym/attendance/qr-scan', [
-                'gym_id' => $gym->id,
-                'branch_id' => $branch->id,
-                'qr_payload' => $qrPayload,
-            ], $headers)
-            ->assertCreated()
-            ->assertJsonPath('data.check_in_method', 'qr');
-
-        $this->actingAs($owner, 'sanctum')
-            ->postJson('/api/gym/attendance/qr-scan', [
-                'gym_id' => $gym->id,
-                'branch_id' => $branch->id,
-                'qr_payload' => $qrPayload,
-            ], $headers)
-            ->assertUnprocessable()
-            ->assertJsonPath('errors.member_id.0', 'This member has already checked in today.');
-    }
-
     public function test_biometric_scan_records_attendance_for_an_enabled_active_profile(): void
     {
         [$owner, $member, $gym, $branch] = $this->makeGymScope(RoleName::GymOwner->value);
@@ -175,55 +142,6 @@ class AttendanceManagementFeatureTest extends TestCase
             ->assertJsonPath('errors.member_id.0', 'Attendance is unavailable because this gym member profile is inactive.');
 
         $this->assertDatabaseMissing('attendance_logs', ['member_id' => $member->id]);
-    }
-
-    public function test_scan_request_rejects_ambiguous_qr_and_biometric_credentials(): void
-    {
-        [$owner, $member, $gym, $branch] = $this->makeGymScope(RoleName::GymOwner->value);
-        $qrPayload = app(AttendanceService::class)->buildQrPayload($member, $gym, $branch)['qr_payload'];
-
-        $this->actingAs($owner, 'sanctum')
-            ->postJson('/api/gym/attendance/scan', [
-                'gym_id' => $gym->id,
-                'branch_id' => $branch->id,
-                'biometric_identifier' => 'scanner-member-42',
-                'qr_payload' => $qrPayload,
-            ], [
-                'X-Gym-Id' => (string) $gym->id,
-                'X-Branch-Id' => (string) $branch->id,
-            ])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors(['biometric_identifier', 'qr_payload']);
-    }
-
-    public function test_qr_payload_cannot_be_replayed_when_same_day_duplicates_are_allowed(): void
-    {
-        [$owner, $member, $gym, $branch] = $this->makeGymScope(RoleName::GymOwner->value);
-        $gym->forceFill(['prevent_duplicate_same_day_checkins' => false])->save();
-        $qrPayload = app(AttendanceService::class)->buildQrPayload($member, $gym, $branch)['qr_payload'];
-        $headers = [
-            'X-Gym-Id' => (string) $gym->id,
-            'X-Branch-Id' => (string) $branch->id,
-        ];
-
-        $this->actingAs($owner, 'sanctum')
-            ->postJson('/api/gym/attendance/qr-scan', [
-                'gym_id' => $gym->id,
-                'branch_id' => $branch->id,
-                'qr_payload' => $qrPayload,
-            ], $headers)
-            ->assertCreated();
-
-        $this->actingAs($owner, 'sanctum')
-            ->postJson('/api/gym/attendance/qr-scan', [
-                'gym_id' => $gym->id,
-                'branch_id' => $branch->id,
-                'qr_payload' => $qrPayload,
-            ], $headers)
-            ->assertUnprocessable()
-            ->assertJsonPath('errors.qr_payload.0', 'This attendance QR code has already been used. Ask the member to refresh it.');
-
-        $this->assertDatabaseCount('attendance_logs', 1);
     }
 
     public function test_duplicate_day_is_calculated_in_the_branch_timezone(): void
@@ -310,7 +228,7 @@ class AttendanceManagementFeatureTest extends TestCase
         $this->assertSame(2, MemberProfile::query()->where('biometric_identifier', 'local-scanner-slot-7')->count());
     }
 
-    public function test_member_qr_uses_current_gym_profile_when_independent_profile_exists(): void
+    public function test_removed_member_qr_route_is_not_exposed_when_multiple_profiles_exist(): void
     {
         $this->seed(PermissionSeeder::class);
 
@@ -321,23 +239,23 @@ class AttendanceManagementFeatureTest extends TestCase
         $member->assignRole(RoleName::Member->value);
 
         $gym = Gym::query()->create([
-            'name' => 'Scoped QR Gym',
-            'slug' => 'scoped-qr-gym',
+            'name' => 'Scoped Attendance Gym',
+            'slug' => 'scoped-attendance-gym',
             'status' => 'active',
             'approval_status' => 'approved',
             'is_active' => true,
         ]);
         $branch = Branch::query()->create([
             'gym_id' => $gym->id,
-            'name' => 'Scoped QR Branch',
-            'slug' => 'scoped-qr-branch',
+            'name' => 'Scoped Attendance Branch',
+            'slug' => 'scoped-attendance-branch',
             'status' => 'active',
             'is_active' => true,
         ]);
         $plan = MembershipPlan::query()->create([
             'gym_id' => $gym->id,
             'branch_id' => $branch->id,
-            'name' => 'Scoped QR Plan',
+            'name' => 'Scoped Attendance Plan',
             'duration_days' => 30,
             'plan_price' => 2500,
             'joining_fee' => 0,
@@ -380,13 +298,14 @@ class AttendanceManagementFeatureTest extends TestCase
 
         $this->actingAs($member, 'sanctum')
             ->getJson('/api/member/qr-code')
-            ->assertOk()
-            ->assertJsonPath('data.enabled', true)
-            ->assertJsonPath('data.check_in_status.enabled', true)
-            ->assertJsonPath('message', 'Member QR code payload generated successfully.');
+            ->assertNotFound();
+
+        $this->actingAs($member, 'sanctum')
+            ->getJson('/api/member/attendance/qr-code')
+            ->assertNotFound();
     }
 
-    public function test_qr_scan_rejects_member_without_active_membership(): void
+    public function test_removed_admin_qr_scan_routes_are_not_exposed(): void
     {
         [$owner, $member, $gym, $branch] = $this->makeGymScope(RoleName::GymOwner->value, membershipStatus: 'expired');
         $plan = MembershipPlan::query()->create([
@@ -425,19 +344,25 @@ class AttendanceManagementFeatureTest extends TestCase
             'payment_status' => 'paid',
         ]);
 
-        $payload = app(AttendanceService::class)->buildQrPayload($member, $gym, $branch)['qr_payload'];
-
         $this->actingAs($owner, 'sanctum')
             ->postJson('/api/gym/attendance/qr-scan', [
                 'gym_id' => $gym->id,
                 'branch_id' => $branch->id,
-                'qr_payload' => $payload,
             ], [
                 'X-Gym-Id' => (string) $gym->id,
                 'X-Branch-Id' => (string) $branch->id,
             ])
-            ->assertUnprocessable()
-            ->assertJsonPath('errors.member_id.0', 'Attendance is unavailable because the member does not have an active membership.');
+            ->assertNotFound();
+
+        $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/gym/attendance/scan', [
+                'gym_id' => $gym->id,
+                'branch_id' => $branch->id,
+            ], [
+                'X-Gym-Id' => (string) $gym->id,
+                'X-Branch-Id' => (string) $branch->id,
+            ])
+            ->assertNotFound();
     }
 
     public function test_branch_manager_cannot_view_other_branch_member_attendance(): void

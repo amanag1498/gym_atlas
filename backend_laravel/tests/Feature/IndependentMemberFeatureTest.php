@@ -45,11 +45,6 @@ class IndependentMemberFeatureTest extends TestCase
             ->assertJsonPath('data.steps.lastSyncedAt', null);
 
         $this->actingAs($member, 'sanctum')
-            ->getJson('/api/member/attendance/qr-code')
-            ->assertOk()
-            ->assertJsonPath('data.enabled', false);
-
-        $this->actingAs($member, 'sanctum')
             ->getJson('/api/member/trainer')
             ->assertOk()
             ->assertJsonPath('data.enabled', false);

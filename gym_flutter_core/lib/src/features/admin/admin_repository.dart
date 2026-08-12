@@ -71,7 +71,6 @@ class AdminRepository {
   Future<void> createPayment(int membershipId, JsonMap payload) => _apiClient.post<dynamic>('/gym/member-memberships/$membershipId/payments', data: payload);
   Future<void> markMembershipPaid(int membershipId) => _apiClient.post<dynamic>('/gym/member-memberships/$membershipId/mark-paid');
   Future<void> markMembershipUnpaid(int membershipId) => _apiClient.post<dynamic>('/gym/member-memberships/$membershipId/mark-unpaid');
-  Future<void> scanAttendance(JsonMap payload) => _apiClient.post<dynamic>('/gym/attendance/scan', data: payload);
   Future<void> manualAttendance(JsonMap payload) => _apiClient.post<dynamic>('/gym/attendance/manual', data: payload);
   Future<void> createAnnouncement(JsonMap payload) => _apiClient.post<dynamic>('/gym/announcements', data: payload);
   Future<void> createFacility(JsonMap payload) => _apiClient.post<dynamic>('/platform-admin/facilities', data: payload);

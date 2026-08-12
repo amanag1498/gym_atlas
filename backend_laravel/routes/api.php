@@ -421,11 +421,7 @@ Route::prefix('gym')
             ->middleware('permission:attendance.view|attendance.manage');
         Route::post('attendance/manual', [AttendanceController::class, 'manual'])
             ->middleware('permission:attendance.manage');
-        Route::post('attendance/scan', [AttendanceController::class, 'biometricScan'])
-            ->middleware('permission:attendance.manage');
         Route::post('attendance/biometric-scan', [AttendanceController::class, 'biometricScan'])
-            ->middleware('permission:attendance.manage');
-        Route::post('attendance/qr-scan', [AttendanceController::class, 'biometricScan'])
             ->middleware('permission:attendance.manage');
         Route::get('membership-plans', [MembershipPlanController::class, 'index'])
             ->middleware('permission:membership_plan.view|membership_plan.manage');
@@ -708,8 +704,6 @@ Route::prefix('member')
         Route::get('attendance/biometric-profile', [MemberAttendanceController::class, 'biometricProfile']);
         Route::get('attendance', [MemberAttendanceController::class, 'history']);
         Route::get('attendance/status', [MemberAttendanceController::class, 'status']);
-        Route::get('attendance/qr-code', [MemberAttendanceController::class, 'qrCode']);
-        Route::get('qr-code', [MemberAttendanceController::class, 'qrCode']);
         Route::get('attendance/history', [MemberAttendanceController::class, 'history']);
         Route::get('workout-plans', [MemberWorkoutController::class, 'plans'])
             ->middleware('permission:workout_plan.view');

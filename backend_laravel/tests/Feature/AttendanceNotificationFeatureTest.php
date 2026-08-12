@@ -22,20 +22,16 @@ class AttendanceNotificationFeatureTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_duplicate_same_day_qr_check_in_is_blocked_when_gym_setting_enabled(): void
+    public function test_duplicate_same_day_biometric_check_in_is_blocked_when_gym_setting_enabled(): void
     {
         [$staff, $member, $gym, $branch] = $this->makeScopedUsers(RoleName::GymStaff->value);
-
-        $qrResponse = $this->actingAs($member, 'sanctum')
-            ->getJson('/api/member/attendance/qr-code', [
-                'X-Gym-Id' => (string) $gym->id,
-                'X-Branch-Id' => (string) $branch->id,
-            ])
-            ->assertOk()
-            ->assertJsonPath('data.enabled', true)
-            ->assertJsonStructure(['data' => ['qr_payload']]);
-
-        $qrPayload = $qrResponse->json('data.qr_payload');
+        MemberProfile::query()
+            ->where('user_id', $member->id)
+            ->where('gym_id', $gym->id)
+            ->update([
+                'biometric_identifier' => 'duplicate-day-member',
+                'biometric_enabled' => true,
+            ]);
 
         $headers = [
             'X-Gym-Id' => (string) $gym->id,
@@ -43,18 +39,18 @@ class AttendanceNotificationFeatureTest extends TestCase
         ];
 
         $this->actingAs($staff, 'sanctum')
-            ->postJson('/api/gym/attendance/scan', [
+            ->postJson('/api/gym/attendance/biometric-scan', [
                 'gym_id' => $gym->id,
                 'branch_id' => $branch->id,
-                'qr_payload' => $qrPayload,
+                'biometric_identifier' => 'duplicate-day-member',
             ], $headers)
             ->assertCreated();
 
         $this->actingAs($staff, 'sanctum')
-            ->postJson('/api/gym/attendance/scan', [
+            ->postJson('/api/gym/attendance/biometric-scan', [
                 'gym_id' => $gym->id,
                 'branch_id' => $branch->id,
-                'qr_payload' => $qrPayload,
+                'biometric_identifier' => 'duplicate-day-member',
             ], $headers)
             ->assertUnprocessable()
             ->assertJsonPath('errors.member_id.0', 'This member has already checked in today.');

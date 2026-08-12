@@ -32,7 +32,7 @@ Final hard-audit validation passes across the entire Laravel suite with no basel
 
 The final audit also repaired adjacent regressions that could have weakened the completed workflow:
 
-- Attendance QR codes are encrypted, short-lived, gym/branch scoped, exposed on both supported Member API paths, and accepted by the scan aliases. Check-in now requires a real active membership; a stale active profile cannot restore attendance after cancellation.
+- Member attendance is available through manual and biometric check-in only. Both paths require a real active membership; a stale active profile cannot restore attendance after cancellation.
 - Gym Staff settings access now requires the scoped `view_reports` grant on both web and API paths instead of passing through role-level dashboard permission.
 - Legacy gym-profile submissions normalize inherited fields and expand the existing all-days timing format before validation.
 - Platform gym creation always writes a valid onboarding boolean, partial settings updates preserve omitted values, and the Platform Admin owner/listing/impersonation views again expose their operational context clearly.
@@ -245,7 +245,7 @@ They must not expose gym payment, dues, membership, branch attendance, gym staff
 - Platform verification decisions now create critical trainer notifications for pending review, approval, rejection, and suspension. Rejection or suspension reasons are returned in the trainer profile API.
 - The Trainer App displays the review reason on the independent status card and profile screen, and provides a confirmation flow for withdrawing pending invitations.
 - Notification cards in both apps distinguish independent invitations, verification changes, coaching responses, and revoked coaching relationships.
-- Both `/api/member/qr-code` and `/api/member/attendance/qr-code` return the same signed attendance QR contract. Members without an active gym membership receive a safe disabled state instead of a 404 or a usable payload.
+- QR attendance routes are intentionally not exposed. Members can view attendance status and history, while authorized gym users record attendance manually or through the biometric endpoint.
 
 ## Testing matrix
 
