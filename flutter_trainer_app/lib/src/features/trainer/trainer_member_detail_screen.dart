@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/metric_trend_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:gym_flutter_core/diet_plan_summary_view.dart';
 
@@ -1220,6 +1221,34 @@ class _OverviewTab extends StatelessWidget {
   }
 }
 
+List<MetricChartPoint> _trainerMetricPoints(
+  List<Map<String, dynamic>> rows,
+  String dateKey,
+  String valueKey,
+) {
+  final points =
+      rows
+          .where((row) => row[valueKey] != null)
+          .map((row) {
+            final date = DateTime.tryParse(row[dateKey]?.toString() ?? '');
+            final value = double.tryParse(row[valueKey].toString());
+            if (date == null || value == null) return null;
+            return (date: date, value: value);
+          })
+          .whereType<({DateTime date, double value})>()
+          .toList()
+        ..sort((left, right) => left.date.compareTo(right.date));
+
+  return points
+      .map(
+        (point) => MetricChartPoint(
+          label: DateFormat('d MMM').format(point.date.toLocal()),
+          value: point.value,
+        ),
+      )
+      .toList();
+}
+
 class _DietPlansTab extends StatelessWidget {
   const _DietPlansTab({required this.plans, required this.onAssign});
 
@@ -1428,6 +1457,30 @@ class _ProgressTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        MetricTrendChart(
+          title: 'Member weight trend',
+          subtitle: 'Oldest to latest visible check-in',
+          points: _trainerMetricPoints(weightLogs, 'log_date', 'weight_kg'),
+          accentColor: AppColors.accentNeon,
+          unit: ' kg',
+          emptyMessage:
+              'Two member weight logs are needed before a trend appears.',
+        ),
+        const SizedBox(height: 14),
+        MetricTrendChart(
+          title: 'Member waist trend',
+          subtitle: 'Body measurement change across check-ins',
+          points: _trainerMetricPoints(
+            bodyMeasurements,
+            'measured_on',
+            'waist_cm',
+          ),
+          accentColor: AppColors.accentPurple,
+          unit: ' cm',
+          emptyMessage:
+              'Two waist measurements are needed before a trend appears.',
+        ),
+        const SizedBox(height: 14),
         PremiumCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

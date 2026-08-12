@@ -6,6 +6,7 @@ use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\Gym;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -56,11 +57,15 @@ class GymAuditLogService
             ->latest('id');
 
         if ($filters['actor']) {
-            $search = '%'.$filters['actor'].'%';
-            $query->whereHas('actor', function (Builder $builder) use ($search): void {
-                $builder->where('name', 'like', $search)
-                    ->orWhere('email', 'like', $search);
-            });
+            if (Str::lower($filters['actor']) === 'system') {
+                $query->whereNull('actor_user_id');
+            } else {
+                $search = '%'.$filters['actor'].'%';
+                $query->whereHas('actor', function (Builder $builder) use ($search): void {
+                    $builder->where('name', 'like', $search)
+                        ->orWhere('email', 'like', $search);
+                });
+            }
         }
 
         if ($filters['action']) {
@@ -118,7 +123,7 @@ class GymAuditLogService
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, Branch>
+     * @return Collection<int, Branch>
      */
     public function branchOptions(Gym $gym, array $accessibleBranchIds)
     {
@@ -140,6 +145,7 @@ class GymAuditLogService
             foreach ($value as $key => $nestedValue) {
                 if (is_string($key) && $this->isSensitiveKey($key)) {
                     $sanitized[$key] = '[redacted]';
+
                     continue;
                 }
 

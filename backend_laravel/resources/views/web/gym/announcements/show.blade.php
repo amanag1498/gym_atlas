@@ -44,5 +44,37 @@
                 </div>
             </x-premium-card>
         </div>
+
+        <x-table-wrapper>
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h3 class="panel-section-title">Delivery coverage</h3>
+                    <p class="panel-section-copy">Recipient-level delivery and read status for this announcement.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <x-status-badge :label="$announcement->recipients_count.' recipients'" tone="info" />
+                    <x-status-badge :label="$announcement->read_recipients_count.' read'" :tone="$announcement->read_recipients_count > 0 ? 'success' : 'neutral'" />
+                </div>
+            </div>
+            @if ($announcement->recipients->isNotEmpty())
+                <div class="mt-6 overflow-x-auto">
+                    <table class="panel-table min-w-[760px]">
+                        <thead><tr><th>Member</th><th>Email</th><th>Status</th><th>Delivered</th></tr></thead>
+                        <tbody>
+                            @foreach ($announcement->recipients as $recipient)
+                                <tr>
+                                    <td class="font-medium text-slate-950 dark:text-white">{{ $recipient->user?->name ?? 'Member unavailable' }}</td>
+                                    <td>{{ $recipient->user?->email ?? 'No email' }}</td>
+                                    <td><x-status-badge :label="$recipient->read_at ? 'Read' : 'Unread'" :tone="$recipient->read_at ? 'success' : 'warning'" /></td>
+                                    <td>{{ optional($recipient->created_at)->format('d M Y H:i') ?: 'Not available' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @else
+                <div class="mt-6"><x-empty-state title="No recipients" message="No eligible members matched this announcement when it was sent." /></div>
+            @endif
+        </x-table-wrapper>
     </div>
 @endsection

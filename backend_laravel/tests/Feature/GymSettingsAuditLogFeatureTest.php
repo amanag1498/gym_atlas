@@ -7,8 +7,6 @@ use App\Enums\RoleName;
 use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\Gym;
-use App\Models\GymSetting;
-use App\Models\NotificationPreference;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -156,6 +154,15 @@ class GymSettingsAuditLogFeatureTest extends TestCase
             ->assertSee('payment.recorded')
             ->assertSee('[redacted]')
             ->assertDontSee('abc123');
+
+        $export = $this->get(route('web.gym.audit-logs.export', [
+            'gym' => $gym->id,
+            'branch_id' => $branchA->id,
+        ]));
+        $export->assertOk()->assertHeader('content-type', 'text/csv; charset=UTF-8');
+        $this->assertStringContainsString('payment.recorded', $export->streamedContent());
+        $this->assertStringContainsString('[redacted]', $export->streamedContent());
+        $this->assertStringNotContainsString('secret', $export->streamedContent());
 
         $manager = User::factory()->create([
             'password' => 'secret123',

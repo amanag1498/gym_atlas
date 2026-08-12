@@ -3,12 +3,14 @@
 namespace App\Services\Notification;
 
 use App\Enums\NotificationType;
+use App\Models\AnnouncementRecipient;
 use App\Models\Branch;
 use App\Models\Gym;
 use App\Models\Notification;
 use App\Models\NotificationPreference;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 
 class NotificationService
 {
@@ -63,26 +65,47 @@ class NotificationService
 
     public function markRead(Notification $notification): Notification
     {
-        $notification->forceFill(['read_at' => now()])->save();
+        DB::transaction(function () use ($notification): void {
+            $readAt = now();
+            $notification->forceFill(['read_at' => $readAt])->save();
+            AnnouncementRecipient::query()
+                ->where('notification_id', $notification->id)
+                ->update(['read_at' => $readAt]);
+        });
 
         return $notification;
     }
 
     public function markUnread(Notification $notification): Notification
     {
-        $notification->forceFill(['read_at' => null])->save();
+        DB::transaction(function () use ($notification): void {
+            $notification->forceFill(['read_at' => null])->save();
+            AnnouncementRecipient::query()
+                ->where('notification_id', $notification->id)
+                ->update(['read_at' => null]);
+        });
 
         return $notification;
     }
 
     public function markAllRead(User $user, ?int $gymId = null, ?int $branchId = null): int
     {
-        return Notification::query()
+        $query = Notification::query()
             ->where('user_id', $user->id)
             ->whereNull('read_at')
             ->when($gymId !== null, fn ($query) => $query->where('gym_id', $gymId))
-            ->when($branchId !== null, fn ($query) => $query->where('branch_id', $branchId))
-            ->update(['read_at' => now()]);
+            ->when($branchId !== null, fn ($query) => $query->where('branch_id', $branchId));
+        $notificationIds = (clone $query)->pluck('id');
+
+        return DB::transaction(function () use ($query, $notificationIds): int {
+            $readAt = now();
+            $updated = $query->update(['read_at' => $readAt]);
+            AnnouncementRecipient::query()
+                ->whereIn('notification_id', $notificationIds)
+                ->update(['read_at' => $readAt]);
+
+            return $updated;
+        });
     }
 
     public function isEnabled(int $userId, string $type, ?int $gymId = null, ?int $branchId = null): bool

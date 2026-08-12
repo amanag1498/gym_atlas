@@ -146,10 +146,15 @@ class GymReportService
             'payments' => $this->revenueReport($gym, $filters),
             'dues' => $this->duesReport($gym, $filters),
             'attendance' => $this->attendanceReport($gym, $filters),
+            'memberships' => $this->membershipsReport($gym, $filters),
             'expired-members' => $this->membershipsReport($gym, array_merge($filters, ['status' => 'expired'])),
             'expiring-members' => $this->membershipsReport($gym, array_merge($filters, ['status' => 'expiring-soon'])),
             'trial-requests' => $this->leadConversionReport($gym, $filters),
             'custom-fee-report', 'custom-fees' => $this->customFeeReport($gym, $filters),
+            'overview' => $this->overviewReport($gym, $filters),
+            'trainers' => $this->trainerPerformanceReport($gym, $filters),
+            'inactive-members' => $this->inactiveMembersReport($gym, $filters),
+            'branch-comparison' => $this->branchComparisonReport($gym, $filters),
             default => $this->overviewReport($gym, $filters),
         };
     }

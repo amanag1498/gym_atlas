@@ -821,6 +821,7 @@ class WebPanelTest extends TestCase
         $response->assertOk()->assertSee('Gym Dashboard');
 
         $stats = $response->viewData('stats');
+        $charts = $response->viewData('charts');
 
         $this->assertSame(2, $stats['total_members']);
         $this->assertSame(1, $stats['active_members']);
@@ -835,6 +836,11 @@ class WebPanelTest extends TestCase
         $this->assertSame(2.0, $stats['trainer_member_ratio']);
         $this->assertSame(1, $stats['pending_trial_requests']);
         $this->assertSame(1, $stats['members_without_trainer_count']);
+        $this->assertCount(30, $charts['collections']);
+        $this->assertCount(30, $charts['attendance']);
+        $this->assertSame(1000.0, (float) $charts['collections']->last()['value']);
+        $this->assertSame(1, $charts['attendance']->last()['value']);
+        $this->assertSame($branch->name, $charts['branch_members']->first()['label']);
     }
 
     public function test_branch_manager_dashboard_is_branch_scoped(): void

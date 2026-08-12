@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web\Gym;
 
+use App\Enums\AnnouncementAudienceType;
 use App\Enums\PermissionName;
 use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
@@ -50,6 +51,19 @@ class AnnouncementController extends Controller
                     'announcements_page',
                 )
                 ->withQueryString(),
+            'announcementSummary' => $this->announcementService->summaryForActor(
+                $request->user(),
+                $gym->id,
+                $branch?->id,
+                $request->only(['search', 'audience_type']),
+            ),
+            'audienceOptions' => [
+                '' => 'All audiences',
+                AnnouncementAudienceType::GymWide->value => 'All Gym Members',
+                AnnouncementAudienceType::BranchSpecific->value => 'Branch Members',
+                AnnouncementAudienceType::SelectedMembers->value => 'Selected Members',
+            ],
+            'sendAudienceOptions' => $this->sendAudienceOptions($request),
             'branches' => $gym->branches()
                 ->whereIn('id', $this->gymWebPanelService->accessibleBranchIds($request, $gym))
                 ->orderBy('name')
@@ -77,18 +91,19 @@ class AnnouncementController extends Controller
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
         $this->gymWebPanelService->assertPermission($request, PermissionName::AnnouncementsView->value, $gym);
+        abort_unless((int) $announcement->gym_id === (int) $gym->id, 404);
 
         return view('web.gym.announcements.show', [
             'pageTitle' => $announcement->title,
             'breadcrumbs' => ['Gym', 'Announcements', $announcement->title],
-            'announcement' => $this->announcementService->resolveAnnouncementForActor($request->user(), $announcement)->load('creator', 'gym', 'branch'),
+            'announcement' => $this->announcementService->showAnnouncementForActor($request->user(), $announcement),
         ]);
     }
 
     public function store(StoreAnnouncementRequest $request): RedirectResponse
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
-        $branch = $request->filled('branch_id')
+        $branch = $request->string('audience_type')->toString() !== AnnouncementAudienceType::GymWide->value && $request->filled('branch_id')
             ? Branch::query()->whereKey($request->integer('branch_id'))->firstOrFail()
             : null;
 
@@ -111,6 +126,7 @@ class AnnouncementController extends Controller
     public function destroy(Request $request, Announcement $announcement): RedirectResponse
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
+        abort_unless((int) $announcement->gym_id === (int) $gym->id, 404);
         $branchId = $announcement->branch_id;
         $this->gymWebPanelService->assertPermission($request, PermissionName::AnnouncementsManage->value, $gym, $branchId);
         $this->assertSendAnnouncementsAccess($request, $gym, $branchId);
@@ -165,5 +181,21 @@ class AnnouncementController extends Controller
                 $builder->whereNull('branch_id')->orWhere('branch_id', $branchId);
             }))
             ->latest('id');
+    }
+
+    private function sendAudienceOptions(Request $request): array
+    {
+        $options = [];
+        $role = $request->user()?->active_role;
+
+        if (! in_array($role, [RoleName::BranchManager->value, RoleName::Trainer->value], true)) {
+            $options[AnnouncementAudienceType::GymWide->value] = 'All Gym Members';
+        }
+        if ($role !== RoleName::Trainer->value) {
+            $options[AnnouncementAudienceType::BranchSpecific->value] = 'Branch Members';
+        }
+        $options[AnnouncementAudienceType::SelectedMembers->value] = 'Selected Members';
+
+        return $options;
     }
 }

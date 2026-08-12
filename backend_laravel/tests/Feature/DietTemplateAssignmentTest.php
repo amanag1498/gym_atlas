@@ -285,6 +285,39 @@ class DietTemplateAssignmentTest extends TestCase
         );
     }
 
+    public function test_diet_permission_backfill_repairs_all_existing_role_records_without_expanding_staff_management(): void
+    {
+        $this->seed(PermissionSeeder::class);
+
+        foreach (RoleName::cases() as $roleName) {
+            Role::findByName($roleName->value, 'sanctum')->revokePermissionTo([
+                PermissionName::DietPlansView->value,
+                PermissionName::DietPlansManage->value,
+            ]);
+        }
+
+        $migration = require database_path(
+            'migrations/2026_08_12_120000_backfill_diet_plan_permissions_for_existing_roles.php',
+        );
+        $migration->up();
+
+        foreach ([
+            RoleName::PlatformAdmin,
+            RoleName::GymOwner,
+            RoleName::BranchManager,
+            RoleName::Trainer,
+            RoleName::Member,
+        ] as $roleName) {
+            $role = Role::findByName($roleName->value, 'sanctum');
+            $this->assertTrue($role->hasPermissionTo(PermissionName::DietPlansView->value));
+            $this->assertTrue($role->hasPermissionTo(PermissionName::DietPlansManage->value));
+        }
+
+        $staffRole = Role::findByName(RoleName::GymStaff->value, 'sanctum');
+        $this->assertTrue($staffRole->hasPermissionTo(PermissionName::DietPlansView->value));
+        $this->assertFalse($staffRole->hasPermissionTo(PermissionName::DietPlansManage->value));
+    }
+
     public function test_platform_admin_can_build_a_global_template_with_repeatable_food_products(): void
     {
         $this->seed(PermissionSeeder::class);

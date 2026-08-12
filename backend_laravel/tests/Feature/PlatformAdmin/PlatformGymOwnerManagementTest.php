@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\PlatformAdmin;
 
+use App\Enums\PermissionName;
 use App\Enums\RoleName;
 use App\Models\Gym;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class PlatformGymOwnerManagementTest extends TestCase
@@ -156,6 +158,56 @@ class PlatformGymOwnerManagementTest extends TestCase
             ->assertSessionMissing('web_panel.platform_admin_impersonator_id');
 
         $this->get(route('web.admin.dashboard'))->assertOk();
+    }
+
+    public function test_diet_permission_backfill_keeps_diet_plans_available_during_platform_admin_preview(): void
+    {
+        $admin = User::factory()->create([
+            'active_role' => RoleName::PlatformAdmin->value,
+            'password' => 'secret123',
+            'is_active' => true,
+        ]);
+        $admin->assignRole(RoleName::PlatformAdmin->value);
+
+        $owner = User::factory()->create([
+            'active_role' => RoleName::GymOwner->value,
+            'is_active' => true,
+        ]);
+        $owner->assignRole(RoleName::GymOwner->value);
+
+        $gym = Gym::query()->create([
+            'owner_user_id' => $owner->id,
+            'name' => 'Diet Preview Gym',
+            'slug' => 'diet-preview-gym',
+            'city' => 'Bengaluru',
+            'status' => 'active',
+            'approval_status' => 'approved',
+            'is_active' => true,
+        ]);
+
+        $ownerRole = Role::findByName(RoleName::GymOwner->value, 'sanctum');
+        $ownerRole->revokePermissionTo([
+            PermissionName::DietPlansView->value,
+            PermissionName::DietPlansManage->value,
+        ]);
+
+        $migration = require database_path(
+            'migrations/2026_08_12_120000_backfill_diet_plan_permissions_for_existing_roles.php',
+        );
+        $migration->up();
+
+        $this->post('/admin/login', [
+            'email' => $admin->email,
+            'password' => 'secret123',
+        ])->assertRedirect(route('web.admin.dashboard'));
+
+        $this->get(route('web.admin.gym-owners.dashboard', $owner))
+            ->assertRedirect(route('web.gym.dashboard', ['gym' => $gym->id]));
+
+        $this->get(route('web.gym.diet-plans.index', ['gym' => $gym->id]))
+            ->assertOk()
+            ->assertSee('Diet Plans')
+            ->assertSee('Assign Diet Plan');
     }
 
     public function test_platform_admin_cannot_open_gym_routes_without_starting_a_preview_session(): void

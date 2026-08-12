@@ -48,7 +48,9 @@ class PaymentManagementFeatureTest extends TestCase
 
         $this->get(route('web.gym.payments.index', ['gym' => $gym->id, 'branch' => $branch->id]))
             ->assertOk()
-            ->assertSee('Payments');
+            ->assertSee('Payments')
+            ->assertSee('Collect Payment')
+            ->assertDontSee('Mark Paid');
 
         $this->assertAggregatesDoNotInheritDisplayOrder('paid_at');
         DB::disableQueryLog();
@@ -80,6 +82,11 @@ class PaymentManagementFeatureTest extends TestCase
 
         $membership->refresh();
         $payment = Payment::query()->latest('id')->firstOrFail();
+
+        $this->get(route('web.gym.payments.index', ['gym' => $gym->id, 'branch' => $branch->id]))
+            ->assertOk()
+            ->assertSeeInOrder(['Mode', 'Collector', 'Receipt', 'Actions'])
+            ->assertSee($owner->email);
 
         $this->assertSame('paid', $membership->payment_status);
         $this->assertSame(1900.0, (float) $membership->amount_paid);

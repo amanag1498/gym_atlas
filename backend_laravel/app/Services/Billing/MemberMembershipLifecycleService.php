@@ -218,42 +218,97 @@ class MemberMembershipLifecycleService
         $this->syncMemberProfileSummary($member, $membership->gym_id);
     }
 
-    public function syncMemberProfileSummary(?User $member, int $gymId): void
+    public function syncMemberProfileSummary(?User $member, int $gymId, ?string $asOfDate = null): bool
     {
         if (! $member) {
-            return;
+            return false;
         }
+
+        $asOfDate ??= today()->toDateString();
 
         $profile = $member->memberProfile()
             ->where('gym_id', $gymId)
             ->first();
 
         if (! $profile instanceof MemberProfile) {
-            return;
+            return false;
         }
 
         $current = MemberMembership::query()
             ->where('gym_id', $gymId)
             ->where('member_id', $member->id)
+            ->where(function ($query) use ($asOfDate): void {
+                $query->where('status', MembershipStatus::Frozen->value)
+                    ->orWhere(function ($active) use ($asOfDate): void {
+                        $active->where('status', MembershipStatus::Active->value)
+                            ->whereDate('start_date', '<=', $asOfDate)
+                            ->whereDate('expiry_date', '>=', $asOfDate);
+                    });
+            })
             ->currentFirst()
             ->first();
 
         if (! $current) {
+            $future = MemberMembership::query()
+                ->where('gym_id', $gymId)
+                ->where('member_id', $member->id)
+                ->where('status', MembershipStatus::Active->value)
+                ->whereDate('start_date', '>', $asOfDate)
+                ->whereDate('expiry_date', '>=', $asOfDate)
+                ->orderBy('start_date')
+                ->orderBy('id')
+                ->first();
+
+            if ($future) {
+                $changed = $profile->status !== 'inactive'
+                    || $profile->is_active
+                    || $profile->membership_status !== 'inactive'
+                    || $profile->membership_expires_on?->toDateString() !== $future->expiry_date?->toDateString()
+                    || (int) $profile->branch_id !== (int) $future->branch_id;
+                $profile->forceFill([
+                    'branch_id' => $future->branch_id,
+                    'status' => 'inactive',
+                    'is_active' => false,
+                    'membership_status' => 'inactive',
+                    'membership_expires_on' => $future->expiry_date,
+                ])->save();
+
+                return $changed;
+            }
+
+            $latest = MemberMembership::query()
+                ->where('gym_id', $gymId)
+                ->where('member_id', $member->id)
+                ->currentFirst()
+                ->first();
+            $membershipStatus = $latest?->status ?? 'inactive';
+            $changed = $profile->status !== 'inactive'
+                || $profile->is_active
+                || $profile->membership_status !== $membershipStatus
+                || $profile->membership_expires_on?->toDateString() !== $latest?->expiry_date?->toDateString()
+                || $profile->assigned_trainer_user_id !== null
+                || $profile->assigned_trainer_id !== null;
             $profile->forceFill([
                 'status' => 'inactive',
                 'is_active' => false,
-                'membership_status' => 'inactive',
-                'membership_expires_on' => null,
+                'membership_status' => $membershipStatus,
+                'membership_expires_on' => $latest?->expiry_date,
                 'assigned_trainer_user_id' => null,
                 'assigned_trainer_id' => null,
             ])->save();
 
-            return;
+            return $changed;
         }
 
         $isOperational = $current->status === MembershipStatus::Frozen->value
-            || ($current->status === MembershipStatus::Active->value && $current->expiry_date?->endOfDay()->isFuture());
+            || $current->status === MembershipStatus::Active->value;
+        $changed = $profile->status !== ($isOperational ? 'active' : 'inactive')
+            || $profile->is_active !== $isOperational
+            || $profile->membership_status !== $current->status
+            || $profile->membership_expires_on?->toDateString() !== $current->expiry_date?->toDateString()
+            || (int) $profile->branch_id !== (int) $current->branch_id;
         $profile->forceFill([
+            'branch_id' => $current->branch_id,
             'status' => $isOperational ? 'active' : 'inactive',
             'is_active' => $isOperational,
             'membership_status' => $current->status,
@@ -263,6 +318,8 @@ class MemberMembershipLifecycleService
                 'assigned_trainer_id' => null,
             ]),
         ])->save();
+
+        return $changed;
     }
 
     private function cancelAttendanceInactivityReminders(MemberMembership $membership): void

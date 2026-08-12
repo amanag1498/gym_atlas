@@ -15,6 +15,11 @@
         'plan_id' => $filters['plan_id'],
         'status' => $filters['status'],
     ], fn ($value) => filled($value));
+    $currentReportRoute = $reportNavigation[$reportKey]['route'] ?? 'web.gym.reports.index';
+    $currentReportParams = $baseRouteParams;
+    if (! isset($reportNavigation[$reportKey])) {
+        $currentReportParams['report'] = str_replace('-', '_', $reportKey);
+    }
 @endphp
 
 @section('content')
@@ -36,14 +41,7 @@
                     </x-action-button>
                     <x-action-button
                         as="a"
-                        href="{{ route('web.gym.reports.export', array_merge($baseRouteParams, $filterQuery, ['type' => match($reportKey) {
-                            'dues' => 'dues',
-                            'attendance' => 'attendance',
-                            'memberships' => 'expiring-members',
-                            'custom-fees' => 'custom-fee-report',
-                            'leads' => 'trial-requests',
-                            default => 'payments',
-                        }])) }}"
+                        href="{{ route('web.gym.reports.export', array_merge($baseRouteParams, $filterQuery, ['type' => $currentExportType])) }}"
                     >
                         Export Current View
                     </x-action-button>
@@ -55,7 +53,7 @@
             @foreach ($reportNavigation as $key => $item)
                 <a
                     href="{{ route($item['route'], array_merge($baseRouteParams, $filterQuery)) }}"
-                    class="rounded-2xl border px-4 py-3 text-sm font-semibold transition {{ $reportKey === $key ? 'border-sky-400/60 bg-sky-500/15 text-white shadow-lg shadow-sky-950/40' : 'border-white/10 bg-white/5 text-slate-300 hover:border-white/20 hover:bg-white/10 hover:text-white' }}"
+                    class="rounded-2xl border px-4 py-3 text-sm font-semibold transition {{ $reportKey === $key ? 'border-sky-300 bg-sky-50 text-sky-800 shadow-lg shadow-sky-950/10 dark:border-sky-400/60 dark:bg-sky-500/15 dark:text-white dark:shadow-sky-950/40' : 'border-slate-200 bg-white text-slate-700 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-800 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:border-white/20 dark:hover:bg-white/10 dark:hover:text-white' }}"
                 >
                     {{ $item['label'] }}
                 </a>
@@ -64,7 +62,7 @@
 
         <x-premium-card class="p-6">
             <form method="GET" class="grid gap-4 lg:grid-cols-6">
-                @foreach ($baseRouteParams as $field => $value)
+                @foreach ($currentReportParams as $field => $value)
                     <input type="hidden" name="{{ $field }}" value="{{ $value }}">
                 @endforeach
 
@@ -96,27 +94,27 @@
                 />
                 <div class="flex items-end gap-3 lg:col-span-6">
                     <x-action-button type="submit">Apply Filters</x-action-button>
-                    <x-action-button as="a" variant="secondary" href="{{ route($reportNavigation[$reportKey]['route'], $baseRouteParams) }}">Reset</x-action-button>
+                    <x-action-button as="a" variant="secondary" href="{{ route($currentReportRoute, $currentReportParams) }}">Reset</x-action-button>
                 </div>
             </form>
         </x-premium-card>
 
         <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             @foreach ($summaryCards as $card)
-                <x-stat-card :label="$card['label']" :value="$card['value']" tone="sky" />
+                <x-stat-card :label="$card['label']" :value="$card['value']" :hint="$card['hint'] ?? null" tone="sky" />
             @endforeach
         </section>
 
         @if (! empty($chartCards))
             <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 @foreach ($chartCards as $card)
-                    <x-stat-card :label="$card['label']" :value="$card['value']" tone="slate" />
+                    <x-stat-card :label="$card['label']" :value="$card['value']" :hint="$card['hint'] ?? null" tone="slate" />
                 @endforeach
             </section>
         @endif
 
         <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <x-action-button as="a" variant="secondary" href="{{ route('web.gym.reports.export', array_merge($baseRouteParams, $filterQuery, ['type' => 'members'])) }}">Export Members CSV</x-action-button>
+            <x-action-button as="a" variant="secondary" href="{{ route('web.gym.reports.export', array_merge($baseRouteParams, $filterQuery, ['type' => 'members'])) }}">Export Inactive Members CSV</x-action-button>
             <x-action-button as="a" variant="secondary" href="{{ route('web.gym.reports.export', array_merge($baseRouteParams, $filterQuery, ['type' => 'dues'])) }}">Export Dues CSV</x-action-button>
             <x-action-button as="a" variant="secondary" href="{{ route('web.gym.reports.export', array_merge($baseRouteParams, $filterQuery, ['type' => 'expired-members'])) }}">Export Expired Members CSV</x-action-button>
             <x-action-button as="a" variant="secondary" href="{{ route('web.gym.reports.export', array_merge($baseRouteParams, $filterQuery, ['type' => 'trial-requests'])) }}">Export Trial Requests CSV</x-action-button>

@@ -4,7 +4,6 @@ namespace App\Services\Audit;
 
 use App\Models\ActivityLog;
 use App\Models\CustomFeeAuditLog;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 class AuditTimelineService
@@ -101,7 +100,7 @@ class AuditTimelineService
     private function titleForActivityLog(ActivityLog $log): string
     {
         return match ($log->event) {
-            'web.gym.membership.custom_fee.updated', 'membership.custom_fee.updated' => "Member fee changed",
+            'web.gym.membership.custom_fee.updated', 'membership.custom_fee.updated' => 'Member fee changed',
             'web.gym.payment.recorded', 'payment.recorded' => 'Payment collected',
             'web.gym.payment.marked_paid', 'payment.marked_paid' => 'Membership marked paid',
             'web.gym.payment.marked_unpaid', 'payment.marked_unpaid' => 'Membership marked unpaid',
@@ -112,6 +111,7 @@ class AuditTimelineService
             'membership.reactivated', 'web.gym.membership.reactivated' => 'Membership reactivated',
             'membership.extended', 'web.gym.membership.extended' => 'Membership extended',
             'membership.cancelled', 'web.gym.membership.cancelled' => 'Membership cancelled',
+            'membership.expired' => 'Membership expired',
             'web.gym.staff.created' => 'Staff member added',
             'web.gym.staff.updated' => 'Staff access updated',
             'web.gym.staff.status.updated' => 'Staff account status changed',
@@ -174,6 +174,7 @@ class AuditTimelineService
             'membership.reactivated', 'web.gym.membership.reactivated' => 'Membership status moved back to active',
             'membership.extended', 'web.gym.membership.extended' => 'Expiry updated to '.($new['expiry_date'] ?? 'new date'),
             'membership.cancelled', 'web.gym.membership.cancelled' => 'Membership status moved to cancelled',
+            'membership.expired' => 'Membership reached its recorded expiry date',
             'web.gym.staff.updated' => $this->staffChangeSummary($old, $new),
             'web.gym.staff.status.updated' => (($old['is_active'] ?? false) ? 'Active' : 'Inactive').' -> '.(($new['is_active'] ?? false) ? 'Active' : 'Inactive'),
             'web.gym.staff.removed' => 'Staff role, branch scope, and gym access were removed from this workspace',
@@ -274,6 +275,7 @@ class AuditTimelineService
             'web.gym.member.created', 'gym.member.created' => 'member_created',
             'membership.created' => 'membership_assigned',
             'membership.renewed' => 'membership_renewed',
+            'membership.expired' => 'membership_expired',
             'web.gym.member.updated', 'gym.member.updated' => $this->memberUpdateIcon($log),
             'web.gym.payment.recorded', 'payment.recorded', 'web.gym.payment.marked_paid', 'payment.marked_paid', 'web.gym.payment.marked_unpaid', 'payment.marked_unpaid' => 'payment',
             'web.gym.attendance.manual.created', 'attendance.manual.created', 'attendance.biometric.created', 'web.gym.attendance.biometric.created', 'web.gym.attendance.correction.requested', 'web.gym.attendance.correction.approved', 'web.gym.attendance.correction.rejected' => 'attendance',
@@ -289,6 +291,7 @@ class AuditTimelineService
             'web.gym.payment.recorded', 'payment.recorded', 'web.gym.payment.marked_paid', 'payment.marked_paid' => 'success',
             'web.gym.membership.custom_fee.updated', 'membership.custom_fee.updated' => 'accent',
             'membership.renewed', 'membership.created', 'workout_plan.created', 'progress.photo.created' => 'info',
+            'membership.expired' => 'warning',
             'web.gym.member.updated', 'gym.member.updated' => $this->memberStatusTone($log),
             'web.gym.attendance.correction.approved' => 'success',
             'web.gym.attendance.correction.rejected' => 'danger',

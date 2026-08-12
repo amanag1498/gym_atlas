@@ -44,9 +44,29 @@ class GymReportManagementFeatureTest extends TestCase
 
         $this->loginGymUser($owner);
 
+        $this->get(route('web.gym.dashboard', ['gym' => $gym->id]))
+            ->assertOk()
+            ->assertSee('Performance analytics')
+            ->assertSee('Collection trend')
+            ->assertSee('Attendance trend')
+            ->assertSee('Membership lifecycle')
+            ->assertSee('Member engagement')
+            ->assertSee('Members by branch')
+            ->assertSee('Period total');
+
         $this->get(route('web.gym.reports.index', ['gym' => $gym->id]))
             ->assertOk()
-            ->assertSee('Gym Reports Overview');
+            ->assertSee('Gym Reports Overview')
+            ->assertSee('Export Inactive Members CSV');
+
+        $this->get(route('web.gym.reports.index', [
+            'gym' => $gym->id,
+            'report' => 'inactive_members',
+            'start_date' => now()->startOfMonth()->toDateString(),
+        ]))
+            ->assertOk()
+            ->assertSee('Inactive Members Report')
+            ->assertSee('name="report" value="inactive_members"', false);
 
         $this->get(route('web.gym.reports.revenue', ['gym' => $gym->id, 'branch_id' => $branchA->id]))
             ->assertOk()
@@ -92,6 +112,15 @@ class GymReportManagementFeatureTest extends TestCase
 
         $this->assertStringContainsString('Member Alpha', $export->streamedContent());
         $this->assertStringNotContainsString('Member Beta', $export->streamedContent());
+
+        $trainerExport = $this->get(route('web.gym.reports.export', [
+            'type' => 'trainers',
+            'gym' => $gym->id,
+            'branch_id' => $branchA->id,
+        ]));
+        $trainerExport->assertOk();
+        $this->assertStringContainsString('Trainer Alpha', $trainerExport->streamedContent());
+        $this->assertStringNotContainsString('Trainer Beta', $trainerExport->streamedContent());
     }
 
     public function test_branch_manager_reports_are_branch_scoped_on_web_and_api(): void

@@ -5,10 +5,10 @@
         <x-premium-card class="p-4">
             <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                 <div class="min-w-0">
-                    <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">Finance operations</p>
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">Finance operations</p>
                     <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <h1 class="text-2xl font-semibold tracking-tight text-slate-950">Payments</h1>
-                        <span class="text-sm text-slate-500">Collections, spends, owner ledger, dues, and billing audit in one workspace.</span>
+                        <h1 class="text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">Payments</h1>
+                        <span class="text-sm text-slate-500 dark:text-slate-400">Collections, spends, owner ledger, dues, and billing audit in one workspace.</span>
                     </div>
                 </div>
                 <div class="flex flex-wrap gap-2">
@@ -22,7 +22,7 @@
             </div>
         </x-premium-card>
 
-        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-11">
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
             <x-stat-card label="Recorded" :value="$summary['recorded_payments']" hint="Filtered payments" tone="sky" />
             <x-stat-card label="Collected" :value="number_format((float) $summary['collected_amount'], 2)" hint="Captured amount" tone="success" />
             <x-stat-card label="Monthly" :value="number_format((float) $monthlyCollection, 2)" hint="Current month" tone="info" />
@@ -77,8 +77,8 @@
         </div>
 
         <x-premium-card class="overflow-hidden p-0">
-            <div class="border-b border-slate-200 bg-slate-50/90 px-4 py-3">
-                <h3 class="text-lg font-semibold tracking-tight text-slate-950">Payment filters</h3>
+            <div class="border-b border-slate-200 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/70">
+                <h3 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Payment filters</h3>
             </div>
             <form method="GET" class="grid gap-3 px-4 py-4 md:grid-cols-2 xl:grid-cols-7">
                 <input type="hidden" name="gym" value="{{ request('gym') }}">
@@ -223,13 +223,13 @@
                     @if ($canCollectPayments)
                         <form action="{{ route('web.gym.payments.ledger-entries.store', request()->only(['gym', 'branch'])) }}" method="POST" class="mt-4 grid gap-4">
                             @csrf
-                            <x-form-select name="branch_id" label="Branch" :selected="old('branch_id', request('branch_id', request('branch')))" :options="['' => 'Gym-wide'] + $branches->pluck('name', 'id')->all()" />
+                            <x-form-select id="ledger_entry_branch_id" name="branch_id" label="Branch" :selected="old('branch_id', request('branch_id', request('branch')))" :options="['' => 'Gym-wide'] + $branches->pluck('name', 'id')->all()" />
                             <x-form-select name="entry_type" label="Entry Type" :selected="old('entry_type', 'expense')" :options="['expense' => 'Expense', 'other_income' => 'Other income', 'refund' => 'Refund', 'adjustment' => 'Adjustment']" />
                             <x-form-select name="adjustment_direction" label="Adjustment Direction" :selected="old('adjustment_direction', 'outflow')" :options="['inflow' => 'Inflow', 'outflow' => 'Outflow']" />
                             <x-form-select name="category" label="Category" :selected="old('category', 'rent')" :options="$ledgerCategoryOptions" />
                             <x-form-input name="title" label="Title" :value="old('title')" placeholder="July rent, treadmill repair, owner deposit" />
                             <x-form-input name="amount" label="Amount" type="number" step="0.01" :value="old('amount')" />
-                            <x-form-select name="payment_mode" label="Payment Mode" :selected="old('payment_mode')" :options="['' => 'Not specified', 'cash' => 'Cash', 'upi' => 'UPI', 'card' => 'Card', 'bank' => 'Bank']" />
+                            <x-form-select id="ledger_entry_payment_mode" name="payment_mode" label="Payment Mode" :selected="old('payment_mode')" :options="['' => 'Not specified', 'cash' => 'Cash', 'upi' => 'UPI', 'card' => 'Card', 'bank' => 'Bank']" />
                             <x-form-input name="reference" label="Reference" :value="old('reference')" placeholder="Invoice no, bank ref, voucher" />
                             <x-form-input name="occurred_at" label="Occurred At" type="datetime-local" :value="old('occurred_at', now()->format('Y-m-d\\TH:i'))" />
                             <div>
@@ -304,7 +304,10 @@
                                         </td>
                                         <td class="text-sm text-slate-600 dark:text-slate-300">
                                             <div>{{ strtoupper((string) ($payment->payment_mode ?? '-')) }}</div>
-                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $payment->collector?->name ?? $payment->receiver?->name ?? 'System' }}</div>
+                                        </td>
+                                        <td class="text-sm text-slate-600 dark:text-slate-300">
+                                            <div>{{ $payment->collector?->name ?? $payment->receiver?->name ?? 'System' }}</div>
+                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $payment->collector?->email ?? $payment->receiver?->email ?? 'Automated record' }}</div>
                                         </td>
                                         <td class="text-sm text-slate-600 dark:text-slate-300">
                                             <div>{{ $payment->receipt_number ?? $payment->receipt?->receipt_number ?? 'No receipt' }}</div>
@@ -408,15 +411,7 @@
                                         <td>
                                             <div class="flex justify-end gap-2">
                                                 @if ($canCollectPayments)
-                                                    <form action="{{ route('web.gym.payments.mark-paid', ['memberMembership' => $membership->id] + request()->only(['gym', 'branch'])) }}" method="POST" data-confirm-submit data-confirm-title="Mark membership paid?" data-confirm-message="This will record a paid state for the selected membership." data-confirm-button="Mark paid">
-                                                        @csrf
-                                                        <div data-confirm-payload>
-                                                            <input type="hidden" name="payment_mode" value="cash">
-                                                            <input type="hidden" name="paid_at" value="{{ now()->toIso8601String() }}">
-                                                            <input type="hidden" name="notes" value="Marked paid from web payments dashboard">
-                                                        </div>
-                                                        <x-action-button type="submit">Mark Paid</x-action-button>
-                                                    </form>
+                                                    <x-action-button as="a" href="{{ route('web.gym.payments.create', array_merge(request()->only(['gym', 'branch']), ['member_id' => $membership->member_id])) }}">Collect Payment</x-action-button>
                                                 @endif
                                                 <x-action-button as="a" variant="secondary" href="{{ route('web.gym.members.payments', array_merge(request()->only(['gym', 'branch']), ['member' => $membership->member_id])) }}">History</x-action-button>
                                             </div>

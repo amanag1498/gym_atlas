@@ -611,6 +611,7 @@ Route::prefix('gym')
         Route::get('/settings', [WebGymSettingController::class, 'index'])->name('settings.index');
         Route::put('/settings', [WebGymSettingController::class, 'update'])->name('settings.update');
         Route::get('/audit-logs', [WebGymAuditLogController::class, 'index'])->name('audit-logs.index');
+        Route::get('/audit-logs/export', [WebGymAuditLogController::class, 'export'])->name('audit-logs.export');
 
         Route::get('/public-listing-settings', [WebGymPublicListingController::class, 'edit'])->name('public-listing.edit');
         Route::put('/public-listing-settings', [WebGymPublicListingController::class, 'update'])->name('public-listing.update');

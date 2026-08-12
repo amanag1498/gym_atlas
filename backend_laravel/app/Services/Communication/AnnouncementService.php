@@ -94,6 +94,49 @@ class AnnouncementService
         array $filters = [],
         string $pageName = 'page',
     ) {
+        return $this->announcementQueryForActor($actor, $gymId, $branchId, $filters)
+            ->with(['creator:id,name,email', 'gym:id,name', 'branch:id,name'])
+            ->withCount([
+                'recipients',
+                'recipients as read_recipients_count' => fn ($query) => $query->whereNotNull('read_at'),
+            ])
+            ->latest('id')
+            ->paginate((int) ($filters['per_page'] ?? 15), ['*'], $pageName);
+    }
+
+    /**
+     * @return array{total:int,gym_wide:int,branch_specific:int,selected_members:int,recipients:int,read_recipients:int}
+     */
+    public function summaryForActor(
+        User $actor,
+        ?int $gymId = null,
+        ?int $branchId = null,
+        array $filters = [],
+    ): array {
+        $query = $this->announcementQueryForActor($actor, $gymId, $branchId, $filters);
+        $counts = (clone $query)
+            ->selectRaw('audience_type, COUNT(*) as aggregate')
+            ->groupBy('audience_type')
+            ->pluck('aggregate', 'audience_type');
+        $recipientQuery = AnnouncementRecipient::query()
+            ->whereIn('announcement_id', (clone $query)->select('announcements.id'));
+
+        return [
+            'total' => (int) $counts->sum(),
+            'gym_wide' => (int) ($counts[AnnouncementAudienceType::GymWide->value] ?? 0),
+            'branch_specific' => (int) ($counts[AnnouncementAudienceType::BranchSpecific->value] ?? 0),
+            'selected_members' => (int) ($counts[AnnouncementAudienceType::SelectedMembers->value] ?? 0),
+            'recipients' => (clone $recipientQuery)->count(),
+            'read_recipients' => (clone $recipientQuery)->whereNotNull('read_at')->count(),
+        ];
+    }
+
+    private function announcementQueryForActor(
+        User $actor,
+        ?int $gymId,
+        ?int $branchId,
+        array $filters,
+    ): Builder {
         return Announcement::query()
             ->when($actor->active_role !== RoleName::PlatformAdmin->value, function ($query) use ($actor): void {
                 $gymIds = $this->scopeResolver->gymsQuery($actor)->pluck('gyms.id');
@@ -112,7 +155,9 @@ class AnnouncementService
                 });
             })
             ->when($gymId, fn ($query) => $query->where('gym_id', $gymId))
-            ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
+            ->when($branchId, fn ($query) => $query->where(function ($scope) use ($branchId): void {
+                $scope->whereNull('branch_id')->orWhere('branch_id', $branchId);
+            }))
             ->when(($filters['search'] ?? null) !== null && $filters['search'] !== '', function ($query) use ($filters): void {
                 $search = '%'.trim((string) $filters['search']).'%';
 
@@ -121,14 +166,7 @@ class AnnouncementService
                         ->orWhere('message', 'like', $search);
                 });
             })
-            ->when(($filters['audience_type'] ?? null) !== null && $filters['audience_type'] !== '', fn ($query) => $query->where('audience_type', $filters['audience_type']))
-            ->with(['creator:id,name,email', 'gym:id,name', 'branch:id,name'])
-            ->withCount([
-                'recipients',
-                'recipients as read_recipients_count' => fn ($query) => $query->whereNotNull('read_at'),
-            ])
-            ->latest('id')
-            ->paginate((int) ($filters['per_page'] ?? 15), ['*'], $pageName);
+            ->when(($filters['audience_type'] ?? null) !== null && $filters['audience_type'] !== '', fn ($query) => $query->where('audience_type', $filters['audience_type']));
     }
 
     public function resolveAnnouncementForActor(User $actor, Announcement $announcement): Announcement
@@ -227,6 +265,13 @@ class AnnouncementService
         if ($actor->active_role === RoleName::BranchManager->value && ! $branch) {
             throw ValidationException::withMessages([
                 'branch_id' => ['Branch managers can notify only their own branch.'],
+            ]);
+        }
+
+        if ($actor->active_role === RoleName::BranchManager->value
+            && $audienceType === AnnouncementAudienceType::GymWide->value) {
+            throw ValidationException::withMessages([
+                'audience_type' => ['Branch managers cannot send gym-wide announcements.'],
             ]);
         }
 

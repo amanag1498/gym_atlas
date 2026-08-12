@@ -21,6 +21,7 @@ use App\Services\Onboarding\OnboardingProgressService;
 use App\Services\Web\GymWebPanelService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
@@ -184,6 +185,24 @@ class DashboardController extends Controller
                     });
             })
             ->sum('due_amount');
+        $trendStart = now()->subDays(29)->startOfDay();
+        $collectionTrend = $this->dailySeries(
+            (clone $paymentQuery)
+                ->where('paid_at', '>=', $trendStart),
+            'paid_at',
+            'amount',
+        );
+        $attendanceTrend = $this->dailySeries(
+            (clone $attendanceQuery)
+                ->where('checked_in_at', '>=', $trendStart),
+            'checked_in_at',
+        );
+        $membershipHealth = collect(['active', 'frozen', 'expired', 'inactive', 'cancelled'])
+            ->map(fn (string $status): array => [
+                'label' => str($status)->headline()->toString(),
+                'value' => (clone $memberQuery)->where('membership_status', $status)->count(),
+            ])
+            ->values();
         $quickActions = [
             [
                 'label' => 'Add Member',
@@ -295,7 +314,48 @@ class DashboardController extends Controller
                 'paid' => (clone $membershipQuery)->where('payment_status', PaymentStatus::Paid->value)->count(),
                 'overdue' => (clone $membershipQuery)->where('payment_status', PaymentStatus::Overdue->value)->count(),
             ],
+            'charts' => [
+                'collections' => $collectionTrend,
+                'attendance' => $attendanceTrend,
+                'membership_health' => $membershipHealth,
+                'engagement' => collect([
+                    ['label' => 'Excellent', 'value' => $engagementCounts['excellent']],
+                    ['label' => 'Good', 'value' => $engagementCounts['good']],
+                    ['label' => 'Needs attention', 'value' => $engagementCounts['needs_attention']],
+                    ['label' => 'High risk', 'value' => $engagementCounts['high_risk']],
+                ]),
+                'branch_members' => $branchSnapshots->map(fn (array $snapshot): array => [
+                    'label' => $snapshot['name'],
+                    'value' => $snapshot['members'],
+                ]),
+            ],
         ]);
+    }
+
+    /**
+     * @return Collection<int, array{label: string, date: string, value: float|int}>
+     */
+    private function dailySeries(Builder $query, string $dateColumn, ?string $valueColumn = null): Collection
+    {
+        $aggregate = $valueColumn
+            ? "COALESCE(SUM({$valueColumn}), 0)"
+            : 'COUNT(*)';
+        $valuesByDate = $query
+            ->selectRaw("DATE({$dateColumn}) as series_date")
+            ->selectRaw("{$aggregate} as series_value")
+            ->groupByRaw("DATE({$dateColumn})")
+            ->pluck('series_value', 'series_date')
+            ->map(fn ($value): float|int => $valueColumn ? round((float) $value, 2) : (int) $value);
+
+        return collect(range(29, 0))->map(function (int $daysAgo) use ($valuesByDate): array {
+            $date = now()->subDays($daysAgo);
+
+            return [
+                'label' => $date->format('d M'),
+                'date' => $date->toDateString(),
+                'value' => $valuesByDate->get($date->toDateString(), 0),
+            ];
+        });
     }
 
     private function buildVisibility(Request $request, Gym $gym, ?int $branchId): array

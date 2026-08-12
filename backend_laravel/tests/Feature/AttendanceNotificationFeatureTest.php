@@ -30,7 +30,10 @@ class AttendanceNotificationFeatureTest extends TestCase
             ->getJson('/api/member/attendance/qr-code', [
                 'X-Gym-Id' => (string) $gym->id,
                 'X-Branch-Id' => (string) $branch->id,
-            ]);
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.enabled', true)
+            ->assertJsonStructure(['data' => ['qr_payload']]);
 
         $qrPayload = $qrResponse->json('data.qr_payload');
 
@@ -247,11 +250,11 @@ class AttendanceNotificationFeatureTest extends TestCase
     {
         $this->seed(PermissionSeeder::class);
 
-        $actor = User::factory()->create();
+        $actor = User::factory()->create(['is_active' => true]);
         $actor->forceFill(['active_role' => $activeRole])->save();
         $actor->assignRole($activeRole);
 
-        $member = User::factory()->create();
+        $member = User::factory()->create(['is_active' => true]);
         $member->forceFill(['active_role' => RoleName::Member->value])->save();
         $member->assignRole(RoleName::Member->value);
 
@@ -261,6 +264,8 @@ class AttendanceNotificationFeatureTest extends TestCase
             'slug' => 'scoped-gym-'.str()->random(6),
             'timezone' => 'Asia/Kolkata',
             'status' => 'active',
+            'operational_access_enabled' => true,
+            'is_active' => true,
             'prevent_duplicate_same_day_checkins' => true,
         ]);
 

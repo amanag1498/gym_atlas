@@ -9,6 +9,7 @@ use App\Models\Gym;
 use App\Models\MemberDailyStep;
 use App\Models\MemberMembership;
 use App\Models\MemberProfile;
+use App\Models\ScheduledReminder;
 use App\Models\TrialRequest;
 use App\Models\User;
 use App\Models\WorkoutPlan;
@@ -467,6 +468,109 @@ class MemberAppService
                 ->where('member_id', $user->id)
                 ->where('gym_id', $gymId)
                 ->where('status', 'active')
+                ->update(['status' => 'cancelled']);
+
+            $branchIds = Branch::query()->where('gym_id', $gymId)->pluck('id')->all();
+            if ($branchIds !== []) {
+                $user->branches()->detach($branchIds);
+            }
+            $user->gyms()->detach($gymId);
+
+            if (! $this->hasActiveGymAccess($user)) {
+                $independentProfile = MemberProfile::query()->updateOrCreate(
+                    ['user_id' => $user->id, 'gym_id' => null],
+                    [
+                        'fitness_goal' => $profile?->fitness_goal,
+                        'gender' => $profile?->gender,
+                        'height_cm' => $profile?->height_cm,
+                        'weight_kg' => $profile?->weight_kg,
+                        'experience_level' => $profile?->experience_level,
+                        'medical_notes' => $profile?->medical_notes,
+                        'injury_notes' => $profile?->injury_notes,
+                        'status' => 'active',
+                        'membership_status' => 'inactive',
+                        'is_active' => true,
+                    ],
+                );
+                $independentProfile->fitnessGoals()->sync($fitnessGoalIds);
+            }
+
+            $user->unsetRelation('memberProfile');
+            $user->unsetRelation('gyms');
+            $user->unsetRelation('branches');
+        });
+    }
+
+    /**
+     * Apply terminal cleanup after natural expiry while retaining immutable
+     * membership, workout, diet, attendance, payment, and progress history.
+     */
+    public function expireGymAccess(
+        User $user,
+        Gym|int $gym,
+        MemberMembership $expiredMembership,
+        ?string $asOfDate = null,
+    ): void {
+        $gymId = $gym instanceof Gym ? $gym->id : $gym;
+        $asOfDate ??= today()->toDateString();
+
+        DB::transaction(function () use ($user, $gymId, $expiredMembership, $asOfDate): void {
+            $hasCurrentOrFutureCycle = MemberMembership::query()
+                ->where('member_id', $user->id)
+                ->where('gym_id', $gymId)
+                ->where(function ($query) use ($asOfDate): void {
+                    $query->where('status', 'frozen')
+                        ->orWhere(function ($active) use ($asOfDate): void {
+                            $active->where('status', 'active')
+                                ->whereDate('expiry_date', '>=', $asOfDate);
+                        });
+                })
+                ->exists();
+            if ($hasCurrentOrFutureCycle) {
+                return;
+            }
+
+            $profile = MemberProfile::query()
+                ->where('user_id', $user->id)
+                ->where('gym_id', $gymId)
+                ->lockForUpdate()
+                ->latest('id')
+                ->first();
+            $fitnessGoalIds = $profile?->fitnessGoals()->pluck('fitness_goals.id')->all() ?? [];
+
+            if ($profile !== null) {
+                $profile->forceFill([
+                    'assigned_trainer_user_id' => null,
+                    'assigned_trainer_id' => null,
+                    'status' => 'inactive',
+                    'membership_status' => 'expired',
+                    'membership_expires_on' => $expiredMembership->expiry_date,
+                    'is_active' => false,
+                ])->save();
+            }
+
+            $this->releaseMemberOwnedWorkoutPlans($user, (int) $gymId);
+            WorkoutPlan::query()
+                ->where('member_id', $user->id)
+                ->where('gym_id', $gymId)
+                ->whereNull('independent_trainer_member_relationship_id')
+                ->where('status', 'active')
+                ->update(['status' => 'inactive']);
+            DietPlan::query()
+                ->where('member_id', $user->id)
+                ->where('gym_id', $gymId)
+                ->whereNull('independent_trainer_member_relationship_id')
+                ->where('status', 'active')
+                ->update(['status' => 'inactive']);
+            WorkoutSession::query()
+                ->where('member_id', $user->id)
+                ->where('gym_id', $gymId)
+                ->where('status', 'active')
+                ->update(['status' => 'cancelled']);
+            ScheduledReminder::query()
+                ->where('user_id', $user->id)
+                ->where('gym_id', $gymId)
+                ->where('status', 'pending')
                 ->update(['status' => 'cancelled']);
 
             $branchIds = Branch::query()->where('gym_id', $gymId)->pluck('id')->all();

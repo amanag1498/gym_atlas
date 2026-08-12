@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\NotificationType;
 use App\Enums\RoleName;
 use App\Models\Announcement;
+use App\Models\AnnouncementRecipient;
 use App\Models\Branch;
 use App\Models\Gym;
 use App\Models\MemberProfile;
@@ -17,6 +18,79 @@ use Tests\TestCase;
 class AnnouncementNotificationManagementFeatureTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_gym_web_announcement_page_filters_sends_and_reports_delivery(): void
+    {
+        [$owner, $gym, $branch, $member] = $this->makeGymScope();
+
+        $this->actingAs($owner)
+            ->post(route('web.gym.announcements.store', ['gym' => $gym->id, 'branch' => $branch->id]), [
+                'gym_id' => $gym->id,
+                'branch_id' => $branch->id,
+                'audience_type' => 'gym_wide',
+                'title' => 'Web member update',
+                'message' => 'A complete update sent from the dashboard.',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $announcement = Announcement::query()->where('title', 'Web member update')->firstOrFail();
+        $this->assertNull($announcement->branch_id);
+        $this->assertDatabaseHas('announcement_recipients', [
+            'announcement_id' => $announcement->id,
+            'user_id' => $member->id,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('web.gym.announcements.index', [
+                'gym' => $gym->id,
+                'search' => 'Web member',
+                'audience_type' => 'gym_wide',
+            ]))
+            ->assertOk()
+            ->assertSee('Search announcements')
+            ->assertSee('id="send_audience_type"', false)
+            ->assertSee('Web member update')
+            ->assertSee('1 recipients');
+
+        $this->actingAs($owner)
+            ->get(route('web.gym.announcements.show', ['gym' => $gym->id, 'announcement' => $announcement->id]))
+            ->assertOk()
+            ->assertSee('Delivery coverage')
+            ->assertSee($member->email);
+    }
+
+    public function test_announcement_detail_and_delete_cannot_cross_the_selected_gym_context(): void
+    {
+        [$owner, $gym] = $this->makeGymScope();
+        $otherGym = Gym::query()->create([
+            'owner_user_id' => $owner->id,
+            'name' => 'Other Announcement Gym',
+            'slug' => 'other-announcement-gym-'.str()->random(6),
+            'status' => 'active',
+            'approval_status' => 'approved',
+            'is_active' => true,
+        ]);
+        $owner->gyms()->syncWithoutDetaching([$otherGym->id => ['is_primary' => false]]);
+        $announcement = Announcement::query()->create([
+            'gym_id' => $otherGym->id,
+            'created_by_user_id' => $owner->id,
+            'created_by' => $owner->id,
+            'audience_type' => 'gym_wide',
+            'title' => 'Other gym only',
+            'message' => 'This must not cross gym context.',
+            'status' => 'sent',
+            'send_at' => now(),
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('web.gym.announcements.show', ['gym' => $gym->id, 'announcement' => $announcement->id]))
+            ->assertNotFound();
+        $this->actingAs($owner)
+            ->delete(route('web.gym.announcements.destroy', ['gym' => $gym->id, 'announcement' => $announcement->id]))
+            ->assertNotFound();
+        $this->assertDatabaseHas('announcements', ['id' => $announcement->id]);
+    }
 
     public function test_gym_announcement_creates_member_notifications_and_show_delete_work(): void
     {
@@ -75,7 +149,7 @@ class AnnouncementNotificationManagementFeatureTest extends TestCase
             'send_at' => now(),
         ]);
 
-        Notification::query()->create([
+        $notification = Notification::query()->create([
             'user_id' => $member->id,
             'gym_id' => $gym->id,
             'branch_id' => $branch->id,
@@ -84,6 +158,13 @@ class AnnouncementNotificationManagementFeatureTest extends TestCase
             'title' => 'Reminder',
             'message' => 'Bring water.',
             'body' => 'Bring water.',
+        ]);
+        AnnouncementRecipient::query()->create([
+            'announcement_id' => $announcement->id,
+            'user_id' => $member->id,
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'notification_id' => $notification->id,
         ]);
 
         $headers = ['X-Gym-Id' => (string) $gym->id, 'X-Branch-Id' => (string) $branch->id];
@@ -97,6 +178,11 @@ class AnnouncementNotificationManagementFeatureTest extends TestCase
         $this->actingAs($member, 'sanctum')
             ->postJson("/api/notifications/{$notificationId}/read", [], $headers)
             ->assertOk();
+        $this->assertDatabaseHas('announcement_recipients', [
+            'announcement_id' => $announcement->id,
+            'user_id' => $member->id,
+        ]);
+        $this->assertNotNull($announcement->recipients()->where('user_id', $member->id)->firstOrFail()->read_at);
 
         $this->actingAs($member, 'sanctum')
             ->postJson('/api/notifications/read-all', [], $headers)
@@ -174,6 +260,17 @@ class AnnouncementNotificationManagementFeatureTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.title', 'A Only');
+
+        $this->actingAs($manager, 'sanctum')
+            ->postJson('/api/gym/announcements', [
+                'gym_id' => $gym->id,
+                'branch_id' => $branchA->id,
+                'audience_type' => 'gym_wide',
+                'title' => 'Forbidden gym broadcast',
+                'message' => 'Must remain branch scoped.',
+            ], ['X-Gym-Id' => (string) $gym->id, 'X-Branch-Id' => (string) $branchA->id])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.audience_type.0', 'Branch managers cannot send gym-wide announcements.');
     }
 
     public function test_gym_staff_needs_send_announcements_custom_permission(): void

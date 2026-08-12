@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/metric_trend_chart.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
@@ -1028,7 +1029,10 @@ class _ProgressOverviewTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (weightLogs.isEmpty && bodyMeasurements.isEmpty && photos.isEmpty) {
+    if (weightLogs.isEmpty &&
+        bodyMeasurements.isEmpty &&
+        photos.isEmpty &&
+        stepSummary.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(AppSpacing.lg),
         child: _StrengthEmptyPanel(
@@ -1093,6 +1097,23 @@ class _ProgressOverviewTab extends StatelessWidget {
               color: const Color(0xFFFFB86C),
             ),
           ],
+        ),
+        const SizedBox(height: 18),
+        MetricTrendChart(
+          title: 'Weight trend',
+          subtitle: 'Your logged weight across the visible timeline',
+          points: _metricPoints(weightLogs, 'log_date', 'weight_kg'),
+          accentColor: const Color(0xFF92A3FD),
+          unit: ' kg',
+        ),
+        const SizedBox(height: 18),
+        MetricTrendChart(
+          title: 'Seven-day steps',
+          subtitle: 'Daily movement from synced step history',
+          points: _metricPoints(stepSummary, 'date', 'steps'),
+          accentColor: const Color(0xFF40D9B8),
+          unit: ' steps',
+          emptyMessage: 'Sync steps on two days to see your activity trend.',
         ),
         const SizedBox(height: 18),
         _StrengthInsightPanel(
@@ -1214,6 +1235,15 @@ class _StepHistoryTab extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 18),
+        MetricTrendChart(
+          title: 'Daily step trend',
+          subtitle: 'Compare movement across the last seven synced days',
+          points: _metricPoints(stepSummary, 'date', 'steps'),
+          accentColor: const Color(0xFF40D9B8),
+          unit: ' steps',
+          emptyMessage: 'Sync steps on two days to unlock this chart.',
+        ),
+        const SizedBox(height: 18),
         _StrengthInsightPanel(
           title: 'Server-backed step history',
           subtitle:
@@ -1308,6 +1338,14 @@ class _WeightLogsTab extends StatelessWidget {
               onPressed: saving ? null : onSave,
             ),
           ],
+        ),
+        const SizedBox(height: 18),
+        MetricTrendChart(
+          title: 'Weight trend',
+          subtitle: 'Oldest to latest visible check-in',
+          points: _metricPoints(weightLogs, 'log_date', 'weight_kg'),
+          accentColor: const Color(0xFF92A3FD),
+          unit: ' kg',
         ),
         const SizedBox(height: 18),
         _StrengthSectionTitle(
@@ -1447,6 +1485,28 @@ class _BodyMeasurementsTab extends StatelessWidget {
               onPressed: saving ? null : onSave,
             ),
           ],
+        ),
+        const SizedBox(height: 18),
+        MetricTrendChart(
+          title: 'Waist trend',
+          subtitle: 'Centimetres across your measurement snapshots',
+          points: _metricPoints(measurements, 'measured_on', 'waist_cm'),
+          accentColor: const Color(0xFFC58BF2),
+          unit: ' cm',
+          emptyMessage: 'Add waist measurements on two dates to see a trend.',
+        ),
+        const SizedBox(height: 12),
+        MetricTrendChart(
+          title: 'Body-fat trend',
+          subtitle: 'Percentage across your measurement snapshots',
+          points: _metricPoints(
+            measurements,
+            'measured_on',
+            'body_fat_percentage',
+          ),
+          accentColor: const Color(0xFFFFB86C),
+          unit: '%',
+          emptyMessage: 'Add body-fat values on two dates to see a trend.',
         ),
         const SizedBox(height: 18),
         _StrengthSectionTitle(
@@ -2519,4 +2579,32 @@ String _titleCase(String value) {
       .where((part) => part.isNotEmpty)
       .map((part) => part[0].toUpperCase() + part.substring(1).toLowerCase())
       .join(' ');
+}
+
+List<MetricChartPoint> _metricPoints(
+  List<Map<String, dynamic>> rows,
+  String dateKey,
+  String valueKey,
+) {
+  final points =
+      rows
+          .where((row) => row[valueKey] != null)
+          .map((row) {
+            final date = DateTime.tryParse(row[dateKey]?.toString() ?? '');
+            final value = double.tryParse(row[valueKey].toString());
+            if (date == null || value == null) return null;
+            return (date: date, value: value);
+          })
+          .whereType<({DateTime date, double value})>()
+          .toList()
+        ..sort((left, right) => left.date.compareTo(right.date));
+
+  return points
+      .map(
+        (point) => MetricChartPoint(
+          label: DateFormat('d MMM').format(point.date.toLocal()),
+          value: point.value,
+        ),
+      )
+      .toList();
 }

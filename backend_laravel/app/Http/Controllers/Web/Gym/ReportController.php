@@ -18,12 +18,19 @@ class ReportController extends Controller
         private readonly GymWebPanelService $gymWebPanelService,
         private readonly ScopedPermissionResolver $scopedPermissionResolver,
         private readonly GymReportService $reportService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
-        return $this->renderReport($request, 'overview');
+        $type = match ($request->string('report')->trim()->toString()) {
+            'inactive_members', 'inactive-members' => 'inactive-members',
+            'branch_comparison', 'branch-comparison' => 'branch-comparison',
+            'lead_conversion', 'leads' => 'leads',
+            'custom_fee', 'custom-fees' => 'custom-fees',
+            default => 'overview',
+        };
+
+        return $this->renderReport($request, $type);
     }
 
     public function revenue(Request $request): View
@@ -109,6 +116,17 @@ class ReportController extends Controller
             'emptyState' => $dataset['empty_state'],
             'reportOptions' => $this->reportService->reportOptions(),
             'reportNavigation' => $this->reportService->navigation(),
+            'currentExportType' => match ($dataset['key']) {
+                'overview' => 'overview',
+                'trainers' => 'trainers',
+                'inactive-members' => 'inactive-members',
+                'branch-comparison' => 'branch-comparison',
+                'custom-fees' => 'custom-fees',
+                'leads' => 'trial-requests',
+                'memberships' => 'memberships',
+                'revenue' => 'payments',
+                default => $dataset['key'],
+            },
             'filterOptions' => $this->reportService->filterOptions($gym, $accessibleBranchIds),
             'filters' => [
                 'start_date' => $filters['start_date']->toDateString(),

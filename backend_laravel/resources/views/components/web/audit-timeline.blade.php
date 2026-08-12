@@ -11,6 +11,7 @@
                 'member_created' => '👤',
                 'membership_assigned' => '🪪',
                 'membership_renewed' => '↺',
+                'membership_expired' => '⌛',
                 'membership_status' => '❄',
                 'trainer_assigned' => '🧑‍🏫',
                 'custom_fee' => '₹',

@@ -312,8 +312,10 @@ class PaymentController extends Controller
     private function renderListing(Request $request, string $preset, string $pageTitle, ?User $member = null): View|StreamedResponse
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
-        $this->gymWebPanelService->assertPermission($request, PermissionName::PaymentsView->value, $gym);
-        $this->assertBillingViewAccess($request, $gym->id);
+        $branch = $this->gymWebPanelService->resolveBranch($request, $gym);
+        $permissionBranchId = $branch?->id;
+        $this->gymWebPanelService->assertPermission($request, PermissionName::PaymentsView->value, $gym, $permissionBranchId);
+        $this->assertBillingViewAccess($request, $gym->id, $permissionBranchId);
 
         $paymentsQuery = Payment::query()
             ->with(['member.memberProfile.branch', 'membership.membershipPlan', 'collector', 'receipt', 'branch'])
@@ -323,7 +325,7 @@ class PaymentController extends Controller
             ->with(['member.memberProfile.branch', 'membershipPlan', 'branch'])
             ->where('gym_id', $gym->id);
 
-        if ($branch = $this->gymWebPanelService->resolveBranch($request, $gym)) {
+        if ($branch) {
             $paymentsQuery->where('branch_id', $branch->id);
             $membershipsQuery->where('branch_id', $branch->id);
         } else {
@@ -376,7 +378,7 @@ class PaymentController extends Controller
             ->with(['branch:id,name', 'creator:id,name,email'])
             ->where('gym_id', $gym->id);
 
-        if ($branch = $this->gymWebPanelService->resolveBranch($request, $gym)) {
+        if ($branch) {
             $ledgerQuery->where(function (Builder $builder) use ($branch): void {
                 $builder->where('branch_id', $branch->id)
                     ->orWhereNull('branch_id');
@@ -558,7 +560,8 @@ class PaymentController extends Controller
                 ->whereBetween('paid_at', [now()->startOfMonth(), now()->endOfMonth()])
                 ->sum('amount'),
             'branches' => $this->gymWebPanelService->accessibleBranches($request, $gym),
-            'canCollectPayments' => $this->gymWebPanelService->canPermission($request, PermissionName::PaymentsManage->value, $gym),
+            'canCollectPayments' => $this->gymWebPanelService->canPermission($request, PermissionName::PaymentsManage->value, $gym, $permissionBranchId)
+                && $this->canCollectPaymentAccess($request, $gym->id, $permissionBranchId),
             'paymentAuditTimeline' => $this->auditTimelineService->forActivityLogs($paymentActivityLogs),
             'ledgerEntries' => $ledgerPaginator,
             'summary' => [
@@ -704,15 +707,20 @@ class PaymentController extends Controller
 
     private function assertCollectPaymentAccess(Request $request, int $gymId, ?int $branchId = null): void
     {
-        $role = $request->user()?->active_role;
+        abort_unless($this->canCollectPaymentAccess($request, $gymId, $branchId), 403);
+    }
 
-        if (in_array($role, ['gym_owner', 'platform_admin'], true)) {
-            return;
+    private function canCollectPaymentAccess(Request $request, int $gymId, ?int $branchId = null): bool
+    {
+        if (in_array($request->user()?->active_role, ['gym_owner', 'platform_admin'], true)) {
+            return true;
         }
 
-        abort_unless(
-            $this->scopedPermissionResolver->hasCustomPermission($request->user(), 'collect_payment', $gymId, $branchId),
-            403
+        return $this->scopedPermissionResolver->hasCustomPermission(
+            $request->user(),
+            'collect_payment',
+            $gymId,
+            $branchId,
         );
     }
 }

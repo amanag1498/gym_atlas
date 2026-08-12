@@ -83,6 +83,62 @@
             @endforeach
         </div>
 
+        @if ($visibility['billing'] || $visibility['attendance'] || $visibility['members_view'])
+            <section aria-labelledby="dashboard-trends-heading" class="space-y-4">
+                <div class="flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-600 dark:text-sky-400">Performance analytics</p>
+                        <h2 id="dashboard-trends-heading" class="mt-1 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">Trends that need attention</h2>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Thirty-day movement and current member health for the selected gym and branch scope.</p>
+                    </div>
+                    <x-action-button as="a" variant="secondary" href="{{ route('web.gym.reports.index', request()->query()) }}">Open detailed reports</x-action-button>
+                </div>
+
+                <div class="grid gap-4 xl:grid-cols-2">
+                    @if ($visibility['billing'])
+                        <x-web.line-chart-card
+                            title="Collection trend"
+                            subtitle="Recorded payments by paid date"
+                            :series="$charts['collections']"
+                            value-prefix="₹"
+                            accent="#12b76a"
+                        />
+                    @endif
+                    @if ($visibility['attendance'])
+                        <x-web.line-chart-card
+                            title="Attendance trend"
+                            subtitle="Daily member check-ins"
+                            :series="$charts['attendance']"
+                            unit=" check-ins"
+                            accent="#465fff"
+                        />
+                    @endif
+                </div>
+
+                @if ($visibility['members_view'])
+                    <div class="grid gap-4 lg:grid-cols-3">
+                        <x-web.distribution-chart-card
+                            title="Membership lifecycle"
+                            subtitle="Current membership cycles by status"
+                            :series="$charts['membership_health']"
+                        />
+                        <x-web.distribution-chart-card
+                            title="Member engagement"
+                            subtitle="Activity-based engagement categories"
+                            :series="$charts['engagement']"
+                            :colors="['#12b76a', '#2e90fa', '#f79009', '#f04438']"
+                        />
+                        <x-web.distribution-chart-card
+                            title="Members by branch"
+                            subtitle="Current member allocation across accessible branches"
+                            :series="$charts['branch_members']"
+                            :colors="['#465fff', '#7a5af8', '#2e90fa', '#12b76a']"
+                        />
+                    </div>
+                @endif
+            </section>
+        @endif
+
         <div class="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
             <x-premium-card class="overflow-hidden p-0">
                 <div class="border-b border-slate-200/80 px-5 py-4 dark:border-slate-800">

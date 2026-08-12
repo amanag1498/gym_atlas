@@ -31,7 +31,7 @@ class RealtimeService {
           .setTransports(['websocket'])
           .disableAutoConnect()
           .setAuth(<String, dynamic>{'token': token})
-          .setExtraHeaders(<String, dynamic>{'Authorization': 'Bearer $token'})
+          .setExtraHeaders(<String, String>{'Authorization': 'Bearer $token'})
           .build(),
     );
 
