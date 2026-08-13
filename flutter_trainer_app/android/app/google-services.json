@@ -142,6 +142,22 @@
           }
         },
         {
+          "client_id": "707275991691-h0cuter36jko04saeqeeth61g0lofsi3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.techybugs.gymatlas.trainer",
+            "certificate_hash": "d4ad662d4a17901c0ec425d935c9c4fd9329d9bc"
+          }
+        },
+        {
+          "client_id": "707275991691-t4or5f1sqn8isvt1pjoejeu3jbgdoro8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.techybugs.gymatlas.trainer",
+            "certificate_hash": "b0db2804a611dd143149a483a0a6ea63f32b50f0"
+          }
+        },
+        {
           "client_id": "707275991691-mheei9urcte498qjdcel0v223965bgpm.apps.googleusercontent.com",
           "client_type": 3
         }

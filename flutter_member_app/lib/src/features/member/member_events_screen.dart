@@ -3,10 +3,9 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_gradients.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../core/widgets/empty_state.dart';
-import '../../../core/widgets/premium_app_bar.dart';
+import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/loading_state.dart';
 import '../../../core/widgets/premium_card.dart';
 import 'member_repository.dart';
 
@@ -142,65 +141,65 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
   @override
   Widget build(BuildContext context) {
     final visible = _tab == 0 ? _events : _bookedEvents;
-    return Scaffold(
-      appBar: PremiumAppBar(
-        title: 'Events',
-        subtitle: 'Classes, workshops and gym experiences',
-        actions: [
-          IconButton(
-            tooltip: 'Refresh events',
-            onPressed: _load,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-      ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: AppGradients.pageBackground),
+    return AppGradientScaffold(
+      title: 'Events',
+      body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.lg,
-                AppSpacing.sm,
+                AppSpacing.md,
+                AppSpacing.lg,
+                0,
+              ),
+              child: _EventsTopBar(
+                onBack: () => Navigator.of(context).maybePop(),
+                onRefresh: _load,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.md,
+                AppSpacing.lg,
+                0,
+              ),
+              child: _EventsSummaryPanel(
+                upcomingCount: _events.length,
+                bookingCount: _bookedEvents.where((event) {
+                  final status = _map(event['booking'])['status'];
+                  return status == 'reserved' || status == 'waitlisted';
+                }).length,
+                nextEvent: _events.firstOrNull,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.md,
                 AppSpacing.lg,
                 AppSpacing.md,
               ),
-              child: SizedBox(
-                width: double.infinity,
-                child: SegmentedButton<int>(
-                  segments: const [
-                    ButtonSegment(
-                      value: 0,
-                      label: Text('All upcoming'),
-                      icon: Icon(Icons.calendar_month),
-                    ),
-                    ButtonSegment(
-                      value: 1,
-                      label: Text('My bookings'),
-                      icon: Icon(Icons.confirmation_number_outlined),
-                    ),
-                  ],
-                  selected: {_tab},
-                  onSelectionChanged: (value) =>
-                      setState(() => _tab = value.first),
-                  style: const ButtonStyle(
-                    visualDensity: VisualDensity.comfortable,
-                  ),
-                ),
+              child: _EventsTabSlider(
+                selected: _tab,
+                onChanged: (value) => setState(() => _tab = value),
               ),
             ),
             Expanded(
               child: _loading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const LoadingState(label: 'Loading upcoming events...')
                   : _error != null
-                  ? _Error(message: _error!, retry: _load)
+                  ? ErrorStateView(message: _error!, onRetry: _load)
                   : RefreshIndicator(
                       onRefresh: _load,
                       child: visible.isEmpty
                           ? ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
                               children: [
-                                SizedBox(height: 96),
-                                EmptyState(
+                                const SizedBox(height: 24),
+                                _EventsEmptyPanel(
                                   title: _tab == 0
                                       ? 'Nothing scheduled yet'
                                       : 'No upcoming bookings',
@@ -216,7 +215,7 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
                                 AppSpacing.lg,
                                 0,
                                 AppSpacing.lg,
-                                AppSpacing.xxl,
+                                96,
                               ),
                               itemCount: visible.length,
                               separatorBuilder: (_, __) =>
@@ -239,6 +238,7 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         final booking = _map(event['booking']);
         final booked = ['reserved', 'waitlisted'].contains(booking['status']);
@@ -266,18 +266,37 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
             ? '${_money(priceAmount, currency)} · pay at venue'
             : 'Free';
         return SafeArea(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              20,
-              20,
-              20 + MediaQuery.viewInsetsOf(sheetContext).bottom,
+          top: false,
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.9,
+            ),
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
             ),
             child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                12,
+                AppSpacing.lg,
+                AppSpacing.lg + MediaQuery.viewInsetsOf(sheetContext).bottom,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  Center(
+                    child: Container(
+                      width: 46,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: AppColors.strokeStrong,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   if ((event['cover_image_url']?.toString() ?? '').isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 16),
@@ -295,101 +314,179 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
                   Text(
                     event['title']?.toString() ?? 'Event',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${_date(event['starts_at'])} – ${_time(event['ends_at'])}',
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _EventInfoChip(
+                        icon: Icons.schedule_rounded,
+                        label:
+                            '${_date(event['starts_at'])} – ${_time(event['ends_at'])}',
+                      ),
+                      _EventInfoChip(
+                        icon: Icons.payments_outlined,
+                        label: pricing,
+                      ),
+                      _EventInfoChip(
+                        icon: Icons.group_outlined,
+                        label: event['capacity'] == null
+                            ? 'Open capacity'
+                            : '${event['available_spots'] ?? 0} spots available',
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '${event['location_name'] ?? 'Location to be announced'} · $pricing',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.w700,
+                  const SizedBox(height: 14),
+                  PremiumCard(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: AppColors.accentPurple.withValues(
+                              alpha: 0.12,
+                            ),
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: const Icon(
+                            Icons.location_on_outlined,
+                            color: AppColors.accentPurple,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                event['location_name']?.toString() ??
+                                    'Location to be announced',
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(
+                                      color: AppColors.textPrimary,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                              ),
+                              if ((event['address']?.toString() ?? '')
+                                  .isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  event['address'].toString(),
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: AppColors.textSecondary,
+                                      ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  if ((event['address']?.toString() ?? '').isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 5),
-                      child: Text(event['address'].toString()),
-                    ),
                   if ((paymentNote?.toString() ?? '').isNotEmpty)
                     Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(paymentNote.toString()),
+                      padding: const EdgeInsets.only(top: 12),
+                      child: _EventNotice(
+                        icon: Icons.info_outline_rounded,
+                        text: paymentNote.toString(),
+                      ),
                     ),
                   if ((event['description']?.toString() ?? '').isNotEmpty)
                     Padding(
-                      padding: const EdgeInsets.only(top: 14),
-                      child: Text(event['description'].toString()),
+                      padding: const EdgeInsets.only(top: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'About this event',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                          ),
+                          const SizedBox(height: 7),
+                          Text(
+                            event['description'].toString(),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: AppColors.textSecondary,
+                                  height: 1.45,
+                                ),
+                          ),
+                        ],
+                      ),
                     ),
-                  const SizedBox(height: 16),
-                  Text(
-                    event['capacity'] == null
-                        ? 'Unlimited capacity'
-                        : '${event['available_spots']} spots available',
-                  ),
                   if (event['latitude'] != null && event['longitude'] != null)
-                    TextButton.icon(
-                      onPressed: () => launchUrl(
-                        Uri.parse(
-                          'https://www.google.com/maps/search/?api=1&query=${event['latitude']},${event['longitude']}',
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: OutlinedButton.icon(
+                        onPressed: () => launchUrl(
+                          Uri.parse(
+                            'https://www.google.com/maps/search/?api=1&query=${event['latitude']},${event['longitude']}',
+                          ),
+                          mode: LaunchMode.externalApplication,
                         ),
-                        mode: LaunchMode.externalApplication,
+                        icon: const Icon(Icons.directions_outlined),
+                        label: const Text('Open directions'),
                       ),
-                      icon: const Icon(Icons.directions_outlined),
-                      label: const Text('Open directions'),
                     ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: !actionEnabled
-                          ? null
-                          : () async {
-                              Navigator.pop(sheetContext);
-                              try {
-                                Map<String, dynamic> response;
-                                if (booked) {
-                                  response = await widget.repository
-                                      .cancelEventBooking(_int(event['id'])!);
-                                } else {
-                                  response = await widget.repository.bookEvent(
-                                    _int(event['id'])!,
-                                  );
-                                }
-                                await _load();
-                                if (mounted) {
-                                  final status = _map(
-                                    response['data'],
-                                  )['status']?.toString();
-                                  final message = booked
-                                      ? 'Your event booking was cancelled.'
-                                      : status == 'waitlisted'
-                                      ? 'The event is full. You joined the waitlist.'
-                                      : 'Your event spot is confirmed.';
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text(message)),
-                                  );
-                                }
-                              } catch (error) {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text(error.toString())),
-                                  );
-                                }
+                  const SizedBox(height: 18),
+                  GradientButton(
+                    expanded: true,
+                    variant: booked
+                        ? GradientButtonVariant.danger
+                        : GradientButtonVariant.primary,
+                    icon: booked
+                        ? Icons.event_busy_outlined
+                        : Icons.confirmation_number_outlined,
+                    onPressed: !actionEnabled
+                        ? null
+                        : () async {
+                            Navigator.pop(sheetContext);
+                            try {
+                              Map<String, dynamic> response;
+                              if (booked) {
+                                response = await widget.repository
+                                    .cancelEventBooking(_int(event['id'])!);
+                              } else {
+                                response = await widget.repository.bookEvent(
+                                  _int(event['id'])!,
+                                );
                               }
-                            },
-                      child: Text(
-                        booked
-                            ? (canCancel
-                                  ? 'Cancel booking'
-                                  : 'Cancellation closed')
-                            : (canBook ? 'Reserve my spot' : 'Booking closed'),
-                      ),
-                    ),
+                              await _load();
+                              if (mounted) {
+                                final status = _map(
+                                  response['data'],
+                                )['status']?.toString();
+                                final message = booked
+                                    ? 'Your event booking was cancelled.'
+                                    : status == 'waitlisted'
+                                    ? 'The event is full. You joined the waitlist.'
+                                    : 'Your event spot is confirmed.';
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(message)),
+                                );
+                              }
+                            } catch (error) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(error.toString())),
+                                );
+                              }
+                            }
+                          },
+                    label: booked
+                        ? (canCancel ? 'Cancel booking' : 'Cancellation closed')
+                        : (canBook ? 'Reserve my spot' : 'Booking closed'),
                   ),
                 ],
               ),
@@ -397,6 +494,372 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _EventsTopBar extends StatelessWidget {
+  const _EventsTopBar({required this.onBack, required this.onRefresh});
+
+  final VoidCallback onBack;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        MemberHeaderActionButton(icon: Icons.arrow_back_rounded, onTap: onBack),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Upcoming Events',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                'Classes, workshops, and community sessions.',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        MemberHeaderActionButton(icon: Icons.refresh_rounded, onTap: onRefresh),
+      ],
+    );
+  }
+}
+
+class _EventsSummaryPanel extends StatelessWidget {
+  const _EventsSummaryPanel({
+    required this.upcomingCount,
+    required this.bookingCount,
+    required this.nextEvent,
+  });
+
+  final int upcomingCount;
+  final int bookingCount;
+  final Map<String, dynamic>? nextEvent;
+
+  @override
+  Widget build(BuildContext context) {
+    final event = nextEvent;
+    final nextTitle = event?['title']?.toString() ?? 'Discover what is next';
+    final nextSchedule = event == null
+        ? 'New gym and global events will appear here.'
+        : '${_date(event['starts_at'])} · ${event['location_name'] ?? 'Location TBA'}';
+
+    return PremiumCard(
+      padding: EdgeInsets.zero,
+      glowColor: AppColors.accentPurple,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.primary.withValues(alpha: 0.12),
+              AppColors.accentPurple.withValues(alpha: 0.08),
+              AppColors.surface,
+            ],
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(
+                    Icons.event_available_rounded,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'NEXT ON YOUR CALENDAR',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        nextTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              nextSchedule,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _EventInfoChip(
+                  icon: Icons.calendar_month_rounded,
+                  label: '$upcomingCount upcoming',
+                ),
+                _EventInfoChip(
+                  icon: Icons.confirmation_number_rounded,
+                  label: '$bookingCount booked',
+                ),
+                const _EventInfoChip(
+                  icon: Icons.notifications_active_outlined,
+                  label: 'Reminders included',
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EventsTabSlider extends StatelessWidget {
+  const _EventsTabSlider({required this.selected, required this.onChanged});
+
+  final int selected;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    const items = [
+      (label: 'All Upcoming', icon: Icons.calendar_month_rounded),
+      (label: 'My Bookings', icon: Icons.confirmation_number_rounded),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceOverlay,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.stroke),
+      ),
+      child: Row(
+        children: [
+          for (var index = 0; index < items.length; index++)
+            Expanded(
+              child: InkWell(
+                onTap: () => onChanged(index),
+                borderRadius: BorderRadius.circular(999),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 11,
+                  ),
+                  decoration: BoxDecoration(
+                    color: selected == index
+                        ? AppColors.primary
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        items[index].icon,
+                        size: 17,
+                        color: selected == index
+                            ? Colors.white
+                            : AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          items[index].label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(
+                                color: selected == index
+                                    ? Colors.white
+                                    : AppColors.textSecondary,
+                                fontWeight: selected == index
+                                    ? FontWeight.w800
+                                    : FontWeight.w700,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EventsEmptyPanel extends StatelessWidget {
+  const _EventsEmptyPanel({
+    required this.title,
+    required this.message,
+    required this.icon,
+  });
+
+  final String title;
+  final String message;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: PremiumCard(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: Icon(icon, color: AppColors.primary, size: 30),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EventInfoChip extends StatelessWidget {
+  const _EventInfoChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppColors.surface.withValues(alpha: 0.84),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.stroke),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: AppColors.primary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EventNotice extends StatelessWidget {
+  const _EventNotice({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: AppColors.warning, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w700,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -409,6 +872,18 @@ class _EventCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final booking = _map(event['booking']);
     final bookingStatus = booking['status']?.toString() ?? '';
+    final category = event['category']?.toString().trim();
+    final useBookingSnapshot = [
+      'reserved',
+      'waitlisted',
+      'attended',
+    ].contains(bookingStatus);
+    final payAtVenue = useBookingSnapshot
+        ? booking['price_amount_snapshot'] != null
+        : event['pricing_type'] == 'pay_at_venue';
+    final pricing = payAtVenue
+        ? '${_money(useBookingSnapshot ? booking['price_amount_snapshot'] : event['price_amount'], useBookingSnapshot ? booking['currency_snapshot'] : event['currency'])} at venue'
+        : 'Free';
     final bookingLabel = switch (bookingStatus) {
       'waitlisted' => 'Waitlisted',
       'reserved' => 'Spot confirmed',
@@ -427,91 +902,151 @@ class _EventCard extends StatelessWidget {
     };
     return PremiumCard(
       onTap: onTap,
-      glowColor: booking.isEmpty ? AppColors.primary : AppColors.success,
-      child: Row(
+      glowColor: booking.isEmpty ? AppColors.primary : bookingColor,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 58,
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppColors.primary.withValues(alpha: 0.16),
-                  AppColors.accentPurple.withValues(alpha: 0.08),
-                ],
-              ),
-              border: Border.all(color: AppColors.strokeStrong),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  _month(event['starts_at']),
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 58,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppColors.primary.withValues(alpha: 0.16),
+                      AppColors.accentPurple.withValues(alpha: 0.08),
+                    ],
                   ),
+                  border: Border.all(color: AppColors.strokeStrong),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                Text(
-                  _day(event['starts_at']),
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  event['title']?.toString() ?? 'Event',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  '${_time(event['starts_at'])} · ${event['location_name'] ?? 'Location TBA'}',
-                ),
-                if (booking.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      bookingLabel,
-                      style: TextStyle(
-                        color: bookingColor,
-                        fontWeight: FontWeight.w700,
+                child: Column(
+                  children: [
+                    Text(
+                      _month(event['starts_at']),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                  ),
-              ],
-            ),
+                    Text(
+                      _day(event['starts_at']),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 7,
+                      runSpacing: 6,
+                      children: [
+                        if (category != null && category.isNotEmpty)
+                          _EventStatusBadge(
+                            label: category,
+                            color: AppColors.accentPurple,
+                          ),
+                        _EventStatusBadge(
+                          label: event['scope'] == 'global'
+                              ? 'Atlas event'
+                              : 'Gym event',
+                          color: AppColors.primary,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 9),
+                    Text(
+                      event['title']?.toString() ?? 'Event',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      '${_time(event['starts_at'])} · ${event['location_name'] ?? 'Location TBA'}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ],
           ),
-          const Icon(Icons.chevron_right, color: AppColors.textMuted),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _EventInfoChip(icon: Icons.payments_outlined, label: pricing),
+              _EventInfoChip(
+                icon: Icons.group_outlined,
+                label: event['capacity'] == null
+                    ? 'Open capacity'
+                    : '${event['available_spots'] ?? 0} spots left',
+              ),
+              if (booking.isNotEmpty)
+                _EventStatusBadge(label: bookingLabel, color: bookingColor),
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
-class _Error extends StatelessWidget {
-  const _Error({required this.message, required this.retry});
-  final String message;
-  final VoidCallback retry;
+class _EventStatusBadge extends StatelessWidget {
+  const _EventStatusBadge({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
   @override
-  Widget build(BuildContext context) => EmptyState(
-    title: 'Events could not load',
-    message: message,
-    icon: Icons.cloud_off_outlined,
-    action: FilledButton(onPressed: retry, child: const Text('Try again')),
-  );
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
 }
 
 List<Map<String, dynamic>> _records(Map<String, dynamic> response) {

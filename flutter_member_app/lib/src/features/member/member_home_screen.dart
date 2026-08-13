@@ -1730,6 +1730,11 @@ class _DashboardPage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             RevealOnBuild(
+              delay: const Duration(milliseconds: 55),
+              child: _UpcomingEventsShortcut(onTap: onOpenEvents),
+            ),
+            const SizedBox(height: 16),
+            RevealOnBuild(
               delay: const Duration(milliseconds: 65),
               child: _DashboardSection(
                 eyebrow: 'Snapshot',
@@ -2135,6 +2140,126 @@ class _DashboardSection extends StatelessWidget {
         ),
         child,
       ],
+    );
+  }
+}
+
+class _UpcomingEventsShortcut extends StatelessWidget {
+  const _UpcomingEventsShortcut({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PremiumCard(
+      onTap: onTap,
+      padding: EdgeInsets.zero,
+      glowColor: AppColors.accentPurple,
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.accentPurple.withValues(alpha: 0.13),
+              AppColors.primary.withValues(alpha: 0.06),
+              AppColors.surface,
+            ],
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                color: AppColors.accentPurple.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(19),
+                border: Border.all(
+                  color: AppColors.accentPurple.withValues(alpha: 0.2),
+                ),
+              ),
+              child: const Icon(
+                Icons.event_available_rounded,
+                color: AppColors.accentPurple,
+                size: 27,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'UPCOMING EVENTS',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppColors.accentPurple,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Classes, workshops & community',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'View schedule, reserve a spot, and manage bookings.',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(999),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.2),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'View',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                    ),
+                  ),
+                  SizedBox(width: 3),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web\Admin;
 
+use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\PlatformAdmin\StoreGymOwnerRequest;
 use App\Http\Requests\PlatformAdmin\UpdateGymOwnerRequest;
@@ -130,7 +131,7 @@ class GymOwnerController extends Controller
     {
         /** @var User $admin */
         $admin = $request->user();
-        abort_unless($admin?->hasRole(\App\Enums\RoleName::PlatformAdmin->value), 403);
+        abort_unless($admin?->hasRole(RoleName::PlatformAdmin->value), 403);
 
         $this->gymOwnerService->ensureGymOwner($user);
 
@@ -150,14 +151,16 @@ class GymOwnerController extends Controller
 
         abort_unless((int) $gym->owner_user_id === (int) $user->id, 404);
 
-        $user->forceFill(['active_role' => \App\Enums\RoleName::GymOwner->value])->save();
+        $originalActiveRole = $user->active_role;
+        $user->forceFill(['active_role' => RoleName::GymOwner->value])->save();
 
         Auth::guard('web')->login($user);
-        $request->session()->regenerate();
+        $request->session()->forget('web_panel');
         $request->session()->put('web_panel.gym_id', $gym->id);
         $request->session()->put('web_panel.platform_admin_impersonator_id', $admin->id);
         $request->session()->put('web_panel.platform_admin_return_url', route('web.admin.gym-owners.show', $user));
-        $request->session()->forget('web_panel.branch_id');
+        $request->session()->put('web_panel.impersonated_user_id', $user->id);
+        $request->session()->put('web_panel.impersonated_user_original_active_role', $originalActiveRole);
 
         return redirect()
             ->route('web.gym.dashboard', ['gym' => $gym->id])
@@ -169,15 +172,28 @@ class GymOwnerController extends Controller
         $adminId = $request->session()->get('web_panel.platform_admin_impersonator_id');
         abort_unless($adminId, 403);
 
+        $impersonatedUserId = $request->session()->get('web_panel.impersonated_user_id');
+        $originalActiveRole = $request->session()->get('web_panel.impersonated_user_original_active_role');
+
         /** @var User $admin */
         $admin = User::query()->findOrFail($adminId);
-        abort_unless($admin->hasRole(\App\Enums\RoleName::PlatformAdmin->value), 403);
+        abort_unless($admin->hasRole(RoleName::PlatformAdmin->value), 403);
 
         $returnUrl = $request->session()->get('web_panel.platform_admin_return_url')
             ?: route('web.admin.gym-owners.index');
 
+        if ($impersonatedUserId) {
+            $impersonatedUser = User::query()->find($impersonatedUserId);
+            if ($impersonatedUser
+                && $impersonatedUser->active_role === RoleName::GymOwner->value
+                && ($originalActiveRole === null || $impersonatedUser->hasRole($originalActiveRole))) {
+                $impersonatedUser->forceFill(['active_role' => $originalActiveRole])->save();
+            }
+        }
+
+        $admin->forceFill(['active_role' => RoleName::PlatformAdmin->value])->save();
+
         Auth::guard('web')->login($admin);
-        $request->session()->regenerate();
         $request->session()->forget('web_panel');
 
         return redirect($returnUrl)->with('status', 'Returned to platform admin.');

@@ -158,6 +158,56 @@ class PlatformGymOwnerManagementTest extends TestCase
             ->assertSessionMissing('web_panel.platform_admin_impersonator_id');
 
         $this->get(route('web.admin.dashboard'))->assertOk();
+        $this->assertAuthenticatedAs($admin->fresh());
+        $this->assertSame(RoleName::PlatformAdmin->value, $admin->fresh()->active_role);
+    }
+
+    public function test_platform_admin_preview_restores_the_owner_role_and_supports_repeated_switches(): void
+    {
+        $admin = User::factory()->create([
+            'active_role' => RoleName::GymOwner->value,
+            'is_active' => true,
+        ]);
+        $admin->assignRole([RoleName::PlatformAdmin->value, RoleName::GymOwner->value]);
+
+        $owner = User::factory()->create([
+            'active_role' => RoleName::Trainer->value,
+            'is_active' => true,
+        ]);
+        $owner->assignRole([RoleName::GymOwner->value, RoleName::Trainer->value]);
+
+        $gym = Gym::query()->create([
+            'owner_user_id' => $owner->id,
+            'name' => 'Repeated Preview Gym',
+            'slug' => 'repeated-preview-gym',
+            'city' => 'Pune',
+            'status' => 'active',
+            'approval_status' => 'approved',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin);
+
+        foreach (range(1, 3) as $attempt) {
+            $this->get(route('web.admin.gym-owners.gyms.dashboard', [$owner, $gym]))
+                ->assertRedirect(route('web.gym.dashboard', ['gym' => $gym->id]))
+                ->assertSessionHas('web_panel.platform_admin_impersonator_id', $admin->id)
+                ->assertSessionHas('web_panel.impersonated_user_original_active_role', RoleName::Trainer->value);
+
+            $this->assertAuthenticatedAs($owner->fresh());
+            $this->assertSame(RoleName::GymOwner->value, $owner->fresh()->active_role);
+
+            $this->get(route('web.gym.dashboard', ['gym' => $gym->id]))->assertOk();
+
+            $this->post(route('web.admin.impersonation.stop'))
+                ->assertRedirect(route('web.admin.gym-owners.show', $owner))
+                ->assertSessionMissing('web_panel');
+
+            $this->assertAuthenticatedAs($admin->fresh());
+            $this->assertSame(RoleName::PlatformAdmin->value, $admin->fresh()->active_role);
+            $this->assertSame(RoleName::Trainer->value, $owner->fresh()->active_role);
+            $this->get(route('web.admin.dashboard'))->assertOk();
+        }
     }
 
     public function test_diet_permission_backfill_keeps_diet_plans_available_during_platform_admin_preview(): void
