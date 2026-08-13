@@ -25,7 +25,7 @@ class EventController extends Controller
         $this->panel->assertPermission($request, PermissionName::EventsView->value, $gym);
         $branch = $this->panel->resolveBranch($request, $gym);
 
-        return view('web.events.index', ['pageTitle' => 'Gym Events', 'breadcrumbs' => ['Gym', 'Events'], 'panel' => 'gym', 'gym' => $gym, 'branch' => $branch, 'events' => Event::query()->where('gym_id', $gym->id)->when($branch, fn ($q) => $q->where(fn ($s) => $s->whereNull('branch_id')->orWhere('branch_id', $branch->id)))->with(['host:id,name', 'branch:id,name'])->withCount(['bookings as reserved_count' => fn ($q) => $q->whereIn('status', ['reserved', 'attended'])])->latest('starts_at')->paginate(25), 'hosts' => User::query()->whereHas('trainerProfile', fn ($q) => $q->where('gym_id', $gym->id)->where('is_active', true))->orderBy('name')->get(['id', 'name'])]);
+        return view('web.events.index', ['pageTitle' => 'Gym Events', 'breadcrumbs' => ['Gym', 'Events'], 'panel' => 'gym', 'gym' => $gym, 'branch' => $branch, 'events' => Event::query()->where('gym_id', $gym->id)->when($branch, fn ($q) => $q->where(fn ($s) => $s->whereNull('branch_id')->orWhere('branch_id', $branch->id)))->with(['host:id,name', 'branch:id,name'])->withCount(['bookings as reserved_count' => fn ($q) => $q->whereIn('status', ['reserved', 'attended'])])->latest('starts_at')->paginate(25), 'hosts' => User::query()->whereHas('trainerProfile', fn ($q) => $q->where('gym_id', $gym->id)->where('is_active', true)->where('status', 'active'))->orderBy('name')->get(['id', 'name'])]);
     }
 
     public function store(SaveEventRequest $request): RedirectResponse
@@ -60,7 +60,7 @@ class EventController extends Controller
         $this->panel->assertPermission($request, PermissionName::EventsManage->value, $gym);
         abort_unless($event->gym_id === $gym->id && in_array($event->status, ['draft', 'published'], true), 404);
 
-        return view('web.events.edit', ['pageTitle' => 'Edit '.$event->title, 'breadcrumbs' => ['Gym', 'Events', 'Edit'], 'panel' => 'gym', 'gym' => $gym, 'event' => $event, 'hosts' => User::query()->whereHas('trainerProfile', fn ($q) => $q->where('gym_id', $gym->id)->where('is_active', true))->orderBy('name')->get(['id', 'name'])]);
+        return view('web.events.edit', ['pageTitle' => 'Edit '.$event->title, 'breadcrumbs' => ['Gym', 'Events', 'Edit'], 'panel' => 'gym', 'gym' => $gym, 'event' => $event, 'hosts' => User::query()->whereHas('trainerProfile', fn ($q) => $q->where('gym_id', $gym->id)->where('is_active', true)->where('status', 'active'))->orderBy('name')->get(['id', 'name'])]);
     }
 
     public function update(SaveEventRequest $request, Event $event): RedirectResponse

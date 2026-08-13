@@ -6,6 +6,8 @@ use App\Enums\RoleName;
 use App\Models\Event;
 use App\Models\EventBooking;
 use App\Models\EventReminder;
+use App\Models\Gym;
+use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Services\Events\EventService;
 use Database\Seeders\PermissionSeeder;
@@ -40,7 +42,13 @@ class EventLifecycleFeatureTest extends TestCase
 
         $this->postJson("/api/member/events/{$event->id}/book")
             ->assertCreated()
-            ->assertJsonPath('data.status', 'reserved');
+            ->assertJsonPath('data.status', 'reserved')
+            ->assertJsonPath('data.currency_snapshot', 'INR');
+
+        $this->getJson('/api/member/events/bookings?per_page=100')
+            ->assertOk()
+            ->assertJsonPath('data.0.status', 'reserved')
+            ->assertJsonPath('data.0.event.id', $event->id);
 
         $this->assertDatabaseHas('event_bookings', [
             'event_id' => $event->id,
@@ -70,6 +78,56 @@ class EventLifecycleFeatureTest extends TestCase
 
         $this->assertDatabaseHas('event_bookings', ['event_id' => $event->id, 'user_id' => $second->id, 'status' => 'reserved']);
         $this->assertDatabaseHas('event_bookings', ['event_id' => $event->id, 'user_id' => $first->id, 'status' => 'cancelled']);
+    }
+
+    public function test_increasing_capacity_promotes_existing_waitlisted_members(): void
+    {
+        $admin = $this->user(RoleName::PlatformAdmin);
+        $first = $this->user(RoleName::Member);
+        $second = $this->user(RoleName::Member);
+        $event = $this->event($admin, capacity: 1);
+
+        Sanctum::actingAs($first);
+        $this->postJson("/api/member/events/{$event->id}/book")->assertCreated();
+        Sanctum::actingAs($second);
+        $this->postJson("/api/member/events/{$event->id}/book")
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'waitlisted');
+
+        app(EventService::class)->save($admin, ['capacity' => 2], $event);
+
+        $this->assertDatabaseHas('event_bookings', [
+            'event_id' => $event->id,
+            'user_id' => $second->id,
+            'status' => 'reserved',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $second->id,
+            'type' => 'event_waitlist_promoted',
+        ]);
+    }
+
+    public function test_member_cannot_cancel_after_event_has_started(): void
+    {
+        $admin = $this->user(RoleName::PlatformAdmin);
+        $member = $this->user(RoleName::Member);
+        $event = $this->event($admin, capacity: 5);
+
+        Sanctum::actingAs($member);
+        $this->postJson("/api/member/events/{$event->id}/book")->assertCreated();
+        $event->forceFill([
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addHour(),
+        ])->save();
+
+        $this->postJson("/api/member/events/{$event->id}/cancel-booking")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('booking');
+        $this->assertDatabaseHas('event_bookings', [
+            'event_id' => $event->id,
+            'user_id' => $member->id,
+            'status' => 'reserved',
+        ]);
     }
 
     public function test_cancelled_event_preserves_booking_history_and_cancels_reminders(): void
@@ -245,6 +303,161 @@ class EventLifecycleFeatureTest extends TestCase
         $this->assertSame(0, app(EventService::class)->runDueReminders());
         $this->assertSame('sent', $reminder->fresh()->status);
         $this->assertDatabaseCount('notifications', 1);
+    }
+
+    public function test_gym_trainer_can_list_update_and_cancel_an_event_assigned_to_them_as_host(): void
+    {
+        $trainer = $this->user(RoleName::Trainer);
+        $owner = $this->user(RoleName::GymOwner);
+        $gym = Gym::query()->create([
+            'owner_user_id' => $owner->id,
+            'name' => 'Trainer Events Gym',
+            'slug' => 'trainer-events-gym',
+            'status' => 'active',
+            'is_active' => true,
+            'operational_access_enabled' => true,
+            'timezone' => 'Asia/Kolkata',
+        ]);
+        TrainerProfile::query()->create([
+            'user_id' => $trainer->id,
+            'gym_id' => $gym->id,
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+
+        $event = Event::query()->create([
+            'scope' => 'gym', 'gym_id' => $gym->id, 'created_by_user_id' => $owner->id, 'host_user_id' => $trainer->id,
+            'title' => 'Trainer hosted mobility class', 'starts_at' => now()->addDays(2),
+            'ends_at' => now()->addDays(2)->addHour(), 'timezone' => 'Asia/Kolkata', 'pricing_type' => 'free',
+            'currency' => 'INR', 'status' => 'draft',
+        ]);
+
+        Sanctum::actingAs($trainer);
+        $this->getJson('/api/trainer/events?managed_only=1')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $event->id);
+
+        $this->putJson("/api/trainer/events/{$event->id}", [
+            'title' => 'Published mobility class',
+            'starts_at' => now('Asia/Kolkata')->addDays(2)->setTime(16, 0)->format('Y-m-d H:i:s'),
+            'ends_at' => now('Asia/Kolkata')->addDays(2)->setTime(17, 0)->format('Y-m-d H:i:s'),
+            'timezone' => 'Asia/Kolkata',
+            'pricing_type' => 'free',
+            'status' => 'published',
+        ])->assertOk()->assertJsonPath('data.status', 'published');
+
+        $this->postJson("/api/trainer/events/{$event->id}/cancel", ['reason' => 'Studio maintenance'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'cancelled');
+    }
+
+    public function test_trainer_cannot_manage_another_trainers_or_a_gym_event_without_enrollment(): void
+    {
+        $host = $this->user(RoleName::Trainer);
+        $other = $this->user(RoleName::Trainer);
+        $independent = $this->user(RoleName::Trainer);
+        $gym = Gym::query()->create([
+            'name' => 'Trainer Event Isolation Gym',
+            'slug' => 'trainer-event-isolation-gym',
+            'status' => 'active',
+            'is_active' => true,
+            'operational_access_enabled' => true,
+        ]);
+        foreach ([$host, $other] as $trainer) {
+            TrainerProfile::query()->create([
+                'user_id' => $trainer->id,
+                'gym_id' => $gym->id,
+                'status' => 'active',
+                'is_active' => true,
+            ]);
+        }
+        TrainerProfile::query()->create([
+            'user_id' => $independent->id,
+            'gym_id' => null,
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+        $event = Event::query()->create([
+            'scope' => 'gym', 'gym_id' => $gym->id, 'created_by_user_id' => $host->id, 'host_user_id' => $host->id,
+            'title' => 'Host only event', 'starts_at' => now()->addDays(2), 'ends_at' => now()->addDays(2)->addHour(),
+            'timezone' => 'Asia/Kolkata', 'pricing_type' => 'free', 'currency' => 'INR', 'status' => 'draft',
+        ]);
+
+        Sanctum::actingAs($other);
+        $this->postJson("/api/trainer/events/{$event->id}/cancel", ['reason' => 'Not my event'])->assertForbidden();
+        $this->getJson("/api/trainer/events/{$event->id}/bookings")->assertForbidden();
+
+        Sanctum::actingAs($independent);
+        $this->getJson('/api/trainer/events?managed_only=1')->assertForbidden();
+        $event->update(['host_user_id' => $independent->id]);
+        $this->getJson("/api/trainer/events/{$event->id}/bookings")->assertForbidden();
+    }
+
+    public function test_global_event_host_keeps_roster_and_attendance_access(): void
+    {
+        $admin = $this->user(RoleName::PlatformAdmin);
+        $trainer = $this->user(RoleName::Trainer);
+        TrainerProfile::query()->create([
+            'user_id' => $trainer->id,
+            'gym_id' => null,
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+        $member = $this->user(RoleName::Member);
+        $event = $this->event($admin, capacity: 5);
+        $event->forceFill([
+            'host_user_id' => $trainer->id,
+            'starts_at' => now()->addHour(),
+            'ends_at' => now()->addHours(2),
+        ])->save();
+        $booking = EventBooking::query()->create([
+            'event_id' => $event->id,
+            'user_id' => $member->id,
+            'status' => 'reserved',
+            'booked_at' => now(),
+        ]);
+
+        Sanctum::actingAs($trainer);
+        $this->getJson("/api/trainer/events/{$event->id}/bookings")
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $booking->id);
+        $this->putJson("/api/trainer/events/{$event->id}/bookings/{$booking->id}/attendance", ['status' => 'attended'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'attended');
+    }
+
+    public function test_assigning_a_host_to_an_existing_gym_event_notifies_the_trainer(): void
+    {
+        $owner = $this->user(RoleName::GymOwner);
+        $trainer = $this->user(RoleName::Trainer);
+        $gym = Gym::query()->create([
+            'owner_user_id' => $owner->id,
+            'name' => 'Host Notification Gym',
+            'slug' => 'host-notification-gym',
+            'status' => 'active',
+            'is_active' => true,
+            'operational_access_enabled' => true,
+        ]);
+        TrainerProfile::query()->create([
+            'user_id' => $trainer->id,
+            'gym_id' => $gym->id,
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+        $event = Event::query()->create([
+            'scope' => 'gym', 'gym_id' => $gym->id, 'created_by_user_id' => $owner->id,
+            'title' => 'Evening Zumba', 'starts_at' => now()->addDays(2), 'ends_at' => now()->addDays(2)->addHour(),
+            'timezone' => 'Asia/Kolkata', 'pricing_type' => 'free', 'currency' => 'INR',
+            'status' => 'published', 'published_at' => now(),
+        ]);
+
+        app(EventService::class)->save($owner, ['host_user_id' => $trainer->id], $event);
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $trainer->id,
+            'type' => 'event_updated',
+            'title' => 'You were assigned as event host',
+        ]);
     }
 
     private function user(RoleName $role): User

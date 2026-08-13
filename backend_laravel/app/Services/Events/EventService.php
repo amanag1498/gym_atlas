@@ -112,7 +112,7 @@ class EventService
     {
         return DB::transaction(function () use ($user, $event): EventBooking {
             $event = Event::query()->lockForUpdate()->findOrFail($event->id);
-            if ($event->status !== 'published' || $event->ends_at->isPast()) {
+            if ($event->status !== 'published' || $event->starts_at->isPast()) {
                 $this->invalid('booking', 'This event is no longer open for booking changes.');
             }
             if ($event->cancellation_closes_at && now()->gt($event->cancellation_closes_at)) {
@@ -138,6 +138,7 @@ class EventService
     {
         return DB::transaction(function () use ($actor, $data, $event): Event {
             $wasPublished = $event?->status === 'published';
+            $previousHostUserId = $event?->host_user_id;
             if ($event && in_array($event->status, ['cancelled', 'completed'], true)) {
                 $this->invalid('event', 'Cancelled or completed events cannot be edited.');
             }
@@ -177,7 +178,8 @@ class EventService
             $hostUserId = array_key_exists('host_user_id', $data) ? $data['host_user_id'] : $event?->host_user_id;
             if ($hostUserId) {
                 $hostIsEligible = User::query()->whereKey($hostUserId)->where('is_active', true)->whereHas('roles', fn ($q) => $q->where('name', 'trainer'))
-                    ->when($scope === 'gym', fn ($q) => $q->whereHas('trainerProfile', fn ($profile) => $profile->where('gym_id', $gymId)->where('is_active', true)))->exists();
+                    ->when($scope === 'gym', fn ($q) => $q->whereHas('trainerProfile', fn ($profile) => $profile
+                        ->where('gym_id', $gymId)->where('is_active', true)->where('status', 'active')))->exists();
                 if (! $hostIsEligible) {
                     $this->invalid('host_user_id', 'Select an active trainer in the event scope.');
                 }
@@ -194,10 +196,22 @@ class EventService
             }
             $event ??= new Event;
             $event->fill($data)->save();
+            if ($event->wasChanged('capacity')) {
+                $this->fillAvailableSpots($event);
+            }
+            $hostChanged = $previousHostUserId !== $event->host_user_id;
             $materiallyChanged = $event->wasChanged(['starts_at', 'ends_at', 'location_name', 'address', 'latitude', 'longitude']);
             if (! $wasPublished && $event->status === 'published') {
                 SendEventPublishedNotifications::dispatch($event->id);
-                $this->notifyHostAfterCommit($event, NotificationType::EventPublished->value, 'You are hosting an event', "You are listed as the host for {$event->title}.");
+                if (! $hostChanged) {
+                    $this->notifyHostAfterCommit($event, NotificationType::EventPublished->value, 'You are hosting an event', "You are listed as the host for {$event->title}.");
+                }
+            }
+            if ($hostChanged) {
+                $this->notifyHostAfterCommit($event, NotificationType::EventUpdated->value, 'You were assigned as event host', "Your gym assigned you to host {$event->title}. Open Events to manage it.");
+                if ($previousHostUserId) {
+                    $this->notifySpecificHostAfterCommit($previousHostUserId, $event, 'Event host assignment changed', "You are no longer the host for {$event->title}.");
+                }
             }
             if ($event->wasChanged(['starts_at', 'ends_at'])) {
                 foreach ($event->bookings()->where('status', 'reserved')->get() as $booking) {
@@ -211,7 +225,9 @@ class EventService
                     'Event details updated',
                     "The schedule or location for {$event->title} has changed. Open the event to review it.",
                 );
-                $this->notifyHostAfterCommit($event, NotificationType::EventUpdated->value, 'Hosted event updated', "The schedule or location for {$event->title} has changed.");
+                if ($event->host_user_id !== $actor->id) {
+                    $this->notifyHostAfterCommit($event, NotificationType::EventUpdated->value, 'Hosted event updated', "The schedule or location for {$event->title} has changed.");
+                }
             }
 
             return $event->fresh(['gym', 'branch', 'host']);
@@ -337,6 +353,19 @@ class EventService
         }
     }
 
+    private function fillAvailableSpots(Event $event): void
+    {
+        $reserved = $event->bookings()->whereIn('status', ['reserved', 'attended'])->count();
+        while ($event->capacity === null || $reserved < $event->capacity) {
+            $waiting = $event->bookings()->where('status', 'waitlisted')->exists();
+            if (! $waiting) {
+                return;
+            }
+            $this->promoteWaitlist($event);
+            $reserved++;
+        }
+    }
+
     private function notifyHostAfterCommit(Event $event, string $type, string $title, string $body): void
     {
         if (! $event->host_user_id) {
@@ -345,6 +374,14 @@ class EventService
         $host = User::query()->find($event->host_user_id);
         if ($host) {
             DB::afterCommit(fn () => $this->notifier->send($host, $event, $type, $title, $body, 'trainer'));
+        }
+    }
+
+    private function notifySpecificHostAfterCommit(int $userId, Event $event, string $title, string $body): void
+    {
+        $host = User::query()->find($userId);
+        if ($host) {
+            DB::afterCommit(fn () => $this->notifier->send($host, $event, NotificationType::EventUpdated->value, $title, $body, 'trainer'));
         }
     }
 

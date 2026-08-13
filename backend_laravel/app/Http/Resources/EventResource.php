@@ -51,6 +51,8 @@ class EventResource extends JsonResource
             'status' => $this->status,
             'can_book' => $bookingOpen && ! $fullWithoutWaitlist && ! $hasActiveBooking,
             'can_cancel_booking' => $booking && in_array($booking->status, ['reserved', 'waitlisted'], true)
+                && $this->status === 'published'
+                && $this->starts_at?->isFuture()
                 && (! $this->cancellation_closes_at || now()->lte($this->cancellation_closes_at)),
             'attendance_open' => in_array($this->status, ['published', 'completed'], true)
                 && now()->between($this->starts_at->copy()->subHours(2), $this->ends_at->copy()->addDay()),

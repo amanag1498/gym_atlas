@@ -789,7 +789,7 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
       subtitle: user.name,
       actions: [
         IconButton(
-          tooltip: 'Upcoming events',
+          tooltip: 'Events and bookings',
           onPressed: () => Navigator.of(context).push<void>(
             MaterialPageRoute(
               builder: (_) => MemberEventsScreen(repository: _memberRepository),

@@ -187,6 +187,18 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     });
   }
 
+  Future<void> _openEvents([int? eventId]) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => TrainerEventsScreen(
+          repository: _repository,
+          initialEventId: eventId,
+        ),
+      ),
+    );
+    if (mounted) await _load();
+  }
+
   void _scheduleInitialChat() {
     final memberId = widget.initialChatMemberId;
     if (memberId == null ||
@@ -679,6 +691,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
           await _repository.respondToGymInvitation(id, decision);
           await _load();
         },
+        onOpenEvent: _openEvents,
       ),
     ];
 
@@ -686,7 +699,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       title: _pageTitle(_index, user.name),
       actions: [
         IconButton(
-          tooltip: 'Upcoming events',
+          tooltip: 'Events and hosted management',
           onPressed: () => Navigator.of(context).push<void>(
             MaterialPageRoute(
               builder: (_) => TrainerEventsScreen(repository: _repository),
@@ -753,6 +766,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                     await _repository.respondToGymInvitation(id, decision);
                     await _load();
                   },
+                  onOpenEvent: _openEvents,
                 ),
               )
             : !onboardingCompleted
@@ -2645,7 +2659,7 @@ class _DashboardPage extends StatelessWidget {
           ),
           (
             title: 'Upcoming Events',
-            subtitle: 'View the full schedule and hosted-event rosters.',
+            subtitle: 'View the schedule or manage events you are hosting.',
             icon: Icons.calendar_month_rounded,
             onTap: onOpenEvents,
           ),
@@ -10118,6 +10132,7 @@ class _NotificationPage extends StatelessWidget {
     required this.onUpdateTrial,
     required this.onCreateAnnouncement,
     required this.onRespondGymInvitation,
+    required this.onOpenEvent,
   });
 
   final List<Map<String, dynamic>> notifications;
@@ -10134,6 +10149,7 @@ class _NotificationPage extends StatelessWidget {
   onCreateAnnouncement;
   final Future<void> Function(int invitationId, String decision)
   onRespondGymInvitation;
+  final Future<void> Function(int? eventId) onOpenEvent;
 
   @override
   Widget build(BuildContext context) {
@@ -10254,6 +10270,7 @@ class _NotificationPage extends StatelessWidget {
                       }
                     }
                   },
+                  onOpenEvent: onOpenEvent,
                 ),
                 if (entry.key < notifications.length - 1)
                   Divider(color: AppColors.stroke, height: 1),
@@ -10810,6 +10827,7 @@ class _TrainerNotificationRow extends StatelessWidget {
     required this.isUnread,
     required this.onMarkRead,
     required this.onRespondGymInvitation,
+    required this.onOpenEvent,
   });
 
   final Map<String, dynamic> notification;
@@ -10817,6 +10835,7 @@ class _TrainerNotificationRow extends StatelessWidget {
   final VoidCallback onMarkRead;
   final Future<void> Function(int invitationId, String decision)
   onRespondGymInvitation;
+  final Future<void> Function(int? eventId) onOpenEvent;
 
   @override
   Widget build(BuildContext context) {
@@ -10828,13 +10847,22 @@ class _TrainerNotificationRow extends StatelessWidget {
     final color = _notificationColor(context, type);
     final invitationId = (_map(notification['data'])['invitation_id'] as num?)
         ?.toInt();
+    final eventId = _intValue(
+      _map(notification['data'])['event_id'] ??
+          _map(notification['data'])['eventId'],
+    );
     final canRespond =
         type == 'trainer_gym_invitation' &&
         invitationId != null &&
         _map(notification['data'])['status'] == 'pending';
 
     return InkWell(
-      onTap: isUnread ? onMarkRead : null,
+      onTap: eventId != null
+          ? () {
+              if (isUnread) onMarkRead();
+              onOpenEvent(eventId);
+            }
+          : (isUnread ? onMarkRead : null),
       borderRadius: BorderRadius.circular(18),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -10937,6 +10965,23 @@ class _TrainerNotificationRow extends StatelessWidget {
                           ),
                         ),
                       ),
+                      if (eventId != null) ...[
+                        Text(
+                          'Open event',
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: color,
+                          size: 17,
+                        ),
+                        const SizedBox(width: 8),
+                      ],
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,

@@ -152,6 +152,7 @@ class PermissionSeeder extends Seeder
                 PermissionName::TrialRequestsManage->value,
                 PermissionName::NotificationsManage->value,
                 PermissionName::EventsView->value,
+                PermissionName::EventsManage->value,
                 PermissionName::EventBookingsView->value,
                 PermissionName::EventCheckIn->value,
             ],

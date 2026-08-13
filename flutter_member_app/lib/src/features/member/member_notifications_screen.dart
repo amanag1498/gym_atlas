@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/loading_state.dart';
 import '../../core/pagination.dart';
+import 'member_events_screen.dart';
 import 'member_repository.dart';
 
 class MemberNotificationsScreen extends StatefulWidget {
@@ -174,6 +175,21 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text(exception.toString())));
     }
+  }
+
+  Future<void> _openEvent(Map<String, dynamic> notification) async {
+    final eventId = _notificationEventId(notification);
+    if (eventId == null) return;
+    await _markRead(notification);
+    if (!mounted) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => MemberEventsScreen(
+          repository: widget.repository,
+          initialEventId: eventId,
+        ),
+      ),
+    );
   }
 
   Future<void> _markAllRead() async {
@@ -515,6 +531,10 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
                             respondingInvitationIds: _respondingInvitationIds,
                             onMarkRead: () => _markRead(entry.value),
                             onMarkUnread: () => _markUnread(entry.value),
+                            onOpenEvent:
+                                _notificationEventId(entry.value) == null
+                                ? null
+                                : () => _openEvent(entry.value),
                             onAcceptInvitation: () => _respondToGymInvitation(
                               _gymInvitationId(entry.value)!,
                               notification: entry.value,
@@ -861,6 +881,7 @@ class _NotificationCard extends StatelessWidget {
     required this.respondingInvitationIds,
     required this.onMarkRead,
     required this.onMarkUnread,
+    this.onOpenEvent,
     required this.onAcceptInvitation,
     required this.onRejectInvitation,
   });
@@ -869,6 +890,7 @@ class _NotificationCard extends StatelessWidget {
   final Set<int> respondingInvitationIds;
   final VoidCallback onMarkRead;
   final VoidCallback onMarkUnread;
+  final VoidCallback? onOpenEvent;
   final VoidCallback onAcceptInvitation;
   final VoidCallback onRejectInvitation;
 
@@ -895,7 +917,7 @@ class _NotificationCard extends StatelessWidget {
         invitationId != null && respondingInvitationIds.contains(invitationId);
 
     return InkWell(
-      onTap: onMarkRead,
+      onTap: onOpenEvent ?? onMarkRead,
       borderRadius: BorderRadius.circular(18),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -983,6 +1005,23 @@ class _NotificationCard extends StatelessWidget {
                                 ),
                               ),
                             ),
+                            if (onOpenEvent != null) ...[
+                              const Text(
+                                'Open event',
+                                style: TextStyle(
+                                  color: AppColors.primary,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(width: 2),
+                              const Icon(
+                                Icons.chevron_right_rounded,
+                                color: AppColors.primary,
+                                size: 17,
+                              ),
+                              const SizedBox(width: 8),
+                            ],
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
@@ -1176,6 +1215,12 @@ class _NotificationCard extends StatelessWidget {
 
     return 'pending';
   }
+}
+
+int? _notificationEventId(Map<String, dynamic> notification) {
+  final data = notification['data'];
+  final value = data is Map ? data['event_id'] ?? data['eventId'] : null;
+  return value is num ? value.toInt() : int.tryParse(value?.toString() ?? '');
 }
 
 class _GymInvitationActions extends StatelessWidget {

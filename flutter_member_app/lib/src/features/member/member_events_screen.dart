@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_gradients.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/premium_app_bar.dart';
+import '../../../core/widgets/premium_card.dart';
 import 'member_repository.dart';
 
 class MemberEventsScreen extends StatefulWidget {
@@ -20,7 +26,9 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _events = const [];
+  List<Map<String, dynamic>> _bookedEvents = const [];
   int _tab = 0;
+  bool _initialEventHandled = false;
 
   @override
   void initState() {
@@ -34,37 +42,25 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
       _error = null;
     });
     try {
-      final events = <Map<String, dynamic>>[];
-      var page = 1;
-      var lastPage = 1;
-      do {
-        final response = await widget.repository.fetchEvents(page: page);
-        events.addAll(_records(response));
-        lastPage = _lastPage(response, page);
-        page++;
-      } while (page <= lastPage);
+      final results = await Future.wait([_fetchUpcoming(), _fetchBookings()]);
+      final events = results[0];
+      final bookedEvents = results[1].map((bookedEvent) {
+        final matches = events.where(
+          (event) => _int(event['id']) == _int(bookedEvent['id']),
+        );
+        if (matches.isEmpty) return bookedEvent;
+        return <String, dynamic>{
+          ...matches.first,
+          'booking': bookedEvent['booking'],
+        };
+      }).toList();
       if (!mounted) return;
       setState(() {
         _events = events;
+        _bookedEvents = bookedEvents;
         _loading = false;
       });
-      final target = widget.initialEventId;
-      if (target != null) {
-        final matches = events.where((item) => _int(item['id']) == target);
-        if (matches.isNotEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback(
-            (_) => _showEvent(matches.first),
-          );
-        } else {
-          final detailResponse = await widget.repository.fetchEvent(target);
-          final detail = _map(detailResponse['data']);
-          if (mounted && detail.isNotEmpty) {
-            WidgetsBinding.instance.addPostFrameCallback(
-              (_) => _showEvent(detail),
-            );
-          }
-        }
-      }
+      await _openInitialEventOnce(events);
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -75,66 +71,165 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
     }
   }
 
+  Future<void> _openInitialEventOnce(List<Map<String, dynamic>> events) async {
+    final target = widget.initialEventId;
+    if (_initialEventHandled || target == null) return;
+    _initialEventHandled = true;
+
+    Map<String, dynamic>? event;
+    final matches = events.where((item) => _int(item['id']) == target);
+    if (matches.isNotEmpty) {
+      event = matches.first;
+    } else {
+      try {
+        final response = await widget.repository.fetchEvent(target);
+        final detail = _map(response['data']);
+        if (detail.isNotEmpty) event = detail;
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('This event is no longer available.')),
+          );
+        }
+        return;
+      }
+    }
+
+    if (!mounted || event == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _showEvent(event!);
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchUpcoming() async {
+    final events = <Map<String, dynamic>>[];
+    var page = 1;
+    var lastPage = 1;
+    do {
+      final response = await widget.repository.fetchEvents(page: page);
+      events.addAll(_records(response));
+      lastPage = _lastPage(response, page);
+      page++;
+    } while (page <= lastPage);
+    return events;
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchBookings() async {
+    final events = <Map<String, dynamic>>[];
+    var page = 1;
+    var lastPage = 1;
+    do {
+      final response = await widget.repository.fetchEventBookings(page: page);
+      for (final booking in _records(response)) {
+        final event = _map(booking['event']);
+        if (event.isEmpty) continue;
+        event['booking'] = {
+          'id': booking['id'],
+          'status': booking['status'],
+          'booked_at': booking['booked_at'],
+          'price_amount_snapshot': booking['price_amount_snapshot'],
+          'currency_snapshot': booking['currency_snapshot'],
+          'payment_note_snapshot': booking['payment_note_snapshot'],
+        };
+        events.add(event);
+      }
+      lastPage = _lastPage(response, page);
+      page++;
+    } while (page <= lastPage);
+    return events;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final visible = _tab == 0
-        ? _events
-        : _events.where((event) => _map(event['booking']).isNotEmpty).toList();
+    final visible = _tab == 0 ? _events : _bookedEvents;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Upcoming events'),
+      appBar: PremiumAppBar(
+        title: 'Events',
+        subtitle: 'Classes, workshops and gym experiences',
         actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded)),
+          IconButton(
+            tooltip: 'Refresh events',
+            onPressed: _load,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
         ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: SegmentedButton<int>(
-              segments: const [
-                ButtonSegment(
-                  value: 0,
-                  label: Text('All upcoming'),
-                  icon: Icon(Icons.calendar_month),
-                ),
-                ButtonSegment(
-                  value: 1,
-                  label: Text('My bookings'),
-                  icon: Icon(Icons.confirmation_number_outlined),
-                ),
-              ],
-              selected: {_tab},
-              onSelectionChanged: (value) => setState(() => _tab = value.first),
-            ),
-          ),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null
-                ? _Error(message: _error!, retry: _load)
-                : RefreshIndicator(
-                    onRefresh: _load,
-                    child: visible.isEmpty
-                        ? ListView(
-                            children: const [
-                              SizedBox(height: 180),
-                              Center(child: Text('No upcoming events found.')),
-                            ],
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                            itemCount: visible.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 12),
-                            itemBuilder: (_, index) => _EventCard(
-                              event: visible[index],
-                              onTap: () => _showEvent(visible[index]),
-                            ),
-                          ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppGradients.pageBackground),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.sm,
+                AppSpacing.lg,
+                AppSpacing.md,
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<int>(
+                  segments: const [
+                    ButtonSegment(
+                      value: 0,
+                      label: Text('All upcoming'),
+                      icon: Icon(Icons.calendar_month),
+                    ),
+                    ButtonSegment(
+                      value: 1,
+                      label: Text('My bookings'),
+                      icon: Icon(Icons.confirmation_number_outlined),
+                    ),
+                  ],
+                  selected: {_tab},
+                  onSelectionChanged: (value) =>
+                      setState(() => _tab = value.first),
+                  style: const ButtonStyle(
+                    visualDensity: VisualDensity.comfortable,
                   ),
-          ),
-        ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                  ? _Error(message: _error!, retry: _load)
+                  : RefreshIndicator(
+                      onRefresh: _load,
+                      child: visible.isEmpty
+                          ? ListView(
+                              children: [
+                                SizedBox(height: 96),
+                                EmptyState(
+                                  title: _tab == 0
+                                      ? 'Nothing scheduled yet'
+                                      : 'No upcoming bookings',
+                                  message: _tab == 0
+                                      ? 'Upcoming gym and global events will appear here.'
+                                      : 'Reserve a spot from All upcoming and it will stay organised here.',
+                                  icon: Icons.event_available_outlined,
+                                ),
+                              ],
+                            )
+                          : ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(
+                                AppSpacing.lg,
+                                0,
+                                AppSpacing.lg,
+                                AppSpacing.xxl,
+                              ),
+                              itemCount: visible.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 12),
+                              itemBuilder: (_, index) => _EventCard(
+                                event: visible[index],
+                                onTap: () => _showEvent(visible[index]),
+                              ),
+                            ),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -150,8 +245,25 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
         final canBook = event['can_book'] == true;
         final canCancel = event['can_cancel_booking'] == true;
         final actionEnabled = booked ? canCancel : canBook;
-        final pricing = event['pricing_type'] == 'pay_at_venue'
-            ? '₹${event['price_amount']} · pay at venue'
+        final useBookingSnapshot = [
+          'reserved',
+          'waitlisted',
+          'attended',
+        ].contains(booking['status']);
+        final payAtVenue = useBookingSnapshot
+            ? booking['price_amount_snapshot'] != null
+            : event['pricing_type'] == 'pay_at_venue';
+        final priceAmount = useBookingSnapshot
+            ? booking['price_amount_snapshot']
+            : event['price_amount'];
+        final currency = useBookingSnapshot
+            ? booking['currency_snapshot']
+            : event['currency'];
+        final paymentNote = useBookingSnapshot
+            ? booking['payment_note_snapshot']
+            : event['payment_note'];
+        final pricing = payAtVenue
+            ? '${_money(priceAmount, currency)} · pay at venue'
             : 'Free';
         return SafeArea(
           child: Padding(
@@ -203,10 +315,10 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
                       padding: const EdgeInsets.only(top: 5),
                       child: Text(event['address'].toString()),
                     ),
-                  if ((event['payment_note']?.toString() ?? '').isNotEmpty)
+                  if ((paymentNote?.toString() ?? '').isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
-                      child: Text(event['payment_note'].toString()),
+                      child: Text(paymentNote.toString()),
                     ),
                   if ((event['description']?.toString() ?? '').isNotEmpty)
                     Padding(
@@ -239,16 +351,29 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
                           : () async {
                               Navigator.pop(sheetContext);
                               try {
+                                Map<String, dynamic> response;
                                 if (booked) {
-                                  await widget.repository.cancelEventBooking(
-                                    _int(event['id'])!,
-                                  );
+                                  response = await widget.repository
+                                      .cancelEventBooking(_int(event['id'])!);
                                 } else {
-                                  await widget.repository.bookEvent(
+                                  response = await widget.repository.bookEvent(
                                     _int(event['id'])!,
                                   );
                                 }
                                 await _load();
+                                if (mounted) {
+                                  final status = _map(
+                                    response['data'],
+                                  )['status']?.toString();
+                                  final message = booked
+                                      ? 'Your event booking was cancelled.'
+                                      : status == 'waitlisted'
+                                      ? 'The event is full. You joined the waitlist.'
+                                      : 'Your event spot is confirmed.';
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(message)),
+                                  );
+                                }
                               } catch (error) {
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -283,78 +408,94 @@ class _EventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final booking = _map(event['booking']);
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 58,
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(14),
+    final bookingStatus = booking['status']?.toString() ?? '';
+    final bookingLabel = switch (bookingStatus) {
+      'waitlisted' => 'Waitlisted',
+      'reserved' => 'Spot confirmed',
+      'attended' => 'Attended',
+      'no_show' => 'No-show',
+      'cancelled' => 'Booking cancelled',
+      'event_cancelled' => 'Event cancelled',
+      'waitlist_expired' => 'Waitlist closed',
+      _ => bookingStatus.replaceAll('_', ' '),
+    };
+    final bookingColor = switch (bookingStatus) {
+      'reserved' || 'attended' => AppColors.success,
+      'waitlisted' => AppColors.warning,
+      'cancelled' || 'event_cancelled' || 'no_show' => AppColors.error,
+      _ => AppColors.textMuted,
+    };
+    return PremiumCard(
+      onTap: onTap,
+      glowColor: booking.isEmpty ? AppColors.primary : AppColors.success,
+      child: Row(
+        children: [
+          Container(
+            width: 58,
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.primary.withValues(alpha: 0.16),
+                  AppColors.accentPurple.withValues(alpha: 0.08),
+                ],
+              ),
+              border: Border.all(color: AppColors.strokeStrong),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  _month(event['starts_at']),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                child: Column(
-                  children: [
-                    Text(
-                      _month(event['starts_at']),
-                      style: const TextStyle(
-                        fontSize: 11,
+                Text(
+                  _day(event['starts_at']),
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  event['title']?.toString() ?? 'Event',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  '${_time(event['starts_at'])} · ${event['location_name'] ?? 'Location TBA'}',
+                ),
+                if (booking.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      bookingLabel,
+                      style: TextStyle(
+                        color: bookingColor,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    Text(
-                      _day(event['starts_at']),
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      event['title']?.toString() ?? 'Event',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      '${_time(event['starts_at'])} · ${event['location_name'] ?? 'Location TBA'}',
-                    ),
-                    if (booking.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          booking['status'] == 'waitlisted'
-                              ? 'Waitlisted'
-                              : 'Spot confirmed',
-                          style: TextStyle(
-                            color: booking['status'] == 'waitlisted'
-                                ? Colors.orange
-                                : Colors.green,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right),
-            ],
+                  ),
+              ],
+            ),
           ),
-        ),
+          const Icon(Icons.chevron_right, color: AppColors.textMuted),
+        ],
       ),
     );
   }
@@ -365,18 +506,11 @@ class _Error extends StatelessWidget {
   final String message;
   final VoidCallback retry;
   @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(message, textAlign: TextAlign.center),
-          const SizedBox(height: 12),
-          FilledButton(onPressed: retry, child: const Text('Try again')),
-        ],
-      ),
-    ),
+  Widget build(BuildContext context) => EmptyState(
+    title: 'Events could not load',
+    message: message,
+    icon: Icons.cloud_off_outlined,
+    action: FilledButton(onPressed: retry, child: const Text('Try again')),
   );
 }
 
@@ -410,3 +544,16 @@ String _month(dynamic value) => _dt(value) == null
     : DateFormat('MMM').format(_dt(value)!).toUpperCase();
 String _day(dynamic value) =>
     _dt(value) == null ? '--' : DateFormat('d').format(_dt(value)!);
+
+String _money(dynamic amount, dynamic currency) {
+  final code = currency?.toString().trim().toUpperCase();
+  final value = amount is num
+      ? amount.toDouble()
+      : double.tryParse(amount?.toString() ?? '');
+  final formatted = value == null
+      ? amount?.toString() ?? '0'
+      : value == value.roundToDouble()
+      ? value.toStringAsFixed(0)
+      : value.toStringAsFixed(2);
+  return code == 'INR' ? '₹$formatted' : '${code ?? 'INR'} $formatted';
+}

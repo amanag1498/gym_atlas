@@ -35,6 +35,7 @@ class TrainerRepository {
       _client.get('/trainer/context');
   Future<Map<String, dynamic>> fetchEvents({
     bool hostedOnly = false,
+    bool managedOnly = false,
     int page = 1,
   }) => _client.get(
     '/trainer/events',
@@ -42,10 +43,17 @@ class TrainerRepository {
       'page': page,
       'per_page': 100,
       if (hostedOnly) 'hosted_only': true,
+      if (managedOnly) 'managed_only': true,
     },
   );
   Future<Map<String, dynamic>> fetchEvent(int eventId) =>
       _client.get('/trainer/events/$eventId');
+  Future<Map<String, dynamic>> updateEvent(
+    int eventId,
+    Map<String, dynamic> payload,
+  ) => _client.put('/trainer/events/$eventId', data: payload);
+  Future<Map<String, dynamic>> cancelHostedEvent(int eventId, String reason) =>
+      _client.post('/trainer/events/$eventId/cancel', data: {'reason': reason});
   Future<Map<String, dynamic>> fetchEventRoster(int eventId, {int page = 1}) =>
       _client.get(
         '/trainer/events/$eventId/bookings',

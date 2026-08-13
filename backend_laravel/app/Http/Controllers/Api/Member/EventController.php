@@ -40,8 +40,14 @@ class EventController extends Controller
 
     public function bookings(Request $request)
     {
-        $paginator = $request->user()->eventBookings()->with(['event.gym:id,name', 'event.branch:id,name', 'event.host:id,name,avatar'])
-            ->whereHas('event', fn ($q) => $q->where('ends_at', '>=', now()))->latest('booked_at')->paginate(30);
+        $userId = $request->user()->id;
+        $paginator = $request->user()->eventBookings()->with([
+            'event' => fn ($event) => $event
+                ->with(['gym:id,name', 'branch:id,name', 'host:id,name,avatar', 'bookings' => fn ($booking) => $booking->where('user_id', $userId)])
+                ->withCount(['bookings as reserved_count' => fn ($booking) => $booking->whereIn('status', ['reserved', 'attended'])]),
+        ])
+            ->whereHas('event', fn ($q) => $q->where('ends_at', '>=', now()))
+            ->latest('booked_at')->paginate(min(100, max(1, $request->integer('per_page', 30))));
 
         return $this->paginated($paginator, EventBookingResource::collection($paginator->getCollection()), 'Event bookings fetched successfully.');
     }

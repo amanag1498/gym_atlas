@@ -665,6 +665,8 @@ Route::prefix('trainer')
             ->middleware('permission:notification.manage');
         Route::get('events', [TrainerEventController::class, 'index'])->middleware('permission:event.view');
         Route::get('events/{event}', [TrainerEventController::class, 'show'])->middleware('permission:event.view');
+        Route::put('events/{event}', [TrainerEventController::class, 'update'])->middleware('permission:event.manage');
+        Route::post('events/{event}/cancel', [TrainerEventController::class, 'cancel'])->middleware('permission:event.manage');
         Route::get('events/{event}/bookings', [TrainerEventController::class, 'roster'])->middleware('permission:event_booking.view');
         Route::put('events/{event}/bookings/{booking}/attendance', [TrainerEventController::class, 'attendance'])->middleware('permission:event.check_in');
         Route::get('trial-requests', [TrainerTrialRequestController::class, 'index'])
