@@ -25,7 +25,32 @@ class EventController extends Controller
         $this->panel->assertPermission($request, PermissionName::EventsView->value, $gym);
         $branch = $this->panel->resolveBranch($request, $gym);
 
-        return view('web.events.index', ['pageTitle' => 'Gym Events', 'breadcrumbs' => ['Gym', 'Events'], 'panel' => 'gym', 'gym' => $gym, 'branch' => $branch, 'events' => Event::query()->where('gym_id', $gym->id)->when($branch, fn ($q) => $q->where(fn ($s) => $s->whereNull('branch_id')->orWhere('branch_id', $branch->id)))->with(['host:id,name', 'branch:id,name'])->withCount(['bookings as reserved_count' => fn ($q) => $q->whereIn('status', ['reserved', 'attended'])])->latest('starts_at')->paginate(25), 'hosts' => User::query()->whereHas('trainerProfile', fn ($q) => $q->where('gym_id', $gym->id)->where('is_active', true)->where('status', 'active'))->orderBy('name')->get(['id', 'name'])]);
+        $eventQuery = Event::query()
+            ->where('gym_id', $gym->id)
+            ->when($branch, fn ($query) => $query->where(fn ($scope) => $scope->whereNull('branch_id')->orWhere('branch_id', $branch->id)));
+
+        return view('web.events.index', [
+            'pageTitle' => 'Gym Events',
+            'breadcrumbs' => ['Gym', 'Events'],
+            'panel' => 'gym',
+            'gym' => $gym,
+            'branch' => $branch,
+            'events' => (clone $eventQuery)
+                ->with(['host:id,name', 'branch:id,name'])
+                ->withCount(['bookings as reserved_count' => fn ($query) => $query->whereIn('status', ['reserved', 'attended'])])
+                ->latest('starts_at')
+                ->paginate(25),
+            'eventSummary' => [
+                'total' => (clone $eventQuery)->count(),
+                'upcoming' => (clone $eventQuery)->where('status', 'published')->where('starts_at', '>=', now())->count(),
+                'drafts' => (clone $eventQuery)->where('status', 'draft')->count(),
+                'bookings' => EventBooking::query()->whereIn('event_id', (clone $eventQuery)->select('id'))->whereIn('status', ['reserved', 'attended'])->count(),
+            ],
+            'hosts' => User::query()->whereHas('trainerProfile', fn ($query) => $query->where('gym_id', $gym->id)->where('is_active', true)->where('status', 'active'))->orderBy('name')->get(['id', 'name']),
+            'canManageEvents' => $this->panel->canPermission($request, PermissionName::EventsManage->value, $gym, $branch?->id),
+            'canViewRoster' => $this->panel->canPermission($request, PermissionName::EventBookingsView->value, $gym, $branch?->id),
+            'canCheckIn' => $this->panel->canPermission($request, PermissionName::EventCheckIn->value, $gym, $branch?->id),
+        ]);
     }
 
     public function store(SaveEventRequest $request): RedirectResponse
@@ -51,7 +76,7 @@ class EventController extends Controller
             'bookings as attended_bookings_count' => fn ($query) => $query->where('status', 'attended'),
         ]);
 
-        return view('web.events.show', ['pageTitle' => $event->title, 'breadcrumbs' => ['Gym', 'Events', $event->title], 'panel' => 'gym', 'gym' => $gym, 'event' => $event, 'bookings' => $event->bookings()->with('user')->orderBy('booked_at')->paginate(100)]);
+        return view('web.events.show', ['pageTitle' => $event->title, 'breadcrumbs' => ['Gym', 'Events', $event->title], 'panel' => 'gym', 'gym' => $gym, 'event' => $event, 'bookings' => $event->bookings()->with('user')->orderBy('booked_at')->paginate(100), 'canManageEvents' => $this->panel->canPermission($request, PermissionName::EventsManage->value, $gym, $event->branch_id), 'canCheckIn' => $this->panel->canPermission($request, PermissionName::EventCheckIn->value, $gym, $event->branch_id)]);
     }
 
     public function edit(Request $request, Event $event): View

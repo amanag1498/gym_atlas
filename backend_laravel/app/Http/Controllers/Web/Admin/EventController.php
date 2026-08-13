@@ -19,7 +19,28 @@ class EventController extends Controller
 
     public function index(): View
     {
-        return view('web.events.index', ['pageTitle' => 'Global Events', 'breadcrumbs' => ['Platform', 'Events'], 'panel' => 'admin', 'events' => Event::query()->where('scope', 'global')->with(['host:id,name', 'gym:id,name'])->withCount(['bookings as reserved_count' => fn ($q) => $q->whereIn('status', ['reserved', 'attended'])])->latest('starts_at')->paginate(25), 'hosts' => User::query()->role('trainer')->where('is_active', true)->orderBy('name')->get(['id', 'name'])]);
+        $eventQuery = Event::query()->where('scope', 'global');
+
+        return view('web.events.index', [
+            'pageTitle' => 'Global Events',
+            'breadcrumbs' => ['Platform', 'Events'],
+            'panel' => 'admin',
+            'events' => (clone $eventQuery)
+                ->with(['host:id,name', 'gym:id,name'])
+                ->withCount(['bookings as reserved_count' => fn ($q) => $q->whereIn('status', ['reserved', 'attended'])])
+                ->latest('starts_at')
+                ->paginate(25),
+            'eventSummary' => [
+                'total' => (clone $eventQuery)->count(),
+                'upcoming' => (clone $eventQuery)->where('status', 'published')->where('starts_at', '>=', now())->count(),
+                'drafts' => (clone $eventQuery)->where('status', 'draft')->count(),
+                'bookings' => EventBooking::query()->whereHas('event', fn ($query) => $query->where('scope', 'global'))->whereIn('status', ['reserved', 'attended'])->count(),
+            ],
+            'hosts' => User::query()->role('trainer')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'canManageEvents' => true,
+            'canViewRoster' => true,
+            'canCheckIn' => true,
+        ]);
     }
 
     public function store(SaveEventRequest $request): RedirectResponse
@@ -40,7 +61,7 @@ class EventController extends Controller
             'bookings as attended_bookings_count' => fn ($query) => $query->where('status', 'attended'),
         ]);
 
-        return view('web.events.show', ['pageTitle' => $event->title, 'breadcrumbs' => ['Platform', 'Events', $event->title], 'panel' => 'admin', 'event' => $event, 'bookings' => $event->bookings()->with('user')->orderBy('booked_at')->paginate(100)]);
+        return view('web.events.show', ['pageTitle' => $event->title, 'breadcrumbs' => ['Platform', 'Events', $event->title], 'panel' => 'admin', 'event' => $event, 'bookings' => $event->bookings()->with('user')->orderBy('booked_at')->paginate(100), 'canManageEvents' => true, 'canCheckIn' => true]);
     }
 
     public function edit(Event $event): View
