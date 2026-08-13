@@ -150,6 +150,10 @@ class NotificationService
             'independent_coaching_response',
             'independent_coaching_revoked',
             'independent_trainer_verification',
+            NotificationType::EventBookingConfirmed->value,
+            NotificationType::EventWaitlistPromoted->value,
+            NotificationType::EventCancelled->value,
+            NotificationType::EventBookingCancelled->value,
         ], true);
     }
 }

@@ -16,6 +16,7 @@ import 'member_logbook_screen.dart';
 import 'member_assigned_trainer_screen.dart';
 import 'member_assigned_workout_screen.dart';
 import 'member_diet_plan_screen.dart';
+import 'member_events_screen.dart';
 import 'member_membership_screen.dart';
 import 'member_notifications_screen.dart';
 import 'member_onboarding_flow.dart';
@@ -708,6 +709,11 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
             unawaited(_handleStepPermissionRequest()),
         onOpenNotifications: _openNotificationsScreen,
         onOpenDietPlan: _openDietPlanScreen,
+        onOpenEvents: () => Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (_) => MemberEventsScreen(repository: _memberRepository),
+          ),
+        ),
         onStartWorkout: () => setState(() => _index = 1),
         onMessageTrainer: () => setState(() => _index = 3),
         onLogWeight: () => setState(() => _index = 2),
@@ -782,6 +788,15 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
       title: 'Welcome Back',
       subtitle: user.name,
       actions: [
+        IconButton(
+          tooltip: 'Upcoming events',
+          onPressed: () => Navigator.of(context).push<void>(
+            MaterialPageRoute(
+              builder: (_) => MemberEventsScreen(repository: _memberRepository),
+            ),
+          ),
+          icon: const Icon(Icons.calendar_month_outlined),
+        ),
         if (gymRelationships.length > 1)
           IconButton(
             tooltip: 'Switch gym',
@@ -1306,6 +1321,7 @@ class _DashboardPage extends StatelessWidget {
     required this.onRequestStepPermission,
     required this.onOpenNotifications,
     required this.onOpenDietPlan,
+    required this.onOpenEvents,
     required this.onStartWorkout,
     required this.onMessageTrainer,
     required this.onLogWeight,
@@ -1338,6 +1354,7 @@ class _DashboardPage extends StatelessWidget {
   final VoidCallback onRequestStepPermission;
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenDietPlan;
+  final VoidCallback onOpenEvents;
   final VoidCallback onStartWorkout;
   final VoidCallback onMessageTrainer;
   final VoidCallback onLogWeight;
@@ -1514,6 +1531,15 @@ class _DashboardPage extends StatelessWidget {
         icon: Icons.restaurant_menu_rounded,
         color: AppColors.primaryBright,
         onTap: onOpenDietPlan,
+      ),
+      _DashboardActionData(
+        label: 'Upcoming events',
+        helper: 'Classes and community sessions',
+        description:
+            'Browse the complete schedule, reserve a spot, or review your bookings.',
+        icon: Icons.calendar_month_rounded,
+        color: AppColors.accentPurple,
+        onTap: onOpenEvents,
       ),
       _DashboardActionData(
         label: 'Open profile',

@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Gym\Admin\AuditLogController as GymAuditLogControll
 use App\Http\Controllers\Api\Gym\Admin\BranchController as GymBranchController;
 use App\Http\Controllers\Api\Gym\Admin\DashboardController as GymDashboardController;
 use App\Http\Controllers\Api\Gym\Admin\DietPlanController as GymDietPlanController;
+use App\Http\Controllers\Api\Gym\Admin\EventController as GymEventController;
 use App\Http\Controllers\Api\Gym\Admin\GymProfileController;
 use App\Http\Controllers\Api\Gym\Admin\MemberController as GymMemberController;
 use App\Http\Controllers\Api\Gym\Admin\ReportController as GymReportController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\Api\Gym\Communication\ReminderController as GymReminder
 use App\Http\Controllers\Api\Gym\GymContextController;
 use App\Http\Controllers\Api\Member\AttendanceController as MemberAttendanceController;
 use App\Http\Controllers\Api\Member\DietPlanController as MemberDietPlanController;
+use App\Http\Controllers\Api\Member\EventController as MemberEventController;
 use App\Http\Controllers\Api\Member\FavoriteGymController;
 use App\Http\Controllers\Api\Member\IndependentTrainerController;
 use App\Http\Controllers\Api\Member\MemberContextController;
@@ -40,6 +42,7 @@ use App\Http\Controllers\Api\PlatformAdmin\AuditLogController as PlatformAuditLo
 use App\Http\Controllers\Api\PlatformAdmin\CatalogController;
 use App\Http\Controllers\Api\PlatformAdmin\DashboardController as PlatformDashboardController;
 use App\Http\Controllers\Api\PlatformAdmin\DietPlanTemplateController as PlatformDietPlanTemplateController;
+use App\Http\Controllers\Api\PlatformAdmin\EventController as PlatformEventController;
 use App\Http\Controllers\Api\PlatformAdmin\ExerciseController as PlatformExerciseController;
 use App\Http\Controllers\Api\PlatformAdmin\FoodCatalogController as PlatformFoodCatalogController;
 use App\Http\Controllers\Api\PlatformAdmin\GymController as PlatformGymController;
@@ -61,6 +64,7 @@ use App\Http\Controllers\Api\Realtime\RealtimeContextController;
 use App\Http\Controllers\Api\Trainer\AnnouncementController as TrainerAnnouncementController;
 use App\Http\Controllers\Api\Trainer\AssignedMemberController as TrainerAssignedMemberController;
 use App\Http\Controllers\Api\Trainer\DietPlanController as TrainerDietPlanController;
+use App\Http\Controllers\Api\Trainer\EventController as TrainerEventController;
 use App\Http\Controllers\Api\Trainer\ExerciseController as TrainerExerciseController;
 use App\Http\Controllers\Api\Trainer\IndependentMemberCoachingController;
 use App\Http\Controllers\Api\Trainer\IndependentMemberController;
@@ -316,6 +320,12 @@ Route::prefix('platform-admin')
             ->middleware('permission:announcement.view|announcement.manage');
         Route::post('announcements', [PlatformAnnouncementController::class, 'store'])
             ->middleware('permission:announcement.manage');
+        Route::get('events', [PlatformEventController::class, 'index'])->middleware('permission:event.view');
+        Route::post('events', [PlatformEventController::class, 'store'])->middleware('permission:event.manage');
+        Route::put('events/{event}', [PlatformEventController::class, 'update'])->middleware('permission:event.manage');
+        Route::post('events/{event}/cancel', [PlatformEventController::class, 'cancel'])->middleware('permission:event.manage');
+        Route::get('events/{event}/bookings', [PlatformEventController::class, 'roster'])->middleware('permission:event_booking.view');
+        Route::put('events/{event}/bookings/{booking}/attendance', [PlatformEventController::class, 'attendance'])->middleware('permission:event.check_in');
     });
 
 Route::prefix('gym')
@@ -509,6 +519,12 @@ Route::prefix('gym')
             ->middleware('permission:announcement.view|announcement.manage');
         Route::post('announcements', [GymAnnouncementController::class, 'store'])
             ->middleware('permission:announcement.view|announcement.manage|notification.manage');
+        Route::get('events', [GymEventController::class, 'index'])->middleware('permission:event.view');
+        Route::post('events', [GymEventController::class, 'store'])->middleware('permission:event.manage');
+        Route::put('events/{event}', [GymEventController::class, 'update'])->middleware('permission:event.manage');
+        Route::post('events/{event}/cancel', [GymEventController::class, 'cancel'])->middleware('permission:event.manage');
+        Route::get('events/{event}/bookings', [GymEventController::class, 'roster'])->middleware('permission:event_booking.view');
+        Route::put('events/{event}/bookings/{booking}/attendance', [GymEventController::class, 'attendance'])->middleware('permission:event.check_in');
         Route::get('announcements/{announcement}', [GymAnnouncementController::class, 'show'])
             ->middleware('permission:announcement.view|announcement.manage');
         Route::delete('announcements/{announcement}', [GymAnnouncementController::class, 'destroy'])
@@ -647,6 +663,10 @@ Route::prefix('trainer')
             ->middleware('permission:trainer.self.manage');
         Route::post('announcements', [TrainerAnnouncementController::class, 'store'])
             ->middleware('permission:notification.manage');
+        Route::get('events', [TrainerEventController::class, 'index'])->middleware('permission:event.view');
+        Route::get('events/{event}', [TrainerEventController::class, 'show'])->middleware('permission:event.view');
+        Route::get('events/{event}/bookings', [TrainerEventController::class, 'roster'])->middleware('permission:event_booking.view');
+        Route::put('events/{event}/bookings/{booking}/attendance', [TrainerEventController::class, 'attendance'])->middleware('permission:event.check_in');
         Route::get('trial-requests', [TrainerTrialRequestController::class, 'index'])
             ->middleware('permission:trial_request.view|trial_request.manage');
         Route::get('trial-requests/{trialRequest}', [TrainerTrialRequestController::class, 'show'])
@@ -678,6 +698,11 @@ Route::prefix('member')
         Route::get('independent-trainers', [IndependentTrainerController::class, 'trainers']);
         Route::post('independent-trainers/{relationship}/revoke', [IndependentTrainerController::class, 'revoke']);
         Route::get('context', MemberContextController::class);
+        Route::get('events', [MemberEventController::class, 'index'])->middleware('permission:event.view');
+        Route::get('events/bookings', [MemberEventController::class, 'bookings'])->middleware('permission:event.view');
+        Route::get('events/{event}', [MemberEventController::class, 'show'])->middleware('permission:event.view');
+        Route::post('events/{event}/book', [MemberEventController::class, 'book'])->middleware(['permission:event.view', 'throttle:30,1']);
+        Route::post('events/{event}/cancel-booking', [MemberEventController::class, 'cancel'])->middleware(['permission:event.view', 'throttle:30,1']);
     });
 
 Route::prefix('member')

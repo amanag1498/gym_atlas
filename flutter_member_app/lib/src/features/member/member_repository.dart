@@ -9,6 +9,19 @@ class MemberRepository {
 
   Future<Map<String, dynamic>> fetchContext() async =>
       _client.get('/member/context');
+  Future<Map<String, dynamic>> fetchEvents({int page = 1, int perPage = 100}) =>
+      _client.get(
+        '/member/events',
+        queryParameters: {'page': page, 'per_page': perPage},
+      );
+  Future<Map<String, dynamic>> fetchEvent(int eventId) =>
+      _client.get('/member/events/$eventId');
+  Future<Map<String, dynamic>> fetchEventBookings() =>
+      _client.get('/member/events/bookings');
+  Future<Map<String, dynamic>> bookEvent(int eventId) =>
+      _client.post('/member/events/$eventId/book');
+  Future<Map<String, dynamic>> cancelEventBooking(int eventId) =>
+      _client.post('/member/events/$eventId/cancel-booking');
   Future<Map<String, dynamic>> fetchAttendanceHistory({
     int page = 1,
     int perPage = 15,

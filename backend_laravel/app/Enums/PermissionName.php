@@ -54,6 +54,10 @@ enum PermissionName: string
     case AnnouncementsView = 'announcement.view';
     case AnnouncementsManage = 'announcement.manage';
     case NotificationsManage = 'notification.manage';
+    case EventsView = 'event.view';
+    case EventsManage = 'event.manage';
+    case EventBookingsView = 'event_booking.view';
+    case EventCheckIn = 'event.check_in';
 
     /**
      * @return list<string>

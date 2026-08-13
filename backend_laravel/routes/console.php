@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\Events\EventService;
 use App\Services\Notification\ReminderService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -17,4 +18,8 @@ Schedule::command('memberships:reconcile-lifecycle')
 Schedule::call(fn () => app(ReminderService::class)->runDueReminders())
     ->dailyAt('09:00')
     ->name('membership-and-attendance-email-reminders')
+    ->withoutOverlapping();
+Schedule::call(fn () => app(EventService::class)->runDueReminders())
+    ->everyMinute()
+    ->name('event-lifecycle-and-reminders')
     ->withoutOverlapping();

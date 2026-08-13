@@ -33,6 +33,32 @@ class TrainerRepository {
 
   Future<Map<String, dynamic>> fetchContext() async =>
       _client.get('/trainer/context');
+  Future<Map<String, dynamic>> fetchEvents({
+    bool hostedOnly = false,
+    int page = 1,
+  }) => _client.get(
+    '/trainer/events',
+    queryParameters: {
+      'page': page,
+      'per_page': 100,
+      if (hostedOnly) 'hosted_only': true,
+    },
+  );
+  Future<Map<String, dynamic>> fetchEvent(int eventId) =>
+      _client.get('/trainer/events/$eventId');
+  Future<Map<String, dynamic>> fetchEventRoster(int eventId, {int page = 1}) =>
+      _client.get(
+        '/trainer/events/$eventId/bookings',
+        queryParameters: {'page': page, 'per_page': 100},
+      );
+  Future<Map<String, dynamic>> updateEventAttendance(
+    int eventId,
+    int bookingId,
+    String status,
+  ) => _client.put(
+    '/trainer/events/$eventId/bookings/$bookingId/attendance',
+    data: {'status': status},
+  );
   Future<Map<String, dynamic>> fetchIndependentContext() =>
       _client.get('/trainer/independent-context');
   Future<Map<String, dynamic>> inviteMember(Map<String, dynamic> payload) =>

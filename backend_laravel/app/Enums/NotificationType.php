@@ -29,6 +29,14 @@ enum NotificationType: string
     case GymApprovalAlert = 'gym_approval_alert';
     case ReportedContentAlert = 'reported_content_alert';
     case SupportAlert = 'support_alert';
+    case EventPublished = 'event_published';
+    case EventBookingConfirmed = 'event_booking_confirmed';
+    case EventWaitlisted = 'event_waitlisted';
+    case EventWaitlistPromoted = 'event_waitlist_promoted';
+    case EventUpdated = 'event_updated';
+    case EventReminder = 'event_reminder';
+    case EventCancelled = 'event_cancelled';
+    case EventBookingCancelled = 'event_booking_cancelled';
 
     public static function values(): array
     {

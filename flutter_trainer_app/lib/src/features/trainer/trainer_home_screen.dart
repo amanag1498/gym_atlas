@@ -21,6 +21,7 @@ import 'trainer_profile_screen.dart';
 import 'trainer_coaching_mode.dart';
 import 'trainer_repository.dart';
 import 'trainer_diet_plan_screen.dart';
+import 'trainer_events_screen.dart';
 import 'trainer_settings_screen.dart';
 import 'trainer_tasks_screen.dart';
 
@@ -30,12 +31,16 @@ class TrainerHomeScreen extends StatefulWidget {
     this.initialIndex = 0,
     this.initialChatMemberId,
     this.chatLaunchVersion = 0,
+    this.initialEventId,
+    this.eventLaunchVersion = 0,
     this.storePreviewData,
   });
 
   final int initialIndex;
   final int? initialChatMemberId;
   final int chatLaunchVersion;
+  final int? initialEventId;
+  final int eventLaunchVersion;
   final Map<String, dynamic>? storePreviewData;
 
   @override
@@ -74,6 +79,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
   String? _chatError;
   String? _workoutFocusAssignmentKey;
   int _handledChatLaunchVersion = -1;
+  int _handledEventLaunchVersion = -1;
 
   List<Map<String, dynamic>> get _coachingActionMembers => _members
       .where(
@@ -119,6 +125,9 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     if (oldWidget.chatLaunchVersion != widget.chatLaunchVersion) {
       _scheduleInitialChat();
     }
+    if (oldWidget.eventLaunchVersion != widget.eventLaunchVersion) {
+      _scheduleInitialEvent();
+    }
   }
 
   Future<void> _bootstrap() async {
@@ -152,6 +161,30 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       });
     }
     _scheduleInitialChat();
+    _scheduleInitialEvent();
+  }
+
+  void _scheduleInitialEvent() {
+    final eventId = widget.initialEventId;
+    if (eventId == null ||
+        widget.eventLaunchVersion == _handledEventLaunchVersion ||
+        _loading ||
+        !mounted) {
+      return;
+    }
+    _handledEventLaunchVersion = widget.eventLaunchVersion;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (_) => TrainerEventsScreen(
+              repository: _repository,
+              initialEventId: eventId,
+            ),
+          ),
+        );
+      }
+    });
   }
 
   void _scheduleInitialChat() {
@@ -540,6 +573,11 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         onOpenMembers: () => setState(() => _index = 1),
         onOpenWorkouts: () => setState(() => _index = 2),
         onOpenDiet: _openDietBuilder,
+        onOpenEvents: () => Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (_) => TrainerEventsScreen(repository: _repository),
+          ),
+        ),
         onOpenChat: () => setState(() => _index = 3),
         onOpenNotifications: () => setState(() => _index = 4),
         onOpenSettings: _openSettingsScreen,
@@ -647,6 +685,15 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     return AppGradientScaffold(
       title: _pageTitle(_index, user.name),
       actions: [
+        IconButton(
+          tooltip: 'Upcoming events',
+          onPressed: () => Navigator.of(context).push<void>(
+            MaterialPageRoute(
+              builder: (_) => TrainerEventsScreen(repository: _repository),
+            ),
+          ),
+          icon: const Icon(Icons.calendar_month_outlined),
+        ),
         IconButton(
           tooltip: 'Diet plans',
           onPressed: _openDietBuilder,
@@ -2483,6 +2530,7 @@ class _DashboardPage extends StatelessWidget {
     required this.onOpenMembers,
     required this.onOpenWorkouts,
     required this.onOpenDiet,
+    required this.onOpenEvents,
     required this.onOpenChat,
     required this.onOpenNotifications,
     required this.onOpenSettings,
@@ -2504,6 +2552,7 @@ class _DashboardPage extends StatelessWidget {
   final VoidCallback onOpenMembers;
   final VoidCallback onOpenWorkouts;
   final VoidCallback onOpenDiet;
+  final VoidCallback onOpenEvents;
   final VoidCallback onOpenChat;
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenSettings;
@@ -2593,6 +2642,12 @@ class _DashboardPage extends StatelessWidget {
             subtitle: 'Build nutrition plans or assign a diet template.',
             icon: Icons.restaurant_menu_rounded,
             onTap: onOpenDiet,
+          ),
+          (
+            title: 'Upcoming Events',
+            subtitle: 'View the full schedule and hosted-event rosters.',
+            icon: Icons.calendar_month_rounded,
+            onTap: onOpenEvents,
           ),
           (
             title: 'Add Note',

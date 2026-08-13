@@ -33,6 +33,8 @@ class _TrainerAppState extends State<TrainerApp> {
   StreamSubscription<RemoteMessage>? _notificationOpenSubscription;
   int? _pendingChatMemberId;
   int _chatLaunchVersion = 0;
+  int? _pendingEventId;
+  int _eventLaunchVersion = 0;
 
   @override
   void initState() {
@@ -88,15 +90,11 @@ class _TrainerAppState extends State<TrainerApp> {
   }
 
   void _showForegroundChatNotification(RemoteMessage message) {
-    if (message.data['type'] != 'chat_message') {
-      return;
-    }
-
     final notification = message.notification;
     _chatNotificationService
         .show(
-          title: notification?.title ?? 'New chat message',
-          body: notification?.body ?? 'Open the app to view your message.',
+          title: notification?.title ?? 'New notification',
+          body: notification?.body ?? 'Open the app to view details.',
           data: message.data,
         )
         .catchError((Object exception) {
@@ -107,6 +105,16 @@ class _TrainerAppState extends State<TrainerApp> {
   }
 
   void _handleNotificationData(Map<String, dynamic> data) {
+    final eventId = int.tryParse(
+      (data['event_id'] ?? data['eventId'])?.toString() ?? '',
+    );
+    if (eventId != null && eventId > 0 && mounted) {
+      setState(() {
+        _pendingEventId = eventId;
+        _eventLaunchVersion++;
+      });
+      return;
+    }
     if (data['type'] != 'chat_message') {
       return;
     }
@@ -150,6 +158,8 @@ class _TrainerAppState extends State<TrainerApp> {
                 ? TrainerHomeScreen(
                     initialChatMemberId: _pendingChatMemberId,
                     chatLaunchVersion: _chatLaunchVersion,
+                    initialEventId: _pendingEventId,
+                    eventLaunchVersion: _eventLaunchVersion,
                   )
                 : const TrainerLoginScreen();
           },

@@ -7,6 +7,7 @@ use App\Http\Controllers\Web\Admin\DashboardController as AdminDashboardControll
 use App\Http\Controllers\Web\Admin\DietPlanController as AdminDietPlanController;
 use App\Http\Controllers\Web\Admin\DietPlanTemplateController as AdminDietPlanTemplateController;
 use App\Http\Controllers\Web\Admin\EnquiryController as AdminEnquiryController;
+use App\Http\Controllers\Web\Admin\EventController as AdminEventController;
 use App\Http\Controllers\Web\Admin\FoodCatalogController as AdminFoodCatalogController;
 use App\Http\Controllers\Web\Admin\GymController as AdminGymController;
 use App\Http\Controllers\Web\Admin\GymOwnerController as AdminGymOwnerController;
@@ -25,6 +26,7 @@ use App\Http\Controllers\Web\Gym\AuditLogController as WebGymAuditLogController;
 use App\Http\Controllers\Web\Gym\BranchController as WebGymBranchController;
 use App\Http\Controllers\Web\Gym\DashboardController as WebGymDashboardController;
 use App\Http\Controllers\Web\Gym\DietPlanController as WebGymDietPlanController;
+use App\Http\Controllers\Web\Gym\EventController as WebGymEventController;
 use App\Http\Controllers\Web\Gym\GymProfileController as WebGymProfileController;
 use App\Http\Controllers\Web\Gym\MemberController as WebGymMemberController;
 use App\Http\Controllers\Web\Gym\MemberMembershipController as WebGymMemberMembershipController;
@@ -327,6 +329,13 @@ Route::prefix('admin')
     ->group(function (): void {
         Route::get('/dashboard', AdminDashboardController::class)->name('dashboard');
         Route::get('/diet-plans', [AdminDietPlanController::class, 'index'])->name('diet-plans.index');
+        Route::get('/events', [AdminEventController::class, 'index'])->name('events.index');
+        Route::post('/events', [AdminEventController::class, 'store'])->name('events.store');
+        Route::get('/events/{event}', [AdminEventController::class, 'show'])->name('events.show');
+        Route::get('/events/{event}/edit', [AdminEventController::class, 'edit'])->name('events.edit');
+        Route::put('/events/{event}', [AdminEventController::class, 'update'])->name('events.update');
+        Route::post('/events/{event}/cancel', [AdminEventController::class, 'cancel'])->name('events.cancel');
+        Route::put('/events/{event}/bookings/{booking}/attendance', [AdminEventController::class, 'attendance'])->name('events.attendance');
         Route::get('/diet-plans/{dietPlan}', [AdminDietPlanController::class, 'show'])->name('diet-plans.show');
         Route::post('/diet-plans/{dietPlan}/status', [AdminDietPlanController::class, 'updateStatus'])->name('diet-plans.status');
         Route::get('/diet-templates', [AdminDietPlanTemplateController::class, 'index'])->name('diet-templates.index');
@@ -473,6 +482,14 @@ Route::prefix('gym')
     ->middleware(['auth', 'web_gym_panel'])
     ->group(function (): void {
         Route::get('/dashboard', WebGymDashboardController::class)->name('dashboard');
+
+        Route::get('/events', [WebGymEventController::class, 'index'])->name('events.index');
+        Route::post('/events', [WebGymEventController::class, 'store'])->name('events.store');
+        Route::get('/events/{event}', [WebGymEventController::class, 'show'])->name('events.show');
+        Route::get('/events/{event}/edit', [WebGymEventController::class, 'edit'])->name('events.edit');
+        Route::put('/events/{event}', [WebGymEventController::class, 'update'])->name('events.update');
+        Route::post('/events/{event}/cancel', [WebGymEventController::class, 'cancel'])->name('events.cancel');
+        Route::put('/events/{event}/bookings/{booking}/attendance', [WebGymEventController::class, 'attendance'])->name('events.attendance');
 
         Route::get('/profile', [WebGymProfileController::class, 'edit'])->name('profile.edit');
         Route::put('/profile', [WebGymProfileController::class, 'update'])->name('profile.update');

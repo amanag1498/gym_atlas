@@ -187,6 +187,11 @@ class User extends Authenticatable
         return $this->hasMany(Notification::class, 'created_by_user_id');
     }
 
+    public function eventBookings(): HasMany
+    {
+        return $this->hasMany(EventBooking::class);
+    }
+
     public function exercisesCreated(): HasMany
     {
         return $this->hasMany(Exercise::class, 'created_by_user_id');

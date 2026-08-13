@@ -16,6 +16,7 @@ import 'features/auth/auth_service.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/session_controller.dart';
 import 'features/member/member_home_screen.dart';
+import 'features/member/member_events_screen.dart';
 import 'features/member/member_repository.dart';
 
 class MemberApp extends StatefulWidget {
@@ -41,6 +42,8 @@ class _MemberAppState extends State<MemberApp> {
   int? _pendingChatGymId;
   int? _pendingChatTrainerId;
   bool _openingPendingChat = false;
+  int? _pendingEventId;
+  bool _openingPendingEvent = false;
 
   @override
   void initState() {
@@ -89,6 +92,18 @@ class _MemberAppState extends State<MemberApp> {
             ),
           ),
         ),
+        GoRoute(
+          path: '/events/:eventId',
+          pageBuilder: (context, state) => _buildPage(
+            state,
+            MemberEventsScreen(
+              repository: memberRepository,
+              initialEventId: int.tryParse(
+                state.pathParameters['eventId'] ?? '',
+              ),
+            ),
+          ),
+        ),
       ],
       redirect: (context, state) {
         final location = state.matchedLocation;
@@ -109,6 +124,7 @@ class _MemberAppState extends State<MemberApp> {
       },
     );
     sessionController.addListener(_openPendingChatIfReady);
+    sessionController.addListener(_openPendingEventIfReady);
     _chatNotificationService.initialize(_handleNotificationData).catchError((
       Object exception,
     ) {
@@ -149,15 +165,11 @@ class _MemberAppState extends State<MemberApp> {
   }
 
   void _showForegroundChatNotification(RemoteMessage message) {
-    if (message.data['type'] != 'chat_message') {
-      return;
-    }
-
     final notification = message.notification;
     _chatNotificationService
         .show(
-          title: notification?.title ?? 'New chat message',
-          body: notification?.body ?? 'Open the app to view your message.',
+          title: notification?.title ?? 'New notification',
+          body: notification?.body ?? 'Open the app to view details.',
           data: message.data,
         )
         .catchError((Object exception) {
@@ -168,6 +180,12 @@ class _MemberAppState extends State<MemberApp> {
   }
 
   void _handleNotificationData(Map<String, dynamic> data) {
+    final eventId = _notificationInt(data['event_id'] ?? data['eventId']);
+    if (eventId != null && eventId > 0) {
+      _pendingEventId = eventId;
+      unawaited(_openPendingEventIfReady());
+      return;
+    }
     if (data['type'] != 'chat_message') {
       return;
     }
@@ -210,11 +228,33 @@ class _MemberAppState extends State<MemberApp> {
     }
   }
 
+  Future<void> _openPendingEventIfReady() async {
+    final eventId = _pendingEventId;
+    if (eventId == null ||
+        _openingPendingEvent ||
+        sessionController.initializing ||
+        !sessionController.isAuthenticated) {
+      return;
+    }
+
+    _openingPendingEvent = true;
+    _pendingEventId = null;
+    try {
+      router.go('/events/$eventId');
+    } finally {
+      _openingPendingEvent = false;
+      if (_pendingEventId != null) {
+        unawaited(_openPendingEventIfReady());
+      }
+    }
+  }
+
   @override
   void dispose() {
     _foregroundNotificationSubscription?.cancel();
     _notificationOpenSubscription?.cancel();
     sessionController.removeListener(_openPendingChatIfReady);
+    sessionController.removeListener(_openPendingEventIfReady);
     router.dispose();
     sessionController.dispose();
     super.dispose();

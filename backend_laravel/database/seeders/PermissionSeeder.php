@@ -63,6 +63,10 @@ class PermissionSeeder extends Seeder
                 PermissionName::AnnouncementsView->value,
                 PermissionName::AnnouncementsManage->value,
                 PermissionName::NotificationsManage->value,
+                PermissionName::EventsView->value,
+                PermissionName::EventsManage->value,
+                PermissionName::EventBookingsView->value,
+                PermissionName::EventCheckIn->value,
             ],
             RoleName::BranchManager->value => [
                 PermissionName::GymDashboardView->value,
@@ -100,6 +104,10 @@ class PermissionSeeder extends Seeder
                 PermissionName::AnnouncementsView->value,
                 PermissionName::AnnouncementsManage->value,
                 PermissionName::NotificationsManage->value,
+                PermissionName::EventsView->value,
+                PermissionName::EventsManage->value,
+                PermissionName::EventBookingsView->value,
+                PermissionName::EventCheckIn->value,
             ],
             RoleName::GymStaff->value => [
                 PermissionName::GymDashboardView->value,
@@ -120,6 +128,9 @@ class PermissionSeeder extends Seeder
                 PermissionName::WorkoutSessionsView->value,
                 PermissionName::ProgressView->value,
                 PermissionName::AnnouncementsView->value,
+                PermissionName::EventsView->value,
+                PermissionName::EventBookingsView->value,
+                PermissionName::EventCheckIn->value,
             ],
             RoleName::Trainer->value => [
                 PermissionName::TrainersView->value,
@@ -140,6 +151,9 @@ class PermissionSeeder extends Seeder
                 PermissionName::TrialRequestsView->value,
                 PermissionName::TrialRequestsManage->value,
                 PermissionName::NotificationsManage->value,
+                PermissionName::EventsView->value,
+                PermissionName::EventBookingsView->value,
+                PermissionName::EventCheckIn->value,
             ],
             RoleName::Member->value => [
                 PermissionName::MembersView->value,
@@ -153,6 +167,7 @@ class PermissionSeeder extends Seeder
                 PermissionName::WorkoutSessionsManage->value,
                 PermissionName::ProgressView->value,
                 PermissionName::ProgressManage->value,
+                PermissionName::EventsView->value,
             ],
         ];
 
