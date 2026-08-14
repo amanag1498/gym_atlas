@@ -2,17 +2,18 @@
     $supportEmail = $settings['support_email'] ?? null;
     $accountLabel = match ($appType ?? 'account') { 'member' => 'Atlas Member', 'trainer' => 'Atlas Trainer', default => 'Atlas' };
     $steps = [
-        ['Request review', 'The submitted details are recorded as a support enquiry for the team to review.'],
-        ['Identify the account', 'Support may contact the submitted email if more information is needed to identify the relevant account.'],
-        ['Explain next steps', 'The team will explain the removal steps and any record-handling requirements that apply to the request.'],
+        ['Submit the request', 'Use the email connected to the account. The submitted details are recorded as a deletion support request.'],
+        ['Verify ownership', 'Support may reply to that email for information reasonably necessary to identify the account and prevent an unauthorized deletion.'],
+        ['Complete deletion', 'After verification, Atlas deactivates access and deletes or de-identifies personal data from active systems within 30 calendar days.'],
+        ['Receive confirmation', 'Atlas emails confirmation when processing is complete and explains any record that must be retained for a legal or safety obligation.'],
     ];
 @endphp
 
 <x-public.layouts.app page-title="Delete Atlas Account" page-description="Request deletion of an Atlas Member or Atlas Trainer account and associated personal data.">
     <section class="atlas-editorial-hero pb-20 pt-36 sm:pb-24 sm:pt-44">
         <div class="public-container grid items-end gap-10 lg:grid-cols-[1fr_.55fr]">
-            <div><p class="public-eyebrow">Account controls</p><h1 class="mt-6 max-w-4xl text-4xl font-semibold leading-[.98] tracking-[-.055em] text-white sm:text-6xl">Delete your Atlas account.</h1><p class="mt-6 max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">A structured, human-reviewed path for requesting removal of your Atlas Member or Atlas Trainer account.</p></div>
-            <div class="rounded-[1.5rem] border border-white/10 bg-white/[.06] p-6 backdrop-blur-xl"><p class="text-xs font-bold uppercase tracking-[.16em] text-cyan-300">Important</p><p class="mt-3 text-sm leading-7 text-slate-300">Submitting this form creates a support request. It does not delete an account automatically.</p></div>
+            <div><p class="public-eyebrow">Account controls</p><h1 class="mt-6 max-w-4xl text-4xl font-semibold leading-[.98] tracking-[-.055em] text-white sm:text-6xl">Delete your Atlas account.</h1><p class="mt-6 max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">Request deletion of your {{ $accountLabel }} account and associated personal data without signing in.</p></div>
+            <div class="rounded-[1.5rem] border border-white/10 bg-white/[.06] p-6 backdrop-blur-xl"><p class="text-xs font-bold uppercase tracking-[.16em] text-cyan-300">Processing time</p><p class="mt-3 text-sm leading-7 text-slate-300">Submitting this form starts a human-reviewed deletion request. After ownership is verified, active-system deletion or de-identification is completed within 30 calendar days.</p></div>
         </div>
     </section>
 
@@ -23,8 +24,9 @@
 
             <div class="grid gap-10 lg:grid-cols-[.8fr_1.2fr] lg:items-start">
                 <aside class="overflow-hidden rounded-[2rem] bg-slate-950 p-7 text-white shadow-[0_30px_80px_rgba(15,23,42,.18)] sm:p-10 lg:sticky lg:top-28">
-                    <p class="text-xs font-bold uppercase tracking-[.18em] text-cyan-300">A clear review path</p><h2 class="mt-4 text-3xl font-semibold tracking-[-.04em] text-white">What happens after you submit.</h2><p class="mt-4 text-sm leading-7 text-slate-400">The process stays deliberate so support can identify the correct account and explain what applies.</p>
+                    <p class="text-xs font-bold uppercase tracking-[.18em] text-cyan-300">A clear deletion path</p><h2 class="mt-4 text-3xl font-semibold tracking-[-.04em] text-white">What happens after you submit.</h2><p class="mt-4 text-sm leading-7 text-slate-400">The process verifies the correct account, removes personal data on a defined schedule and records completion.</p>
                     <ol class="atlas-deletion-path mt-9">@foreach ($steps as $step)<li class="atlas-deletion-step"><span>0{{ $loop->iteration }}</span><div><h3 class="font-semibold text-white">{{ $step[0] }}</h3><p class="mt-2 text-sm leading-6 text-slate-400">{{ $step[1] }}</p></div></li>@endforeach</ol>
+                    <div class="mt-7 border-t border-white/10 pt-6 text-sm leading-7 text-slate-300"><strong class="text-white">What is deleted</strong><p class="mt-2">Account and profile details, authentication links and tokens, notification tokens, uploaded profile and progress media, synced activity data, and personal workout, diet and progress records are deleted or de-identified from active systems.</p><strong class="mt-5 block text-white">What may be retained</strong><p class="mt-2">Atlas may keep the minimum support, safety, audit, transaction or legal record described in the <a href="{{ route('public.privacy-policy') }}#retention" class="font-semibold text-cyan-300 hover:text-white">privacy policy retention schedule</a>. Encrypted backup copies expire within 90 days.</p></div>
                     @if ($supportEmail)<p class="mt-5 border-t border-white/10 pt-6 text-sm leading-7 text-slate-300">Prefer email? Contact <a href="mailto:{{ $supportEmail }}" class="break-all font-semibold text-cyan-300 hover:text-white">{{ $supportEmail }}</a>.</p>@endif
                 </aside>
 

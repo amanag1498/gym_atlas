@@ -23,10 +23,19 @@ class PublicSupportingPagesTest extends TestCase
         $this->get('/pricing')->assertOk();
         $this->get('/about')->assertOk();
         $this->get('/contact')->assertOk();
-        $this->get('/privacy-policy')->assertOk();
+        $this->get('/privacy-policy')
+            ->assertOk()
+            ->assertSee('Data retention schedule')
+            ->assertSee('within 30 calendar days')
+            ->assertSee('within 90 days')
+            ->assertSee('Atlas Member deletion page')
+            ->assertSee('Atlas Trainer deletion page');
         $this->get('/account-deletion')
             ->assertOk()
-            ->assertSee('Delete your Atlas account');
+            ->assertSee('Delete your Atlas account')
+            ->assertSee('What is deleted')
+            ->assertSee('What may be retained')
+            ->assertSee('within 30 calendar days');
         $this->get('/terms')->assertOk();
     }
 

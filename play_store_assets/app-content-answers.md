@@ -10,6 +10,19 @@ section says otherwise.
 - Account deletion:
   - Member: `https://gymatlas.in/account-deletion?app=member`
   - Trainer: `https://gymatlas.in/account-deletion?app=trainer`
+- Retention disclosed in the public policy:
+  - Active account/service data: while the account is active.
+  - Verified deletion requests: delete or de-identify personal data from active
+    systems within 30 calendar days.
+  - Encrypted backups: expire within 90 days.
+  - Closed support/deletion requests and safety/security records: up to 24
+    months.
+  - Transaction or statutory records: up to 8 years where required for tax,
+    accounting, contractual, dispute or legal obligations.
+- Deletion process: the user submits the web form using the account email;
+  support verifies ownership, deactivates access, completes deletion or
+  de-identification on the published schedule, and emails confirmation. Any
+  legally required exception is disclosed to the requester.
 
 Deploy the backend changes before submitting so these URLs are public,
 non-geoblocked, readable without login and return HTTP 200.
