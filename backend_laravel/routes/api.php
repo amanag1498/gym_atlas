@@ -690,7 +690,9 @@ Route::prefix('member')
         'permission:member.view',
     ])
     ->group(function (): void {
+        Route::get('trial-requests', [TrialRequestController::class, 'index']);
         Route::post('trial-requests', [TrialRequestController::class, 'store']);
+        Route::get('trial-requests/{trialRequest}', [TrialRequestController::class, 'show']);
         Route::get('gym-invitations', [MemberGymInvitationController::class, 'index']);
         Route::post('gym-invitations/{invitation}/accept', [MemberGymInvitationController::class, 'accept']);
         Route::post('gym-invitations/{invitation}/reject', [MemberGymInvitationController::class, 'reject']);

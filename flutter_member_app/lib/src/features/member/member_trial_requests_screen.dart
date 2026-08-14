@@ -91,6 +91,7 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
       final results = await Future.wait<Map<String, dynamic>>([
         _fetchAllPublicGyms(),
         widget.repository.fetchContext(),
+        _fetchAllTrialRequests(),
       ]);
 
       final gyms = (results[0]['data'] as List<dynamic>? ?? const [])
@@ -101,7 +102,15 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
       );
       final userState =
           contextData['user_state']?.toString() ?? 'independent_user';
-      final normalizedTrials = _reconcileTrialRequests(storedTrials, userState);
+      final serverTrials = apiPageItems(results[2]);
+      final normalizedTrials = _reconcileTrialRequests(
+        mergeApiPageItems(storedTrials, serverTrials),
+        userState,
+        serverTrialIds: serverTrials
+            .map((item) => (item['id'] as num?)?.toInt())
+            .whereType<int>()
+            .toSet(),
+      );
 
       _publicGyms = gyms;
       _trialRequests = normalizedTrials;
@@ -152,6 +161,22 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
     return {'data': gyms};
   }
 
+  Future<Map<String, dynamic>> _fetchAllTrialRequests() async {
+    var response = await widget.repository.fetchTrialRequests();
+    var trials = apiPageItems(response);
+    var pagination = ApiPagination.fromResponse(response);
+
+    while (pagination.hasMore) {
+      response = await widget.repository.fetchTrialRequests(
+        page: pagination.nextPage,
+      );
+      trials = mergeApiPageItems(trials, apiPageItems(response));
+      pagination = ApiPagination.fromResponse(response);
+    }
+
+    return {'data': trials};
+  }
+
   Future<void> _hydrateGymBranches(Map<String, dynamic> gym) async {
     final detail = await _fetchGymDetail(gym);
     final branches = (detail['branches'] as List<dynamic>? ?? const [])
@@ -186,8 +211,9 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
 
   List<Map<String, dynamic>> _reconcileTrialRequests(
     List<Map<String, dynamic>> trialRequests,
-    String userState,
-  ) {
+    String userState, {
+    Set<int> serverTrialIds = const <int>{},
+  }) {
     final normalized =
         trialRequests.map((item) => Map<String, dynamic>.from(item)).toList()
           ..sort((left, right) {
@@ -203,11 +229,13 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
     if ((userState == 'gym_member' || userState == 'gym_member_with_trainer') &&
         normalized.isNotEmpty) {
       final mutable = normalized.firstWhere(
-        (item) => const [
-          'pending',
-          'accepted',
-          'completed',
-        ].contains(item['status']?.toString()),
+        (item) =>
+            const [
+              'pending',
+              'accepted',
+              'completed',
+            ].contains(item['status']?.toString()) &&
+            !serverTrialIds.contains((item['id'] as num?)?.toInt()),
         orElse: () => const <String, dynamic>{},
       );
 

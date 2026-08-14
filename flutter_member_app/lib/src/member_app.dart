@@ -44,6 +44,8 @@ class _MemberAppState extends State<MemberApp> {
   bool _openingPendingChat = false;
   int? _pendingEventId;
   bool _openingPendingEvent = false;
+  bool _pendingTrialRequestsOpen = false;
+  bool _openingPendingTrialRequests = false;
 
   @override
   void initState() {
@@ -89,6 +91,8 @@ class _MemberAppState extends State<MemberApp> {
               chatTargetTrainerId: int.tryParse(
                 state.uri.queryParameters['trainer']?.toString() ?? '',
               ),
+              openTrialRequestsOnLoad:
+                  state.uri.queryParameters['section'] == 'trials',
             ),
           ),
         ),
@@ -125,6 +129,7 @@ class _MemberAppState extends State<MemberApp> {
     );
     sessionController.addListener(_openPendingChatIfReady);
     sessionController.addListener(_openPendingEventIfReady);
+    sessionController.addListener(_openPendingTrialRequestsIfReady);
     _chatNotificationService.initialize(_handleNotificationData).catchError((
       Object exception,
     ) {
@@ -184,6 +189,14 @@ class _MemberAppState extends State<MemberApp> {
     if (eventId != null && eventId > 0) {
       _pendingEventId = eventId;
       unawaited(_openPendingEventIfReady());
+      return;
+    }
+    final trialRequestId = _notificationInt(
+      data['trial_request_id'] ?? data['trialRequestId'],
+    );
+    if (trialRequestId != null && trialRequestId > 0) {
+      _pendingTrialRequestsOpen = true;
+      unawaited(_openPendingTrialRequestsIfReady());
       return;
     }
     if (data['type'] != 'chat_message') {
@@ -249,12 +262,32 @@ class _MemberAppState extends State<MemberApp> {
     }
   }
 
+  Future<void> _openPendingTrialRequestsIfReady() async {
+    if (!_pendingTrialRequestsOpen ||
+        _openingPendingTrialRequests ||
+        sessionController.initializing ||
+        !sessionController.isAuthenticated) {
+      return;
+    }
+    _openingPendingTrialRequests = true;
+    _pendingTrialRequestsOpen = false;
+    try {
+      router.go('/home?section=trials');
+    } finally {
+      _openingPendingTrialRequests = false;
+      if (_pendingTrialRequestsOpen) {
+        unawaited(_openPendingTrialRequestsIfReady());
+      }
+    }
+  }
+
   @override
   void dispose() {
     _foregroundNotificationSubscription?.cancel();
     _notificationOpenSubscription?.cancel();
     sessionController.removeListener(_openPendingChatIfReady);
     sessionController.removeListener(_openPendingEventIfReady);
+    sessionController.removeListener(_openPendingTrialRequestsIfReady);
     router.dispose();
     sessionController.dispose();
     super.dispose();

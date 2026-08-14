@@ -75,6 +75,16 @@ class IndependentCoachingPlanIntegrationTest extends TestCase
             'name' => 'Independent diet',
             'status' => 'active',
         ]);
+        MemberProfile::query()
+            ->where('user_id', $member->id)
+            ->where('gym_id', $gym->id)
+            ->update([
+                'fitness_goal' => 'Build strength',
+                'height_cm' => 178,
+                'weight_kg' => 76,
+                'experience_level' => 'intermediate',
+                'injury_notes' => 'Protect left shoulder',
+            ]);
 
         $workouts = $this->actingAs($member, 'sanctum')
             ->getJson('/api/member/workout-plans')
@@ -99,8 +109,25 @@ class IndependentCoachingPlanIntegrationTest extends TestCase
         $this->actingAs($independentTrainer, 'sanctum')
             ->getJson('/api/trainer/independent-members/'.$relationship->id)
             ->assertOk()
+            ->assertJsonPath('data.member_profile.fitness_goal', 'Build strength')
+            ->assertJsonPath('data.member_profile.height_cm', 178)
+            ->assertJsonPath('data.member_profile.weight_kg', 76)
+            ->assertJsonPath('data.member_profile.injury_notes', 'Protect left shoulder')
+            ->assertJsonMissingPath('data.member_profile.gym_id')
             ->assertJsonMissingPath('data.membership_summary')
             ->assertJsonMissingPath('data.attendance_summary');
+        $this->actingAs($independentTrainer, 'sanctum')
+            ->getJson('/api/trainer/diet-plans?member_id='.$member->id.'&independent_trainer_member_relationship_id='.$relationship->id)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $independentDiet->id);
+
+        $relationship->update(['sharing_permissions' => ['workouts', 'chat']]);
+        $this->actingAs($independentTrainer, 'sanctum')
+            ->getJson('/api/trainer/independent-members/'.$relationship->id)
+            ->assertOk()
+            ->assertJsonMissingPath('data.member_profile');
+        $relationship->update(['sharing_permissions' => ['profile', 'workouts', 'diets', 'progress', 'chat']]);
 
         $conversations = $this->actingAs($member, 'sanctum')
             ->getJson('/api/chat/conversations')

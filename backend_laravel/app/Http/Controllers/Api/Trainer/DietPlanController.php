@@ -42,6 +42,17 @@ class DietPlanController extends Controller
                 ->pluck('id')
             : collect();
         $memberId = $request->integer('member_id') ?: null;
+        $relationshipId = $request->integer('independent_trainer_member_relationship_id') ?: null;
+        if ($relationshipId !== null) {
+            $relationship = IndependentTrainerMemberRelationship::query()
+                ->whereIn('id', $activeRelationshipIds)
+                ->whereKey($relationshipId)
+                ->firstOrFail();
+            if ($memberId !== null && (int) $relationship->member_user_id !== $memberId) {
+                abort(404);
+            }
+            $memberId = $relationship->member_user_id;
+        }
         if ($memberId) {
             $member = User::query()->findOrFail($memberId);
             $hasPersonalRelationship = IndependentTrainerMemberRelationship::query()
@@ -70,6 +81,7 @@ class DietPlanController extends Controller
                 $query->whereIn('independent_trainer_member_relationship_id', $activeRelationshipIds);
             })
             ->when($memberId, fn ($query, int $id) => $query->where('member_id', $id))
+            ->when($relationshipId, fn ($query, int $id) => $query->where('independent_trainer_member_relationship_id', $id))
             ->latest()
             ->paginate(min(max($request->integer('per_page', 50), 1), 100));
 

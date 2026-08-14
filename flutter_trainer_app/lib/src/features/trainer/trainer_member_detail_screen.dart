@@ -18,14 +18,16 @@ class TrainerMemberDetailScreen extends StatefulWidget {
     required this.onAssignDiet,
     required this.onMessage,
     required this.onAddCoachingNote,
+    this.onManageRelationship,
   });
 
   final Map<String, dynamic> assignment;
   final TrainerRepository repository;
-  final VoidCallback onAssignWorkout;
-  final Future<void> Function() onAssignDiet;
-  final VoidCallback onMessage;
-  final VoidCallback onAddCoachingNote;
+  final VoidCallback? onAssignWorkout;
+  final Future<void> Function()? onAssignDiet;
+  final VoidCallback? onMessage;
+  final VoidCallback? onAddCoachingNote;
+  final Future<bool> Function()? onManageRelationship;
 
   @override
   State<TrainerMemberDetailScreen> createState() =>
@@ -55,6 +57,24 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
   ApiPagination _progressPhotoPage = const ApiPagination.singlePage();
   ApiPagination _progressRecordPage = const ApiPagination.singlePage();
 
+  bool get _isIndependent =>
+      widget.assignment['relationship_type'] == 'independent';
+
+  int? get _relationshipId => _intValue(
+    widget.assignment['relationship_id'] ?? widget.assignment['id'],
+  );
+
+  Set<String> get _sharingPermissions =>
+      (widget.assignment['sharing_permissions'] as List? ?? const [])
+          .map((value) => value.toString())
+          .toSet();
+
+  bool get _accessActive => widget.assignment['access_active'] != false;
+
+  bool _can(String capability) =>
+      !_isIndependent ||
+      (_accessActive && _sharingPermissions.contains(capability));
+
   bool get _hasMore =>
       _attendancePage.hasMore ||
       _planPage.hasMore ||
@@ -74,6 +94,11 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
   }
 
   Future<void> _load() async {
+    if (_isIndependent) {
+      await _loadIndependent();
+      return;
+    }
+
     final memberId = (widget.assignment['member_id'] as num?)?.toInt();
     if (memberId == null) {
       setState(() {
@@ -165,7 +190,141 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
     }
   }
 
+  Future<void> _loadIndependent() async {
+    final relationshipId = _relationshipId;
+    final memberId = _intValue(widget.assignment['member_id']);
+    if (relationshipId == null || memberId == null) {
+      setState(() {
+        _loading = false;
+        _error = 'Independent coaching relationship is missing.';
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final detailResponse = await widget.repository.fetchIndependentMember(
+        relationshipId,
+      );
+      final relationship = _map(detailResponse['data']);
+      final permissions =
+          (relationship['sharing_permissions'] as List? ?? const [])
+              .map((value) => value.toString())
+              .toSet();
+      final accessActive = relationship['access_active'] != false;
+
+      Future<Map<String, dynamic>> allowed(
+        String capability,
+        Future<Map<String, dynamic>> Function() request,
+      ) => accessActive && permissions.contains(capability)
+          ? request()
+          : Future.value(const <String, dynamic>{'data': []});
+
+      final responses = await Future.wait([
+        allowed(
+          'progress',
+          () =>
+              widget.repository.fetchIndependentMemberProgress(relationshipId),
+        ),
+        allowed(
+          'workouts',
+          () => widget.repository.fetchIndependentMemberWorkoutPlans(
+            relationshipId,
+          ),
+        ),
+        allowed(
+          'profile',
+          () => widget.repository.fetchIndependentMemberNotes(relationshipId),
+        ),
+        allowed(
+          'workouts',
+          () => widget.repository.fetchIndependentMemberWorkoutLogbook(
+            relationshipId,
+          ),
+        ),
+        allowed(
+          'diets',
+          () => widget.repository.fetchDietPlans(
+            memberId: memberId,
+            independentRelationshipId: relationshipId,
+          ),
+        ),
+      ]);
+      final progress = _map(responses[0]['data']);
+      final memberProfile = _map(relationship['member_profile']);
+      final weightLogs = _mapList(progress['weight_logs']);
+      final latestWeight = weightLogs.isEmpty
+          ? memberProfile['weight_kg']
+          : weightLogs.first['weight_kg'];
+
+      if (!mounted) return;
+      setState(() {
+        _detail = {
+          ...relationship,
+          'member': _map(relationship['member']),
+          'member_profile': memberProfile,
+          'membership_summary': {
+            'status': accessActive ? 'personal coaching' : 'access paused',
+            'accepted_at': relationship['accepted_at'],
+          },
+          'attendance_summary': const <String, dynamic>{},
+          'progress_summary': {
+            'fitness_goal': memberProfile['fitness_goal'],
+            'height_cm': memberProfile['height_cm'],
+            'weight_kg': latestWeight,
+            'experience_level': memberProfile['experience_level'],
+          },
+        };
+        _progress = progress;
+        _progressWeightPage = _namedPagination(
+          responses[0],
+          'weight_logs_pagination',
+        );
+        _progressMeasurementPage = _namedPagination(
+          responses[0],
+          'body_measurements_pagination',
+        );
+        _progressPhotoPage = _namedPagination(
+          responses[0],
+          'progress_photos_pagination',
+        );
+        _progressRecordPage = _namedPagination(
+          responses[0],
+          'personal_records_pagination',
+        );
+        _attendance = const [];
+        _attendancePage = const ApiPagination.singlePage();
+        _plans = apiPageItems(responses[1]);
+        _planPage = ApiPagination.fromResponse(responses[1]);
+        _notes = apiPageItems(responses[2]);
+        _notePage = ApiPagination.fromResponse(responses[2]);
+        _workoutHistory = apiPageItems(responses[3]);
+        _logbookPage = ApiPagination.fromResponse(responses[3]);
+        _personalRecords = _mapList(progress['personal_records']);
+        _recordPage = const ApiPagination.singlePage();
+        _dietPlans = apiPageItems(responses[4]);
+        _dietPage = ApiPagination.fromResponse(responses[4]);
+        _loading = false;
+      });
+    } catch (exception) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = exception.toString();
+      });
+    }
+  }
+
   Future<void> _loadMore() async {
+    if (_isIndependent) {
+      await _loadMoreIndependent();
+      return;
+    }
+
     final memberId = (widget.assignment['member_id'] as num?)?.toInt();
     if (memberId == null || _loadingMore || !_hasMore) return;
     setState(() => _loadingMore = true);
@@ -303,11 +462,143 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
     }
   }
 
+  Future<void> _loadMoreIndependent() async {
+    final relationshipId = _relationshipId;
+    final memberId = _intValue(widget.assignment['member_id']);
+    if (relationshipId == null ||
+        memberId == null ||
+        _loadingMore ||
+        !_hasMore) {
+      return;
+    }
+
+    setState(() => _loadingMore = true);
+    try {
+      if (_planPage.hasMore && _can('workouts')) {
+        final response = await widget.repository
+            .fetchIndependentMemberWorkoutPlans(
+              relationshipId,
+              page: _planPage.nextPage,
+            );
+        _plans = mergeApiPageItems(_plans, apiPageItems(response));
+        _planPage = ApiPagination.fromResponse(response);
+      }
+      if (_dietPage.hasMore && _can('diets')) {
+        final response = await widget.repository.fetchDietPlans(
+          memberId: memberId,
+          independentRelationshipId: relationshipId,
+          page: _dietPage.nextPage,
+        );
+        _dietPlans = mergeApiPageItems(_dietPlans, apiPageItems(response));
+        _dietPage = ApiPagination.fromResponse(response);
+      }
+      if (_notePage.hasMore && _can('profile')) {
+        final response = await widget.repository.fetchIndependentMemberNotes(
+          relationshipId,
+          page: _notePage.nextPage,
+        );
+        _notes = mergeApiPageItems(_notes, apiPageItems(response));
+        _notePage = ApiPagination.fromResponse(response);
+      }
+      if (_logbookPage.hasMore && _can('workouts')) {
+        final response = await widget.repository
+            .fetchIndependentMemberWorkoutLogbook(
+              relationshipId,
+              page: _logbookPage.nextPage,
+            );
+        _workoutHistory = mergeApiPageItems(
+          _workoutHistory,
+          apiPageItems(response),
+        );
+        _logbookPage = ApiPagination.fromResponse(response);
+      }
+      if ((_progressWeightPage.hasMore ||
+              _progressMeasurementPage.hasMore ||
+              _progressPhotoPage.hasMore ||
+              _progressRecordPage.hasMore) &&
+          _can('progress')) {
+        final response = await widget.repository.fetchIndependentMemberProgress(
+          relationshipId,
+          weightPage: _progressWeightPage.hasMore
+              ? _progressWeightPage.nextPage
+              : _progressWeightPage.currentPage,
+          measurementPage: _progressMeasurementPage.hasMore
+              ? _progressMeasurementPage.nextPage
+              : _progressMeasurementPage.currentPage,
+          photoPage: _progressPhotoPage.hasMore
+              ? _progressPhotoPage.nextPage
+              : _progressPhotoPage.currentPage,
+          recordPage: _progressRecordPage.hasMore
+              ? _progressRecordPage.nextPage
+              : _progressRecordPage.currentPage,
+        );
+        final data = _map(response['data']);
+        _progress = {
+          ..._progress,
+          ...data,
+          'weight_logs': mergeApiPageItems(
+            _mapList(_progress['weight_logs']),
+            _mapList(data['weight_logs']),
+          ),
+          'body_measurements': mergeApiPageItems(
+            _mapList(_progress['body_measurements']),
+            _mapList(data['body_measurements']),
+          ),
+          'progress_photos': mergeApiPageItems(
+            _mapList(_progress['progress_photos']),
+            _mapList(data['progress_photos']),
+          ),
+          'personal_records': mergeApiPageItems(
+            _mapList(_progress['personal_records']),
+            _mapList(data['personal_records']),
+          ),
+        };
+        _personalRecords = _mapList(_progress['personal_records']);
+        _progressWeightPage = _namedPagination(
+          response,
+          'weight_logs_pagination',
+        );
+        _progressMeasurementPage = _namedPagination(
+          response,
+          'body_measurements_pagination',
+        );
+        _progressPhotoPage = _namedPagination(
+          response,
+          'progress_photos_pagination',
+        );
+        _progressRecordPage = _namedPagination(
+          response,
+          'personal_records_pagination',
+        );
+      }
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
   Future<void> _assignDiet() async {
-    await widget.onAssignDiet();
+    await widget.onAssignDiet?.call();
     if (mounted) {
       await _load();
     }
+  }
+
+  Future<void> _manageRelationship() async {
+    final manage = widget.onManageRelationship;
+    if (manage == null) return;
+    final relationshipEnded = await manage();
+    if (!mounted) return;
+    if (relationshipEnded) {
+      Navigator.of(context).pop();
+      return;
+    }
+    await _load();
   }
 
   @override
@@ -323,10 +614,14 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
     final displayName = member['name']?.toString() ?? 'Assigned member detail';
     final gym = _map(_detail['gym']);
     final branch = _map(_detail['branch']);
-    final gymLabel = gym['name']?.toString().trim().isNotEmpty == true
+    final gymLabel = _isIndependent
+        ? 'Personal coaching'
+        : gym['name']?.toString().trim().isNotEmpty == true
         ? gym['name'].toString()
         : 'Gym ${_detail['gym_id'] ?? widget.assignment['gym_id'] ?? '--'}';
-    final branchLabel = branch['name']?.toString().trim().isNotEmpty == true
+    final branchLabel = _isIndependent
+        ? (_accessActive ? 'Active relationship' : 'Access paused')
+        : branch['name']?.toString().trim().isNotEmpty == true
         ? branch['name'].toString()
         : 'Branch ${_detail['branch_id'] ?? widget.assignment['branch_id'] ?? '--'}';
 
@@ -362,9 +657,14 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
                               memberProfile['fitness_goal']?.toString() ??
                               'No fitness goal set',
                           membershipStatus: _titleCase(
-                            membershipSummary['status']?.toString() ?? 'active',
+                            membershipSummary['status']?.toString() ??
+                                (_isIndependent
+                                    ? 'personal coaching'
+                                    : 'active'),
                           ),
-                          attendanceStatus: _attendanceLabel(attendanceSummary),
+                          attendanceStatus: _isIndependent
+                              ? '${_sharingPermissions.length} shared areas'
+                              : _attendanceLabel(attendanceSummary),
                           workoutStatus: _workoutCompletionLabel(_plans),
                         ),
                         const SizedBox(height: 12),
@@ -392,18 +692,33 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
                             const SizedBox(width: 10),
                             Expanded(
                               child: _FitStatCell(
-                                title: '${_attendance.length}',
-                                subtitle: 'Visits',
+                                title: _isIndependent
+                                    ? '${_workoutHistory.length}'
+                                    : '${_attendance.length}',
+                                subtitle: _isIndependent
+                                    ? 'Sessions'
+                                    : 'Visits',
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 16),
                         _FitActionPanel(
-                          onAssignWorkout: widget.onAssignWorkout,
-                          onAssignDiet: _assignDiet,
-                          onMessage: widget.onMessage,
-                          onAddCoachingNote: widget.onAddCoachingNote,
+                          onAssignWorkout: _can('workouts')
+                              ? widget.onAssignWorkout
+                              : null,
+                          onAssignDiet:
+                              _can('diets') && widget.onAssignDiet != null
+                              ? _assignDiet
+                              : null,
+                          onMessage: _can('chat') ? widget.onMessage : null,
+                          onAddCoachingNote: _can('profile')
+                              ? widget.onAddCoachingNote
+                              : null,
+                          onManageRelationship:
+                              widget.onManageRelationship != null
+                              ? _manageRelationship
+                              : null,
                         ),
                         const SizedBox(height: 18),
                         _FitSectionCard(
@@ -417,42 +732,59 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
                             progressSummary: progressSummary,
                             planCount: _plans.length,
                             dietPlanCount: _dietPlans.length,
+                            independent: _isIndependent,
+                            acceptedAt: _detail['accepted_at'],
+                            profileShared: _can('profile'),
                           ),
                         ),
                         const SizedBox(height: 18),
                         _FitSectionCard(
                           title: 'Diet Plans',
                           icon: Icons.restaurant_menu_rounded,
-                          child: _DietPlansTab(
-                            plans: _dietPlans,
-                            onAssign: _assignDiet,
-                          ),
+                          child: _can('diets')
+                              ? _DietPlansTab(
+                                  plans: _dietPlans,
+                                  onAssign: _assignDiet,
+                                )
+                              : const _SharingRestrictedView(
+                                  area: 'diet plans',
+                                ),
                         ),
                         const SizedBox(height: 18),
                         _FitSectionCard(
                           title: 'Progress',
                           icon: Icons.trending_up_rounded,
-                          child: _ProgressTab(
-                            progress: _progress,
-                            photos: photos,
-                            weightLogs: weightLogs,
-                            bodyMeasurements: bodyMeasurements,
-                          ),
+                          child: _can('progress')
+                              ? _ProgressTab(
+                                  progress: _progress,
+                                  photos: photos,
+                                  weightLogs: weightLogs,
+                                  bodyMeasurements: bodyMeasurements,
+                                )
+                              : const _SharingRestrictedView(area: 'progress'),
                         ),
                         const SizedBox(height: 18),
                         _FitSectionCard(
                           title: 'Logbook',
                           icon: Icons.fitness_center_rounded,
-                          child: _LogbookTab(
-                            history: _workoutHistory,
-                            personalRecords: _personalRecords,
-                          ),
+                          child: _can('workouts')
+                              ? _LogbookTab(
+                                  history: _workoutHistory,
+                                  personalRecords: _personalRecords,
+                                )
+                              : const _SharingRestrictedView(
+                                  area: 'workout history',
+                                ),
                         ),
                         const SizedBox(height: 18),
                         _FitSectionCard(
                           title: 'Notes',
                           icon: Icons.edit_note_rounded,
-                          child: _NotesTab(notes: _notes),
+                          child: _can('profile')
+                              ? _NotesTab(notes: _notes)
+                              : const _SharingRestrictedView(
+                                  area: 'coaching notes',
+                                ),
                         ),
                         if (_hasMore) ...[
                           const SizedBox(height: 18),
@@ -492,8 +824,9 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
     if (denied) {
       return EmptyStateView(
         title: 'Access denied',
-        message:
-            'You can only view members currently assigned to you. Ask your gym admin if this assignment should exist.',
+        message: _isIndependent
+            ? 'This personal coaching relationship is inactive or the member has not shared profile access.'
+            : 'You can only view members currently assigned to you. Ask your gym admin if this assignment should exist.',
         icon: Icons.lock_outline_rounded,
         action: SizedBox(
           width: 220,
@@ -868,12 +1201,14 @@ class _FitActionPanel extends StatelessWidget {
     required this.onAssignDiet,
     required this.onMessage,
     required this.onAddCoachingNote,
+    this.onManageRelationship,
   });
 
-  final VoidCallback onAssignWorkout;
-  final VoidCallback onAssignDiet;
-  final VoidCallback onMessage;
-  final VoidCallback onAddCoachingNote;
+  final VoidCallback? onAssignWorkout;
+  final VoidCallback? onAssignDiet;
+  final VoidCallback? onMessage;
+  final VoidCallback? onAddCoachingNote;
+  final VoidCallback? onManageRelationship;
 
   @override
   Widget build(BuildContext context) {
@@ -917,6 +1252,14 @@ class _FitActionPanel extends StatelessWidget {
               ),
             ],
           ),
+          if (onManageRelationship != null) ...[
+            const SizedBox(height: 8),
+            _CoachActionButton(
+              icon: Icons.manage_accounts_outlined,
+              label: 'Manage personal coaching relationship',
+              onTap: onManageRelationship,
+            ),
+          ],
           const SizedBox(height: 8),
           Row(
             children: [
@@ -956,7 +1299,7 @@ class _CoachActionButton extends StatelessWidget {
 
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final bool primary;
   final bool compact;
 
@@ -966,7 +1309,11 @@ class _CoachActionButton extends StatelessWidget {
       width: double.infinity,
       height: compact ? 52 : 56,
       child: Material(
-        color: primary ? AppColors.primary : AppColors.surfaceSoft,
+        color: onTap == null
+            ? AppColors.surfaceSoft
+            : primary
+            ? AppColors.primary
+            : AppColors.surfaceSoft,
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           onTap: onTap,
@@ -983,7 +1330,11 @@ class _CoachActionButton extends StatelessWidget {
                 Icon(
                   icon,
                   size: 19,
-                  color: primary ? Colors.white : AppColors.primary,
+                  color: onTap == null
+                      ? AppColors.textMuted
+                      : primary
+                      ? Colors.white
+                      : AppColors.primary,
                 ),
                 const SizedBox(width: 8),
                 Flexible(
@@ -992,7 +1343,11 @@ class _CoachActionButton extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: primary ? Colors.white : AppColors.textPrimary,
+                      color: onTap == null
+                          ? AppColors.textMuted
+                          : primary
+                          ? Colors.white
+                          : AppColors.textPrimary,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -1053,6 +1408,22 @@ class _FitSectionCard extends StatelessWidget {
   }
 }
 
+class _SharingRestrictedView extends StatelessWidget {
+  const _SharingRestrictedView({required this.area});
+
+  final String area;
+
+  @override
+  Widget build(BuildContext context) {
+    return EmptyStateView(
+      title: 'Not shared for personal coaching',
+      message:
+          'This member has not shared $area access in the independent coaching relationship.',
+      icon: Icons.privacy_tip_outlined,
+    );
+  }
+}
+
 class _OverviewTab extends StatelessWidget {
   const _OverviewTab({
     required this.memberProfile,
@@ -1062,6 +1433,9 @@ class _OverviewTab extends StatelessWidget {
     required this.progressSummary,
     required this.planCount,
     required this.dietPlanCount,
+    required this.independent,
+    required this.profileShared,
+    this.acceptedAt,
   });
 
   final Map<String, dynamic> memberProfile;
@@ -1071,80 +1445,86 @@ class _OverviewTab extends StatelessWidget {
   final Map<String, dynamic> progressSummary;
   final int planCount;
   final int dietPlanCount;
+  final bool independent;
+  final bool profileShared;
+  final dynamic acceptedAt;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        PremiumCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Member profile',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 12),
-              _InfoRow(
-                label: 'Fitness goal',
-                value:
-                    progressSummary['fitness_goal']?.toString() ??
-                    memberProfile['fitness_goal']?.toString() ??
-                    '--',
-              ),
-              _InfoRow(
-                label: 'Height',
-                value: memberProfile['height_cm'] != null
-                    ? '${memberProfile['height_cm']} cm'
-                    : '--',
-              ),
-              _InfoRow(
-                label: 'Weight',
-                value: progressSummary['weight_kg'] != null
-                    ? '${progressSummary['weight_kg']} kg'
-                    : (memberProfile['weight_kg'] != null
-                          ? '${memberProfile['weight_kg']} kg'
-                          : '--'),
-              ),
-              _InfoRow(
-                label: 'Experience',
-                value:
-                    progressSummary['experience_level']?.toString() ??
-                    memberProfile['experience_level']?.toString() ??
-                    '--',
-              ),
-              _InfoRow(
-                label: 'Injuries',
-                value:
-                    memberProfile['injury_notes']
-                            ?.toString()
-                            .trim()
-                            .isNotEmpty ==
-                        true
-                    ? memberProfile['injury_notes'].toString()
-                    : 'None noted',
-              ),
-              _InfoRow(
-                label: 'Medical notes',
-                value:
-                    memberProfile['medical_notes']
-                            ?.toString()
-                            .trim()
-                            .isNotEmpty ==
-                        true
-                    ? memberProfile['medical_notes'].toString()
-                    : 'No medical notes recorded',
-              ),
-            ],
+        if (!profileShared)
+          const _SharingRestrictedView(area: 'profile')
+        else
+          PremiumCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Member profile',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 12),
+                _InfoRow(
+                  label: 'Fitness goal',
+                  value:
+                      progressSummary['fitness_goal']?.toString() ??
+                      memberProfile['fitness_goal']?.toString() ??
+                      '--',
+                ),
+                _InfoRow(
+                  label: 'Height',
+                  value: memberProfile['height_cm'] != null
+                      ? '${memberProfile['height_cm']} cm'
+                      : '--',
+                ),
+                _InfoRow(
+                  label: 'Weight',
+                  value: progressSummary['weight_kg'] != null
+                      ? '${progressSummary['weight_kg']} kg'
+                      : (memberProfile['weight_kg'] != null
+                            ? '${memberProfile['weight_kg']} kg'
+                            : '--'),
+                ),
+                _InfoRow(
+                  label: 'Experience',
+                  value:
+                      progressSummary['experience_level']?.toString() ??
+                      memberProfile['experience_level']?.toString() ??
+                      '--',
+                ),
+                _InfoRow(
+                  label: 'Injuries',
+                  value:
+                      memberProfile['injury_notes']
+                              ?.toString()
+                              .trim()
+                              .isNotEmpty ==
+                          true
+                      ? memberProfile['injury_notes'].toString()
+                      : 'None noted',
+                ),
+                _InfoRow(
+                  label: 'Medical notes',
+                  value:
+                      memberProfile['medical_notes']
+                              ?.toString()
+                              .trim()
+                              .isNotEmpty ==
+                          true
+                      ? memberProfile['medical_notes'].toString()
+                      : 'No medical notes recorded',
+                ),
+              ],
+            ),
           ),
-        ),
         const SizedBox(height: 14),
         PremiumCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Membership summary',
+                independent ? 'Coaching relationship' : 'Membership summary',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 12),
@@ -1154,68 +1534,77 @@ class _OverviewTab extends StatelessWidget {
                   membershipSummary['status']?.toString() ?? '--',
                 ),
               ),
-              _InfoRow(
-                label: 'Payment status',
-                value: _titleCase(
-                  membershipSummary['payment_status']?.toString() ?? '--',
+              if (independent)
+                _InfoRow(
+                  label: 'Coaching since',
+                  value: _prettyDate(acceptedAt),
+                )
+              else ...[
+                _InfoRow(
+                  label: 'Payment status',
+                  value: _titleCase(
+                    membershipSummary['payment_status']?.toString() ?? '--',
+                  ),
                 ),
-              ),
-              _InfoRow(
-                label: 'Expiry date',
-                value: _prettyDate(membershipSummary['expiry_date']),
-              ),
+                _InfoRow(
+                  label: 'Expiry date',
+                  value: _prettyDate(membershipSummary['expiry_date']),
+                ),
+              ],
               _InfoRow(label: 'Workout plans', value: '$planCount'),
               _InfoRow(label: 'Diet plans', value: '$dietPlanCount'),
             ],
           ),
         ),
-        const SizedBox(height: 14),
-        PremiumCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Attendance summary',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 12),
-              _InfoRow(
-                label: 'Last check-in',
-                value: _prettyDateTime(attendanceSummary['last_check_in_at']),
-              ),
-              _InfoRow(
-                label: 'Recorded check-ins',
-                value:
-                    '${(attendanceSummary['attendance_count'] as num?)?.toInt() ?? attendance.length}',
-              ),
-              const SizedBox(height: 12),
-              if (attendance.isEmpty)
-                const EmptyStateView(
-                  title: 'No attendance history',
-                  message:
-                      'Attendance will appear here after member check-ins.',
-                  icon: Icons.event_busy_rounded,
-                )
-              else
-                ...attendance
-                    .take(5)
-                    .map(
-                      (log) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _TimelineTile(
-                          title: _prettyDateTime(
-                            log['checked_in_at'] ?? log['date'],
+        if (!independent) ...[
+          const SizedBox(height: 14),
+          PremiumCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Attendance summary',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 12),
+                _InfoRow(
+                  label: 'Last check-in',
+                  value: _prettyDateTime(attendanceSummary['last_check_in_at']),
+                ),
+                _InfoRow(
+                  label: 'Recorded check-ins',
+                  value:
+                      '${(attendanceSummary['attendance_count'] as num?)?.toInt() ?? attendance.length}',
+                ),
+                const SizedBox(height: 12),
+                if (attendance.isEmpty)
+                  const EmptyStateView(
+                    title: 'No attendance history',
+                    message:
+                        'Attendance will appear here after member check-ins.',
+                    icon: Icons.event_busy_rounded,
+                  )
+                else
+                  ...attendance
+                      .take(5)
+                      .map(
+                        (log) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _TimelineTile(
+                            title: _prettyDateTime(
+                              log['checked_in_at'] ?? log['date'],
+                            ),
+                            subtitle:
+                                '${_titleCase(log['check_in_method']?.toString() ?? 'manual')} at ${_map(log['branch'])['name']?.toString() ?? 'assigned branch'}',
+                            icon: Icons.event_available_rounded,
+                            accent: AppColors.info,
                           ),
-                          subtitle:
-                              '${_titleCase(log['check_in_method']?.toString() ?? 'manual')} at ${_map(log['branch'])['name']?.toString() ?? 'assigned branch'}',
-                          icon: Icons.event_available_rounded,
-                          accent: AppColors.info,
                         ),
                       ),
-                    ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -1833,6 +2222,12 @@ List<Map<String, dynamic>> _mapList(dynamic value) {
     return value.map((item) => _map(item)).toList();
   }
   return const <Map<String, dynamic>>[];
+}
+
+int? _intValue(dynamic value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '');
 }
 
 String? _workoutSessionDayLabel(Map<String, dynamic> session) {

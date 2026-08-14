@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Enums\RoleName;
 use App\Models\Branch;
 use App\Models\Gym;
-use App\Models\MemberProfile;
+use App\Models\Notification;
 use App\Models\TrainerProfile;
 use App\Models\TrialRequest;
 use App\Models\User;
@@ -46,6 +46,12 @@ class TrialRequestManagementFeatureTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.member_id', $member->id);
 
+        $this->actingAs($member, 'sanctum')
+            ->getJson('/api/member/trial-requests')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.member_id', $member->id);
+
         $this->actingAs($owner, 'sanctum')
             ->getJson('/api/gym/trial-requests', ['X-Gym-Id' => (string) $gym->id, 'X-Branch-Id' => (string) $branch->id])
             ->assertOk()
@@ -66,6 +72,48 @@ class TrialRequestManagementFeatureTest extends TestCase
             ], $headers)
             ->assertOk()
             ->assertJsonPath('data.assigned_trainer_id', $trainer->id);
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $trainer->id,
+            'type' => 'trial_booking',
+            'title' => 'Trial Request Assigned',
+        ]);
+
+        $assignmentNotificationCount = Notification::query()
+            ->where('user_id', $trainer->id)
+            ->where('title', 'Trial Request Assigned')
+            ->count();
+
+        $this->actingAs($owner, 'sanctum')
+            ->postJson("/api/gym/trial-requests/{$trial->id}/assign-trainer", [
+                'assigned_trainer_id' => $trainer->id,
+            ], $headers)
+            ->assertOk();
+
+        $this->assertSame($assignmentNotificationCount, Notification::query()
+            ->where('user_id', $trainer->id)
+            ->where('title', 'Trial Request Assigned')
+            ->count());
+
+        $this->actingAs($trainer, 'sanctum')
+            ->getJson('/api/trainer/trial-requests', $headers)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $trial->id)
+            ->assertJsonPath('data.0.phone', $trial->phone);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->putJson("/api/trainer/trial-requests/{$trial->id}", [
+                'notes' => 'Called and confirmed the preferred slot.',
+            ], $headers)
+            ->assertOk()
+            ->assertJsonPath('data.notes', 'Called and confirmed the preferred slot.');
+
+        $this->actingAs($trainer, 'sanctum')
+            ->putJson("/api/trainer/trial-requests/{$trial->id}", [
+                'assigned_trainer_id' => null,
+            ], $headers)
+            ->assertUnprocessable();
 
         $this->actingAs($owner, 'sanctum')
             ->postJson("/api/gym/trial-requests/{$trial->id}/accept", [], $headers)
@@ -122,6 +170,46 @@ class TrialRequestManagementFeatureTest extends TestCase
                 'password' => 'Convert@123',
             ])
             ->assertRedirectContains('/gym/members/');
+    }
+
+    public function test_web_lead_queue_is_gym_scoped_and_exposes_inline_assignment(): void
+    {
+        [$owner, $gym, $branch, $trainer] = $this->makeGymScope();
+        $visibleTrial = $this->makeTrial($gym, $branch, ['name' => 'Visible Trial']);
+
+        $otherGym = Gym::query()->create([
+            'owner_user_id' => $owner->id,
+            'name' => 'Other Owner Gym',
+            'slug' => 'other-owner-gym-'.str()->random(6),
+            'status' => 'active',
+            'approval_status' => 'approved',
+            'is_active' => true,
+            'operational_access_enabled' => true,
+        ]);
+        $otherBranch = Branch::query()->create([
+            'gym_id' => $otherGym->id,
+            'name' => 'Other Branch',
+            'slug' => 'other-branch-'.str()->random(6),
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+        $owner->gyms()->syncWithoutDetaching([$otherGym->id => ['is_primary' => false]]);
+        $owner->branches()->syncWithoutDetaching([$otherBranch->id => ['is_primary' => false]]);
+        $hiddenTrial = $this->makeTrial($otherGym, $otherBranch, ['name' => 'Hidden Trial']);
+
+        $this->actingAs($owner)
+            ->get(route('web.gym.trial-requests.index', ['gym' => $gym->id, 'branch' => $branch->id]))
+            ->assertOk()
+            ->assertSee('Visible Trial')
+            ->assertSee('Trainer for Visible Trial')
+            ->assertSee($trainer->name)
+            ->assertDontSee('Hidden Trial');
+
+        $this->actingAs($owner)
+            ->get(route('web.gym.trial-requests.show', ['gym' => $gym->id, 'branch' => $branch->id, 'trial' => $hiddenTrial->id]))
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('trial_requests', ['id' => $visibleTrial->id, 'assigned_trainer_id' => null]);
     }
 
     /**

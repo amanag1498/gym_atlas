@@ -14,11 +14,13 @@ class MemberNotificationsScreen extends StatefulWidget {
     required this.repository,
     required this.initialNotifications,
     required this.onChanged,
+    required this.onOpenTrialRequests,
   });
 
   final MemberRepository repository;
   final List<Map<String, dynamic>> initialNotifications;
   final Future<void> Function() onChanged;
+  final Future<void> Function() onOpenTrialRequests;
 
   @override
   State<MemberNotificationsScreen> createState() =>
@@ -190,6 +192,11 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _openTrialRequests(Map<String, dynamic> notification) async {
+    await _markRead(notification);
+    await widget.onOpenTrialRequests();
   }
 
   Future<void> _markAllRead() async {
@@ -535,6 +542,10 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
                                 _notificationEventId(entry.value) == null
                                 ? null
                                 : () => _openEvent(entry.value),
+                            onOpenTrialRequests:
+                                _notificationTrialRequestId(entry.value) == null
+                                ? null
+                                : () => _openTrialRequests(entry.value),
                             onAcceptInvitation: () => _respondToGymInvitation(
                               _gymInvitationId(entry.value)!,
                               notification: entry.value,
@@ -882,6 +893,7 @@ class _NotificationCard extends StatelessWidget {
     required this.onMarkRead,
     required this.onMarkUnread,
     this.onOpenEvent,
+    this.onOpenTrialRequests,
     required this.onAcceptInvitation,
     required this.onRejectInvitation,
   });
@@ -891,6 +903,7 @@ class _NotificationCard extends StatelessWidget {
   final VoidCallback onMarkRead;
   final VoidCallback onMarkUnread;
   final VoidCallback? onOpenEvent;
+  final VoidCallback? onOpenTrialRequests;
   final VoidCallback onAcceptInvitation;
   final VoidCallback onRejectInvitation;
 
@@ -917,7 +930,7 @@ class _NotificationCard extends StatelessWidget {
         invitationId != null && respondingInvitationIds.contains(invitationId);
 
     return InkWell(
-      onTap: onOpenEvent ?? onMarkRead,
+      onTap: onOpenEvent ?? onOpenTrialRequests ?? onMarkRead,
       borderRadius: BorderRadius.circular(18),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1101,6 +1114,7 @@ class _NotificationCard extends StatelessWidget {
       case 'attendance_inactivity':
         return 'Attendance Inactivity';
       case 'trial_request_update':
+      case 'trial_booking':
         return 'Trial Update';
       case 'workout_reminder':
         return 'Workout Reminder';
@@ -1139,6 +1153,7 @@ class _NotificationCard extends StatelessWidget {
       case 'attendance_inactivity':
         return AppColors.statusPending;
       case 'trial_request_update':
+      case 'trial_booking':
         return const Color(0xFFA78BFA);
       case 'workout_reminder':
         return const Color(0xFF22D3EE);
@@ -1170,6 +1185,7 @@ class _NotificationCard extends StatelessWidget {
       case 'attendance_inactivity':
         return Icons.fact_check_outlined;
       case 'trial_request_update':
+      case 'trial_booking':
         return Icons.flag_rounded;
       case 'workout_reminder':
         return Icons.fitness_center_rounded;
@@ -1220,6 +1236,14 @@ class _NotificationCard extends StatelessWidget {
 int? _notificationEventId(Map<String, dynamic> notification) {
   final data = notification['data'];
   final value = data is Map ? data['event_id'] ?? data['eventId'] : null;
+  return value is num ? value.toInt() : int.tryParse(value?.toString() ?? '');
+}
+
+int? _notificationTrialRequestId(Map<String, dynamic> notification) {
+  final data = notification['data'];
+  final value = data is Map
+      ? data['trial_request_id'] ?? data['trialRequestId']
+      : null;
   return value is num ? value.toInt() : int.tryParse(value?.toString() ?? '');
 }
 

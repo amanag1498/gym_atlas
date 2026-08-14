@@ -24,6 +24,7 @@ import 'trainer_diet_plan_screen.dart';
 import 'trainer_events_screen.dart';
 import 'trainer_settings_screen.dart';
 import 'trainer_tasks_screen.dart';
+import 'trainer_trial_leads_screen.dart';
 
 class TrainerHomeScreen extends StatefulWidget {
   const TrainerHomeScreen({
@@ -33,6 +34,8 @@ class TrainerHomeScreen extends StatefulWidget {
     this.chatLaunchVersion = 0,
     this.initialEventId,
     this.eventLaunchVersion = 0,
+    this.initialTrialRequestId,
+    this.trialLaunchVersion = 0,
     this.storePreviewData,
   });
 
@@ -41,6 +44,8 @@ class TrainerHomeScreen extends StatefulWidget {
   final int chatLaunchVersion;
   final int? initialEventId;
   final int eventLaunchVersion;
+  final int? initialTrialRequestId;
+  final int trialLaunchVersion;
   final Map<String, dynamic>? storePreviewData;
 
   @override
@@ -80,6 +85,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
   String? _workoutFocusAssignmentKey;
   int _handledChatLaunchVersion = -1;
   int _handledEventLaunchVersion = -1;
+  int _handledTrialLaunchVersion = -1;
 
   List<Map<String, dynamic>> get _coachingActionMembers => _members
       .where(
@@ -128,6 +134,9 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     if (oldWidget.eventLaunchVersion != widget.eventLaunchVersion) {
       _scheduleInitialEvent();
     }
+    if (oldWidget.trialLaunchVersion != widget.trialLaunchVersion) {
+      _scheduleInitialTrial();
+    }
   }
 
   Future<void> _bootstrap() async {
@@ -162,6 +171,33 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     }
     _scheduleInitialChat();
     _scheduleInitialEvent();
+    _scheduleInitialTrial();
+  }
+
+  void _scheduleInitialTrial() {
+    final trialRequestId = widget.initialTrialRequestId;
+    if (trialRequestId == null ||
+        widget.trialLaunchVersion == _handledTrialLaunchVersion ||
+        _loading ||
+        !mounted) {
+      return;
+    }
+    _handledTrialLaunchVersion = widget.trialLaunchVersion;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_openTrialLeads(trialRequestId));
+    });
+  }
+
+  Future<void> _openTrialLeads([int? trialRequestId]) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => TrainerTrialLeadsScreen(
+          repository: _repository,
+          initialTrialRequestId: trialRequestId,
+        ),
+      ),
+    );
+    if (mounted) await _load();
   }
 
   void _scheduleInitialEvent() {
@@ -592,6 +628,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         ),
         onOpenChat: () => setState(() => _index = 3),
         onOpenNotifications: () => setState(() => _index = 4),
+        onOpenTrialLeads: () => _openTrialLeads(),
         onOpenSettings: _openSettingsScreen,
         onOpenTasks: _openTasksScreen,
         onAddNote: () {
@@ -683,6 +720,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
           });
           await _load();
         },
+        onOpenTrialLeads: () => _openTrialLeads(),
         onCreateAnnouncement: (payload) async {
           await _repository.createAnnouncement(payload);
           await _load();
@@ -761,6 +799,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                     await _load();
                   },
                   onUpdateTrial: (_, __) async {},
+                  onOpenTrialLeads: () => _openTrialLeads(),
                   onCreateAnnouncement: (_) async {},
                   onRespondGymInvitation: (id, decision) async {
                     await _repository.respondToGymInvitation(id, decision);
@@ -975,26 +1014,47 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     if (memberId == null) {
       return;
     }
-    if (assignment['relationship_type'] == 'independent') {
-      await _openIndependentMemberSheet(assignment);
-      return;
-    }
+    final independent = assignment['relationship_type'] == 'independent';
+    final relationshipId = independent
+        ? _intValue(assignment['relationship_id'] ?? assignment['id'])
+        : null;
+    final permissions = (assignment['sharing_permissions'] as List? ?? const [])
+        .map((value) => value.toString())
+        .toSet();
+    final accessActive = assignment['access_active'] != false;
+    bool can(String capability) =>
+        !independent || (accessActive && permissions.contains(capability));
 
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => TrainerMemberDetailScreen(
           assignment: assignment,
           repository: _repository,
-          onAssignWorkout: () => _openQuickAssignSheet(assignment),
-          onAssignDiet: () => _openDietBuilder(preselectedMemberId: memberId),
-          onMessage: () => _openChatWithMember(assignment),
-          onAddCoachingNote: () => _openQuickNoteSheet(assignment),
+          onAssignWorkout: can('workouts')
+              ? () => _openQuickAssignSheet(assignment)
+              : null,
+          onAssignDiet: can('diets')
+              ? () => _openDietBuilder(
+                  preselectedMemberId: memberId,
+                  preselectedRelationshipId: relationshipId,
+                )
+              : null,
+          onMessage: can('chat') ? () => _openChatWithMember(assignment) : null,
+          onAddCoachingNote: can('profile')
+              ? () => _openQuickNoteSheet(assignment)
+              : null,
+          onManageRelationship: independent
+              ? () => _openIndependentMemberSheet(assignment)
+              : null,
         ),
       ),
     );
+    if (mounted) {
+      await _load();
+    }
   }
 
-  Future<void> _openIndependentMemberSheet(
+  Future<bool> _openIndependentMemberSheet(
     Map<String, dynamic> assignment,
   ) async {
     final relationshipId = _intValue(
@@ -1004,7 +1064,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('This coaching connection is invalid.')),
       );
-      return;
+      return false;
     }
     final member = _map(assignment['member']);
     final name = member['name']?.toString() ?? 'Member';
@@ -1058,7 +1118,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       else
         Future.value((items: const <Map<String, dynamic>>[], total: 0)),
     ]);
-    if (!mounted) return;
+    if (!mounted) return false;
     final workoutPlans = results[0].items;
     final workoutPlanTotal = results[0].total;
     final workoutSessionTotal = results[1].total;
@@ -1086,231 +1146,241 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         debugPrint('[independent-member][warn] progress: $exception');
       }
     }
-    if (!mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      backgroundColor: AppColors.surfaceOverlay,
-      builder: (sheetContext) => SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    if (!mounted) return false;
+    return await showModalBottomSheet<bool>(
+          context: context,
+          useSafeArea: true,
+          isScrollControlled: true,
+          backgroundColor: AppColors.surfaceOverlay,
+          builder: (sheetContext) => SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(
-                  Icons.verified_user_outlined,
-                  color: AppColors.primaryBright,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    name,
-                    style: Theme.of(sheetContext).textTheme.headlineSmall,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              accessActive
-                  ? 'Independent coaching relationship. Gym subscriptions, attendance, billing, and gym trainer assignment are not shared here.'
-                  : 'Independent coaching access is paused because trainer eligibility or verification changed. Coaching data and chat are locked; the relationship can still be ended below.',
-              style: Theme.of(sheetContext).textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
-                height: 1.45,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _MemberMetaChip(
-                  label: '$workoutPlanTotal workout plans',
-                  icon: Icons.fitness_center_rounded,
-                ),
-                _MemberMetaChip(
-                  label: '$workoutSessionTotal logged sessions',
-                  icon: Icons.history_rounded,
-                ),
-                _MemberMetaChip(
-                  label: '$noteTotal private notes',
-                  icon: Icons.note_alt_outlined,
-                ),
-                if (accessActive && permissions.contains('progress'))
-                  _MemberMetaChip(
-                    label: '$progressTotal progress records',
-                    icon: Icons.insights_rounded,
-                  ),
-              ],
-            ),
-            if (workoutPlans.isNotEmpty || notes.isNotEmpty) ...[
-              const SizedBox(height: 18),
-              if (workoutPlans.isNotEmpty) ...[
-                Text(
-                  'Independent workout plans',
-                  style: Theme.of(
-                    sheetContext,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 6),
-                ...workoutPlans
-                    .take(3)
-                    .map(
-                      (plan) => ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.fitness_center_rounded),
-                        title: Text(plan['name']?.toString() ?? 'Workout plan'),
-                        subtitle: Text(
-                          _titleCase(plan['status']?.toString() ?? 'active'),
-                        ),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.verified_user_outlined,
+                      color: AppColors.primaryBright,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        name,
+                        style: Theme.of(sheetContext).textTheme.headlineSmall,
                       ),
                     ),
-              ],
-              if (notes.isNotEmpty) ...[
+                  ],
+                ),
                 const SizedBox(height: 8),
                 Text(
-                  'Recent private notes',
-                  style: Theme.of(
-                    sheetContext,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                  accessActive
+                      ? 'Independent coaching relationship. Gym subscriptions, attendance, billing, and gym trainer assignment are not shared here.'
+                      : 'Independent coaching access is paused because trainer eligibility or verification changed. Coaching data and chat are locked; the relationship can still be ended below.',
+                  style: Theme.of(sheetContext).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.45,
+                  ),
                 ),
-                const SizedBox(height: 6),
-                ...notes
-                    .take(3)
-                    .map(
-                      (note) => ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.lock_outline_rounded),
-                        title: Text(
-                          note['note']?.toString() ?? 'Private coaching note',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
+                const SizedBox(height: 18),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _MemberMetaChip(
+                      label: '$workoutPlanTotal workout plans',
+                      icon: Icons.fitness_center_rounded,
                     ),
-              ],
-            ],
-            const SizedBox(height: 18),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                FilledButton.icon(
-                  onPressed: accessActive && permissions.contains('chat')
-                      ? () {
-                          Navigator.of(sheetContext).pop();
-                          _openChatWithMember(assignment);
-                        }
-                      : null,
-                  icon: const Icon(Icons.chat_bubble_outline_rounded),
-                  label: const Text('Message'),
+                    _MemberMetaChip(
+                      label: '$workoutSessionTotal logged sessions',
+                      icon: Icons.history_rounded,
+                    ),
+                    _MemberMetaChip(
+                      label: '$noteTotal private notes',
+                      icon: Icons.note_alt_outlined,
+                    ),
+                    if (accessActive && permissions.contains('progress'))
+                      _MemberMetaChip(
+                        label: '$progressTotal progress records',
+                        icon: Icons.insights_rounded,
+                      ),
+                  ],
                 ),
-                OutlinedButton.icon(
-                  onPressed: accessActive && permissions.contains('workouts')
-                      ? () {
-                          Navigator.of(sheetContext).pop();
-                          _openQuickAssignSheet(assignment);
-                        }
-                      : null,
-                  icon: const Icon(Icons.fitness_center_rounded),
-                  label: const Text('Assign workout'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: accessActive && permissions.contains('diets')
-                      ? () {
-                          Navigator.of(sheetContext).pop();
-                          _openDietBuilder(
-                            preselectedMemberId: _intValue(
-                              assignment['member_id'],
+                if (workoutPlans.isNotEmpty || notes.isNotEmpty) ...[
+                  const SizedBox(height: 18),
+                  if (workoutPlans.isNotEmpty) ...[
+                    Text(
+                      'Independent workout plans',
+                      style: Theme.of(sheetContext).textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 6),
+                    ...workoutPlans
+                        .take(3)
+                        .map(
+                          (plan) => ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.fitness_center_rounded),
+                            title: Text(
+                              plan['name']?.toString() ?? 'Workout plan',
                             ),
-                            preselectedRelationshipId: relationshipId,
+                            subtitle: Text(
+                              _titleCase(
+                                plan['status']?.toString() ?? 'active',
+                              ),
+                            ),
+                          ),
+                        ),
+                  ],
+                  if (notes.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Recent private notes',
+                      style: Theme.of(sheetContext).textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 6),
+                    ...notes
+                        .take(3)
+                        .map(
+                          (note) => ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.lock_outline_rounded),
+                            title: Text(
+                              note['note']?.toString() ??
+                                  'Private coaching note',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                  ],
+                ],
+                const SizedBox(height: 18),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: accessActive && permissions.contains('chat')
+                          ? () {
+                              Navigator.of(sheetContext).pop();
+                              _openChatWithMember(assignment);
+                            }
+                          : null,
+                      icon: const Icon(Icons.chat_bubble_outline_rounded),
+                      label: const Text('Message'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed:
+                          accessActive && permissions.contains('workouts')
+                          ? () {
+                              Navigator.of(sheetContext).pop();
+                              _openQuickAssignSheet(assignment);
+                            }
+                          : null,
+                      icon: const Icon(Icons.fitness_center_rounded),
+                      label: const Text('Assign workout'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: accessActive && permissions.contains('diets')
+                          ? () {
+                              Navigator.of(sheetContext).pop();
+                              _openDietBuilder(
+                                preselectedMemberId: _intValue(
+                                  assignment['member_id'],
+                                ),
+                                preselectedRelationshipId: relationshipId,
+                              );
+                            }
+                          : null,
+                      icon: const Icon(Icons.restaurant_menu_rounded),
+                      label: const Text('Diet plan'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: accessActive && permissions.contains('profile')
+                          ? () {
+                              Navigator.of(sheetContext).pop();
+                              _openQuickNoteSheet(assignment);
+                            }
+                          : null,
+                      icon: const Icon(Icons.note_add_outlined),
+                      label: const Text('Private note'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      final rootMessenger = ScaffoldMessenger.of(context);
+                      final confirmed =
+                          await showDialog<bool>(
+                            context: sheetContext,
+                            builder: (dialogContext) => AlertDialog(
+                              title: const Text('End independent coaching?'),
+                              content: Text(
+                                'This immediately removes independent plan, progress, and chat access for $name. Their gym membership and gym trainer remain unchanged.',
+                              ),
+                              actions: [
+                                IconButton(
+                                  tooltip: 'Assigned trial leads',
+                                  onPressed: () => _openTrialLeads(),
+                                  icon: const Icon(Icons.person_search_rounded),
+                                ),
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.of(dialogContext).pop(false),
+                                  child: const Text('Keep coaching'),
+                                ),
+                                FilledButton(
+                                  onPressed: () =>
+                                      Navigator.of(dialogContext).pop(true),
+                                  child: const Text('End coaching'),
+                                ),
+                              ],
+                            ),
+                          ) ??
+                          false;
+                      if (!confirmed) return;
+                      try {
+                        await _repository.revokeIndependentMemberRelationship(
+                          relationshipId,
+                        );
+                        if (!mounted || !sheetContext.mounted) return;
+                        Navigator.of(sheetContext).pop(true);
+                        rootMessenger.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Independent coaching with $name has ended.',
+                            ),
+                          ),
+                        );
+                        await _load();
+                      } catch (exception) {
+                        if (sheetContext.mounted) {
+                          ScaffoldMessenger.of(sheetContext).showSnackBar(
+                            SnackBar(content: Text(exception.toString())),
                           );
                         }
-                      : null,
-                  icon: const Icon(Icons.restaurant_menu_rounded),
-                  label: const Text('Diet plan'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: accessActive && permissions.contains('profile')
-                      ? () {
-                          Navigator.of(sheetContext).pop();
-                          _openQuickNoteSheet(assignment);
-                        }
-                      : null,
-                  icon: const Icon(Icons.note_add_outlined),
-                  label: const Text('Private note'),
+                      }
+                    },
+                    icon: const Icon(
+                      Icons.link_off_rounded,
+                      color: AppColors.error,
+                    ),
+                    label: const Text('End independent coaching'),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: TextButton.icon(
-                onPressed: () async {
-                  final rootMessenger = ScaffoldMessenger.of(context);
-                  final confirmed =
-                      await showDialog<bool>(
-                        context: sheetContext,
-                        builder: (dialogContext) => AlertDialog(
-                          title: const Text('End independent coaching?'),
-                          content: Text(
-                            'This immediately removes independent plan, progress, and chat access for $name. Their gym membership and gym trainer remain unchanged.',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () =>
-                                  Navigator.of(dialogContext).pop(false),
-                              child: const Text('Keep coaching'),
-                            ),
-                            FilledButton(
-                              onPressed: () =>
-                                  Navigator.of(dialogContext).pop(true),
-                              child: const Text('End coaching'),
-                            ),
-                          ],
-                        ),
-                      ) ??
-                      false;
-                  if (!confirmed) return;
-                  try {
-                    await _repository.revokeIndependentMemberRelationship(
-                      relationshipId,
-                    );
-                    if (!mounted || !sheetContext.mounted) return;
-                    Navigator.of(sheetContext).pop();
-                    rootMessenger.showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Independent coaching with $name has ended.',
-                        ),
-                      ),
-                    );
-                    await _load();
-                  } catch (exception) {
-                    if (sheetContext.mounted) {
-                      ScaffoldMessenger.of(sheetContext).showSnackBar(
-                        SnackBar(content: Text(exception.toString())),
-                      );
-                    }
-                  }
-                },
-                icon: const Icon(
-                  Icons.link_off_rounded,
-                  color: AppColors.error,
-                ),
-                label: const Text('End independent coaching'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+          ),
+        ) ??
+        false;
   }
 
   Future<void> _openDietBuilder({
@@ -2547,6 +2617,7 @@ class _DashboardPage extends StatelessWidget {
     required this.onOpenEvents,
     required this.onOpenChat,
     required this.onOpenNotifications,
+    required this.onOpenTrialLeads,
     required this.onOpenSettings,
     required this.onOpenTasks,
     required this.onAddNote,
@@ -2569,6 +2640,7 @@ class _DashboardPage extends StatelessWidget {
   final VoidCallback onOpenEvents;
   final VoidCallback onOpenChat;
   final VoidCallback onOpenNotifications;
+  final VoidCallback onOpenTrialLeads;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenTasks;
   final VoidCallback onAddNote;
@@ -3646,6 +3718,7 @@ class _DashboardPage extends StatelessWidget {
       onOpenDiet: onOpenDiet,
       onOpenChat: onOpenChat,
       onOpenNotifications: onOpenNotifications,
+      onOpenTrialLeads: onOpenTrialLeads,
       onOpenSettings: onOpenSettings,
       onOpenTasks: onOpenTasks,
       onAddNote: onAddNote,
@@ -3696,6 +3769,7 @@ class _TrainerFitnessDashboard extends StatelessWidget {
     required this.onOpenDiet,
     required this.onOpenChat,
     required this.onOpenNotifications,
+    required this.onOpenTrialLeads,
     required this.onOpenSettings,
     required this.onOpenTasks,
     required this.onAddNote,
@@ -3728,6 +3802,7 @@ class _TrainerFitnessDashboard extends StatelessWidget {
   final VoidCallback onOpenDiet;
   final VoidCallback onOpenChat;
   final VoidCallback onOpenNotifications;
+  final VoidCallback onOpenTrialLeads;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenTasks;
   final VoidCallback onAddNote;
@@ -3956,7 +4031,7 @@ class _TrainerFitnessDashboard extends StatelessWidget {
                           title: 'Trial leads',
                           child: _TrialLeadPanel(
                             trialRequests: trialPreview,
-                            onOpenNotifications: onOpenNotifications,
+                            onOpenTrialLeads: onOpenTrialLeads,
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -3978,7 +4053,7 @@ class _TrainerFitnessDashboard extends StatelessWidget {
                           title: 'Trial leads',
                           child: _TrialLeadPanel(
                             trialRequests: trialPreview,
-                            onOpenNotifications: onOpenNotifications,
+                            onOpenTrialLeads: onOpenTrialLeads,
                           ),
                         ),
                       ),
@@ -5248,11 +5323,11 @@ class _ProgressPanel extends StatelessWidget {
 class _TrialLeadPanel extends StatelessWidget {
   const _TrialLeadPanel({
     required this.trialRequests,
-    required this.onOpenNotifications,
+    required this.onOpenTrialLeads,
   });
 
   final List<Map<String, dynamic>> trialRequests;
-  final VoidCallback onOpenNotifications;
+  final VoidCallback onOpenTrialLeads;
 
   @override
   Widget build(BuildContext context) {
@@ -5288,7 +5363,7 @@ class _TrialLeadPanel extends StatelessWidget {
                 meta: item['status']?.toString() ?? 'pending',
                 icon: Icons.person_add_alt_1_rounded,
                 color: AppColors.accentPurple,
-                onTap: onOpenNotifications,
+                onTap: onOpenTrialLeads,
               );
             }).toList(),
     );
@@ -10130,6 +10205,7 @@ class _NotificationPage extends StatelessWidget {
     required this.onMarkRead,
     required this.onMarkAllRead,
     required this.onUpdateTrial,
+    required this.onOpenTrialLeads,
     required this.onCreateAnnouncement,
     required this.onRespondGymInvitation,
     required this.onOpenEvent,
@@ -10145,6 +10221,7 @@ class _NotificationPage extends StatelessWidget {
   final Future<void> Function(int notificationId) onMarkRead;
   final Future<void> Function() onMarkAllRead;
   final Future<void> Function(int trialRequestId, String status) onUpdateTrial;
+  final VoidCallback onOpenTrialLeads;
   final Future<void> Function(Map<String, dynamic> payload)
   onCreateAnnouncement;
   final Future<void> Function(int invitationId, String decision)
@@ -10206,9 +10283,10 @@ class _NotificationPage extends StatelessWidget {
           ),
           if (trialRequests.isNotEmpty) ...[
             const SizedBox(height: 18),
-            const _TrainerNotificationSectionTitle(
+            _TrainerNotificationSectionTitle(
               title: 'Trial requests',
-              action: 'Assigned',
+              action: 'View all',
+              onTap: onOpenTrialLeads,
             ),
             const SizedBox(height: 10),
             ...trialRequests.take(5).map((trial) {
@@ -10676,10 +10754,12 @@ class _TrainerNotificationSectionTitle extends StatelessWidget {
   const _TrainerNotificationSectionTitle({
     required this.title,
     required this.action,
+    this.onTap,
   });
 
   final String title;
   final String action;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -10695,14 +10775,7 @@ class _TrainerNotificationSectionTitle extends StatelessWidget {
             ),
           ),
         ),
-        Text(
-          action,
-          style: const TextStyle(
-            color: Color(0xFF786F72),
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        TextButton(onPressed: onTap, child: Text(action)),
       ],
     );
   }
@@ -11872,6 +11945,7 @@ Color _notificationColor(BuildContext context, String? type) {
     case 'new_member_assigned':
     case 'trainer_assignment':
     case 'trial_assigned':
+    case 'trial_booking':
       return const Color(0xFF22D3EE);
     case 'attendance_inactivity':
     case 'missed_workout_alert':
@@ -11900,6 +11974,7 @@ IconData _notificationIcon(String? type) {
     case 'new_member_assigned':
     case 'trainer_assignment':
     case 'trial_assigned':
+    case 'trial_booking':
       return Icons.person_add_alt_1_rounded;
     case 'attendance_inactivity':
     case 'missed_workout_alert':
@@ -11939,6 +12014,7 @@ String _notificationLabel(String? type) {
     case 'progress_photo_uploaded':
       return 'Progress photo';
     case 'trial_assigned':
+    case 'trial_booking':
       return 'Trial assigned';
     case 'gym_announcement':
       return 'Gym announcement';
@@ -11969,6 +12045,7 @@ String _notificationFallbackBody(String? type) {
     case 'progress_photo_uploaded':
       return 'A member uploaded fresh progress so you can review the update.';
     case 'trial_assigned':
+    case 'trial_booking':
       return 'A trial lead has been assigned to you for follow-up.';
     case 'gym_announcement':
       return 'Your gym sent an announcement that may affect today’s coaching work.';

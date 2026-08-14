@@ -4,13 +4,16 @@ namespace App\Services\Trials;
 
 use App\Enums\NotificationType;
 use App\Enums\RoleName;
+use App\Jobs\PublishRealtimeEvent;
 use App\Models\Branch;
 use App\Models\Gym;
+use App\Models\Notification;
 use App\Models\TrainerProfile;
 use App\Models\TrialRequest;
 use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Authorization\ScopeResolver;
+use App\Services\Firebase\FcmNotificationService;
 use App\Services\Notification\NotificationService;
 use App\Services\Notification\TransactionalEmailService;
 use App\Services\Users\ManagedUserService;
@@ -30,6 +33,7 @@ class TrialRequestService
         private readonly AuditLogService $auditLogService,
         private readonly ManagedUserService $managedUserService,
         private readonly TransactionalEmailService $transactionalEmailService,
+        private readonly FcmNotificationService $fcmNotificationService,
     ) {}
 
     public function createPublic(array $data, ?User $actor = null, ?Request $request = null): TrialRequest
@@ -194,12 +198,14 @@ class TrialRequestService
             $query->whereRaw('1 = 0');
         }
 
-        if ($request?->filled('gym_id')) {
-            $query->where('gym_id', $request->integer('gym_id'));
+        $requestedGymId = $request?->integer('gym_id') ?: (int) ($request?->header('X-Gym-Id') ?? 0);
+        if ($requestedGymId) {
+            $query->where('gym_id', $requestedGymId);
         }
 
-        if ($request?->filled('branch_id')) {
-            $query->where('branch_id', $request->integer('branch_id'));
+        $requestedBranchId = $request?->integer('branch_id') ?: (int) ($request?->header('X-Branch-Id') ?? 0);
+        if ($requestedBranchId) {
+            $query->where('branch_id', $requestedBranchId);
         }
 
         if ($request?->filled('status')) {
@@ -212,6 +218,12 @@ class TrialRequestService
 
         if ($request?->filled('assigned_trainer_id')) {
             $query->where('assigned_trainer_id', $request->integer('assigned_trainer_id'));
+        }
+
+        if ($request?->string('assignment')->toString() === 'unassigned') {
+            $query->whereNull('assigned_trainer_id');
+        } elseif ($request?->string('assignment')->toString() === 'assigned') {
+            $query->whereNotNull('assigned_trainer_id');
         }
 
         if ($request?->filled('search')) {
@@ -252,6 +264,7 @@ class TrialRequestService
 
         return DB::transaction(function () use ($actor, $trialRequest, $data, $request): TrialRequest {
             $oldValues = $trialRequest->toArray();
+            $previousTrainerId = $trialRequest->assigned_trainer_id;
 
             if (array_key_exists('assigned_trainer_id', $data) && $data['assigned_trainer_id']) {
                 $trainerProfile = TrainerProfile::query()
@@ -278,6 +291,14 @@ class TrialRequestService
 
             $trialRequest->fill($data);
             $trialRequest->save();
+            $assignmentChanged = array_key_exists('assigned_trainer_id', $data)
+                && (int) $previousTrainerId !== (int) $trialRequest->assigned_trainer_id;
+            if ($assignmentChanged) {
+                // resolveForActor eager-loads the previous assignment. Refresh the
+                // relation so notifications target the newly selected trainer.
+                $trialRequest->unsetRelation('assignedTrainer');
+                $trialRequest->load('assignedTrainer');
+            }
 
             if ($trialRequest->member && array_key_exists('status', $data)) {
                 $this->notificationService->create(
@@ -310,16 +331,69 @@ class TrialRequestService
                 ));
             }
 
-            if (! empty($data['assigned_trainer_id']) && $trialRequest->assignedTrainer) {
-                $this->notificationService->create(
+            if ($assignmentChanged && $trialRequest->assignedTrainer) {
+                $title = 'Trial Request Assigned';
+                $body = $trialRequest->name.' has been assigned to you for trial follow-up.';
+                $data = [
+                    'trial_request_id' => $trialRequest->id,
+                    'status' => $trialRequest->status,
+                    'route' => '/trial-leads/'.$trialRequest->id,
+                ];
+                $notification = $this->notificationService->create(
                     user: $trialRequest->assignedTrainer,
                     type: NotificationType::TrialBooking->value,
-                    title: 'Trial Request Assigned',
-                    body: 'A trial request has been assigned to you.',
+                    title: $title,
+                    body: $body,
                     gymId: $trialRequest->gym_id,
                     branchId: $trialRequest->branch_id,
-                    data: ['trial_request_id' => $trialRequest->id],
+                    data: $data,
                 );
+                $this->deliverTrialNotification($trialRequest->assignedTrainer, $notification, $title, $body, $data, 'trainer');
+            }
+
+            if ($assignmentChanged && $previousTrainerId) {
+                $previousTrainer = User::query()->find($previousTrainerId);
+
+                if ($previousTrainer) {
+                    $title = 'Trial Request Reassigned';
+                    $body = $trialRequest->name.' is no longer assigned to your trial follow-up queue.';
+                    $data = [
+                        'trial_request_id' => $trialRequest->id,
+                        'assignment_removed' => true,
+                        'route' => '/trial-leads',
+                    ];
+                    $notification = $this->notificationService->create(
+                        user: $previousTrainer,
+                        type: NotificationType::TrialBooking->value,
+                        title: $title,
+                        body: $body,
+                        gymId: $trialRequest->gym_id,
+                        branchId: $trialRequest->branch_id,
+                        data: $data,
+                    );
+                    $this->deliverTrialNotification($previousTrainer, $notification, $title, $body, $data, 'trainer');
+                }
+            }
+
+            if ($assignmentChanged && $trialRequest->member) {
+                $title = $trialRequest->assignedTrainer ? 'Trial Trainer Assigned' : 'Trial Trainer Updated';
+                $body = $trialRequest->assignedTrainer
+                    ? $trialRequest->assignedTrainer->name.' will help you with your trial visit.'
+                    : 'Your gym is updating the trainer for your trial visit.';
+                $data = [
+                    'trial_request_id' => $trialRequest->id,
+                    'route' => '/trial-requests/'.$trialRequest->id,
+                ];
+                $notification = $this->notificationService->create(
+                    user: $trialRequest->member,
+                    type: NotificationType::TrialBooking->value,
+                    title: $title,
+                    body: $body,
+                    gymId: $trialRequest->gym_id,
+                    branchId: $trialRequest->branch_id,
+                    data: $data,
+                );
+                $this->deliverTrialNotification($trialRequest->member, $notification, $title, $body, $data, 'member');
             }
 
             $this->auditLogService->log(
@@ -488,5 +562,37 @@ class TrialRequestService
         }
 
         return $currentNotes."\n".$newNotes;
+    }
+
+    private function deliverTrialNotification(
+        User $user,
+        ?Notification $notification,
+        string $title,
+        string $body,
+        array $data,
+        string $appRole,
+    ): void {
+        if (! $notification) {
+            return;
+        }
+
+        $payload = [
+            ...$data,
+            'notification_id' => $notification->id,
+            'type' => NotificationType::TrialBooking->value,
+        ];
+
+        DB::afterCommit(function () use ($user, $notification, $title, $body, $payload, $appRole): void {
+            $this->fcmNotificationService->sendToUser($user, $title, $body, $payload, $appRole);
+            PublishRealtimeEvent::dispatch('internal/notifications', [
+                'userId' => $user->id,
+                'title' => $title,
+                'body' => $body,
+                'type' => NotificationType::TrialBooking->value,
+                'gymId' => $notification->gym_id,
+                'branchId' => $notification->branch_id,
+                'data' => $payload,
+            ]);
+        });
     }
 }

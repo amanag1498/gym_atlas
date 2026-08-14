@@ -77,12 +77,14 @@ class MemberHomeScreen extends StatefulWidget {
     this.initialIndex = 0,
     this.chatLaunchVersion = 0,
     this.chatTargetTrainerId,
+    this.openTrialRequestsOnLoad = false,
     this.storePreviewData,
   });
 
   final int initialIndex;
   final int chatLaunchVersion;
   final int? chatTargetTrainerId;
+  final bool openTrialRequestsOnLoad;
   final Map<String, dynamic>? storePreviewData;
 
   @override
@@ -113,6 +115,7 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
   String _stepPermissionStatus = 'unknown';
   bool _stepSyncLoading = false;
   StepSyncResult? _latestStepSyncResult;
+  bool _initialTrialRequestsOpened = false;
 
   Future<Map<String, dynamic>> _safeMapRequest(
     Future<Map<String, dynamic>> Function() request, {
@@ -164,6 +167,7 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
     _independentTrainers = records('independent_trainers');
     _stepPermissionStatus = 'granted';
     _loading = false;
+    _scheduleInitialTrialRequests();
   }
 
   @override
@@ -187,6 +191,7 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
     final session = context.read<MemberSessionController>();
     await _syncStepsIfNeeded();
     await _load();
+    _scheduleInitialTrialRequests();
     if (session.token != null) {
       _connectRealtime(session.token!);
     }
@@ -389,6 +394,8 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
           repository: _memberRepository,
           initialNotifications: _notifications,
           onChanged: _load,
+          onOpenTrialRequests: () =>
+              _openTrialRequestsScreen(initialStatusTab: true),
         ),
       ),
     );
@@ -396,6 +403,21 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
     if (mounted) {
       await _load();
     }
+  }
+
+  void _scheduleInitialTrialRequests() {
+    if (!widget.openTrialRequestsOnLoad ||
+        _initialTrialRequestsOpened ||
+        _loading ||
+        !mounted) {
+      return;
+    }
+    _initialTrialRequestsOpened = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_openTrialRequestsScreen(initialStatusTab: true));
+      }
+    });
   }
 
   Future<void> _openSettingsScreen() async {

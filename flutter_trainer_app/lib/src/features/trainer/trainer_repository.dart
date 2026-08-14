@@ -307,15 +307,20 @@ class TrainerRepository {
       _client.get('/trainer/workout-templates/$templateId');
   Future<Map<String, dynamic>> fetchWorkoutPlans({int page = 1}) async =>
       _client.get('/trainer/workout-plans', queryParameters: {'page': page});
-  Future<Map<String, dynamic>> fetchDietPlans({int? memberId, int page = 1}) =>
-      _client.get(
-        '/trainer/diet-plans',
-        queryParameters: {
-          'page': page,
-          'per_page': 20,
-          if (memberId != null) 'member_id': memberId,
-        },
-      );
+  Future<Map<String, dynamic>> fetchDietPlans({
+    int? memberId,
+    int? independentRelationshipId,
+    int page = 1,
+  }) => _client.get(
+    '/trainer/diet-plans',
+    queryParameters: {
+      'page': page,
+      'per_page': 20,
+      if (memberId != null) 'member_id': memberId,
+      if (independentRelationshipId != null)
+        'independent_trainer_member_relationship_id': independentRelationshipId,
+    },
+  );
   Future<Map<String, dynamic>> fetchDietTemplates({int page = 1}) =>
       _client.get(
         '/trainer/diet-templates',
@@ -355,11 +360,22 @@ class TrainerRepository {
   ) => _client.put('/trainer/diet-plans/$planId', data: payload);
   Future<Map<String, dynamic>> deleteDietPlan(int planId) =>
       _client.delete('/trainer/diet-plans/$planId');
-  Future<Map<String, dynamic>> fetchTrialRequests({int page = 1}) async =>
-      _client.get(
-        '/trainer/trial-requests',
-        queryParameters: {'page': page, 'per_page': 20},
-      );
+  Future<Map<String, dynamic>> fetchTrialRequests({
+    int page = 1,
+    int perPage = 20,
+    String? status,
+    String? search,
+  }) async => _client.get(
+    '/trainer/trial-requests',
+    queryParameters: {
+      'page': page,
+      'per_page': perPage,
+      if (status != null && status.isNotEmpty) 'status': status,
+      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+    },
+  );
+  Future<Map<String, dynamic>> fetchTrialRequest(int trialRequestId) =>
+      _client.get('/trainer/trial-requests/$trialRequestId');
   Future<Map<String, dynamic>> fetchNotifications({
     int page = 1,
     int perPage = 20,

@@ -30,7 +30,16 @@ class IndependentMemberCoachingController extends Controller
 
     public function show(Request $request, IndependentTrainerMemberRelationship $relationship)
     {
-        $relationship = $this->relationship($request, $relationship, 'profile');
+        $relationship = $this->relationship($request, $relationship, null);
+        if (in_array('profile', $relationship->sharing_permissions ?? [], true)) {
+            $coachingProfile = $relationship->member->memberProfiles()
+                ->with('fitnessGoals')
+                ->where('is_active', true)
+                ->orderByRaw('case when gym_id is null then 0 else 1 end')
+                ->latest('id')
+                ->first();
+            $relationship->member->setRelation('independentCoachingProfile', $coachingProfile);
+        }
 
         return $this->success(
             IndependentTrainerMemberRelationshipResource::make($relationship),
@@ -162,7 +171,7 @@ class IndependentMemberCoachingController extends Controller
     private function relationship(
         Request $request,
         IndependentTrainerMemberRelationship $relationship,
-        string $capability,
+        ?string $capability,
     ): IndependentTrainerMemberRelationship {
         $member = $relationship->member()->firstOrFail();
 

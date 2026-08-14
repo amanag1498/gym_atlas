@@ -361,6 +361,27 @@ class MemberRepository {
   Future<Map<String, dynamic>> submitTrialRequest(
     Map<String, dynamic> payload,
   ) => _client.post('/member/trial-requests', data: payload);
+  Future<Map<String, dynamic>> fetchTrialRequests({
+    int page = 1,
+    int perPage = 50,
+  }) async {
+    try {
+      return await _client.get(
+        '/member/trial-requests',
+        queryParameters: {'page': page, 'per_page': perPage},
+      );
+    } on DioException catch (error) {
+      // Preserve compatibility while a new app build and backend release roll
+      // out independently. The screen will continue using its local cache.
+      if (error.response?.statusCode == 404) {
+        return const {'data': <Map<String, dynamic>>[]};
+      }
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> fetchTrialRequest(int trialRequestId) =>
+      _client.get('/member/trial-requests/$trialRequestId');
   Future<Map<String, dynamic>> startWorkout(Map<String, dynamic> payload) =>
       _client.post('/member/workout-sessions/start', data: payload);
   Future<Map<String, dynamic>> createWorkoutPlan(

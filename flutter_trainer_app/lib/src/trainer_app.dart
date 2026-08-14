@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:gym_flutter_core/gym_flutter_core.dart'
-    show ChatNotificationService;
+    show BrandedStartupLoader, ChatNotificationService;
 import 'package:provider/provider.dart';
 
 import 'core/api_client.dart';
@@ -35,6 +35,8 @@ class _TrainerAppState extends State<TrainerApp> {
   int _chatLaunchVersion = 0;
   int? _pendingEventId;
   int _eventLaunchVersion = 0;
+  int? _pendingTrialRequestId;
+  int _trialLaunchVersion = 0;
 
   @override
   void initState() {
@@ -115,6 +117,16 @@ class _TrainerAppState extends State<TrainerApp> {
       });
       return;
     }
+    final trialRequestId = int.tryParse(
+      (data['trial_request_id'] ?? data['trialRequestId'])?.toString() ?? '',
+    );
+    if (trialRequestId != null && trialRequestId > 0 && mounted) {
+      setState(() {
+        _pendingTrialRequestId = trialRequestId;
+        _trialLaunchVersion++;
+      });
+      return;
+    }
     if (data['type'] != 'chat_message') {
       return;
     }
@@ -149,9 +161,7 @@ class _TrainerAppState extends State<TrainerApp> {
         home: Consumer<TrainerSessionController>(
           builder: (context, session, _) {
             if (session.initializing) {
-              return const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
-              );
+              return const BrandedStartupLoader();
             }
 
             return session.isAuthenticated
@@ -160,6 +170,8 @@ class _TrainerAppState extends State<TrainerApp> {
                     chatLaunchVersion: _chatLaunchVersion,
                     initialEventId: _pendingEventId,
                     eventLaunchVersion: _eventLaunchVersion,
+                    initialTrialRequestId: _pendingTrialRequestId,
+                    trialLaunchVersion: _trialLaunchVersion,
                   )
                 : const TrainerLoginScreen();
           },
