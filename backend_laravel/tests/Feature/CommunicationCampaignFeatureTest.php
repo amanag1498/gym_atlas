@@ -70,7 +70,7 @@ class CommunicationCampaignFeatureTest extends TestCase
         ]);
     }
 
-    public function test_whatsapp_campaign_excludes_without_consent_then_sends_approved_template_after_opt_in(): void
+    public function test_whatsapp_campaign_uses_member_phone_without_opt_in_and_honours_explicit_opt_out(): void
     {
         Queue::fake();
         config()->set('services.meta_whatsapp', [
@@ -117,8 +117,6 @@ class CommunicationCampaignFeatureTest extends TestCase
             ],
         ]);
 
-        $this->assertSame(1, $service->preview($campaign)['by_channel']['whatsapp']['exclusion_reasons']['consent_missing']);
-        app(WhatsAppConsentService::class)->set($member, $gym, 'utility', true);
         $this->assertSame(1, $service->preview($campaign)['by_channel']['whatsapp']['eligible']);
 
         Http::fake([
@@ -147,6 +145,20 @@ class CommunicationCampaignFeatureTest extends TestCase
             'direction' => 'outbound',
             'status' => 'sent',
         ]);
+
+        app(WhatsAppConsentService::class)->set($member, $gym, 'utility', false);
+        $optedOutCampaign = $service->create($gym, $owner, [
+            'name' => 'Second membership reminder',
+            'audience_type' => 'selected_members',
+            'member_ids' => [$member->id],
+            'channels' => [
+                'whatsapp' => [
+                    'whatsapp_template_id' => $template->id,
+                    'template_parameters' => ['{member_name}', 'Second reminder'],
+                ],
+            ],
+        ]);
+        $this->assertSame(1, $service->preview($optedOutCampaign)['by_channel']['whatsapp']['exclusion_reasons']['whatsapp_opted_out']);
     }
 
     public function test_enabled_automation_adds_whatsapp_to_an_existing_lifecycle_notification(): void
@@ -182,7 +194,6 @@ class CommunicationCampaignFeatureTest extends TestCase
                 'text' => 'Hi {{1}}, {{2}}',
             ]],
         ]);
-        app(WhatsAppConsentService::class)->set($member, $gym, 'utility', true);
         CommunicationAutomationRule::query()->create([
             'gym_id' => $gym->id,
             'notification_type' => 'payment_due',

@@ -7,11 +7,11 @@ use App\Models\Branch;
 use App\Models\CommunicationCampaign;
 use App\Models\CommunicationRecipient;
 use App\Models\WhatsAppBusinessAccount;
-use App\Models\WhatsAppConsent;
 use App\Models\WhatsAppConversation;
 use App\Models\WhatsAppMessage;
 use App\Services\Notification\NotificationService;
 use App\Services\WhatsApp\MetaWhatsAppClient;
+use App\Services\WhatsApp\WhatsAppConsentService;
 use App\Services\WhatsApp\WhatsAppTemplateParameterService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\Builder;
@@ -105,18 +105,14 @@ class DeliverCommunicationRecipient implements ShouldQueue
             return;
         }
         $purpose = strtolower((string) $template->category) === 'marketing' ? 'marketing' : 'utility';
-        $consent = WhatsAppConsent::query()
-            ->where('user_id', $recipient->user_id)
-            ->where('gym_id', $recipient->campaign->gym_id)
-            ->where('purpose', $purpose)
-            ->where('status', 'granted')
-            ->where('phone_e164', $recipient->destination)
-            ->exists();
-        if (! $consent) {
-            $recipient->forceFill(['status' => 'skipped', 'exclusion_reason' => 'consent_revoked'])->save();
+        $eligibility = app(WhatsAppConsentService::class)->deliveryEligibility($recipient->user, $recipient->campaign->gym_id, $purpose);
+        $destination = $eligibility['phone'];
+        if (! $destination) {
+            $recipient->forceFill(['status' => 'skipped', 'exclusion_reason' => $eligibility['exclusion_reason']])->save();
 
             return;
         }
+        $recipient->forceFill(['destination' => $destination])->save();
 
         $account = WhatsAppBusinessAccount::query()
             ->where('gym_id', $recipient->campaign->gym_id)

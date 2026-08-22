@@ -8,18 +8,20 @@ use App\Models\CommunicationCampaign;
 use App\Models\Gym;
 use App\Models\User;
 use App\Models\WhatsAppBusinessAccount;
-use App\Models\WhatsAppConsent;
 use App\Models\WhatsAppTemplate;
+use App\Services\WhatsApp\WhatsAppConsentService;
 use App\Services\WhatsApp\WhatsAppTemplateParameterService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class CommunicationCampaignService
 {
-    public function __construct(private readonly WhatsAppTemplateParameterService $templateParameters) {}
+    public function __construct(
+        private readonly WhatsAppTemplateParameterService $templateParameters,
+        private readonly WhatsAppConsentService $whatsappPreferences,
+    ) {}
 
     public function create(?Gym $gym, User $actor, array $data): CommunicationCampaign
     {
@@ -87,7 +89,7 @@ class CommunicationCampaignService
                     $eligibility = $this->eligibilityForUsers($campaign, $channel, $users->pluck('id')->all());
                     foreach ($users as $user) {
                         $reason = $eligibility['general_reason']
-                            ?? (isset($eligibility['consents']) && ! isset($eligibility['consents'][$user->id]) ? 'consent_missing' : null);
+                            ?? ($eligibility['exclusion_reasons'][$user->id] ?? null);
                         if ($reason) {
                             $reasons[$reason] = ($reasons[$reason] ?? 0) + 1;
                         } else {
@@ -139,11 +141,10 @@ class CommunicationCampaignService
                     foreach ($campaign->channels as $channel) {
                         $eligibility = $this->eligibilityForUsers($campaign, $channel, $users->pluck('id')->all());
                         foreach ($users as $user) {
-                            $consent = $eligibility['consents'][$user->id] ?? null;
                             $reason = $eligibility['general_reason']
-                                ?? (isset($eligibility['consents']) && ! $consent ? 'consent_missing' : null);
+                                ?? ($eligibility['exclusion_reasons'][$user->id] ?? null);
                             $destination = $channel->channel === CommunicationChannel::WhatsApp->value
-                                ? $consent?->phone_e164
+                                ? ($eligibility['destinations'][$user->id] ?? null)
                                 : (string) $user->id;
                             $campaign->recipients()->create([
                                 'communication_campaign_channel_id' => $channel->id,
@@ -186,17 +187,7 @@ class CommunicationCampaignService
         return $query->distinct();
     }
 
-    private function exclusionReason(CommunicationCampaign $campaign, $channel, User $user): ?string
-    {
-        $eligibility = $this->eligibilityForUsers($campaign, $channel, [$user->id]);
-
-        return $eligibility['general_reason']
-            ?? (array_key_exists('consents', $eligibility) && ! isset($eligibility['consents'][$user->id])
-                ? 'consent_missing'
-                : null);
-    }
-
-    /** @return array{general_reason:?string,consents?:Collection<int,WhatsAppConsent>} */
+    /** @return array{general_reason:?string,destinations?:array<int,string>,exclusion_reasons?:array<int,string>} */
     private function eligibilityForUsers(CommunicationCampaign $campaign, $channel, array $userIds): array
     {
         if ($channel->channel === CommunicationChannel::InApp->value) {
@@ -223,16 +214,20 @@ class CommunicationCampaignService
             return ['general_reason' => 'sender_unavailable'];
         }
 
-        return [
-            'general_reason' => null,
-            'consents' => WhatsAppConsent::query()
-                ->whereIn('user_id', $userIds)
-                ->where('gym_id', $campaign->gym_id)
-                ->where('purpose', $this->consentPurpose($template))
-                ->where('status', 'granted')
-                ->get()
-                ->keyBy('user_id'),
-        ];
+        $destinations = [];
+        $exclusionReasons = [];
+        $users = User::query()->whereKey($userIds)->get();
+        $eligibilities = $this->whatsappPreferences->deliveryEligibilities($users, $campaign->gym_id, $this->consentPurpose($template));
+        $users->each(function (User $user) use ($eligibilities, &$destinations, &$exclusionReasons): void {
+            $eligibility = $eligibilities[$user->id];
+            if ($eligibility['phone']) {
+                $destinations[$user->id] = $eligibility['phone'];
+            } else {
+                $exclusionReasons[$user->id] = $eligibility['exclusion_reason'];
+            }
+        });
+
+        return ['general_reason' => null, 'destinations' => $destinations, 'exclusion_reasons' => $exclusionReasons];
     }
 
     private function consentPurpose(?WhatsAppTemplate $template): string

@@ -53,6 +53,7 @@
                     ['label' => 'Diet Templates', 'icon' => 'ti-notebook', 'route' => 'web.admin.diet-templates.index', 'active' => ['web.admin.diet-templates.*']],
                     ['label' => 'Banners', 'icon' => 'ti-photo', 'route' => 'web.admin.banners.index', 'active' => ['web.admin.banners.*']],
                     ['label' => 'Announcements', 'icon' => 'ti-speakerphone', 'route' => 'web.admin.announcements.index', 'active' => ['web.admin.announcements.*']],
+                    ['label' => 'Communications', 'icon' => 'ti-brand-whatsapp', 'route' => 'web.admin.communications.index', 'active' => ['web.admin.communications.*']],
                     ['label' => 'Events', 'icon' => 'ti-calendar-event', 'route' => 'web.admin.events.index', 'active' => ['web.admin.events.*']],
                     ['label' => 'Notifications', 'icon' => 'ti-bell', 'route' => 'web.admin.notifications.index', 'active' => ['web.admin.notifications.*']],
                     ['label' => 'Fitness Goals', 'icon' => 'ti-target', 'route' => 'web.admin.fitness-goals.index', 'active' => ['web.admin.fitness-goals.*']],
@@ -91,6 +92,7 @@
                 'label' => 'Growth',
                 'items' => [
                     ['label' => 'Announcements', 'icon' => 'ti-speakerphone', 'route' => 'web.gym.announcements.index', 'active' => ['web.gym.announcements.*']],
+                    ['label' => 'Communications', 'icon' => 'ti-brand-whatsapp', 'route' => 'web.gym.communications.index', 'active' => ['web.gym.communications.*']],
                     ['label' => 'Events', 'icon' => 'ti-calendar-event', 'route' => 'web.gym.events.index', 'active' => ['web.gym.events.*']],
                     ['label' => 'Notifications', 'icon' => 'ti-bell', 'route' => 'web.gym.notifications.index', 'active' => ['web.gym.notifications.*']],
                     ['label' => 'Reminders', 'icon' => 'ti-clock', 'route' => 'web.gym.reminders.index', 'active' => ['web.gym.reminders.*']],

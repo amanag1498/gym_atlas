@@ -9,7 +9,7 @@ Delivery boundary: repository implementation only; production deployment and sto
 Atlas exposes two communication channels:
 
 1. **In-App** — durable notification feed, realtime refresh, and Firebase push.
-2. **WhatsApp** — Meta WhatsApp Business Platform messages, templates, campaigns, automation, delivery status, opt-in, opt-out, and replies.
+2. **WhatsApp** — Meta WhatsApp Business Platform messages, templates, campaigns, automation, delivery status, opt-out, and replies.
 
 Existing transactional email remains unchanged as a fallback during migration. It is not exposed as a campaign channel in this feature.
 
@@ -18,9 +18,8 @@ Existing transactional email remains unchanged as a fallback during migration. I
 - A gym can access only its own WhatsApp accounts, numbers, templates, audiences, campaigns, conversations, and delivery data.
 - Platform Admin uses a separate Atlas-owned account. Sending from a gym-owned number requires an explicit gym sender selection and an audit record.
 - Access tokens are encrypted at rest, never returned by APIs, never rendered in views, and redacted from logs.
-- A stored phone number is not WhatsApp consent. Existing users start without WhatsApp opt-in.
-- New gym enrollment includes utility-message permission in the required enrollment confirmation, so members do not face a separate setup step; marketing remains a separate optional choice.
-- Utility and marketing consent are tracked separately, with source, wording version, timestamp, and revocation.
+- A valid member phone number is eligible by default; the product does not add a separate WhatsApp opt-in step.
+- Explicit member opt-outs and inbound STOP keywords are tracked per gym and purpose and always prevent future delivery.
 - Business-initiated WhatsApp messages use approved templates. Free-form replies are allowed only when the provider reports an open customer-service window.
 - Sensitive health, injury, medical, biometric, progress-photo, or identity data is never placed in WhatsApp content.
 - Every delivery is idempotent and auditable. External providers are called only after the database transaction commits.
@@ -103,12 +102,11 @@ Acceptance criteria:
 - A repeated webhook is processed once.
 - Disconnected, expired, restricted, or unhealthy numbers cannot send.
 
-## Phase 4 — Consent and manual campaigns
+## Phase 4 — Preferences and manual campaigns
 
 - [x] Normalize WhatsApp destinations to E.164.
-- [x] Add utility and marketing consent with evidence.
-- [x] Capture auditable utility consent inside public/authenticated gym enrollment, with optional marketing consent and STOP/app opt-out.
-- [x] Add Member App utility/marketing consent and opt-out UI plus sender-scoped inbound keyword handling.
+- [x] Use the existing normalized member number by default without a separate opt-in step.
+- [x] Add Member App preferences and sender-scoped STOP/app opt-out handling.
 - [x] Add campaign drafts, selected channels, channel-specific content, audiences, and recipient snapshots.
 - [ ] Add audience types: gym, branch, selected members, plan, expiring, overdue, inactive, trainer, and trial leads.
 - [x] Add recipient eligibility preview and exclusion reasons.
@@ -117,7 +115,7 @@ Acceptance criteria:
 
 Acceptance criteria:
 
-- No WhatsApp send occurs without suitable consent and an approved template.
+- No WhatsApp send occurs after an explicit opt-out or without a valid number and approved template.
 - Scheduling does not create recipients or notifications before the due time.
 - Audience membership is frozen when a campaign starts.
 - Delivery totals reconcile to eligible, skipped, sent, delivered, read, and failed recipients.
@@ -189,7 +187,7 @@ Existing announcement and notification permissions remain compatible while these
 2. Member, Trainer, and Admin apps analyze and test cleanly.
 3. Queue worker and scheduler health are verified in staging.
 4. Meta App Review and required advanced permissions are approved.
-5. A staging WABA passes connection, template, webhook, opt-in, opt-out, retry, and delivery-status tests.
+5. A staging WABA passes connection, template, webhook, default-number delivery, opt-out, retry, and delivery-status tests.
 6. Backend deploys before updated mobile apps.
 7. Mobile releases pass closed/TestFlight testing before production rollout.
 8. Store upload, production deployment, and campaign activation require separate explicit approval.
@@ -204,21 +202,21 @@ The existing `1.0.2 (12)` Member artifacts were built before this communications
 - Admin App Firebase: token lifecycle with `app_role=admin`, Android permission, iOS push entitlement/background mode, and tap routing into the relevant admin workspace.
 - WhatsApp connection APIs for Gym and Platform Admin: Embedded Signup exchange, encrypted token storage, number validation, app subscription, health state, disconnect, and template sync.
 - Verified `/api/webhooks/whatsapp` GET/POST endpoints with HMAC verification, replay protection, delivery/read state processing, inbound message retention, service-window tracking, and keyword opt-out.
-- Member consent APIs at `/api/member/whatsapp-consents` with separate utility and marketing purposes.
+- Member WhatsApp preference APIs at `/api/member/whatsapp-consents` with separate utility and marketing purposes.
 - Gym and Platform Admin campaign APIs with previews, exclusion reasons, frozen recipients, scheduling, cancellation, in-app delivery, approved-template WhatsApp delivery, and analytics-ready statuses.
 - Gym inbox APIs with in-window text replies and approved-template replies outside the service window.
 - Gym and Platform Admin automation rule APIs with the complete canonical trigger catalog and independent In-App/WhatsApp routing. Rules can send through either channel or both.
 - Gym and Platform Admin template creation/edit submission to Meta, approval-state sync, and validated runtime values for `{member_name}`, `{notification_title}`, `{notification_message}`, `{gym_name}`, and `{branch_name}`.
 - Expiring, one-time Embedded Signup browser sessions for Gym and Platform Admin; raw access tokens never pass through the mobile app or user-entered fields.
 - Admin App Communications workspace for connection health, template sync, campaign draft/preview/send, utility automations, and inbox replies.
-- Member App utility and marketing WhatsApp consent controls scoped to the selected gym.
+- Native Laravel Gym and Platform Admin Communications workspaces for Meta connection, sender health, template creation/edit/sync, campaign preview/send/cancel, independent In-App/WhatsApp automation routing, and inbox replies.
+- Member App utility and marketing WhatsApp preference controls scoped to the selected gym.
 - Recovery dispatch for abandoned outbox locks, campaign recipients, campaigns, and webhook events.
 - Sender-scoped STOP handling, monotonic sent/delivered/read/failed receipt updates, token-expiry checks, provider throughput limits, and marketing quiet hours.
 
 ## Remaining repository work before release
 
-- Add equivalent Communications pages to the legacy Laravel web panels if those panels must remain a primary management surface; the Admin App and all APIs are implemented.
-- Obtain legal/product approval for the final consent wording before production activation.
+- Obtain legal/product approval for the final WhatsApp disclosure and opt-out wording before production activation.
 - Extract and adopt the shared notification-route registry in all three apps; expand routing tests for every notification type.
 - Add test-send, tenant campaign quotas, emergency suspension, exports, operator-triggered webhook replay controls, and retention jobs.
 - Add specialized audience builders for plan, expiring, overdue, inactive, trainer, and trial-lead segments; the current implementation supports gym, branch, selected members, and platform members.
@@ -231,7 +229,7 @@ The existing `1.0.2 (12)` Member artifacts were built before this communications
 3. Configure the Meta webhook callback as `https://<api-host>/api/webhooks/whatsapp`, subscribe the WABA app, and verify messages/template/status webhook fields.
 4. Back up the database, deploy backend code, run `php artisan migrate --force`, clear/rebuild Laravel config and route caches, and run the permission seeder through the normal deployment procedure.
 5. Run supervised queue workers for `notifications`, `whatsapp`, `webhooks`, `realtime`, and the existing default queues; use Redis (or another shared production cache) for sender rate limits and keep the Laravel scheduler running every minute.
-6. Run `php artisan notifications:fcm-health`, verify Admin/Member/Trainer token counts, connect one staging WABA, sync templates, and test consent, opt-out, send, delivery, read, inbound reply, retry, and tenant isolation.
+6. Run `php artisan notifications:fcm-health`, verify Admin/Member/Trainer token counts, connect one staging WABA, sync templates, and test default-number delivery, opt-out, send, delivery, read, inbound reply, retry, and tenant isolation.
 7. Finish and verify the mobile UI work, then create fresh Member, Trainer, and Admin builds. Release through closed testing/TestFlight before production. Do not reuse the pre-feature `1.0.2 (12)` Member artifacts.
 8. Enable automations gradually per gym after delivery/error dashboards and emergency suspension are operational. Store upload and production activation require separate approval.
 
@@ -243,14 +241,14 @@ Closed during the revisit:
 - In-app and WhatsApp preferences are evaluated independently; WhatsApp-only lifecycle delivery stays out of the in-app feed and FCM/realtime.
 - Admin automation routing now governs actual delivery instead of only being stored: In-App-off suppresses the feed, realtime event, and Firebase push, while WhatsApp can continue independently.
 - The Admin App loads every canonical notification trigger from the backend instead of offering four hard-coded types, and supports template creation/editing plus safe per-rule and per-campaign variable values.
-- Enrollment confirmation records utility WhatsApp permission as evidence with immediate STOP/app opt-out; marketing remains separately optional.
-- Nullable tenant scopes now use non-null canonical scope keys, preventing duplicate global preference, consent, and automation rows.
+- Existing normalized member numbers are eligible without extra enrollment friction; explicit STOP/app opt-outs remain authoritative.
+- Nullable tenant scopes now use non-null canonical scope keys, preventing duplicate global preference and automation rows.
 - Abandoned processing locks are recovered after bounded stale windows for notification outbox, campaigns, recipients, and WhatsApp webhooks.
 - Webhook receipts update campaign recipients, messages, and unified notification deliveries without allowing delayed receipts to downgrade a later status.
-- STOP affects only consent for the WhatsApp sender that received it, rather than every gym using the member phone number.
+- STOP affects only the WhatsApp preference for the sender that received it, rather than every gym using the member phone number.
 - Connected accounts must be healthy and unexpired before campaign, automation, or inbox sends.
 - The Graph API version is an explicit reviewed production setting rather than a silently stale application default.
-- Admin App and Member App provide the missing operational and consent surfaces; Platform Admin has its own isolated account, campaigns, automations, and inbox.
+- Admin App and Member App provide the missing operational and preference surfaces; Platform Admin has its own isolated account, campaigns, automations, and inbox.
 - Notification audit found one intentional direct Firebase path for ephemeral chat alerts. Durable application notifications use `NotificationService`, transactional outbox, realtime, and FCM.
 
 Validation evidence from this repository state:

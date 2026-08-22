@@ -12,11 +12,11 @@ use App\Models\Notification;
 use App\Models\NotificationChannelPreference;
 use App\Models\NotificationDelivery;
 use App\Models\UserFcmToken;
-use App\Models\WhatsAppConsent;
 use App\Models\WhatsAppConversation;
 use App\Models\WhatsAppMessage;
 use App\Services\Firebase\FcmNotificationService;
 use App\Services\WhatsApp\MetaWhatsAppClient;
+use App\Services\WhatsApp\WhatsAppConsentService;
 use App\Services\WhatsApp\WhatsAppTemplateParameterService;
 use App\Support\CommunicationScope;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -275,30 +275,28 @@ class DeliverNotificationOutbox implements ShouldQueue
         }
 
         $purpose = strtolower((string) $template->category) === 'marketing' ? 'marketing' : 'utility';
-        $consent = WhatsAppConsent::query()
-            ->where('user_id', $notification->user_id)
-            ->where('gym_id', $notification->gym_id)
-            ->where('purpose', $purpose)
-            ->where('status', 'granted')
-            ->first();
+        $eligibility = app(WhatsAppConsentService::class)->deliveryEligibility($notification->user, $notification->gym_id, $purpose);
+        $destination = $eligibility['phone'];
         $delivery = NotificationDelivery::query()->firstOrCreate([
             'notification_id' => $notification->id,
             'transport' => NotificationTransport::WhatsApp->value,
         ], [
             ...$this->deliveryDefaults($notification, NotificationTransport::WhatsApp, NotificationDeliveryStatus::Queued),
             'channel' => CommunicationChannel::WhatsApp->value,
-            'target_count' => $consent ? 1 : 0,
+            'target_count' => $destination ? 1 : 0,
             'metadata' => ['automation_rule_id' => $rule->id, 'template_id' => $template->id],
         ]);
         if (in_array($delivery->status, ['sent', 'delivered', 'read', 'skipped'], true)) {
             return;
         }
-        if (! $consent) {
+        if (! $destination) {
             $delivery->forceFill([
                 'status' => NotificationDeliveryStatus::Skipped->value,
                 'attempt_count' => $delivery->attempt_count + 1,
-                'error_code' => 'consent_missing',
-                'error_message' => 'The member has not granted the required WhatsApp consent.',
+                'error_code' => $eligibility['exclusion_reason'],
+                'error_message' => $eligibility['exclusion_reason'] === 'whatsapp_opted_out'
+                    ? 'The member opted out of WhatsApp messages for this gym.'
+                    : 'The member does not have a valid mobile number.',
             ])->save();
 
             return;
@@ -308,7 +306,7 @@ class DeliverNotificationOutbox implements ShouldQueue
             $messageId = $meta->sendTemplate(
                 $phone->phone_number_id,
                 (string) $account->access_token,
-                $consent->phone_e164,
+                $destination,
                 $template->name,
                 $template->language,
                 app(WhatsAppTemplateParameterService::class)->components(
@@ -318,7 +316,7 @@ class DeliverNotificationOutbox implements ShouldQueue
             );
             $conversation = WhatsAppConversation::query()->firstOrCreate([
                 'whatsapp_phone_number_id' => $phone->id,
-                'contact_wa_id' => ltrim($consent->phone_e164, '+'),
+                'contact_wa_id' => ltrim($destination, '+'),
             ], [
                 'whatsapp_business_account_id' => $account->id,
                 'user_id' => $notification->user_id,
