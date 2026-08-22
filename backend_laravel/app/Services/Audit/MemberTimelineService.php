@@ -10,19 +10,19 @@ use App\Models\Payment;
 use App\Models\ProgressPhoto;
 use App\Models\User;
 use App\Models\WorkoutPlan;
+use Illuminate\Support\Collection;
 
 class MemberTimelineService
 {
     public function __construct(
         private readonly AuditTimelineService $auditTimelineService,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  list<int>  $branchIds
      * @return array{
-     *     activity_logs: \Illuminate\Support\Collection<int, ActivityLog>,
-     *     custom_fee_audits: \Illuminate\Support\Collection<int, CustomFeeAuditLog>,
+     *     activity_logs: Collection<int, ActivityLog>,
+     *     custom_fee_audits: Collection<int, CustomFeeAuditLog>,
      *     activity_timeline: list<array<string, mixed>>,
      *     status_timeline: list<array<string, mixed>>,
      *     member_timeline: list<array<string, mixed>>

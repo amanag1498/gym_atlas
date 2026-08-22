@@ -16,8 +16,7 @@ class AttendanceCorrectionService
 {
     public function __construct(
         private readonly AttendanceService $attendanceService,
-    ) {
-    }
+    ) {}
 
     public function request(
         Gym $gym,

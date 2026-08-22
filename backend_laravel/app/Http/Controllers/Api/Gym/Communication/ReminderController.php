@@ -15,8 +15,7 @@ class ReminderController extends Controller
     public function __construct(
         private readonly ScopeResolver $scopeResolver,
         private readonly ReminderService $reminderService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {

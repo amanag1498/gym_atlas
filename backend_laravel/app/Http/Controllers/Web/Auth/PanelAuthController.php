@@ -10,14 +10,14 @@ use App\Models\User;
 use App\Services\Auth\FirebaseAuthService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class PanelAuthController extends Controller
 {
     public function __construct(
         private readonly FirebaseAuthService $firebaseAuthService,
-    ) {
-    }
+    ) {}
 
     public function showAdminLogin(): View
     {
@@ -95,7 +95,7 @@ class PanelAuthController extends Controller
             $user = $this->firebaseAuthService->authenticateForWeb(
                 $request->validated('id_token'),
             );
-        } catch (\Illuminate\Validation\ValidationException $exception) {
+        } catch (ValidationException $exception) {
             return back()
                 ->withErrors($exception->errors())
                 ->withInput();

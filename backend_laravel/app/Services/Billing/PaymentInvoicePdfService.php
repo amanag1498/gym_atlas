@@ -72,11 +72,11 @@ class PaymentInvoicePdfService
         $stream = "BT\n/F1 11 Tf\n14 TL\n1 0 0 1 48 804 Tm\n".implode("\nT*\n", $escapedLines)."\nET";
 
         $objects = [
-            1 => "<< /Type /Catalog /Pages 2 0 R >>",
-            2 => "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
-            3 => "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-            4 => "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-            5 => "<< /Length ".strlen($stream)." >>\nstream\n".$stream."\nendstream",
+            1 => '<< /Type /Catalog /Pages 2 0 R >>',
+            2 => '<< /Type /Pages /Count 1 /Kids [3 0 R] >>',
+            3 => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+            4 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+            5 => '<< /Length '.strlen($stream)." >>\nstream\n".$stream."\nendstream",
         ];
 
         $pdf = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";

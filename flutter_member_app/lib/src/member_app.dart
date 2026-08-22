@@ -17,6 +17,7 @@ import 'features/auth/login_screen.dart';
 import 'features/auth/session_controller.dart';
 import 'features/member/member_home_screen.dart';
 import 'features/member/member_events_screen.dart';
+import 'features/member/gym_self_enrollment_screen.dart';
 import 'features/member/member_repository.dart';
 
 class MemberApp extends StatefulWidget {
@@ -97,6 +98,16 @@ class _MemberAppState extends State<MemberApp> {
           ),
         ),
         GoRoute(
+          path: '/join/:token',
+          pageBuilder: (context, state) => _buildPage(
+            state,
+            GymSelfEnrollmentScreen(
+              token: state.pathParameters['token'] ?? '',
+              repository: memberRepository,
+            ),
+          ),
+        ),
+        GoRoute(
           path: '/events/:eventId',
           pageBuilder: (context, state) => _buildPage(
             state,
@@ -117,7 +128,16 @@ class _MemberAppState extends State<MemberApp> {
         }
 
         if (!sessionController.isAuthenticated) {
-          return location == '/login' ? null : '/login';
+          if (location == '/login') return null;
+          if (location.startsWith('/join/')) {
+            final token = state.pathParameters['token'];
+            return '/login?join=${Uri.encodeComponent(token ?? '')}';
+          }
+          return '/login';
+        }
+
+        if (location == '/login' && state.uri.queryParameters['join'] != null) {
+          return '/join/${state.uri.queryParameters['join']}';
         }
 
         if (location == '/' || location == '/login') {

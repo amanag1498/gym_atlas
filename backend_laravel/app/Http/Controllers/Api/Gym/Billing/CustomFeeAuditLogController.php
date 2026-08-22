@@ -12,8 +12,7 @@ class CustomFeeAuditLogController extends Controller
 {
     public function __construct(
         private readonly BillingAccessService $billingAccessService,
-    ) {
-    }
+    ) {}
 
     public function index(MemberMembership $memberMembership, Request $request)
     {

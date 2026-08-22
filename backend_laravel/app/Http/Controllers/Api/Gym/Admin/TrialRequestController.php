@@ -13,8 +13,7 @@ class TrialRequestController extends Controller
 {
     public function __construct(
         private readonly TrialRequestService $trialRequestService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {

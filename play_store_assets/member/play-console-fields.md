@@ -89,11 +89,11 @@ Screenshot alt text:
 
 ## Release
 
-- Release name: `Atlas Member 1.0.0 (1)`
+- Release name: `Atlas Member 1.0.2 (12)`
 - Release notes:
 
 ```text
-Initial Atlas Member release with workout and diet plans, progress tracking, optional step and nearby-gym features, memberships, trainer chat safety controls, notifications, privacy controls and account deletion.
+Join your gym faster from its enrollment QR. Existing Atlas members can securely reuse their saved profile, while new members can enroll on the web and later sign in to the app with the same account. This update also adds verified gym enrollment links and smoother gym switching after enrollment.
 ```
 
 - App signing: `Google Play App Signing`

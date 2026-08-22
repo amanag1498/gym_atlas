@@ -21,8 +21,7 @@ class GymController extends Controller
     public function __construct(
         private readonly AuditLogService $auditLogService,
         private readonly PlatformGymManagementService $platformGymManagementService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {

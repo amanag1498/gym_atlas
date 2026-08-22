@@ -7,6 +7,7 @@ use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Billing\StoreMembershipPlanRequest;
 use App\Http\Requests\Billing\UpdateMembershipPlanRequest;
+use App\Models\Branch;
 use App\Models\MembershipPlan;
 use App\Services\Audit\AuditLogService;
 use App\Services\Billing\BillingAccessService;
@@ -24,8 +25,7 @@ class MembershipPlanController extends Controller
         private readonly GymWebPanelService $gymWebPanelService,
         private readonly BillingAccessService $billingAccessService,
         private readonly AuditLogService $auditLogService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -268,7 +268,7 @@ class MembershipPlanController extends Controller
     }
 
     /**
-     * @return Collection<int, \App\Models\Branch>
+     * @return Collection<int, Branch>
      */
     private function accessibleBranches(Request $request, $gym): Collection
     {

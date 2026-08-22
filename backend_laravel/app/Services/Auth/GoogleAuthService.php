@@ -16,11 +16,10 @@ class GoogleAuthService
     public function __construct(
         private readonly GoogleTokenVerifier $googleTokenVerifier,
         private readonly ActiveRoleManager $activeRoleManager,
-    ) {
-    }
+    ) {}
 
     /**
-     * @return array{token: string, user: \App\Models\User}
+     * @return array{token: string, user: User}
      */
     public function authenticate(string $idToken, string $deviceName): array
     {
@@ -37,7 +36,7 @@ class GoogleAuthService
                 ?? User::query()->firstWhere('email', $payload['email']);
 
             if (! $user) {
-                $user = new User();
+                $user = new User;
             }
 
             $user->fill([

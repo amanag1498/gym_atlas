@@ -12,8 +12,7 @@ class AnnouncementController extends Controller
 {
     public function __construct(
         private readonly AnnouncementService $announcementService,
-    ) {
-    }
+    ) {}
 
     public function store(StoreAnnouncementRequest $request)
     {

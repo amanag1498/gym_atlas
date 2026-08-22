@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Notification extends Model
 {
@@ -24,6 +25,7 @@ class Notification extends Model
         'read_at',
         'created_by_user_id',
         'scheduled_for',
+        'in_app_visible',
     ];
 
     protected function casts(): array
@@ -32,6 +34,7 @@ class Notification extends Model
             'data' => 'array',
             'read_at' => 'datetime',
             'scheduled_for' => 'datetime',
+            'in_app_visible' => 'boolean',
         ];
     }
 
@@ -63,5 +66,10 @@ class Notification extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    public function deliveries(): HasMany
+    {
+        return $this->hasMany(NotificationDelivery::class);
     }
 }

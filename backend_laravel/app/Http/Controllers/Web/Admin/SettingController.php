@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Web\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Web\Platform\UpdatePlatformSettingsRequest;
-use App\Models\PlatformSetting;
 use App\Models\EmailDelivery;
+use App\Models\PlatformSetting;
 use App\Services\Audit\AuditLogService;
 use App\Services\Platform\PlatformSettingService;
 use Illuminate\Http\RedirectResponse;
@@ -16,8 +16,7 @@ class SettingController extends Controller
     public function __construct(
         private readonly AuditLogService $auditLogService,
         private readonly PlatformSettingService $platformSettingService,
-    ) {
-    }
+    ) {}
 
     public function index(): View
     {

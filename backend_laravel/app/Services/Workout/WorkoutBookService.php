@@ -12,8 +12,7 @@ class WorkoutBookService
 {
     public function __construct(
         private readonly WorkoutPlanService $workoutPlanService,
-    ) {
-    }
+    ) {}
 
     public function createBook(User $actor, array $payload): WorkoutBook
     {

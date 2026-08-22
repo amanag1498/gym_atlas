@@ -24,6 +24,7 @@
                     </p>
                     <div class="mt-5 flex flex-wrap gap-2">
                         <x-action-button as="a" href="{{ route('web.gym.members.create', request()->query()) }}">Add Member</x-action-button>
+                        <x-action-button as="a" variant="secondary" href="{{ route('web.gym.self-enrollment.index', request()->query()) }}">Enrollment QR</x-action-button>
                         <x-action-button as="a" variant="secondary" href="{{ request()->fullUrlWithQuery(['export' => 'csv']) }}">Export CSV</x-action-button>
                         <x-action-button as="a" variant="secondary" href="{{ route('web.gym.reports.index', array_merge(request()->query(), ['report' => 'inactive_members'])) }}">Inactive Report</x-action-button>
                         <x-action-button as="a" variant="secondary" href="{{ route('web.gym.memberships.index', request()->query()) }}">Open Memberships</x-action-button>

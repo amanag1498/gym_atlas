@@ -53,6 +53,13 @@ the related feature.
 - Privacy policy: `https://gymatlas.in/privacy-policy`
 - Account deletion: `https://gymatlas.in/account-deletion?app=member`
 
+## What's New in Version 1.0.2
+
+Join your gym faster from its enrollment QR. Existing Gym Atlas members can
+securely reuse their saved profile, while new members can enroll on the web and
+later sign in to the app with the same account. This update also adds verified
+gym enrollment links and smoother gym switching after enrollment.
+
 ## App Review information
 
 Contact details must be entered for the person who can answer review questions.

@@ -10,11 +10,10 @@ use App\Http\Resources\User\UserResource;
 use App\Models\Gym;
 use App\Models\User;
 use App\Services\Audit\AuditLogService;
-use App\Services\Gym\StaffManagementService;
 use App\Services\Authorization\ScopeResolver;
+use App\Services\Gym\StaffManagementService;
 use App\Services\Users\ManagedUserService;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
 use Illuminate\Http\Request;
 
 class StaffController extends Controller
@@ -24,8 +23,7 @@ class StaffController extends Controller
         private readonly ManagedUserService $managedUserService,
         private readonly AuditLogService $auditLogService,
         private readonly StaffManagementService $staffManagementService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {

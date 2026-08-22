@@ -14,16 +14,15 @@ use App\Http\Resources\Gym\GymResource;
 use App\Models\Gym;
 use App\Services\Audit\AuditLogService;
 use App\Services\Platform\PlatformGymManagementService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class GymController extends Controller
 {
     public function __construct(
         private readonly AuditLogService $auditLogService,
         private readonly PlatformGymManagementService $platformGymManagementService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {

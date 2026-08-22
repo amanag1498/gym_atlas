@@ -14,6 +14,7 @@ use App\Models\TrialRequest;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class PlatformReportService
@@ -422,7 +423,7 @@ class PlatformReportService
             })
             ->filter(fn ($items, $month) => $month !== null)
             ->map(function ($items, $month): object {
-                $typed = $items instanceof \Illuminate\Support\Collection ? $items : collect($items);
+                $typed = $items instanceof Collection ? $items : collect($items);
 
                 return (object) [
                     'month_key' => $month,
@@ -481,12 +482,12 @@ class PlatformReportService
             ->select(
                 'gym_id',
                 DB::raw('COUNT(*) as members_count'),
-                DB::raw("SUM(CASE WHEN discount_amount > 0 THEN 1 ELSE 0 END) as discounted_members_count"),
-                DB::raw("SUM(CASE
+                DB::raw('SUM(CASE WHEN discount_amount > 0 THEN 1 ELSE 0 END) as discounted_members_count'),
+                DB::raw('SUM(CASE
                     WHEN final_payable_amount < (COALESCE(default_plan_price, 0) + COALESCE(default_joining_fee, 0) + COALESCE(pt_custom_fee, 0) + COALESCE(partial_month_fee, 0))
                     THEN ((COALESCE(default_plan_price, 0) + COALESCE(default_joining_fee, 0) + COALESCE(pt_custom_fee, 0) + COALESCE(partial_month_fee, 0)) - final_payable_amount)
                     ELSE 0
-                END) as estimated_discount_value")
+                END) as estimated_discount_value')
             )
             ->with('gym:id,name,city')
             ->groupBy('gym_id')

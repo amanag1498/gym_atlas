@@ -2,6 +2,4 @@
 
 namespace App\Http\Requests\Workout;
 
-class UpdateMemberWorkoutPlanRequest extends StoreMemberWorkoutPlanRequest
-{
-}
+class UpdateMemberWorkoutPlanRequest extends StoreMemberWorkoutPlanRequest {}

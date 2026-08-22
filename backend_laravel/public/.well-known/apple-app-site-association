@@ -1,0 +1,11 @@
+{
+    "applinks": {
+        "apps": [],
+        "details": [
+            {
+                "appID": "9BQZB27JWV.com.techybugs.gymatlas.member",
+                "paths": ["/join/*"]
+            }
+        ]
+    }
+}

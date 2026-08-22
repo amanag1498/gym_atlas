@@ -1,16 +1,17 @@
 # Final Android release artifacts
 
-Built and verified on 28 July 2026.
+Member release built and verified on 22 August 2026. Trainer release last
+verified on 28 July 2026.
 
 ## Atlas Member
 
-- Version: `1.0.0+1`
+- Version: `1.0.2+12`
 - Package: `com.techybugs.gymatlas.member`
 - AAB:
   `flutter_member_app/build/app/outputs/bundle/release/app-release.aab`
-- Size: `48.0 MB`
+- Size: `48,751,451 bytes` (`48.8 MB` as reported by Flutter)
 - SHA-256:
-  `7db3a9f754e56251365c9bcd37f642c55372c213dfc2ce9101e5fc250f11380e`
+  `517955ff2bf9d544b5c981f53f85752bf3f2a911363f7bbca7b58d50f5aabfe6`
 - JAR signature verification: `Passed`
 - Upload-key alias: `atlas-member-upload`
 - Upload certificate SHA-1:

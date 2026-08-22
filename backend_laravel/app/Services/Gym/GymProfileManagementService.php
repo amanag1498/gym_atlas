@@ -13,8 +13,7 @@ class GymProfileManagementService
 {
     public function __construct(
         private readonly GymImageService $gymImageService,
-    ) {
-    }
+    ) {}
 
     public function updateProfile(Request $request, Gym $gym, array $data): Gym
     {

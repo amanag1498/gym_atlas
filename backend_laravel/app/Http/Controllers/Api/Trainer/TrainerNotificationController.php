@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Trainer;
 
+use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Trainer\TrainerNotificationResource;
 use App\Models\Notification;
@@ -13,8 +14,7 @@ class TrainerNotificationController extends Controller
 {
     public function __construct(
         private readonly TrainerScopeService $trainerScopeService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {
@@ -29,7 +29,7 @@ class TrainerNotificationController extends Controller
 
     public function markRead(Request $request, Notification $notification)
     {
-        abort_unless($request->user()->active_role === \App\Enums\RoleName::Trainer->value, 403);
+        abort_unless($request->user()->active_role === RoleName::Trainer->value, 403);
 
         $trainerProfile = $this->trainerScopeService->resolveTrainerProfile($request);
         $allowed = $this->trainerScopeService->notificationsQuery($trainerProfile)->whereKey($notification->id)->exists();

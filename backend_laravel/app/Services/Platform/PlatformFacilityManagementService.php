@@ -12,8 +12,7 @@ class PlatformFacilityManagementService
 {
     public function __construct(
         private readonly AuditLogService $auditLogService,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<string, mixed>  $data

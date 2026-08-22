@@ -54,6 +54,13 @@ enum PermissionName: string
     case AnnouncementsView = 'announcement.view';
     case AnnouncementsManage = 'announcement.manage';
     case NotificationsManage = 'notification.manage';
+    case CommunicationsView = 'communications.view';
+    case CommunicationsManage = 'communications.manage';
+    case CampaignsSend = 'campaigns.send';
+    case WhatsAppConnect = 'whatsapp.connect';
+    case WhatsAppTemplatesManage = 'whatsapp.templates.manage';
+    case WhatsAppInboxReply = 'whatsapp.inbox.reply';
+    case PlatformCommunicationsManage = 'platform.communications.manage';
     case EventsView = 'event.view';
     case EventsManage = 'event.manage';
     case EventBookingsView = 'event_booking.view';

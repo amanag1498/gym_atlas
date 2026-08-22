@@ -1,0 +1,21 @@
+@extends('layouts.panel')
+
+@section('content')
+    <div class="space-y-6">
+        <section class="panel-hero"><div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><span class="inline-flex rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold uppercase tracking-[.18em] text-brand-600">Member growth</span><h1 class="mt-4 text-3xl font-semibold tracking-tight">Self-enrollment QR</h1><p class="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Place a branch-specific QR at reception. New members complete the Atlas profile flow; existing members reuse their profile and join immediately.</p></div><a href="{{ route('web.gym.members.index', request()->query()) }}" class="panel-btn-secondary">Back to Members</a></div></section>
+
+        <div class="grid gap-5 xl:grid-cols-2">
+            @foreach($links as $link)
+                @php($url = route('public.self-enrollment.show', $link->token))
+                <x-premium-card class="p-6">
+                    <div class="flex flex-col gap-5 sm:flex-row">
+                        <div class="shrink-0 rounded-2xl border border-slate-200 bg-white p-3"><img src="{{ route('web.gym.self-enrollment.qr', ['link' => $link->id] + request()->query()) }}" alt="Enrollment QR for {{ $link->name }}" class="h-44 w-44"></div>
+                        <div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2"><h2 class="text-xl font-semibold text-slate-950 dark:text-white">{{ $link->branch?->name ?? 'All branches' }}</h2><x-status-badge :label="$link->is_active ? 'Active' : 'Disabled'" :tone="$link->is_active ? 'success' : 'danger'" /></div><p class="mt-2 text-sm text-slate-500">{{ $link->name }} · {{ $link->submissions_count }} submissions</p><div class="mt-4 flex gap-2"><input id="link-{{ $link->id }}" value="{{ $url }}" readonly class="panel-input min-w-0 flex-1 text-xs"><button type="button" class="panel-btn-secondary !px-3" onclick="navigator.clipboard.writeText(document.getElementById('link-{{ $link->id }}').value)">Copy</button></div><div class="mt-4 flex flex-wrap gap-2"><a href="{{ route('web.gym.self-enrollment.qr', ['link' => $link->id, 'download' => 1] + request()->query()) }}" class="panel-btn-primary">Download SVG</a><form method="POST" action="{{ route('web.gym.self-enrollment.toggle', ['link' => $link->id] + request()->query()) }}">@csrf<button class="panel-btn-secondary">{{ $link->is_active ? 'Disable' : 'Enable' }}</button></form><form method="POST" action="{{ route('web.gym.self-enrollment.rotate', ['link' => $link->id] + request()->query()) }}" data-confirm-submit data-confirm-title="Replace this QR?" data-confirm-message="The printed and copied old link will stop working immediately." data-confirm-button="Generate new QR">@csrf<button class="panel-btn-secondary">Regenerate</button></form></div></div>
+                    </div>
+                </x-premium-card>
+            @endforeach
+        </div>
+
+        <x-premium-card class="overflow-hidden p-0"><div class="border-b border-slate-200 p-5 dark:border-slate-800"><h2 class="panel-section-title">Recent enrollments</h2><p class="panel-section-copy">Successful, repeated, and desk-assistance outcomes from these QR links.</p></div><x-table-wrapper><table class="panel-table"><thead><tr><th>Member</th><th>Branch</th><th>Source</th><th>Outcome</th><th>Submitted</th></tr></thead><tbody>@forelse($recentSubmissions as $submission)<tr><td><div class="font-semibold">{{ $submission->user?->name ?? $submission->submitted_name }}</div><div class="text-xs text-slate-500">{{ $submission->submitted_email }}</div></td><td>{{ $submission->branch?->name ?? 'General link' }}</td><td>{{ ucfirst($submission->source) }}</td><td><x-status-badge :label="str($submission->outcome)->replace('_',' ')->title()" :tone="$submission->outcome === 'enrolled' ? 'success' : ($submission->outcome === 'inactive_member' ? 'warning' : 'info')" /></td><td>{{ $submission->created_at?->format('d M Y, h:i A') }}</td></tr>@empty<tr><td colspan="5"><x-empty-state title="No QR enrollments yet" message="Print a reception QR and the first submission will appear here." /></td></tr>@endforelse</tbody></table></x-table-wrapper></x-premium-card>
+    </div>
+@endsection

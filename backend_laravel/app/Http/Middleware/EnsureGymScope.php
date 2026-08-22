@@ -12,8 +12,7 @@ class EnsureGymScope
 {
     public function __construct(
         private readonly ScopeResolver $scopeResolver,
-    ) {
-    }
+    ) {}
 
     public function handle(Request $request, Closure $next): Response
     {

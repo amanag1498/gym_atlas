@@ -20,8 +20,7 @@ class ReminderController extends Controller
         private readonly GymWebPanelService $gymWebPanelService,
         private readonly ReminderService $reminderService,
         private readonly AuditLogService $auditLogService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {

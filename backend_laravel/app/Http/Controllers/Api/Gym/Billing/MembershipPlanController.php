@@ -9,8 +9,8 @@ use App\Http\Requests\Billing\UpdateMembershipPlanRequest;
 use App\Http\Resources\Billing\MembershipPlanResource;
 use App\Models\MembershipPlan;
 use App\Services\Audit\AuditLogService;
-use App\Services\Billing\BillingAccessService;
 use App\Services\Authorization\ScopeResolver;
+use App\Services\Billing\BillingAccessService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -21,8 +21,7 @@ class MembershipPlanController extends Controller
         private readonly BillingAccessService $billingAccessService,
         private readonly ScopeResolver $scopeResolver,
         private readonly AuditLogService $auditLogService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {

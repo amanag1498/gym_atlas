@@ -11,6 +11,26 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('chat:prune')->dailyAt('03:15')->withoutOverlapping();
+Schedule::command('communications:dispatch-outbox')
+    ->everyMinute()
+    ->name('communication-outbox-dispatch')
+    ->withoutOverlapping();
+Schedule::command('communications:dispatch-campaigns')
+    ->everyMinute()
+    ->name('scheduled-communication-campaigns')
+    ->withoutOverlapping();
+Schedule::command('communications:dispatch-announcements')
+    ->everyMinute()
+    ->name('scheduled-announcement-dispatch')
+    ->withoutOverlapping();
+Schedule::command('communications:dispatch-webhooks')
+    ->everyMinute()
+    ->name('whatsapp-webhook-recovery')
+    ->withoutOverlapping();
+Schedule::command('notifications:prune-fcm-tokens')
+    ->dailyAt('03:30')
+    ->name('stale-firebase-token-pruning')
+    ->withoutOverlapping();
 Schedule::command('memberships:reconcile-lifecycle')
     ->dailyAt('00:10')
     ->name('membership-lifecycle-reconciliation')

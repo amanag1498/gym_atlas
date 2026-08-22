@@ -45,4 +45,15 @@ enum NotificationType: string
             self::cases(),
         );
     }
+
+    public static function catalog(): array
+    {
+        return array_map(
+            static fn (self $type): array => [
+                'value' => $type->value,
+                'label' => ucfirst(str_replace('_', ' ', $type->value)),
+            ],
+            self::cases(),
+        );
+    }
 }

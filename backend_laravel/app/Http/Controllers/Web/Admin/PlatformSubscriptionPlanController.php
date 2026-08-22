@@ -16,8 +16,7 @@ class PlatformSubscriptionPlanController extends Controller
 {
     public function __construct(
         private readonly AuditLogService $auditLogService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {

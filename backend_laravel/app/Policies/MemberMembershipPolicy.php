@@ -14,8 +14,7 @@ class MemberMembershipPolicy
     public function __construct(
         private readonly ScopeResolver $scopeResolver,
         private readonly ScopedPermissionResolver $scopedPermissionResolver,
-    ) {
-    }
+    ) {}
 
     public function viewAny(User $user): bool
     {

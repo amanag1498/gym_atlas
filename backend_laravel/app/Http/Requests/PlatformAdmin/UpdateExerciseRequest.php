@@ -2,6 +2,4 @@
 
 namespace App\Http\Requests\PlatformAdmin;
 
-class UpdateExerciseRequest extends StoreExerciseRequest
-{
-}
+class UpdateExerciseRequest extends StoreExerciseRequest {}

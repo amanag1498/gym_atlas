@@ -12,8 +12,7 @@ class SettingController extends Controller
     public function __construct(
         private readonly PlatformSettingService $platformSettingService,
         private readonly AuditLogService $auditLogService,
-    ) {
-    }
+    ) {}
 
     public function index()
     {

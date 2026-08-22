@@ -35,12 +35,15 @@ use App\Http\Controllers\Web\Gym\PaymentController as WebGymPaymentController;
 use App\Http\Controllers\Web\Gym\PublicListingController as WebGymPublicListingController;
 use App\Http\Controllers\Web\Gym\ReminderController as WebGymReminderController;
 use App\Http\Controllers\Web\Gym\ReportController as WebGymReportController;
+use App\Http\Controllers\Web\Gym\SelfEnrollmentController as WebGymSelfEnrollmentController;
 use App\Http\Controllers\Web\Gym\SettingController as WebGymSettingController;
 use App\Http\Controllers\Web\Gym\StaffController as WebGymStaffController;
 use App\Http\Controllers\Web\Gym\TrainerController as WebGymTrainerController;
 use App\Http\Controllers\Web\Gym\TrialRequestController as WebGymTrialRequestController;
 use App\Http\Controllers\Web\IndependentTrainerMemberInvitationController;
 use App\Http\Controllers\Web\MemberEmailInvitationController;
+use App\Http\Controllers\Web\Public\GymSelfEnrollmentController as PublicGymSelfEnrollmentController;
+use App\Http\Controllers\Web\Public\WhatsAppOnboardingController;
 use App\Http\Controllers\Web\TrainerEmailInvitationController;
 use App\Http\Requests\Web\Public\StoreContactSubmissionRequest;
 use App\Http\Requests\Web\Public\StoreGymTrialRequest;
@@ -56,6 +59,13 @@ use App\Services\Trials\TrialRequestService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+
+Route::get('/whatsapp/onboarding/{token}', [WhatsAppOnboardingController::class, 'show'])
+    ->middleware('throttle:30,1')
+    ->name('whatsapp.onboarding.show');
+Route::post('/whatsapp/onboarding/{token}', [WhatsAppOnboardingController::class, 'complete'])
+    ->middleware('throttle:10,1')
+    ->name('whatsapp.onboarding.complete');
 
 Route::get('/', function (GymDiscoveryService $discoveryService) {
     if (! Schema::hasTable('gyms')) {
@@ -315,6 +325,16 @@ Route::middleware('guest')->group(function (): void {
     Route::post('/gym/login/firebase', [PanelAuthController::class, 'loginGymWithFirebase'])->name('web.gym.login.firebase');
 });
 
+Route::get('/join/{token}', [PublicGymSelfEnrollmentController::class, 'show'])
+    ->middleware('throttle:60,1')
+    ->name('public.self-enrollment.show');
+Route::post('/join/{token}', [PublicGymSelfEnrollmentController::class, 'store'])
+    ->middleware('throttle:12,1')
+    ->name('public.self-enrollment.store');
+Route::get('/join/{token}/success', [PublicGymSelfEnrollmentController::class, 'completed'])
+    ->middleware('throttle:60,1')
+    ->name('public.self-enrollment.success');
+
 Route::post('/logout', [PanelAuthController::class, 'logout'])
     ->middleware('auth')
     ->name('web.logout');
@@ -540,6 +560,10 @@ Route::prefix('gym')
         Route::post('/members/{member}/deactivate', [WebGymMemberController::class, 'deactivate'])->name('members.deactivate');
         Route::post('/members/{member}/remove-from-gym', [WebGymMemberController::class, 'removeFromGym'])->name('members.remove-from-gym');
         Route::post('/members/{member}/assign-trainer', [WebGymMemberController::class, 'assignTrainer'])->name('members.assign-trainer');
+        Route::get('/self-enrollment', [WebGymSelfEnrollmentController::class, 'index'])->name('self-enrollment.index');
+        Route::post('/self-enrollment/{link}/toggle', [WebGymSelfEnrollmentController::class, 'toggle'])->name('self-enrollment.toggle');
+        Route::post('/self-enrollment/{link}/rotate', [WebGymSelfEnrollmentController::class, 'rotate'])->name('self-enrollment.rotate');
+        Route::get('/self-enrollment/{link}/qr.svg', [WebGymSelfEnrollmentController::class, 'qr'])->name('self-enrollment.qr');
         Route::get('/diet-plans', [WebGymDietPlanController::class, 'index'])->name('diet-plans.index');
         Route::post('/diet-plans', [WebGymDietPlanController::class, 'store'])->name('diet-plans.store');
         Route::get('/diet-plans/{dietPlan}/edit', [WebGymDietPlanController::class, 'edit'])->name('diet-plans.edit');

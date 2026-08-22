@@ -14,8 +14,23 @@ class MemberEmailInvitation extends Model
         return ['payload' => 'array', 'expires_at' => 'datetime', 'responded_at' => 'datetime'];
     }
 
-    public function gym(): BelongsTo { return $this->belongsTo(Gym::class); }
-    public function branch(): BelongsTo { return $this->belongsTo(Branch::class); }
-    public function assignedTrainer(): BelongsTo { return $this->belongsTo(User::class, 'assigned_trainer_user_id'); }
-    public function invitedBy(): BelongsTo { return $this->belongsTo(User::class, 'invited_by_user_id'); }
+    public function gym(): BelongsTo
+    {
+        return $this->belongsTo(Gym::class);
+    }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    public function assignedTrainer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_trainer_user_id');
+    }
+
+    public function invitedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'invited_by_user_id');
+    }
 }

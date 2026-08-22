@@ -35,7 +35,7 @@ class GymImageService
     /**
      * @param  iterable<mixed>  $files
      * @param  array<string, int|string>  $options
-     * @return \Illuminate\Support\Collection<int, array{path: string, url: string, thumbnail_path: string|null, thumbnail_url: string}>
+     * @return Collection<int, array{path: string, url: string, thumbnail_path: string|null, thumbnail_url: string}>
      */
     public function storeGallery(iterable $files, string $directory, array $options = []): Collection
     {

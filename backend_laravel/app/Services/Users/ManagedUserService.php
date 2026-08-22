@@ -494,7 +494,9 @@ class ManagedUserService
             'name' => $data['name'],
             'email' => $data['email'],
             'avatar' => $data['avatar'] ?? $user->avatar,
-            'auth_provider' => $user->google_id ? 'google' : 'gym_invite',
+            'auth_provider' => $user->exists
+                ? $user->auth_provider
+                : ($data['auth_provider'] ?? ($user->google_id ? 'google' : 'gym_invite')),
             'is_active' => Arr::get($data, 'is_active', $user->is_active ?? true),
         ];
 

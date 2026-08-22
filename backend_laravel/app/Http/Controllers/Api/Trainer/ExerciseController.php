@@ -16,8 +16,7 @@ class ExerciseController extends Controller
     public function __construct(
         private readonly ScopeResolver $scopeResolver,
         private readonly AuditLogService $auditLogService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {

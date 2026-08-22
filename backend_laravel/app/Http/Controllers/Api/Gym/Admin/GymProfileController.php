@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api\Gym\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Gym\Admin\UpdateGymPublicListingSettingsRequest;
 use App\Http\Requests\Gym\Admin\UpdateGymProfileRequest;
+use App\Http\Requests\Gym\Admin\UpdateGymPublicListingSettingsRequest;
 use App\Http\Resources\Gym\GymResource;
 use App\Models\Gym;
 use App\Services\Audit\AuditLogService;
@@ -18,8 +18,7 @@ class GymProfileController extends Controller
         private readonly ScopeResolver $scopeResolver,
         private readonly AuditLogService $auditLogService,
         private readonly GymProfileManagementService $gymProfileManagementService,
-    ) {
-    }
+    ) {}
 
     public function show(Request $request)
     {

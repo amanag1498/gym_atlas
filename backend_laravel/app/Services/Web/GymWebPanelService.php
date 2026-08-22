@@ -5,8 +5,8 @@ namespace App\Services\Web;
 use App\Models\Branch;
 use App\Models\Gym;
 use App\Models\User;
-use App\Services\Authorization\ScopeResolver;
 use App\Services\Authorization\ScopedPermissionResolver;
+use App\Services\Authorization\ScopeResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -18,8 +18,7 @@ class GymWebPanelService
         private readonly WebPanelContext $webPanelContext,
         private readonly ScopeResolver $scopeResolver,
         private readonly ScopedPermissionResolver $scopedPermissionResolver,
-    ) {
-    }
+    ) {}
 
     public function resolveGym(Request $request): Gym
     {

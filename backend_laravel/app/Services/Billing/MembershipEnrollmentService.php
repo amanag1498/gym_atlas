@@ -15,8 +15,7 @@ class MembershipEnrollmentService
     public function __construct(
         private readonly MembershipPricingService $membershipPricingService,
         private readonly PaymentService $paymentService,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<string, mixed>  $input

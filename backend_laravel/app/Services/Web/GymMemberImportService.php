@@ -5,7 +5,6 @@ namespace App\Services\Web;
 use App\Models\Branch;
 use App\Models\Gym;
 use App\Models\MembershipPlan;
-use App\Models\TrainerProfile;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -32,6 +31,7 @@ class GymMemberImportService
         foreach ($this->readCsv($file) as $index => $row) {
             if ($index === 0) {
                 $headers = $this->normalizeHeaders($row);
+
                 continue;
             }
 

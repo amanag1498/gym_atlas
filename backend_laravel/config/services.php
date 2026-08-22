@@ -56,6 +56,7 @@ return [
         'web_app_id' => env('FIREBASE_WEB_APP_ID'),
         'messaging_sender_id' => env('FIREBASE_MESSAGING_SENDER_ID'),
         'storage_bucket' => env('FIREBASE_STORAGE_BUCKET'),
+        'token_stale_days' => (int) env('FIREBASE_TOKEN_STALE_DAYS', 60),
     ],
 
     'realtime' => [
@@ -65,6 +66,20 @@ return [
 
     'public_whatsapp' => [
         'number' => env('PUBLIC_WHATSAPP_NUMBER', '917451008842'),
+    ],
+
+    'meta_whatsapp' => [
+        'graph_url' => env('META_GRAPH_URL', 'https://graph.facebook.com'),
+        'graph_version' => env('META_GRAPH_VERSION'),
+        'app_id' => env('META_APP_ID'),
+        'app_secret' => env('META_APP_SECRET'),
+        'embedded_signup_config_id' => env('META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID'),
+        'webhook_verify_token' => env('META_WHATSAPP_WEBHOOK_VERIFY_TOKEN'),
+        'default_country_code' => env('WHATSAPP_DEFAULT_COUNTRY_CODE', '91'),
+        'messages_per_minute' => (int) env('WHATSAPP_MESSAGES_PER_MINUTE', 60),
+        'quiet_hours_start' => env('WHATSAPP_QUIET_HOURS_START', '21:00'),
+        'quiet_hours_end' => env('WHATSAPP_QUIET_HOURS_END', '08:00'),
+        'platform_timezone' => env('WHATSAPP_PLATFORM_TIMEZONE', 'Asia/Kolkata'),
     ],
 
 ];

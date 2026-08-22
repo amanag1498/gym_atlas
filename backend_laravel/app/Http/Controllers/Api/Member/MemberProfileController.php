@@ -19,8 +19,7 @@ class MemberProfileController extends Controller
         private readonly AuditLogService $auditLogService,
         private readonly MemberFitnessGoalService $memberFitnessGoalService,
         private readonly OnboardingProgressService $onboardingProgressService,
-    ) {
-    }
+    ) {}
 
     public function show(Request $request)
     {

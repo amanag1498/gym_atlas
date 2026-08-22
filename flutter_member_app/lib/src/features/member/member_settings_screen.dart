@@ -10,6 +10,7 @@ import '../../core/config.dart';
 import '../auth/session_controller.dart';
 import 'member_repository.dart';
 import 'notification_preferences_sheet.dart';
+import 'whatsapp_preferences_sheet.dart';
 
 class MemberSettingsScreen extends StatelessWidget {
   const MemberSettingsScreen({
@@ -21,6 +22,8 @@ class MemberSettingsScreen extends StatelessWidget {
     required this.onOpenMembership,
     required this.onOpenAttendance,
     required this.onPreferencesChanged,
+    required this.selectedGymId,
+    required this.selectedGymName,
   });
 
   final MemberRepository repository;
@@ -30,6 +33,8 @@ class MemberSettingsScreen extends StatelessWidget {
   final Future<void> Function() onOpenMembership;
   final Future<void> Function() onOpenAttendance;
   final Future<void> Function() onPreferencesChanged;
+  final int? selectedGymId;
+  final String selectedGymName;
 
   @override
   Widget build(BuildContext context) {
@@ -148,6 +153,11 @@ class MemberSettingsScreen extends StatelessWidget {
                     _NotificationPreferenceRow(
                       onPressed: () => _openPreferences(context),
                     ),
+                    _SettingsRow(
+                      icon: Icons.chat_outlined,
+                      title: 'WhatsApp notifications',
+                      onPressed: () => _openWhatsAppPreferences(context),
+                    ),
                   ],
                 ),
               ),
@@ -209,6 +219,22 @@ class MemberSettingsScreen extends StatelessWidget {
       ),
     );
 
+    if (changed == true) {
+      await onPreferencesChanged();
+    }
+  }
+
+  Future<void> _openWhatsAppPreferences(BuildContext context) async {
+    final changed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => MemberWhatsAppPreferencesSheet(
+        repository: repository,
+        gymId: selectedGymId,
+        scopeName: selectedGymId == null ? 'Atlas' : selectedGymName,
+      ),
+    );
     if (changed == true) {
       await onPreferencesChanged();
     }

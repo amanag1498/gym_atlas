@@ -11,8 +11,7 @@ class GymPolicy
 {
     public function __construct(
         private readonly ScopeResolver $scopeResolver,
-    ) {
-    }
+    ) {}
 
     public function view(User $user, Gym $gym): bool
     {

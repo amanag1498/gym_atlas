@@ -12,8 +12,7 @@ class DiscoveryController extends Controller
 {
     public function __construct(
         private readonly GymDiscoveryService $gymDiscoveryService,
-    ) {
-    }
+    ) {}
 
     public function index(ListPublicGymRequest $request)
     {

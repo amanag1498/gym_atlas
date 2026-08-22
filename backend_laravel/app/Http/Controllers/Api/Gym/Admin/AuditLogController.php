@@ -6,8 +6,8 @@ use App\Enums\PermissionName;
 use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Audit\GymAuditLogResource;
-use App\Services\Authorization\ScopeResolver;
 use App\Services\Authorization\ScopedPermissionResolver;
+use App\Services\Authorization\ScopeResolver;
 use App\Services\Gym\GymAuditLogService;
 use Illuminate\Http\Request;
 
@@ -17,8 +17,7 @@ class AuditLogController extends Controller
         private readonly ScopeResolver $scopeResolver,
         private readonly ScopedPermissionResolver $scopedPermissionResolver,
         private readonly GymAuditLogService $gymAuditLogService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {

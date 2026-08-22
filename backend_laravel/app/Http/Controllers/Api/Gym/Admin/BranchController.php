@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers\Api\Gym\Admin;
 
+use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Gym\Admin\StoreBranchRequest;
 use App\Http\Requests\Gym\Admin\UpdateBranchRequest;
 use App\Http\Resources\Gym\BranchResource;
-use App\Models\User;
 use App\Models\Branch;
 use App\Models\Gym;
-use App\Enums\RoleName;
+use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Authorization\ScopeResolver;
 use App\Services\Gym\BranchManagementService;
@@ -21,8 +21,7 @@ class BranchController extends Controller
         private readonly ScopeResolver $scopeResolver,
         private readonly AuditLogService $auditLogService,
         private readonly BranchManagementService $branchManagementService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {

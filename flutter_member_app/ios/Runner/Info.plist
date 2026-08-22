@@ -36,6 +36,14 @@
 				<string>com.googleusercontent.apps.707275991691-catqhsa9ln8j9e87975oikl7ds8gdcs3</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>gymatlasmember</string>
+			</array>
+		</dict>
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>

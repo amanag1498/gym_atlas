@@ -11,8 +11,7 @@ class BranchPolicy
 {
     public function __construct(
         private readonly ScopeResolver $scopeResolver,
-    ) {
-    }
+    ) {}
 
     public function view(User $user, Branch $branch): bool
     {

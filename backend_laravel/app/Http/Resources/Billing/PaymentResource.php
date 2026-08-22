@@ -2,6 +2,8 @@
 
 namespace App\Http\Resources\Billing;
 
+use App\Http\Resources\Gym\BranchResource;
+use App\Http\Resources\User\UserResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -25,10 +27,10 @@ class PaymentResource extends JsonResource
             'notes' => $this->notes,
             'paid_at' => $this->paid_at?->toIso8601String(),
             'payment_date' => $this->payment_date?->toIso8601String(),
-            'member' => \App\Http\Resources\User\UserResource::make($this->whenLoaded('member')),
+            'member' => UserResource::make($this->whenLoaded('member')),
             'membership' => MemberMembershipResource::make($this->whenLoaded('membership')),
-            'branch' => \App\Http\Resources\Gym\BranchResource::make($this->whenLoaded('branch')),
-            'collector' => \App\Http\Resources\User\UserResource::make($this->whenLoaded('collector')),
+            'branch' => BranchResource::make($this->whenLoaded('branch')),
+            'collector' => UserResource::make($this->whenLoaded('collector')),
             'receipt' => PaymentReceiptResource::make($this->whenLoaded('receipt')),
             'created_at' => $this->created_at?->toIso8601String(),
         ];

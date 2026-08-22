@@ -10,6 +10,17 @@ use Illuminate\Support\Facades\Log;
 
 class FcmNotificationService
 {
+    public function isConfigured(): bool
+    {
+        $projectId = trim((string) config('services.firebase.project_id'));
+        $credentials = $this->serviceAccount();
+
+        return $projectId !== ''
+            && is_array($credentials)
+            && trim((string) ($credentials['client_email'] ?? '')) !== ''
+            && trim((string) ($credentials['private_key'] ?? '')) !== '';
+    }
+
     public function sendToUser(
         User $user,
         string $title,
@@ -18,6 +29,7 @@ class FcmNotificationService
         ?string $appRole = null,
     ): int {
         $tokenQuery = UserFcmToken::query()
+            ->deliverable()
             ->where('user_id', $user->id)
             ->when($appRole !== null, fn ($query) => $query->where('app_role', $appRole));
 

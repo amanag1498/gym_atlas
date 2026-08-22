@@ -11,8 +11,7 @@ class MembershipPlanPolicy
 {
     public function __construct(
         private readonly ScopeResolver $scopeResolver,
-    ) {
-    }
+    ) {}
 
     public function viewAny(User $user): bool
     {

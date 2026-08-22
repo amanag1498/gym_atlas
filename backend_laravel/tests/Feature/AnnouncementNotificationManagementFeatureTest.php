@@ -11,6 +11,7 @@ use App\Models\Gym;
 use App\Models\MemberProfile;
 use App\Models\Notification;
 use App\Models\User;
+use App\Services\Communication\AnnouncementService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -371,6 +372,35 @@ class AnnouncementNotificationManagementFeatureTest extends TestCase
             ], $headers)
             ->assertUnprocessable()
             ->assertJsonPath('errors.member_ids.0', 'Selected members must have current access to this gym and branch.');
+    }
+
+    public function test_scheduled_announcement_does_not_create_notifications_before_its_due_time(): void
+    {
+        [$owner, $gym, $branch, $member] = $this->makeGymScope();
+        $service = app(AnnouncementService::class);
+        $announcement = $service->createAnnouncement($owner, [
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'audience_type' => 'branch_specific',
+            'title' => 'Tomorrow opening',
+            'message' => 'The gym opens at 7 AM tomorrow.',
+            'send_at' => now()->addHour()->toIso8601String(),
+        ]);
+
+        $this->assertSame('scheduled', $announcement->status);
+        $this->assertDatabaseMissing('notifications', [
+            'announcement_id' => $announcement->id,
+            'user_id' => $member->id,
+        ]);
+
+        $announcement->forceFill(['send_at' => now()->subMinute()])->save();
+        $this->artisan('communications:dispatch-announcements')->assertSuccessful();
+
+        $this->assertDatabaseHas('notifications', [
+            'announcement_id' => $announcement->id,
+            'user_id' => $member->id,
+        ]);
+        $this->assertSame('sent', $announcement->fresh()->status);
     }
 
     /**

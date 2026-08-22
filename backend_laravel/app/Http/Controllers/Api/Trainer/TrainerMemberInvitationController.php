@@ -28,9 +28,11 @@ class TrainerMemberInvitationController extends Controller
                 return response()->json(['message' => 'This email belongs to a non-member account and cannot be invited as a member.'], 422);
             }
             $invitation = $this->memberGymInvitationService->invite($request->user(), $existingUser, $profile->gym, $payload);
+
             return $this->success(['invitation_id' => $invitation->id, 'approval_channel' => 'app'], 'Invitation sent to the member app for approval.', 202);
         }
         $invitation = $this->memberEmailInvitationService->invite($request->user(), $profile->gym, $payload);
+
         return $this->success(['invitation_id' => $invitation->id, 'approval_channel' => 'email'], 'Enrollment approval email sent.', 202);
     }
 }

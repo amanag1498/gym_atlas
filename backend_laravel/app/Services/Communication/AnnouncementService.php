@@ -36,6 +36,8 @@ class AnnouncementService
 
             $this->assertAnnouncementScope($actor, $data['audience_type'], $gym, $branch, $data['member_ids'] ?? []);
 
+            $sendAt = isset($data['send_at']) ? now()->parse($data['send_at']) : now();
+            $isScheduled = $sendAt->isFuture();
             $announcement = Announcement::query()->create([
                 'gym_id' => $gym?->id,
                 'branch_id' => $branch?->id,
@@ -44,47 +46,87 @@ class AnnouncementService
                 'audience_type' => $data['audience_type'],
                 'title' => $data['title'],
                 'message' => $data['message'],
-                'status' => 'sent',
+                'status' => $isScheduled ? 'scheduled' : 'processing',
                 'is_platform_wide' => $data['audience_type'] === AnnouncementAudienceType::PlatformWide->value,
-                'send_at' => $data['send_at'] ?? now(),
+                'send_at' => $sendAt,
                 'metadata' => $data['metadata'] ?? null,
             ]);
 
             $recipients = $this->resolveRecipients($actor, $data['audience_type'], $gym, $branch, $data['member_ids'] ?? []);
 
             foreach ($recipients as $recipient) {
-                $notification = $this->notificationService->create(
-                    user: $recipient,
-                    type: $data['audience_type'] === AnnouncementAudienceType::TrainerAssignment->value
-                        ? NotificationType::TrainerAssignment->value
-                        : NotificationType::GymAnnouncement->value,
-                    title: $data['title'],
-                    body: $data['message'],
-                    gymId: $gym?->id,
-                    branchId: $branch?->id,
-                    createdByUserId: $actor->id,
-                    announcementId: $announcement->id,
-                    data: [
-                        'audience_type' => $data['audience_type'],
-                        'member_ids' => $data['member_ids'] ?? [],
-                        'source' => $gym ? 'gym' : 'platform',
-                        'gym_name' => $gym?->name,
-                        'branch_name' => $branch?->name,
-                    ],
-                    scheduledFor: $data['send_at'] ?? now(),
-                );
-
                 AnnouncementRecipient::query()->create([
                     'announcement_id' => $announcement->id,
                     'user_id' => $recipient->id,
                     'gym_id' => $gym?->id,
                     'branch_id' => $branch?->id,
-                    'notification_id' => $notification?->id,
+                    'notification_id' => null,
                 ]);
+            }
+
+            if (! $isScheduled) {
+                $this->deliverAnnouncement($announcement);
             }
 
             return $announcement->loadCount('recipients');
         });
+    }
+
+    public function dispatchDueAnnouncements(int $limit = 100): int
+    {
+        $ids = Announcement::query()
+            ->where('status', 'scheduled')
+            ->where('send_at', '<=', now())
+            ->orderBy('id')
+            ->limit(max(1, min(500, $limit)))
+            ->pluck('id');
+
+        foreach ($ids as $id) {
+            DB::transaction(function () use ($id): void {
+                $announcement = Announcement::query()->lockForUpdate()->find($id);
+                if (! $announcement || $announcement->status !== 'scheduled' || $announcement->send_at?->isFuture()) {
+                    return;
+                }
+                $announcement->forceFill(['status' => 'processing'])->save();
+                $this->deliverAnnouncement($announcement);
+            });
+        }
+
+        return $ids->count();
+    }
+
+    private function deliverAnnouncement(Announcement $announcement): void
+    {
+        $announcement->loadMissing(['gym', 'branch', 'recipients.user']);
+        foreach ($announcement->recipients as $recipientRecord) {
+            if ($recipientRecord->notification_id || ! $recipientRecord->user) {
+                continue;
+            }
+            $notification = $this->notificationService->create(
+                user: $recipientRecord->user,
+                type: $announcement->audience_type === AnnouncementAudienceType::TrainerAssignment->value
+                    ? NotificationType::TrainerAssignment->value
+                    : NotificationType::GymAnnouncement->value,
+                title: $announcement->title,
+                body: $announcement->message,
+                gymId: $announcement->gym_id,
+                branchId: $announcement->branch_id,
+                createdByUserId: $announcement->created_by_user_id,
+                announcementId: $announcement->id,
+                data: [
+                    'audience_type' => $announcement->audience_type,
+                    'source' => $announcement->gym_id ? 'gym' : 'platform',
+                    'gym_name' => $announcement->gym?->name,
+                    'branch_name' => $announcement->branch?->name,
+                    'app_role' => $announcement->audience_type === AnnouncementAudienceType::TrainerAssignment->value
+                        ? 'trainer'
+                        : 'member',
+                ],
+                scheduledFor: $announcement->send_at,
+            );
+            $recipientRecord->forceFill(['notification_id' => $notification?->id])->save();
+        }
+        $announcement->forceFill(['status' => 'sent'])->save();
     }
 
     public function listAnnouncementsForActor(

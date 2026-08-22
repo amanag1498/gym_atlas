@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Web\Gym;
 
 use App\Enums\PermissionName;
+use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Web\Gym\StoreBranchWebRequest;
 use App\Http\Requests\Web\Gym\UpdateBranchWebRequest;
 use App\Models\Branch;
 use App\Models\City;
 use App\Models\Facility;
+use App\Models\Gym;
 use App\Services\Audit\AuditLogService;
 use App\Services\Gym\BranchManagementService;
 use App\Services\Web\GymWebPanelService;
@@ -22,8 +24,7 @@ class BranchController extends Controller
         private readonly GymWebPanelService $gymWebPanelService,
         private readonly AuditLogService $auditLogService,
         private readonly BranchManagementService $branchManagementService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -228,16 +229,16 @@ class BranchController extends Controller
         return back()->with('status', 'Branch status updated successfully.');
     }
 
-    private function canManageBranches(Request $request, \App\Models\Gym $gym, ?int $branchId = null): bool
+    private function canManageBranches(Request $request, Gym $gym, ?int $branchId = null): bool
     {
-        if ($request->user()?->active_role === \App\Enums\RoleName::BranchManager->value) {
+        if ($request->user()?->active_role === RoleName::BranchManager->value) {
             return false;
         }
 
         return $this->gymWebPanelService->canPermission($request, PermissionName::BranchesManage->value, $gym, $branchId);
     }
 
-    private function assertManageAllowed(Request $request, \App\Models\Gym $gym, ?int $branchId = null): void
+    private function assertManageAllowed(Request $request, Gym $gym, ?int $branchId = null): void
     {
         abort_unless($this->canManageBranches($request, $gym, $branchId), 403);
     }

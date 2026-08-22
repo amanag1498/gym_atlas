@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Api\Gym\Admin;
 use App\Enums\PermissionName;
 use App\Enums\RoleName;
 use App\Http\Controllers\Controller;
-use App\Services\Authorization\ScopeResolver;
 use App\Services\Authorization\ScopedPermissionResolver;
+use App\Services\Authorization\ScopeResolver;
 use App\Services\Gym\GymReportService;
 use Illuminate\Http\Request;
 
@@ -16,8 +16,7 @@ class ReportController extends Controller
         private readonly ScopeResolver $scopeResolver,
         private readonly ScopedPermissionResolver $scopedPermissionResolver,
         private readonly GymReportService $reportService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {

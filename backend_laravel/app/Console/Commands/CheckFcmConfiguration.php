@@ -26,6 +26,7 @@ class CheckFcmConfiguration extends Command
             ['Registered tokens', (string) UserFcmToken::query()->count()],
             ['Member app tokens', (string) UserFcmToken::query()->where('app_role', 'member')->count()],
             ['Trainer app tokens', (string) UserFcmToken::query()->where('app_role', 'trainer')->count()],
+            ['Admin app tokens', (string) UserFcmToken::query()->where('app_role', 'admin')->count()],
         ];
 
         $this->table(['Check', 'Value'], $rows);

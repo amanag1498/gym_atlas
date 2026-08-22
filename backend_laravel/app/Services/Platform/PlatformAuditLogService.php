@@ -114,6 +114,7 @@ class PlatformAuditLogService
             foreach ($value as $key => $nestedValue) {
                 if (is_string($key) && $this->isSensitiveKey($key)) {
                     $sanitized[$key] = '[redacted]';
+
                     continue;
                 }
 
@@ -267,9 +268,9 @@ class PlatformAuditLogService
         return match ($log->event) {
             'platform_admin_created_gym' => "{$subject} was added to the platform directory.",
             'platform_admin_updated_gym' => "{$subject} details were refreshed for the platform team.",
-            'platform.gym.approval.updated', 'web.platform.gym.approval.updated' => "{$subject} moved to ".$this->humanizeValue($new['approval_status'] ?? 'updated').".",
-            'platform.gym.status.updated' => "{$subject} is now ".$this->humanizeValue($new['status'] ?? 'updated').".",
-            'platform.gym.verification.updated' => "{$subject} verification is now ".$this->humanizeValue($new['verification_status'] ?? 'updated').".",
+            'platform.gym.approval.updated', 'web.platform.gym.approval.updated' => "{$subject} moved to ".$this->humanizeValue($new['approval_status'] ?? 'updated').'.',
+            'platform.gym.status.updated' => "{$subject} is now ".$this->humanizeValue($new['status'] ?? 'updated').'.',
+            'platform.gym.verification.updated' => "{$subject} verification is now ".$this->humanizeValue($new['verification_status'] ?? 'updated').'.',
             'platform.gym.listing_flags.updated', 'web.platform.gym.featured.updated', 'web.platform.gym.promoted.updated', 'web.platform.gym.listing.updated', 'platform.gym.public_listing.updated', 'platform.gym.public_listing.visibility_updated' => $this->listingSummary($log, $subject),
             'platform.settings.updated' => 'Core platform controls, notification rules, or defaults were changed.',
             'web.platform.gym-subscription.created' => "{$subject} received a new platform billing assignment.",
@@ -447,6 +448,7 @@ class PlatformAuditLogService
                 }
 
                 $flattened += $this->flattenForDiff($value, $path);
+
                 continue;
             }
 

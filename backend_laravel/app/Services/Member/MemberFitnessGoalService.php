@@ -43,6 +43,7 @@ class MemberFitnessGoalService
 
         if ($matchedIds !== []) {
             $this->syncForProfile($profile, $matchedIds, null);
+
             return;
         }
 

@@ -5,6 +5,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../core/models/session_models.dart';
 import '../../core/network/api_client.dart';
+import '../../core/notifications/admin_fcm_token_service.dart';
 import '../../core/storage/token_storage.dart';
 import 'auth_repository.dart';
 
@@ -12,22 +13,21 @@ class SessionController extends ChangeNotifier {
   SessionController({
     TokenStorage? tokenStorage,
     ApiClient? apiClient,
+    AdminFcmTokenService? fcmTokenService,
     GoogleSignIn? googleSignIn,
   }) : _tokenStorage = tokenStorage ?? const TokenStorage(),
        _apiClient =
-           apiClient ??
-           ApiClient(token: null, onUnauthorized: () async {}),
+           apiClient ?? ApiClient(token: null, onUnauthorized: () async {}),
        _googleSignIn =
-           googleSignIn ??
-           GoogleSignIn(
-             scopes: const ['email', 'profile'],
-           ) {
+           googleSignIn ?? GoogleSignIn(scopes: const ['email', 'profile']) {
     _apiClient.updateUnauthorizedHandler(_handleUnauthorized);
+    _fcmTokenService = fcmTokenService ?? AdminFcmTokenService(_apiClient);
   }
 
   final TokenStorage _tokenStorage;
   final ApiClient _apiClient;
   final GoogleSignIn _googleSignIn;
+  late final AdminFcmTokenService _fcmTokenService;
 
   AppUser? user;
   String? _token;
@@ -72,6 +72,7 @@ class SessionController extends ChangeNotifier {
       _ensureEligibleAdmin(me);
       user = me;
       await _tokenStorage.writeSession(token: storedToken, user: me);
+      await _fcmTokenService.registerToken();
     } on DioException catch (exception) {
       if (exception.response?.statusCode == 401) {
         await _clearLocalState(notify: false);
@@ -128,6 +129,7 @@ class SessionController extends ChangeNotifier {
       _token = session.token;
       user = me;
       await _tokenStorage.writeSession(token: session.token, user: me);
+      await _fcmTokenService.registerToken();
     } on DioException catch (exception) {
       await _googleSafeSignOut();
       await _clearLocalState(notify: false);
@@ -159,6 +161,7 @@ class SessionController extends ChangeNotifier {
       _ensureEligibleAdmin(me);
       user = me;
       await _tokenStorage.writeSession(token: _token!, user: me);
+      await _fcmTokenService.registerToken();
     } on DioException catch (exception) {
       error = _mapAuthError(exception);
     } catch (exception) {
@@ -173,6 +176,7 @@ class SessionController extends ChangeNotifier {
 
     if (remote && _token != null && _token!.isNotEmpty) {
       try {
+        await _fcmTokenService.unregisterCurrentToken();
         await AuthRepository(_apiClient).logout();
       } catch (_) {
         // Preserve logout flow on API failure.
@@ -206,7 +210,9 @@ class SessionController extends ChangeNotifier {
 
   void _ensureEligibleAdmin(AppUser currentUser) {
     if (!currentUser.isActive) {
-      throw Exception('Your admin account is inactive. Please contact support.');
+      throw Exception(
+        'Your admin account is inactive. Please contact support.',
+      );
     }
 
     if (!_allowedRoles.contains(currentUser.activeRole) &&

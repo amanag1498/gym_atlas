@@ -90,6 +90,11 @@ class Branch extends Model
         return $this->hasMany(MemberProfile::class);
     }
 
+    public function selfEnrollmentLinks(): HasMany
+    {
+        return $this->hasMany(GymSelfEnrollmentLink::class);
+    }
+
     public function members(): HasMany
     {
         return $this->memberProfiles();

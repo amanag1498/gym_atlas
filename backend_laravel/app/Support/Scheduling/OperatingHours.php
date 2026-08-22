@@ -36,6 +36,7 @@ class OperatingHours
         foreach (self::DAYS as $day) {
             if (in_array($day, $closedDays, true)) {
                 $normalized[$day] = [];
+
                 continue;
             }
 
@@ -184,11 +185,13 @@ class OperatingHours
         foreach ($timings as $day => $slots) {
             if (! in_array((string) $day, self::DAYS, true)) {
                 $errors[] = 'Unsupported day key: '.(string) $day.'.';
+
                 continue;
             }
 
             if (! is_array($slots)) {
                 $errors[] = self::dayLabel((string) $day).' schedule must be a list of time windows.';
+
                 continue;
             }
 
@@ -199,6 +202,7 @@ class OperatingHours
             foreach ($candidateSlots as $index => $slot) {
                 if (! is_array($slot)) {
                     $errors[] = self::dayLabel((string) $day).' slot '.((int) $index + 1).' must be an object.';
+
                     continue;
                 }
 
@@ -237,7 +241,6 @@ class OperatingHours
     }
 
     /**
-     * @param  mixed  $slots
      * @return list<array{open: string, close: string}>
      */
     private static function normalizeDaySlots(mixed $slots): array

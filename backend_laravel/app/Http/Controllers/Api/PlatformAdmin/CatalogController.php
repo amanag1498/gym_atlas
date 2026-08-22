@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Api\PlatformAdmin;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\PlatformAdmin\UpsertFitnessGoalRequest;
 use App\Http\Requests\PlatformAdmin\UpsertBannerRequest;
 use App\Http\Requests\PlatformAdmin\UpsertCityRequest;
 use App\Http\Requests\PlatformAdmin\UpsertFacilityRequest;
+use App\Http\Requests\PlatformAdmin\UpsertFitnessGoalRequest;
 use App\Http\Requests\PlatformAdmin\UpsertTrainerSpecializationRequest;
 use App\Http\Resources\Catalog\FitnessGoalResource;
 use App\Http\Resources\Catalog\TrainerSpecializationResource;
@@ -14,14 +14,14 @@ use App\Http\Resources\Gym\CityResource;
 use App\Http\Resources\Gym\FacilityResource;
 use App\Http\Resources\Platform\PlatformBannerResource;
 use App\Models\City;
-use App\Models\FitnessGoal;
 use App\Models\Facility;
+use App\Models\FitnessGoal;
 use App\Models\PlatformBanner;
 use App\Models\TrainerProfile;
 use App\Models\TrainerSpecialization;
-use App\Support\Api\ApiResponse;
 use App\Services\Audit\AuditLogService;
 use App\Services\Platform\PlatformFacilityManagementService;
+use App\Support\Api\ApiResponse;
 use Illuminate\Http\Request;
 
 class CatalogController extends Controller
@@ -29,8 +29,7 @@ class CatalogController extends Controller
     public function __construct(
         private readonly AuditLogService $auditLogService,
         private readonly PlatformFacilityManagementService $platformFacilityManagementService,
-    ) {
-    }
+    ) {}
 
     public function cities(Request $request)
     {

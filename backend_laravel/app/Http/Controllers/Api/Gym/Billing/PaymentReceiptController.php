@@ -12,8 +12,7 @@ class PaymentReceiptController extends Controller
 {
     public function __construct(
         private readonly BillingAccessService $billingAccessService,
-    ) {
-    }
+    ) {}
 
     public function show(Payment $payment, Request $request)
     {

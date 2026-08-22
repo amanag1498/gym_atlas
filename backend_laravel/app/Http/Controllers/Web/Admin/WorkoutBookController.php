@@ -19,8 +19,7 @@ class WorkoutBookController extends Controller
     public function __construct(
         private readonly WorkoutBookService $workoutBookService,
         private readonly AuditLogService $auditLogService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {

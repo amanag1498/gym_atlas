@@ -17,6 +17,7 @@ trait ValidatesOperatingHours
 
             if ($value === '__invalid_json__') {
                 $validator->errors()->add($field, 'The operating hours payload is not valid JSON.');
+
                 continue;
             }
 

@@ -927,6 +927,153 @@ class AdminRepository {
     return _apiClient.post(path, data: payload);
   }
 
+  String _communicationBase(String role) => role == 'platform_admin'
+      ? '/platform-admin/communications'
+      : '/gym/communications';
+
+  Future<Map<String, dynamic>> fetchWhatsAppConnection(String role) async {
+    final response = await _apiClient.get(
+      '${_communicationBase(role)}/whatsapp',
+    );
+    return Map<String, dynamic>.from(response['data'] as Map? ?? const {});
+  }
+
+  Future<List<Map<String, dynamic>>> fetchCommunicationCampaigns(
+    String role,
+  ) async {
+    final response = await _apiClient.get(
+      '${_communicationBase(role)}/campaigns',
+    );
+    return (response['data'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchCommunicationAutomations(
+    String role,
+  ) async {
+    final response = await _apiClient.get(
+      '${_communicationBase(role)}/automations',
+    );
+    return (response['data'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchCommunicationNotificationTypes(
+    String role,
+  ) async {
+    final response = await _apiClient.get(
+      '${_communicationBase(role)}/notification-types',
+    );
+    return (response['data'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchWhatsAppInbox(String role) async {
+    try {
+      final response = await _apiClient.get(
+        '${_communicationBase(role)}/whatsapp/inbox',
+      );
+      return (response['data'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<Uri> createWhatsAppOnboardingSession(String role) async {
+    final response = await _apiClient.post(
+      '${_communicationBase(role)}/whatsapp/onboarding-session',
+    );
+    final data = Map<String, dynamic>.from(
+      response['data'] as Map? ?? const {},
+    );
+    return Uri.parse(data['url'] as String);
+  }
+
+  Future<void> syncWhatsAppTemplates(String role) =>
+      _apiClient.post('${_communicationBase(role)}/whatsapp/sync-templates');
+
+  Future<void> createWhatsAppTemplate(
+    String role,
+    Map<String, dynamic> payload,
+  ) => _apiClient.post(
+    '${_communicationBase(role)}/whatsapp/templates',
+    data: payload,
+  );
+
+  Future<void> updateWhatsAppTemplate(
+    String role,
+    int templateId,
+    Map<String, dynamic> payload,
+  ) => _apiClient.put(
+    '${_communicationBase(role)}/whatsapp/templates/$templateId',
+    data: payload,
+  );
+
+  Future<void> disconnectWhatsApp(String role) =>
+      _apiClient.delete('${_communicationBase(role)}/whatsapp');
+
+  Future<Map<String, dynamic>> createCommunicationCampaign(
+    String role,
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _apiClient.post(
+      '${_communicationBase(role)}/campaigns',
+      data: payload,
+    );
+    return Map<String, dynamic>.from(response['data'] as Map? ?? const {});
+  }
+
+  Future<void> sendCommunicationCampaign(String role, int campaignId) =>
+      _apiClient.post('${_communicationBase(role)}/campaigns/$campaignId/send');
+
+  Future<Map<String, dynamic>> previewCommunicationCampaign(
+    String role,
+    int campaignId,
+  ) async {
+    final response = await _apiClient.get(
+      '${_communicationBase(role)}/campaigns/$campaignId/preview',
+    );
+    return Map<String, dynamic>.from(response['data'] as Map? ?? const {});
+  }
+
+  Future<void> saveCommunicationAutomation(
+    String role,
+    Map<String, dynamic> payload,
+  ) => _apiClient.put('${_communicationBase(role)}/automations', data: payload);
+
+  Future<Map<String, dynamic>> fetchWhatsAppConversation(
+    String role,
+    int conversationId,
+  ) async {
+    final response = await _apiClient.get(
+      '${_communicationBase(role)}/whatsapp/inbox/$conversationId',
+    );
+    return Map<String, dynamic>.from(response['data'] as Map? ?? const {});
+  }
+
+  Future<void> replyToWhatsAppConversation(
+    String role,
+    int conversationId, {
+    String? body,
+    int? templateId,
+  }) => _apiClient.post(
+    '${_communicationBase(role)}/whatsapp/inbox/$conversationId/reply',
+    data: {
+      if (body != null && body.trim().isNotEmpty) 'body': body.trim(),
+      if (templateId != null) 'whatsapp_template_id': templateId,
+      if (templateId != null) 'template_parameters': <dynamic>[],
+    },
+  );
+
   Future<void> runReminderEngine(Map<String, dynamic> payload) =>
       _apiClient.post('/gym/scheduled-reminders/run-due', data: payload);
 

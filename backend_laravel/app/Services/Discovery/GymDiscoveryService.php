@@ -4,7 +4,6 @@ namespace App\Services\Discovery;
 
 use App\Models\Gym;
 use App\Support\Scheduling\OperatingHours;
-use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 

@@ -13,6 +13,7 @@ import '../../core/widgets/common_widgets.dart';
 import '../auth/session_controller.dart';
 import 'admin_repository.dart';
 import 'diet_plans_workspace.dart';
+import 'communications_workspace.dart';
 import 'notification_preferences_sheet.dart';
 import 'platform_workout_books_screen.dart';
 
@@ -41,7 +42,9 @@ bool _hasAnyAdminPermission(AppUser appUser, List<String> permissions) {
 }
 
 class AdminShellScreen extends StatefulWidget {
-  const AdminShellScreen({super.key});
+  const AdminShellScreen({super.key, this.initialDestinationTitle});
+
+  final String? initialDestinationTitle;
 
   @override
   State<AdminShellScreen> createState() => _AdminShellScreenState();
@@ -50,6 +53,7 @@ class AdminShellScreen extends StatefulWidget {
 class _AdminShellScreenState extends State<AdminShellScreen> {
   late AdminRepository _repository;
   int _selectedIndex = 0;
+  bool _initialDestinationApplied = false;
   bool _loading = true;
   String? _error;
   Map<String, dynamic> _dashboard = const {};
@@ -187,6 +191,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
           Icons.campaign_rounded,
           endpoint: '/platform-admin/announcements',
         ),
+        _AdminDestination('Communications', Icons.forum_rounded),
         _AdminDestination(
           'Notifications',
           Icons.notifications_active_rounded,
@@ -278,6 +283,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
         endpoint: '/gym/announcements',
         formType: _AdminFormType.announcement,
       ),
+      _AdminDestination('Communications', Icons.forum_rounded),
       _AdminDestination(
         'Notifications',
         Icons.notifications_active_rounded,
@@ -356,6 +362,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
           'trial_request.manage',
         ]);
       case 'Announcements':
+      case 'Communications':
         return user.hasAnyPermission([
           'announcement.view',
           'announcement.manage',
@@ -394,6 +401,16 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
     }
 
     final destinations = _visibleDestinations(user);
+    if (!_initialDestinationApplied) {
+      _initialDestinationApplied = true;
+      final requestedDestination = widget.initialDestinationTitle;
+      if (requestedDestination != null) {
+        final requestedIndex = destinations.indexWhere(
+          (destination) => destination.title == requestedDestination,
+        );
+        if (requestedIndex >= 0) _selectedIndex = requestedIndex;
+      }
+    }
     final safeSelectedIndex = destinations.isEmpty
         ? 0
         : _selectedIndex.clamp(0, destinations.length - 1);
@@ -467,6 +484,12 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                   : selected.title == 'Announcements' &&
                         user.activeRole != 'platform_admin'
                   ? _AnnouncementsWorkspaceSection(
+                      key: ValueKey(selected.title),
+                      appUser: user,
+                      repository: _repository,
+                    )
+                  : selected.title == 'Communications'
+                  ? CommunicationsWorkspace(
                       key: ValueKey(selected.title),
                       appUser: user,
                       repository: _repository,

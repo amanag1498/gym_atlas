@@ -21,12 +21,17 @@ use App\Http\Controllers\Api\Gym\Billing\MembershipPlanController;
 use App\Http\Controllers\Api\Gym\Billing\PaymentController;
 use App\Http\Controllers\Api\Gym\Billing\PaymentReceiptController;
 use App\Http\Controllers\Api\Gym\Communication\AnnouncementController as GymAnnouncementController;
+use App\Http\Controllers\Api\Gym\Communication\AutomationRuleController as GymAutomationRuleController;
+use App\Http\Controllers\Api\Gym\Communication\CampaignController as GymCampaignController;
 use App\Http\Controllers\Api\Gym\Communication\ReminderController as GymReminderController;
+use App\Http\Controllers\Api\Gym\Communication\WhatsAppConnectionController as GymWhatsAppConnectionController;
+use App\Http\Controllers\Api\Gym\Communication\WhatsAppInboxController as GymWhatsAppInboxController;
 use App\Http\Controllers\Api\Gym\GymContextController;
 use App\Http\Controllers\Api\Member\AttendanceController as MemberAttendanceController;
 use App\Http\Controllers\Api\Member\DietPlanController as MemberDietPlanController;
 use App\Http\Controllers\Api\Member\EventController as MemberEventController;
 use App\Http\Controllers\Api\Member\FavoriteGymController;
+use App\Http\Controllers\Api\Member\GymSelfEnrollmentController;
 use App\Http\Controllers\Api\Member\IndependentTrainerController;
 use App\Http\Controllers\Api\Member\MemberContextController;
 use App\Http\Controllers\Api\Member\MemberGymInvitationController;
@@ -36,10 +41,13 @@ use App\Http\Controllers\Api\Member\MemberStepController;
 use App\Http\Controllers\Api\Member\MemberTrainerController;
 use App\Http\Controllers\Api\Member\ProgressController as MemberProgressController;
 use App\Http\Controllers\Api\Member\TrialRequestController;
+use App\Http\Controllers\Api\Member\WhatsAppConsentController;
 use App\Http\Controllers\Api\Member\WorkoutController as MemberWorkoutController;
 use App\Http\Controllers\Api\PlatformAdmin\AnnouncementController as PlatformAnnouncementController;
 use App\Http\Controllers\Api\PlatformAdmin\AuditLogController as PlatformAuditLogController;
 use App\Http\Controllers\Api\PlatformAdmin\CatalogController;
+use App\Http\Controllers\Api\PlatformAdmin\CommunicationAutomationRuleController as PlatformAutomationRuleController;
+use App\Http\Controllers\Api\PlatformAdmin\CommunicationCampaignController as PlatformCampaignController;
 use App\Http\Controllers\Api\PlatformAdmin\DashboardController as PlatformDashboardController;
 use App\Http\Controllers\Api\PlatformAdmin\DietPlanTemplateController as PlatformDietPlanTemplateController;
 use App\Http\Controllers\Api\PlatformAdmin\EventController as PlatformEventController;
@@ -53,6 +61,8 @@ use App\Http\Controllers\Api\PlatformAdmin\PlatformAdminContextController;
 use App\Http\Controllers\Api\PlatformAdmin\ReportController as PlatformReportController;
 use App\Http\Controllers\Api\PlatformAdmin\SettingController as PlatformSettingController;
 use App\Http\Controllers\Api\PlatformAdmin\UserController as PlatformUserController;
+use App\Http\Controllers\Api\PlatformAdmin\WhatsAppConnectionController as PlatformWhatsAppConnectionController;
+use App\Http\Controllers\Api\PlatformAdmin\WhatsAppInboxController as PlatformWhatsAppInboxController;
 use App\Http\Controllers\Api\PlatformAdmin\WorkoutBookController as PlatformWorkoutBookController;
 use App\Http\Controllers\Api\Public\AuthController;
 use App\Http\Controllers\Api\Public\DiscoveryController;
@@ -78,7 +88,11 @@ use App\Http\Controllers\Api\Trainer\TrainerProfileController;
 use App\Http\Controllers\Api\Trainer\TrialRequestController as TrainerTrialRequestController;
 use App\Http\Controllers\Api\Trainer\WorkoutPlanController as TrainerWorkoutPlanController;
 use App\Http\Controllers\Api\Trainer\WorkoutTemplateController as TrainerWorkoutTemplateController;
+use App\Http\Controllers\Api\Webhooks\WhatsAppWebhookController;
 use Illuminate\Support\Facades\Route;
+
+Route::get('webhooks/whatsapp', [WhatsAppWebhookController::class, 'verify']);
+Route::post('webhooks/whatsapp', [WhatsAppWebhookController::class, 'receive']);
 
 Route::prefix('public')->group(function (): void {
     Route::get('health', [PublicContextController::class, 'health']);
@@ -162,6 +176,42 @@ Route::prefix('platform-admin')
         Route::get('audit-logs', [PlatformAuditLogController::class, 'index'])
             ->middleware('permission:platform.dashboard.view');
         Route::get('context', PlatformAdminContextController::class);
+        Route::get('communications/whatsapp', [PlatformWhatsAppConnectionController::class, 'show'])
+            ->middleware('permission:communications.view|platform.communications.manage');
+        Route::post('communications/whatsapp/connect', [PlatformWhatsAppConnectionController::class, 'connect'])
+            ->middleware('permission:platform.communications.manage');
+        Route::post('communications/whatsapp/onboarding-session', [PlatformWhatsAppConnectionController::class, 'onboardingSession'])
+            ->middleware('permission:platform.communications.manage');
+        Route::post('communications/whatsapp/sync-templates', [PlatformWhatsAppConnectionController::class, 'syncTemplates'])
+            ->middleware('permission:platform.communications.manage');
+        Route::post('communications/whatsapp/templates', [PlatformWhatsAppConnectionController::class, 'storeTemplate'])
+            ->middleware('permission:platform.communications.manage');
+        Route::put('communications/whatsapp/templates/{template}', [PlatformWhatsAppConnectionController::class, 'updateTemplate'])
+            ->middleware('permission:platform.communications.manage');
+        Route::delete('communications/whatsapp', [PlatformWhatsAppConnectionController::class, 'disconnect'])
+            ->middleware('permission:platform.communications.manage');
+        Route::get('communications/whatsapp/inbox', [PlatformWhatsAppInboxController::class, 'index'])
+            ->middleware('permission:communications.view');
+        Route::get('communications/whatsapp/inbox/{conversation}', [PlatformWhatsAppInboxController::class, 'show'])
+            ->middleware('permission:communications.view');
+        Route::post('communications/whatsapp/inbox/{conversation}/reply', [PlatformWhatsAppInboxController::class, 'reply'])
+            ->middleware('permission:platform.communications.manage');
+        Route::get('communications/campaigns', [PlatformCampaignController::class, 'index'])
+            ->middleware('permission:communications.view');
+        Route::post('communications/campaigns', [PlatformCampaignController::class, 'store'])
+            ->middleware('permission:platform.communications.manage');
+        Route::get('communications/campaigns/{campaign}/preview', [PlatformCampaignController::class, 'preview'])
+            ->middleware('permission:communications.view');
+        Route::post('communications/campaigns/{campaign}/send', [PlatformCampaignController::class, 'send'])
+            ->middleware('permission:platform.communications.manage');
+        Route::post('communications/campaigns/{campaign}/cancel', [PlatformCampaignController::class, 'cancel'])
+            ->middleware('permission:platform.communications.manage');
+        Route::get('communications/automations', [PlatformAutomationRuleController::class, 'index'])
+            ->middleware('permission:communications.view');
+        Route::get('communications/notification-types', [PlatformAutomationRuleController::class, 'types'])
+            ->middleware('permission:communications.view');
+        Route::put('communications/automations', [PlatformAutomationRuleController::class, 'store'])
+            ->middleware('permission:platform.communications.manage');
         Route::get('gyms', [PlatformGymController::class, 'index'])
             ->middleware('permission:platform.gyms.view');
         Route::post('gyms', [PlatformGymController::class, 'store'])
@@ -533,6 +583,44 @@ Route::prefix('gym')
             ->middleware('permission:notification.manage');
         Route::post('scheduled-reminders/run-due', [GymReminderController::class, 'runDue'])
             ->middleware('permission:notification.manage');
+        Route::get('communications/whatsapp', [GymWhatsAppConnectionController::class, 'show'])
+            ->middleware('permission:communications.view');
+        Route::post('communications/whatsapp/connect', [GymWhatsAppConnectionController::class, 'connect'])
+            ->middleware('permission:whatsapp.connect');
+        Route::post('communications/whatsapp/onboarding-session', [GymWhatsAppConnectionController::class, 'onboardingSession'])
+            ->middleware('permission:whatsapp.connect');
+        Route::post('communications/whatsapp/sync-templates', [GymWhatsAppConnectionController::class, 'syncTemplates'])
+            ->middleware('permission:whatsapp.templates.manage');
+        Route::post('communications/whatsapp/templates', [GymWhatsAppConnectionController::class, 'storeTemplate'])
+            ->middleware('permission:whatsapp.templates.manage');
+        Route::put('communications/whatsapp/templates/{template}', [GymWhatsAppConnectionController::class, 'updateTemplate'])
+            ->middleware('permission:whatsapp.templates.manage');
+        Route::delete('communications/whatsapp', [GymWhatsAppConnectionController::class, 'disconnect'])
+            ->middleware('permission:whatsapp.connect');
+        Route::get('communications/campaigns', [GymCampaignController::class, 'index'])
+            ->middleware('permission:communications.view');
+        Route::post('communications/campaigns', [GymCampaignController::class, 'store'])
+            ->middleware('permission:campaigns.send');
+        Route::get('communications/campaigns/{campaign}', [GymCampaignController::class, 'show'])
+            ->middleware('permission:communications.view');
+        Route::get('communications/campaigns/{campaign}/preview', [GymCampaignController::class, 'preview'])
+            ->middleware('permission:communications.view');
+        Route::post('communications/campaigns/{campaign}/send', [GymCampaignController::class, 'send'])
+            ->middleware('permission:campaigns.send');
+        Route::post('communications/campaigns/{campaign}/cancel', [GymCampaignController::class, 'cancel'])
+            ->middleware('permission:campaigns.send');
+        Route::get('communications/whatsapp/inbox', [GymWhatsAppInboxController::class, 'index'])
+            ->middleware('permission:communications.view');
+        Route::get('communications/whatsapp/inbox/{conversation}', [GymWhatsAppInboxController::class, 'show'])
+            ->middleware('permission:communications.view');
+        Route::post('communications/whatsapp/inbox/{conversation}/reply', [GymWhatsAppInboxController::class, 'reply'])
+            ->middleware('permission:whatsapp.inbox.reply');
+        Route::get('communications/automations', [GymAutomationRuleController::class, 'index'])
+            ->middleware('permission:communications.view');
+        Route::get('communications/notification-types', [GymAutomationRuleController::class, 'types'])
+            ->middleware('permission:communications.view');
+        Route::put('communications/automations', [GymAutomationRuleController::class, 'store'])
+            ->middleware('permission:communications.manage');
         Route::get('trial-requests', [GymTrialRequestController::class, 'index'])
             ->middleware('permission:trial_request.view|trial_request.manage');
         Route::get('trial-requests/{trialRequest}', [GymTrialRequestController::class, 'show'])
@@ -696,12 +784,16 @@ Route::prefix('member')
         Route::get('gym-invitations', [MemberGymInvitationController::class, 'index']);
         Route::post('gym-invitations/{invitation}/accept', [MemberGymInvitationController::class, 'accept']);
         Route::post('gym-invitations/{invitation}/reject', [MemberGymInvitationController::class, 'reject']);
+        Route::get('self-enrollment/{token}/preview', [GymSelfEnrollmentController::class, 'preview'])->middleware('throttle:60,1');
+        Route::post('self-enrollment/{token}', [GymSelfEnrollmentController::class, 'store'])->middleware('throttle:12,1');
         Route::get('independent-trainer-invitations', [IndependentTrainerController::class, 'invitations']);
         Route::post('independent-trainer-invitations/{invitation}/accept', [IndependentTrainerController::class, 'accept']);
         Route::post('independent-trainer-invitations/{invitation}/reject', [IndependentTrainerController::class, 'reject']);
         Route::get('independent-trainers', [IndependentTrainerController::class, 'trainers']);
         Route::post('independent-trainers/{relationship}/revoke', [IndependentTrainerController::class, 'revoke']);
         Route::get('context', MemberContextController::class);
+        Route::get('whatsapp-consents', [WhatsAppConsentController::class, 'index']);
+        Route::put('whatsapp-consents', [WhatsAppConsentController::class, 'update']);
         Route::get('events', [MemberEventController::class, 'index'])->middleware('permission:event.view');
         Route::get('events/bookings', [MemberEventController::class, 'bookings'])->middleware('permission:event.view');
         Route::get('events/{event}', [MemberEventController::class, 'show'])->middleware('permission:event.view');

@@ -4,6 +4,7 @@ namespace App\Services\Notification;
 
 use App\Enums\NotificationType;
 use App\Enums\RoleName;
+use App\Models\NotificationChannelPreference;
 use App\Models\NotificationPreference;
 use App\Models\User;
 
@@ -19,15 +20,28 @@ class NotificationPreferenceCatalogService
             ->whereIn('notification_type', array_column($definitions, 'notification_type'))
             ->get()
             ->keyBy('notification_type');
+        $channelPreferences = NotificationChannelPreference::query()
+            ->where('user_id', $user->id)
+            ->whereNull('gym_id')
+            ->whereNull('branch_id')
+            ->whereIn('notification_type', array_column($definitions, 'notification_type'))
+            ->get()
+            ->groupBy('notification_type');
 
-        return array_map(function (array $definition) use ($existing): array {
+        return array_map(function (array $definition) use ($existing, $channelPreferences): array {
             $preference = $existing->get($definition['notification_type']);
+            $channels = $channelPreferences->get($definition['notification_type'], collect())->keyBy('channel');
+            $inAppEnabled = $channels->get('in_app')?->is_enabled ?? $preference?->is_enabled ?? true;
 
             return [
                 ...$definition,
                 'gym_id' => null,
                 'branch_id' => null,
-                'is_enabled' => $preference?->is_enabled ?? true,
+                'is_enabled' => $inAppEnabled,
+                'channels' => [
+                    'in_app' => $inAppEnabled,
+                    'whatsapp' => $channels->get('whatsapp')?->is_enabled ?? true,
+                ],
             ];
         }, $definitions);
     }

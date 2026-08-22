@@ -422,6 +422,12 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
 
   Future<void> _openSettingsScreen() async {
     final session = context.read<MemberSessionController>();
+    final selectedGymId = (_contextData['selected_gym_id'] as num?)?.toInt();
+    final relationships =
+        (_contextData['gym_relationships'] as List? ?? const [])
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (context) => MemberSettingsScreen(
@@ -432,6 +438,8 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
           onOpenMembership: _openMembershipScreen,
           onOpenAttendance: _openAttendanceScreen,
           onPreferencesChanged: _load,
+          selectedGymId: selectedGymId,
+          selectedGymName: _selectedGymName(relationships, selectedGymId),
         ),
       ),
     );

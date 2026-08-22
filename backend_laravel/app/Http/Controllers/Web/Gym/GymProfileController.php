@@ -20,8 +20,7 @@ class GymProfileController extends Controller
         private readonly GymWebPanelService $gymWebPanelService,
         private readonly AuditLogService $auditLogService,
         private readonly GymProfileManagementService $gymProfileManagementService,
-    ) {
-    }
+    ) {}
 
     public function edit(Request $request): View
     {

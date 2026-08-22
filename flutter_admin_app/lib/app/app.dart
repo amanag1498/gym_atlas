@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -19,6 +22,12 @@ class GymAdminApp extends StatefulWidget {
 class _GymAdminAppState extends State<GymAdminApp> {
   late final SessionController _sessionController;
   late final GoRouter _router;
+  final GlobalKey<ScaffoldMessengerState> _messengerKey =
+      GlobalKey<ScaffoldMessengerState>();
+  StreamSubscription<RemoteMessage>? _foregroundNotificationSubscription;
+  StreamSubscription<RemoteMessage>? _notificationOpenSubscription;
+  String? _pendingDestination;
+  bool _openingPendingDestination = false;
 
   @override
   void initState() {
@@ -35,8 +44,7 @@ class _GymAdminAppState extends State<GymAdminApp> {
           return '/login';
         }
 
-        if (loggedIn &&
-            location == '/login') {
+        if (loggedIn && location == '/login') {
           return '/home';
         }
 
@@ -67,8 +75,12 @@ class _GymAdminAppState extends State<GymAdminApp> {
         ),
         GoRoute(
           path: '/home',
-          pageBuilder: (context, state) =>
-              _buildPage(state, const AdminShellScreen()),
+          pageBuilder: (context, state) => _buildPage(
+            state,
+            AdminShellScreen(
+              initialDestinationTitle: state.uri.queryParameters['section'],
+            ),
+          ),
         ),
         GoRoute(
           path: '/platform-admin/workout-books',
@@ -77,10 +89,93 @@ class _GymAdminAppState extends State<GymAdminApp> {
         ),
       ],
     );
+    _sessionController.addListener(_openPendingDestinationIfReady);
+    FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        )
+        .catchError((Object exception) {
+          debugPrint(
+            '[notifications][admin] foreground setup skipped: $exception',
+          );
+        });
+    _notificationOpenSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
+      (message) => _handleNotificationData(message.data),
+    );
+    _foregroundNotificationSubscription = FirebaseMessaging.onMessage.listen((
+      message,
+    ) {
+      final notification = message.notification;
+      _messengerKey.currentState
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              '${notification?.title ?? 'New notification'}\n'
+              '${notification?.body ?? 'Open to view details.'}',
+            ),
+            action: SnackBarAction(
+              label: 'Open',
+              onPressed: () => _handleNotificationData(message.data),
+            ),
+          ),
+        );
+    });
+    FirebaseMessaging.instance
+        .getInitialMessage()
+        .then((message) {
+          if (message != null) _handleNotificationData(message.data);
+        })
+        .catchError((Object exception) {
+          debugPrint(
+            '[notifications][admin] initial message skipped: $exception',
+          );
+        });
+  }
+
+  void _handleNotificationData(Map<String, dynamic> data) {
+    final route = data['route']?.toString().toLowerCase() ?? '';
+    final type = data['type']?.toString().toLowerCase() ?? '';
+
+    _pendingDestination = switch ((route, type)) {
+      (final value, _) when value.contains('trial') => 'Trial Requests',
+      (final value, _) when value.contains('member') => 'Members',
+      (final value, _)
+          when value.contains('payment') || value.contains('due') =>
+        'Payments',
+      (_, final value) when value.contains('trial') => 'Trial Requests',
+      (_, final value)
+          when value.contains('payment') || value.contains('due') =>
+        'Payments',
+      _ => 'Notifications',
+    };
+    unawaited(_openPendingDestinationIfReady());
+  }
+
+  Future<void> _openPendingDestinationIfReady() async {
+    final destination = _pendingDestination;
+    if (destination == null ||
+        _openingPendingDestination ||
+        !_sessionController.isAuthenticated) {
+      return;
+    }
+
+    _openingPendingDestination = true;
+    _pendingDestination = null;
+    try {
+      _router.go('/home?section=${Uri.encodeQueryComponent(destination)}');
+    } finally {
+      _openingPendingDestination = false;
+    }
   }
 
   @override
   void dispose() {
+    _sessionController.removeListener(_openPendingDestinationIfReady);
+    _foregroundNotificationSubscription?.cancel();
+    _notificationOpenSubscription?.cancel();
     _router.dispose();
     _sessionController.dispose();
     super.dispose();
@@ -91,6 +186,7 @@ class _GymAdminAppState extends State<GymAdminApp> {
     return ChangeNotifierProvider<SessionController>.value(
       value: _sessionController,
       child: MaterialApp.router(
+        scaffoldMessengerKey: _messengerKey,
         debugShowCheckedModeBanner: false,
         title: 'Gym Command',
         theme: AppTheme.build(),

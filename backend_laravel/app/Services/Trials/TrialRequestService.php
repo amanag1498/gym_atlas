@@ -4,16 +4,13 @@ namespace App\Services\Trials;
 
 use App\Enums\NotificationType;
 use App\Enums\RoleName;
-use App\Jobs\PublishRealtimeEvent;
 use App\Models\Branch;
 use App\Models\Gym;
-use App\Models\Notification;
 use App\Models\TrainerProfile;
 use App\Models\TrialRequest;
 use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Authorization\ScopeResolver;
-use App\Services\Firebase\FcmNotificationService;
 use App\Services\Notification\NotificationService;
 use App\Services\Notification\TransactionalEmailService;
 use App\Services\Users\ManagedUserService;
@@ -33,7 +30,6 @@ class TrialRequestService
         private readonly AuditLogService $auditLogService,
         private readonly ManagedUserService $managedUserService,
         private readonly TransactionalEmailService $transactionalEmailService,
-        private readonly FcmNotificationService $fcmNotificationService,
     ) {}
 
     public function createPublic(array $data, ?User $actor = null, ?Request $request = null): TrialRequest
@@ -104,7 +100,7 @@ class TrialRequestService
                     body: 'A new trial request has been created for your gym.',
                     gymId: $gym->id,
                     branchId: $branch?->id,
-                    data: ['trial_request_id' => $trialRequest->id],
+                    data: ['trial_request_id' => $trialRequest->id, 'app_role' => 'admin'],
                 );
                 DB::afterCommit(fn () => $this->transactionalEmailService->send(
                     $gym->owner,
@@ -130,7 +126,7 @@ class TrialRequestService
                     body: 'Your trial request has been recorded.',
                     gymId: $gym->id,
                     branchId: $branch?->id,
-                    data: ['trial_request_id' => $trialRequest->id],
+                    data: ['trial_request_id' => $trialRequest->id, 'app_role' => 'member'],
                 );
             }
 
@@ -311,6 +307,7 @@ class TrialRequestService
                     data: [
                         'trial_request_id' => $trialRequest->id,
                         'status' => $trialRequest->status,
+                        'app_role' => 'member',
                     ],
                 );
             }
@@ -338,8 +335,9 @@ class TrialRequestService
                     'trial_request_id' => $trialRequest->id,
                     'status' => $trialRequest->status,
                     'route' => '/trial-leads/'.$trialRequest->id,
+                    'app_role' => 'trainer',
                 ];
-                $notification = $this->notificationService->create(
+                $this->notificationService->create(
                     user: $trialRequest->assignedTrainer,
                     type: NotificationType::TrialBooking->value,
                     title: $title,
@@ -348,7 +346,6 @@ class TrialRequestService
                     branchId: $trialRequest->branch_id,
                     data: $data,
                 );
-                $this->deliverTrialNotification($trialRequest->assignedTrainer, $notification, $title, $body, $data, 'trainer');
             }
 
             if ($assignmentChanged && $previousTrainerId) {
@@ -361,8 +358,9 @@ class TrialRequestService
                         'trial_request_id' => $trialRequest->id,
                         'assignment_removed' => true,
                         'route' => '/trial-leads',
+                        'app_role' => 'trainer',
                     ];
-                    $notification = $this->notificationService->create(
+                    $this->notificationService->create(
                         user: $previousTrainer,
                         type: NotificationType::TrialBooking->value,
                         title: $title,
@@ -371,7 +369,6 @@ class TrialRequestService
                         branchId: $trialRequest->branch_id,
                         data: $data,
                     );
-                    $this->deliverTrialNotification($previousTrainer, $notification, $title, $body, $data, 'trainer');
                 }
             }
 
@@ -383,8 +380,9 @@ class TrialRequestService
                 $data = [
                     'trial_request_id' => $trialRequest->id,
                     'route' => '/trial-requests/'.$trialRequest->id,
+                    'app_role' => 'member',
                 ];
-                $notification = $this->notificationService->create(
+                $this->notificationService->create(
                     user: $trialRequest->member,
                     type: NotificationType::TrialBooking->value,
                     title: $title,
@@ -393,7 +391,6 @@ class TrialRequestService
                     branchId: $trialRequest->branch_id,
                     data: $data,
                 );
-                $this->deliverTrialNotification($trialRequest->member, $notification, $title, $body, $data, 'member');
             }
 
             $this->auditLogService->log(
@@ -562,37 +559,5 @@ class TrialRequestService
         }
 
         return $currentNotes."\n".$newNotes;
-    }
-
-    private function deliverTrialNotification(
-        User $user,
-        ?Notification $notification,
-        string $title,
-        string $body,
-        array $data,
-        string $appRole,
-    ): void {
-        if (! $notification) {
-            return;
-        }
-
-        $payload = [
-            ...$data,
-            'notification_id' => $notification->id,
-            'type' => NotificationType::TrialBooking->value,
-        ];
-
-        DB::afterCommit(function () use ($user, $notification, $title, $body, $payload, $appRole): void {
-            $this->fcmNotificationService->sendToUser($user, $title, $body, $payload, $appRole);
-            PublishRealtimeEvent::dispatch('internal/notifications', [
-                'userId' => $user->id,
-                'title' => $title,
-                'body' => $body,
-                'type' => NotificationType::TrialBooking->value,
-                'gymId' => $notification->gym_id,
-                'branchId' => $notification->branch_id,
-                'data' => $payload,
-            ]);
-        });
     }
 }

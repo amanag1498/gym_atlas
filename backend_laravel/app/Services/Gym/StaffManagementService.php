@@ -16,8 +16,7 @@ class StaffManagementService
 {
     public function __construct(
         private readonly GymSettingService $gymSettingService,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<string, string>

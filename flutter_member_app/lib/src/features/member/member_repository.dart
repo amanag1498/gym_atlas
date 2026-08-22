@@ -316,6 +316,10 @@ class MemberRepository {
                 'gym_id': item['gym_id'],
                 'branch_id': item['branch_id'],
                 'is_enabled': item['is_enabled'] == true,
+                if (item['channels'] is Map)
+                  'channels': Map<String, dynamic>.from(
+                    item['channels'] as Map,
+                  ),
               },
             )
             .toList(),
@@ -326,6 +330,23 @@ class MemberRepository {
         .map((item) => Map<String, dynamic>.from(item as Map))
         .toList();
   }
+
+  Future<List<Map<String, dynamic>>> fetchWhatsAppConsents() async {
+    final response = await _client.get('/member/whatsapp-consents');
+    return (response['data'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> updateWhatsAppConsent({
+    required int? gymId,
+    required String purpose,
+    required bool granted,
+  }) => _client.put(
+    '/member/whatsapp-consents',
+    data: {'gym_id': gymId, 'purpose': purpose, 'granted': granted},
+  );
 
   Future<Map<String, dynamic>> fetchPublicGyms({
     Map<String, dynamic>? filters,
@@ -347,6 +368,20 @@ class MemberRepository {
   Future<Map<String, dynamic>> removeSavedGym(int gymId) =>
       _client.delete('/member/favorite-gyms/$gymId');
   Future<Map<String, dynamic>> fetchProfile() => _client.get('/member/profile');
+  Future<Map<String, dynamic>> fetchSelfEnrollmentPreview(String token) =>
+      _client.get('/member/self-enrollment/$token/preview');
+  Future<Map<String, dynamic>> joinGymFromSelfEnrollment(
+    String token, {
+    int? branchId,
+    bool reuseProfile = true,
+  }) => _client.post(
+    '/member/self-enrollment/$token',
+    data: {
+      'branch_id': branchId,
+      'reuse_profile': reuseProfile,
+      'consent': true,
+    },
+  );
   Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> payload) =>
       _client.put('/member/profile', data: payload);
   Future<Map<String, dynamic>> uploadProfilePhoto({

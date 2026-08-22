@@ -11,8 +11,7 @@ class AuditLogController extends Controller
 {
     public function __construct(
         private readonly PlatformAuditLogService $platformAuditLogService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {

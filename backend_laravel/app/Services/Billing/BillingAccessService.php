@@ -14,8 +14,7 @@ class BillingAccessService
 {
     public function __construct(
         private readonly ScopeResolver $scopeResolver,
-    ) {
-    }
+    ) {}
 
     public function assertGymAccess(User $user, int $gymId): Gym
     {

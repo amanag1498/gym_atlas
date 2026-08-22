@@ -1,0 +1,12 @@
+[
+    {
+        "relation": ["delegate_permission/common.handle_all_urls"],
+        "target": {
+            "namespace": "android_app",
+            "package_name": "com.techybugs.gymatlas.member",
+            "sha256_cert_fingerprints": [
+                "AD:C5:B6:44:9E:5E:A9:72:54:75:30:54:5F:AA:B6:79:8B:0A:F8:D0:09:6A:EB:73:45:46:DA:5C:E6:DB:57:4A"
+            ]
+        }
+    }
+]
