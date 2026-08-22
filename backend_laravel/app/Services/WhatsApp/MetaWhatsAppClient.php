@@ -65,7 +65,7 @@ class MetaWhatsAppClient
     {
         return $this->authenticated($accessToken)
             ->get('/'.$wabaId.'/phone_numbers', [
-                'fields' => 'id,display_phone_number,verified_name,quality_rating,code_verification_status',
+                'fields' => 'id,display_phone_number,verified_name,quality_rating,code_verification_status,platform_type,is_on_biz_app',
                 'limit' => 100,
             ])
             ->throw()

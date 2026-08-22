@@ -61,7 +61,7 @@ class WhatsAppOnboardingService
             ->firstOrFail();
     }
 
-    public function complete(string $token, string $code, string $wabaId, string $phoneNumberId): WhatsAppBusinessAccount
+    public function complete(string $token, string $code, string $wabaId, ?string $phoneNumberId): WhatsAppBusinessAccount
     {
         $session = DB::transaction(function () use ($token): WhatsAppOnboardingSession {
             $session = WhatsAppOnboardingSession::query()

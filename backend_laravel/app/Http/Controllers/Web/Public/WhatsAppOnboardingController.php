@@ -30,13 +30,13 @@ class WhatsAppOnboardingController extends Controller
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:4096'],
             'waba_id' => ['required', 'string', 'max:100'],
-            'phone_number_id' => ['required', 'string', 'max:100'],
+            'phone_number_id' => ['nullable', 'string', 'max:100'],
         ]);
         $account = $this->onboarding->complete(
             $token,
             $validated['code'],
             $validated['waba_id'],
-            $validated['phone_number_id'],
+            $validated['phone_number_id'] ?? null,
         );
 
         return view('public.whatsapp-onboarding.complete', ['account' => $account]);

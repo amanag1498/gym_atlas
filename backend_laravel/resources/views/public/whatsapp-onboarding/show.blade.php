@@ -16,43 +16,50 @@
     @if(! $configuration['ready'])
         <p class="error">Meta Embedded Signup is not configured in this environment. Ask the platform administrator to complete the production Meta settings.</p>
     @endif
-    <p id="status" class="muted">Choose the WhatsApp Business account and phone number you want Atlas to use.</p>
-    <button id="connect" class="button" type="button" @disabled(! $configuration['ready'])>Continue with Meta</button>
+    <p id="status" class="muted">Choose how this number is currently used.</p>
+    <button id="connect-business-app" class="button" type="button" @disabled(! $configuration['ready'])>Keep using WhatsApp Business app</button>
+    <button id="connect-new-number" class="button" style="margin-top:12px;background:#e9eef7;color:#172033" type="button" @disabled(! $configuration['ready'])>Connect a new API number</button>
     <form id="complete" method="post" action="{{ route('whatsapp.onboarding.complete', ['token' => $token]) }}" hidden>
         @csrf
         <input id="code" name="code"><input id="waba_id" name="waba_id"><input id="phone_number_id" name="phone_number_id">
     </form>
 </main>
 <script>
-let signupCode = null, signupData = null;
+let signupCode = null, signupData = null, signupEvent = null;
 const statusNode = document.getElementById('status');
 function submitWhenReady() {
-    if (!signupCode || !signupData?.waba_id || !signupData?.phone_number_id) return;
+    const isBusinessAppOnboarding = signupEvent === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING';
+    if (!signupCode || !signupData?.waba_id || (!isBusinessAppOnboarding && !signupData?.phone_number_id)) return;
     document.getElementById('code').value = signupCode;
     document.getElementById('waba_id').value = signupData.waba_id;
-    document.getElementById('phone_number_id').value = signupData.phone_number_id;
+    document.getElementById('phone_number_id').value = signupData.phone_number_id ?? '';
     document.getElementById('complete').submit();
 }
 window.addEventListener('message', (event) => {
     if (!['https://www.facebook.com', 'https://web.facebook.com'].includes(event.origin)) return;
     let payload;
     try { payload = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; } catch (_) { return; }
-    if (payload?.type === 'WA_EMBEDDED_SIGNUP' && payload.event === 'FINISH') {
+    if (payload?.type === 'WA_EMBEDDED_SIGNUP' && ['FINISH', 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING'].includes(payload.event)) {
         signupData = payload.data;
+        signupEvent = payload.event;
         statusNode.textContent = 'Account selected. Completing secure connection...';
         submitWhenReady();
     }
 });
 window.fbAsyncInit = () => FB.init({appId: @json($configuration['app_id']), autoLogAppEvents: true, xfbml: true, version: @json($configuration['graph_version'])});
-document.getElementById('connect').addEventListener('click', () => {
+function launchSignup(useBusinessApp) {
     if (typeof FB === 'undefined') { statusNode.textContent = 'Meta signup is still loading. Please try again in a moment.'; return; }
     statusNode.textContent = 'Waiting for Meta Embedded Signup...';
+    const extras = {setup: {}};
+    if (useBusinessApp) extras.featureType = 'whatsapp_business_app_onboarding';
     FB.login((response) => {
         signupCode = response?.authResponse?.code ?? null;
         if (!signupCode) statusNode.textContent = 'Meta signup was cancelled or did not return a code.';
         submitWhenReady();
-    }, {config_id: @json($configuration['configuration_id']), response_type: 'code', override_default_response_type: true, extras: {setup: {}}});
-});
+    }, {config_id: @json($configuration['configuration_id']), response_type: 'code', override_default_response_type: true, extras});
+}
+document.getElementById('connect-business-app').addEventListener('click', () => launchSignup(true));
+document.getElementById('connect-new-number').addEventListener('click', () => launchSignup(false));
 </script>
 <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
 </body>

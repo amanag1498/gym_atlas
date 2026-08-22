@@ -84,7 +84,7 @@ class WhatsAppConnectionFeatureTest extends TestCase
             $owner,
             'one-time-embedded-code',
             '10001',
-            '20001',
+            null,
         );
 
         $this->assertSame('secret-system-user-token', $account->access_token);
@@ -191,7 +191,9 @@ class WhatsAppConnectionFeatureTest extends TestCase
         $this->get($handoff['url'])
             ->assertOk()
             ->assertSee('Connect WhatsApp Business')
-            ->assertSee('never paste an API key');
+            ->assertSee('never paste an API key')
+            ->assertSee('Keep using WhatsApp Business app')
+            ->assertSee('whatsapp_business_app_onboarding');
         $this->assertDatabaseHas('whatsapp_onboarding_sessions', [
             'gym_id' => $gym->id,
             'created_by_user_id' => $owner->id,

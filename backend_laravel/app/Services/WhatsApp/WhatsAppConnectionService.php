@@ -34,7 +34,7 @@ class WhatsAppConnectionService
         User $actor,
         string $code,
         string $wabaId,
-        string $phoneNumberId,
+        ?string $phoneNumberId,
     ): WhatsAppBusinessAccount {
         if (! $this->meta->isConfigured()) {
             throw ValidationException::withMessages([
@@ -59,10 +59,19 @@ class WhatsAppConnectionService
         }
 
         $phones = collect($this->meta->phoneNumbers($wabaId, $accessToken));
-        if (! $phones->contains(fn (array $phone): bool => (string) ($phone['id'] ?? '') === $phoneNumberId)) {
+        if ($phones->isEmpty()) {
+            throw ValidationException::withMessages([
+                'phone_number_id' => ['Meta did not return a phone number for this WhatsApp Business account.'],
+            ]);
+        }
+        if ($phoneNumberId && ! $phones->contains(fn (array $phone): bool => (string) ($phone['id'] ?? '') === $phoneNumberId)) {
             throw ValidationException::withMessages([
                 'phone_number_id' => ['The selected number does not belong to this WhatsApp Business account.'],
             ]);
+        }
+        if (! $phoneNumberId) {
+            $coexistencePhone = $phones->first(fn (array $phone): bool => filter_var($phone['is_on_biz_app'] ?? false, FILTER_VALIDATE_BOOL));
+            $phoneNumberId = (string) (($coexistencePhone ?? $phones->first())['id'] ?? '');
         }
 
         $this->meta->subscribeApp($wabaId, $accessToken);
