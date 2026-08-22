@@ -39,12 +39,14 @@ class GymSelfEnrollmentFeatureTest extends TestCase
         $page = $this->get(route('public.self-enrollment.show', $link->token));
         $page
             ->assertOk()
-            ->assertSee('Reuse your Atlas profile')
-            ->assertSee('Create your member profile')
+            ->assertSee('Choose how to continue')
+            ->assertSee('Atlas account')
+            ->assertSee('Contact details')
             ->assertSee($branch->name)
             ->assertSee('new-gym-logo.png', false)
             ->assertSee('data-enrollment-shell', false)
             ->assertSee('data-initial-step="1"', false)
+            ->assertDontSee('existing-member-card', false)
             ->assertDontSee('public-header', false)
             ->assertDontSee('public-footer', false);
 
@@ -258,7 +260,7 @@ class GymSelfEnrollmentFeatureTest extends TestCase
         $response
             ->assertOk()
             ->assertSee('data-initial-step="5"', false)
-            ->assertSee('Please review these details.')
+            ->assertSee('Check the highlighted step.')
             ->assertSee('The consent field must be accepted.');
     }
 
