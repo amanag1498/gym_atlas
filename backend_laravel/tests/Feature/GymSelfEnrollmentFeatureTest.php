@@ -28,6 +28,7 @@ class GymSelfEnrollmentFeatureTest extends TestCase
     public function test_new_visitor_creates_reusable_account_and_active_gym_profile_without_invitation(): void
     {
         [$gym, $branch, $link] = $this->gymFixture('new');
+        $gym->update(['logo_url' => 'https://cdn.example.com/new-gym-logo.png']);
         $goal = FitnessGoal::query()->create([
             'name' => 'Build Strength',
             'slug' => 'build-strength',
@@ -35,11 +36,23 @@ class GymSelfEnrollmentFeatureTest extends TestCase
             'is_active' => true,
         ]);
 
-        $this->get(route('public.self-enrollment.show', $link->token))
+        $page = $this->get(route('public.self-enrollment.show', $link->token));
+        $page
             ->assertOk()
             ->assertSee('Reuse your Atlas profile')
-            ->assertSee('Create your reusable member profile')
-            ->assertSee($branch->name);
+            ->assertSee('Create your member profile')
+            ->assertSee($branch->name)
+            ->assertSee('new-gym-logo.png', false)
+            ->assertSee('data-enrollment-shell', false)
+            ->assertSee('data-initial-step="1"', false)
+            ->assertDontSee('public-header', false)
+            ->assertDontSee('public-footer', false);
+
+        $html = $page->getContent();
+        $this->assertMatchesRegularExpression('/<button id="enroll-next"[^>]*disabled[^>]*>/', $html);
+        $this->assertMatchesRegularExpression('/<button id="enroll-submit"[^>]*hidden[^>]*disabled[^>]*>/', $html);
+        $this->assertStringContainsString('submit.hidden = current !== totalSteps', $html);
+        $this->assertStringContainsString('for (let stepNumber = 1; stepNumber <= totalSteps; stepNumber++)', $html);
 
         $response = $this->post(route('public.self-enrollment.store', $link->token), [
             'name' => 'New Atlas Member',
@@ -61,6 +74,11 @@ class GymSelfEnrollmentFeatureTest extends TestCase
             'token' => $link->token,
             'submission' => $link->submissions()->value('id'),
         ]));
+        $this->get($response->headers->get('Location'))
+            ->assertOk()
+            ->assertSee('Welcome to '.$gym->name)
+            ->assertSee('Powered by Gym Atlas')
+            ->assertDontSee('public-footer', false);
         $this->assertSame('self_enrollment', $member->auth_provider);
         $this->assertTrue($member->hasRole(RoleName::Member->value));
         $this->assertTrue($member->member_onboarding_completed);
@@ -212,6 +230,36 @@ class GymSelfEnrollmentFeatureTest extends TestCase
 
         $this->assertDatabaseCount('gym_self_enrollment_submissions', 0);
         $this->assertDatabaseCount('member_profiles', 0);
+    }
+
+    public function test_server_validation_returns_user_to_the_step_that_needs_attention(): void
+    {
+        [, $branch, $link] = $this->gymFixture('validation-step');
+        $goal = FitnessGoal::query()->create([
+            'name' => 'Conditioning',
+            'slug' => 'conditioning',
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+
+        $response = $this->followingRedirects()
+            ->from(route('public.self-enrollment.show', $link->token))
+            ->post(route('public.self-enrollment.store', $link->token), [
+                'name' => 'Validation Member',
+                'email' => 'validation-member@example.com',
+                'phone' => '9999999999',
+                'branch_id' => $branch->id,
+                'fitness_goal_ids' => [$goal->id],
+                'experience_level' => 'beginner',
+                'height_cm' => 170,
+                'weight_kg' => 70,
+            ]);
+
+        $response
+            ->assertOk()
+            ->assertSee('data-initial-step="5"', false)
+            ->assertSee('Please review these details.')
+            ->assertSee('The consent field must be accepted.');
     }
 
     public function test_repeat_authenticated_submission_is_idempotent(): void
