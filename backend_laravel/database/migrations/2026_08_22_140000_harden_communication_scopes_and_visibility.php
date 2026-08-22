@@ -24,6 +24,7 @@ return new class extends Migration
         });
         Schema::table('notification_channel_preferences', function (Blueprint $table): void {
             $table->string('scope_key', 80)->nullable(false)->change();
+            $table->index('user_id', 'ncp_user_fk_idx');
             $table->dropUnique('notification_channel_preferences_scope_unique');
             $table->unique(
                 ['user_id', 'scope_key', 'notification_type', 'channel'],
@@ -41,6 +42,7 @@ return new class extends Migration
         });
         Schema::table('whatsapp_consents', function (Blueprint $table): void {
             $table->string('scope_key', 80)->nullable(false)->change();
+            $table->index('user_id', 'wa_consents_user_fk_idx');
             $table->dropUnique('wa_consents_user_gym_purpose_unique');
             $table->unique(['user_id', 'scope_key', 'purpose'], 'wa_consents_user_scope_purpose_unique');
         });
@@ -55,6 +57,7 @@ return new class extends Migration
         });
         Schema::table('communication_automation_rules', function (Blueprint $table): void {
             $table->string('scope_key', 80)->nullable(false)->change();
+            $table->index('gym_id', 'comm_rules_gym_fk_idx');
             $table->dropUnique('communication_automation_scope_unique');
             $table->unique(
                 ['scope_key', 'notification_type', 'recipient_role'],
@@ -72,11 +75,13 @@ return new class extends Migration
                 ['gym_id', 'branch_id', 'notification_type', 'recipient_role'],
                 'communication_automation_scope_unique'
             );
+            $table->dropIndex('comm_rules_gym_fk_idx');
         });
         Schema::table('whatsapp_consents', function (Blueprint $table): void {
             $table->dropUnique('wa_consents_user_scope_purpose_unique');
             $table->dropColumn('scope_key');
             $table->unique(['user_id', 'gym_id', 'purpose'], 'wa_consents_user_gym_purpose_unique');
+            $table->dropIndex('wa_consents_user_fk_idx');
         });
         Schema::table('notification_channel_preferences', function (Blueprint $table): void {
             $table->dropUnique('notification_channel_preferences_scope_unique');
@@ -85,6 +90,7 @@ return new class extends Migration
                 ['user_id', 'gym_id', 'branch_id', 'notification_type', 'channel'],
                 'notification_channel_preferences_scope_unique'
             );
+            $table->dropIndex('ncp_user_fk_idx');
         });
         Schema::table('notifications', function (Blueprint $table): void {
             $table->dropColumn('in_app_visible');
