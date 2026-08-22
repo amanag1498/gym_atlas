@@ -45,8 +45,9 @@ return new class extends Migration
 
         Schema::create('communication_campaign_channels', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('communication_campaign_id', 'campaign_channel_campaign_fk')
-                ->constrained('communication_campaigns')->cascadeOnDelete();
+            $table->foreignId('communication_campaign_id')
+                ->constrained('communication_campaigns', 'id', 'campaign_channel_campaign_fk')
+                ->cascadeOnDelete();
             $table->string('channel', 30);
             $table->string('notification_type')->nullable();
             $table->string('title')->nullable();
@@ -60,10 +61,12 @@ return new class extends Migration
 
         Schema::create('communication_recipients', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('communication_campaign_id', 'campaign_recipient_campaign_fk')
-                ->constrained('communication_campaigns')->cascadeOnDelete();
-            $table->foreignId('communication_campaign_channel_id', 'campaign_recipient_channel_fk')
-                ->constrained('communication_campaign_channels')->cascadeOnDelete();
+            $table->foreignId('communication_campaign_id')
+                ->constrained('communication_campaigns', 'id', 'campaign_recipient_campaign_fk')
+                ->cascadeOnDelete();
+            $table->foreignId('communication_campaign_channel_id')
+                ->constrained('communication_campaign_channels', 'id', 'campaign_recipient_channel_fk')
+                ->cascadeOnDelete();
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
             $table->string('channel', 30);
             $table->string('destination')->nullable();

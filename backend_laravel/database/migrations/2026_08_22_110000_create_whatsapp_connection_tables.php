@@ -29,8 +29,9 @@ return new class extends Migration
 
         Schema::create('whatsapp_phone_numbers', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('whatsapp_business_account_id', 'wa_phone_account_fk')
-                ->constrained('whatsapp_business_accounts')->cascadeOnDelete();
+            $table->foreignId('whatsapp_business_account_id')
+                ->constrained('whatsapp_business_accounts', 'id', 'wa_phone_account_fk')
+                ->cascadeOnDelete();
             $table->string('phone_number_id')->unique();
             $table->string('display_phone_number')->nullable();
             $table->string('verified_name')->nullable();
@@ -44,8 +45,9 @@ return new class extends Migration
 
         Schema::create('whatsapp_templates', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('whatsapp_business_account_id', 'wa_template_account_fk')
-                ->constrained('whatsapp_business_accounts')->cascadeOnDelete();
+            $table->foreignId('whatsapp_business_account_id')
+                ->constrained('whatsapp_business_accounts', 'id', 'wa_template_account_fk')
+                ->cascadeOnDelete();
             $table->string('provider_template_id')->nullable();
             $table->string('name');
             $table->string('language', 20);
@@ -66,10 +68,12 @@ return new class extends Migration
 
         Schema::create('whatsapp_conversations', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('whatsapp_business_account_id', 'wa_conversation_account_fk')
-                ->constrained('whatsapp_business_accounts')->cascadeOnDelete();
-            $table->foreignId('whatsapp_phone_number_id', 'wa_conversation_phone_fk')
-                ->constrained('whatsapp_phone_numbers')->cascadeOnDelete();
+            $table->foreignId('whatsapp_business_account_id')
+                ->constrained('whatsapp_business_accounts', 'id', 'wa_conversation_account_fk')
+                ->cascadeOnDelete();
+            $table->foreignId('whatsapp_phone_number_id')
+                ->constrained('whatsapp_phone_numbers', 'id', 'wa_conversation_phone_fk')
+                ->cascadeOnDelete();
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
             $table->string('contact_wa_id', 30);
             $table->string('contact_name')->nullable();
@@ -87,8 +91,9 @@ return new class extends Migration
 
         Schema::create('whatsapp_messages', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('whatsapp_conversation_id', 'wa_message_conversation_fk')
-                ->constrained('whatsapp_conversations')->cascadeOnDelete();
+            $table->foreignId('whatsapp_conversation_id')
+                ->constrained('whatsapp_conversations', 'id', 'wa_message_conversation_fk')
+                ->cascadeOnDelete();
             $table->string('provider_message_id')->nullable()->unique();
             $table->string('direction', 20);
             $table->string('message_type', 30)->nullable();
