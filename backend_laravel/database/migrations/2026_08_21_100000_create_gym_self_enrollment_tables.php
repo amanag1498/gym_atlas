@@ -25,8 +25,9 @@ return new class extends Migration
 
         Schema::create('gym_self_enrollment_submissions', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('gym_self_enrollment_link_id', 'gym_enroll_submission_link_fk')
-                ->constrained('gym_self_enrollment_links')->cascadeOnDelete();
+            $table->foreignId('gym_self_enrollment_link_id')
+                ->constrained('gym_self_enrollment_links', 'id', 'gym_enroll_submission_link_fk')
+                ->cascadeOnDelete();
             $table->foreignId('gym_id')->constrained('gyms')->cascadeOnDelete();
             $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
