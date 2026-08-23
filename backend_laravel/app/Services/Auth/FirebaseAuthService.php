@@ -33,8 +33,12 @@ class FirebaseAuthService
             appType: $appType,
         );
 
+        $abilities = in_array($appType, [RoleName::Member->value, RoleName::Trainer->value], true)
+            ? ['role:'.$appType]
+            : ['*'];
+
         return [
-            'token' => $user->createToken($deviceName)->plainTextToken,
+            'token' => $user->createToken($deviceName, $abilities)->plainTextToken,
             'user' => $user->fresh(['roles', 'permissions']),
         ];
     }
@@ -105,6 +109,8 @@ class FirebaseAuthService
                         'verification_status' => 'pending',
                     ],
                 );
+            } elseif ($appType === RoleName::Member->value) {
+                $user->assignRole(RoleName::Member->value);
             } elseif ($user->roles()->doesntExist()) {
                 $user->assignRole(RoleName::Member->value);
             }

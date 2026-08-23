@@ -118,6 +118,62 @@ class FirebaseLoginTest extends TestCase
             ->assertJsonPath('data.assigned_gym', null);
     }
 
+    public function test_member_app_login_adds_member_access_to_an_existing_trainer_account(): void
+    {
+        $this->seed(PermissionSeeder::class);
+
+        $user = User::factory()->create([
+            'email' => 'dual-role@example.com',
+            'active_role' => RoleName::Trainer->value,
+            'is_active' => true,
+        ]);
+        $user->assignRole(RoleName::Trainer->value);
+
+        $this->mock(FirebaseTokenVerifier::class, function ($mock): void {
+            $mock->shouldReceive('verify')
+                ->once()
+                ->andReturn([
+                    'sub' => 'firebase-dual-role-001',
+                    'email' => 'dual-role@example.com',
+                    'name' => 'Dual Role Reviewer',
+                    'email_verified' => true,
+                    'firebase' => [
+                        'sign_in_provider' => 'google.com',
+                    ],
+                    'aud' => 'gym-atlas-test',
+                    'iss' => 'https://securetoken.google.com/gym-atlas-test',
+                    'exp' => now()->addHour()->timestamp,
+                ]);
+        });
+
+        config()->set('services.firebase.project_id', 'gym-atlas-test');
+
+        $response = $this->postJson('/api/public/auth/firebase/login', [
+            'id_token' => 'fake.firebase.dual-role.jwt',
+            'device_name' => 'flutter_member_app',
+            'app_type' => RoleName::Member->value,
+        ])->assertOk();
+
+        $user->refresh();
+        $this->assertTrue($user->hasRole(RoleName::Member->value));
+        $this->assertTrue($user->hasRole(RoleName::Trainer->value));
+
+        $token = $response->json('data.token');
+
+        $this->withToken($token)
+            ->getJson('/api/public/me')
+            ->assertOk()
+            ->assertJsonPath('data.active_role', RoleName::Member->value)
+            ->assertJsonPath(
+                'data.roles',
+                fn (array $roles): bool => in_array(RoleName::Member->value, $roles, true)
+                    && in_array(RoleName::Trainer->value, $roles, true),
+            );
+
+        $this->assertSame(['role:member'], $user->tokens()->latest('id')->firstOrFail()->abilities);
+        $this->assertSame(RoleName::Trainer->value, $user->fresh()->active_role);
+    }
+
     public function test_apple_login_records_the_firebase_apple_provider(): void
     {
         $this->seed(PermissionSeeder::class);
