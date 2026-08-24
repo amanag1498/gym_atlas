@@ -10,6 +10,8 @@ use App\Models\User;
 use App\Services\Events\EventService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -147,6 +149,55 @@ class EventManagementUiTest extends TestCase
             'app_visibility' => 'link_only',
             'public_booking_enabled' => true,
         ]);
+    }
+
+    public function test_platform_admin_uploads_replaces_and_removes_an_event_cover_image(): void
+    {
+        Storage::fake('public');
+        $admin = $this->user(RoleName::PlatformAdmin);
+        $payload = [
+            'title' => 'Event with stored cover',
+            'starts_at' => now()->addWeek()->format('Y-m-d H:i:s'),
+            'ends_at' => now()->addWeek()->addHour()->format('Y-m-d H:i:s'),
+            'timezone' => 'Asia/Kolkata',
+            'booking_audience' => 'atlas_members',
+            'app_visibility' => 'all_atlas',
+            'public_booking_enabled' => '0',
+            'waitlist_enabled' => '1',
+            'pricing_type' => 'free',
+            'status' => 'draft',
+        ];
+
+        $this->actingAs($admin)
+            ->post(route('web.admin.events.store'), $payload + [
+                'cover_image' => UploadedFile::fake()->image('event-cover.jpg', 1200, 675),
+            ])->assertSessionHasNoErrors();
+
+        $event = Event::query()->where('title', 'Event with stored cover')->firstOrFail();
+        $firstPath = $event->cover_image_path;
+        $this->assertNotNull($firstPath);
+        $this->assertNull($event->getRawOriginal('cover_image_url'));
+        $this->assertStringStartsWith('/storage/events/covers/', $event->cover_image_url);
+        Storage::disk('public')->assertExists($firstPath);
+
+        $this->put(route('web.admin.events.update', $event), $payload + [
+            'cover_image' => UploadedFile::fake()->image('replacement.png', 1600, 900),
+        ])->assertSessionHasNoErrors();
+
+        $event->refresh();
+        $secondPath = $event->cover_image_path;
+        $this->assertNotSame($firstPath, $secondPath);
+        Storage::disk('public')->assertMissing($firstPath);
+        Storage::disk('public')->assertExists($secondPath);
+
+        $this->put(route('web.admin.events.update', $event), $payload + [
+            'remove_cover_image' => '1',
+        ])->assertSessionHasNoErrors();
+
+        $event->refresh();
+        $this->assertNull($event->cover_image_path);
+        $this->assertNull($event->cover_image_url);
+        Storage::disk('public')->assertMissing($secondPath);
     }
 
     public function test_service_rejects_unreachable_event_visibility_combinations(): void

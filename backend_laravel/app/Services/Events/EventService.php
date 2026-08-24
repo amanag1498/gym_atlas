@@ -13,9 +13,11 @@ use App\Models\MemberProfile;
 use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Services\Audit\AuditLogService;
+use App\Services\Media\GymImageService;
 use App\Services\Members\GymMemberAccessService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -26,6 +28,7 @@ class EventService
         private readonly EventNotificationService $notifier,
         private readonly GymMemberAccessService $memberAccess,
         private readonly AuditLogService $audit,
+        private readonly GymImageService $images,
     ) {}
 
     public function memberQuery(User $user): Builder
@@ -381,126 +384,165 @@ class EventService
 
     public function save(User $actor, array $data, ?Event $event = null): Event
     {
-        return DB::transaction(function () use ($actor, $data, $event): Event {
-            if ($event?->exists) {
-                $event = Event::query()->lockForUpdate()->findOrFail($event->id);
-            }
-            $wasPublished = $event?->status === 'published';
-            $previousHostUserId = $event?->host_user_id;
-            if ($event && in_array($event->status, ['cancelled', 'completed'], true)) {
-                $this->invalid('event', 'Cancelled or completed events cannot be edited.');
-            }
-            if ($wasPublished && isset($data['status']) && $data['status'] !== 'published') {
-                $this->invalid('status', 'A published event cannot be moved back to draft. Cancel it instead.');
-            }
-            $timezone = (string) ($data['timezone'] ?? $event?->timezone ?? config('app.timezone'));
-            foreach (['starts_at', 'ends_at', 'booking_opens_at', 'booking_closes_at', 'cancellation_closes_at'] as $field) {
-                if (! empty($data[$field])) {
-                    $data[$field] = Carbon::parse($data[$field], $timezone)->setTimezone(config('app.timezone'));
+        $newCoverPath = null;
+        $oldCoverPathToDelete = null;
+
+        try {
+            $savedEvent = DB::transaction(function () use ($actor, $data, $event, &$newCoverPath, &$oldCoverPathToDelete): Event {
+                $coverImage = $data['cover_image'] ?? null;
+                $removeCoverImage = (bool) ($data['remove_cover_image'] ?? false);
+                unset($data['cover_image'], $data['remove_cover_image'], $data['cover_image_url']);
+                if ($event?->exists) {
+                    $event = Event::query()->lockForUpdate()->findOrFail($event->id);
                 }
-            }
-            if ($event && array_key_exists('capacity', $data)) {
-                $reserved = $event->bookings()->whereIn('status', ['reserved', 'attended'])->count();
-                if ($data['capacity'] !== null && $data['capacity'] < $reserved) {
-                    $this->invalid('capacity', 'Capacity cannot be lower than confirmed bookings.');
+                $wasPublished = $event?->status === 'published';
+                $previousHostUserId = $event?->host_user_id;
+                if ($event && in_array($event->status, ['cancelled', 'completed'], true)) {
+                    $this->invalid('event', 'Cancelled or completed events cannot be edited.');
                 }
-            }
-            if (($data['pricing_type'] ?? $event?->pricing_type) === 'free') {
-                $data['price_amount'] = null;
-            }
-            $data['currency'] = strtoupper($data['currency'] ?? $event?->currency ?? 'INR');
-            $data['waitlist_enabled'] = $data['waitlist_enabled'] ?? $event?->waitlist_enabled ?? true;
-            $data['status'] = $data['status'] ?? $event?->status ?? 'draft';
-            $scope = (string) ($data['scope'] ?? $event?->scope ?? 'gym');
-            $data['booking_audience'] ??= $event?->booking_audience ?? ($scope === 'global' ? 'atlas_members' : 'gym_members');
-            $data['app_visibility'] ??= $event?->app_visibility ?? ($scope === 'global' ? 'all_atlas' : 'hosting_gym');
-            $data['public_booking_enabled'] = (bool) ($data['public_booking_enabled'] ?? $event?->public_booking_enabled ?? false);
-            if ($data['public_booking_enabled'] && $data['booking_audience'] !== 'anyone') {
-                $this->invalid('booking_audience', 'Public booking requires the Anyone audience.');
-            }
-            if ($scope === 'global' && $data['booking_audience'] === 'gym_members') {
-                $this->invalid('booking_audience', 'A global event cannot be limited to a hosting gym.');
-            }
-            if ($scope === 'global' && $data['app_visibility'] === 'hosting_gym') {
-                $this->invalid('app_visibility', 'A global event cannot use hosting-gym visibility.');
-            }
-            if ($scope === 'gym' && $data['app_visibility'] === 'all_atlas') {
-                $this->invalid('app_visibility', 'Gym events cannot be broadcast to every Atlas member app. Share the event link instead.');
-            }
-            if ($data['app_visibility'] === 'all_atlas' && $data['booking_audience'] === 'gym_members') {
-                $this->invalid('app_visibility', 'An event shown to all Atlas members cannot be limited to one gym.');
-            }
-            if ($data['app_visibility'] === 'link_only' && $data['booking_audience'] === 'gym_members') {
-                $this->invalid('app_visibility', 'Link-only events must allow Atlas members or public guests with the link.');
-            }
-            $gymId = $data['gym_id'] ?? $event?->gym_id;
-            $branchId = $data['branch_id'] ?? $event?->branch_id;
-            if ($scope === 'global' && ($gymId !== null || $branchId !== null)) {
-                $this->invalid('scope', 'Global events cannot have a gym or branch scope.');
-            }
-            if ($scope === 'gym' && ! $gymId) {
-                $this->invalid('gym_id', 'A gym event requires a gym.');
-            }
-            if ($branchId && ! Branch::query()->whereKey($branchId)->where('gym_id', $gymId)->exists()) {
-                $this->invalid('branch_id', 'The selected branch does not belong to this gym.');
-            }
-            $hostUserId = array_key_exists('host_user_id', $data) ? $data['host_user_id'] : $event?->host_user_id;
-            if ($hostUserId) {
-                $hostIsEligible = User::query()->whereKey($hostUserId)->where('is_active', true)->whereHas('roles', fn ($q) => $q->where('name', 'trainer'))
-                    ->when($scope === 'gym', fn ($q) => $q->whereHas('trainerProfile', fn ($profile) => $profile
-                        ->where('gym_id', $gymId)->where('is_active', true)->where('status', 'active')))->exists();
-                if (! $hostIsEligible) {
-                    $this->invalid('host_user_id', 'Select an active trainer in the event scope.');
+                if ($wasPublished && isset($data['status']) && $data['status'] !== 'published') {
+                    $this->invalid('status', 'A published event cannot be moved back to draft. Cancel it instead.');
                 }
-            }
-            $startsAt = $data['starts_at'] ?? $event?->starts_at;
-            if ($data['status'] === 'published' && $startsAt && Carbon::parse($startsAt)->lte(now())) {
-                $this->invalid('starts_at', 'A published event must start in the future.');
-            }
-            if ($data['status'] === 'published' && ! $event?->published_at) {
-                $data['published_at'] = now();
-            }
-            if (! $event) {
-                $data['created_by_user_id'] = $actor->id;
-            }
-            $event ??= new Event;
-            $event->fill($data)->save();
-            if ($event->wasChanged('capacity')) {
-                $this->fillAvailableSpots($event);
-            }
-            $hostChanged = $previousHostUserId !== $event->host_user_id;
-            $materiallyChanged = $event->wasChanged(['starts_at', 'ends_at', 'location_name', 'address', 'latitude', 'longitude']);
-            if (! $wasPublished && $event->status === 'published') {
-                SendEventPublishedNotifications::dispatch($event->id);
-                if (! $hostChanged) {
-                    $this->notifyHostAfterCommit($event, NotificationType::EventPublished->value, 'You are hosting an event', "You are listed as the host for {$event->title}.");
+                $timezone = (string) ($data['timezone'] ?? $event?->timezone ?? config('app.timezone'));
+                foreach (['starts_at', 'ends_at', 'booking_opens_at', 'booking_closes_at', 'cancellation_closes_at'] as $field) {
+                    if (! empty($data[$field])) {
+                        $data[$field] = Carbon::parse($data[$field], $timezone)->setTimezone(config('app.timezone'));
+                    }
                 }
-            }
-            if ($hostChanged) {
-                $this->notifyHostAfterCommit($event, NotificationType::EventUpdated->value, 'You were assigned as event host', "Your gym assigned you to host {$event->title}. Open Events to manage it.");
-                if ($previousHostUserId) {
-                    $this->notifySpecificHostAfterCommit($previousHostUserId, $event, 'Event host assignment changed', "You are no longer the host for {$event->title}.");
+                if ($event && array_key_exists('capacity', $data)) {
+                    $reserved = $event->bookings()->whereIn('status', ['reserved', 'attended'])->count();
+                    if ($data['capacity'] !== null && $data['capacity'] < $reserved) {
+                        $this->invalid('capacity', 'Capacity cannot be lower than confirmed bookings.');
+                    }
                 }
-            }
-            if ($event->wasChanged(['starts_at', 'ends_at'])) {
-                foreach ($event->bookings()->where('status', 'reserved')->get() as $booking) {
-                    $this->scheduleReminders($booking, $event);
+                if (($data['pricing_type'] ?? $event?->pricing_type) === 'free') {
+                    $data['price_amount'] = null;
                 }
-            }
-            if ($wasPublished && $materiallyChanged) {
-                SendEventBookingAudienceNotification::dispatch(
-                    $event->id,
-                    NotificationType::EventUpdated->value,
-                    'Event details updated',
-                    "The schedule or location for {$event->title} has changed. Open the event to review it.",
-                );
-                if ($event->host_user_id !== $actor->id) {
-                    $this->notifyHostAfterCommit($event, NotificationType::EventUpdated->value, 'Hosted event updated', "The schedule or location for {$event->title} has changed.");
+                $data['currency'] = strtoupper($data['currency'] ?? $event?->currency ?? 'INR');
+                $data['waitlist_enabled'] = $data['waitlist_enabled'] ?? $event?->waitlist_enabled ?? true;
+                $data['status'] = $data['status'] ?? $event?->status ?? 'draft';
+                $scope = (string) ($data['scope'] ?? $event?->scope ?? 'gym');
+                $data['booking_audience'] ??= $event?->booking_audience ?? ($scope === 'global' ? 'atlas_members' : 'gym_members');
+                $data['app_visibility'] ??= $event?->app_visibility ?? ($scope === 'global' ? 'all_atlas' : 'hosting_gym');
+                $data['public_booking_enabled'] = (bool) ($data['public_booking_enabled'] ?? $event?->public_booking_enabled ?? false);
+                if ($data['public_booking_enabled'] && $data['booking_audience'] !== 'anyone') {
+                    $this->invalid('booking_audience', 'Public booking requires the Anyone audience.');
                 }
+                if ($scope === 'global' && $data['booking_audience'] === 'gym_members') {
+                    $this->invalid('booking_audience', 'A global event cannot be limited to a hosting gym.');
+                }
+                if ($scope === 'global' && $data['app_visibility'] === 'hosting_gym') {
+                    $this->invalid('app_visibility', 'A global event cannot use hosting-gym visibility.');
+                }
+                if ($scope === 'gym' && $data['app_visibility'] === 'all_atlas') {
+                    $this->invalid('app_visibility', 'Gym events cannot be broadcast to every Atlas member app. Share the event link instead.');
+                }
+                if ($data['app_visibility'] === 'all_atlas' && $data['booking_audience'] === 'gym_members') {
+                    $this->invalid('app_visibility', 'An event shown to all Atlas members cannot be limited to one gym.');
+                }
+                if ($data['app_visibility'] === 'link_only' && $data['booking_audience'] === 'gym_members') {
+                    $this->invalid('app_visibility', 'Link-only events must allow Atlas members or public guests with the link.');
+                }
+                $gymId = $data['gym_id'] ?? $event?->gym_id;
+                $branchId = $data['branch_id'] ?? $event?->branch_id;
+                if ($scope === 'global' && ($gymId !== null || $branchId !== null)) {
+                    $this->invalid('scope', 'Global events cannot have a gym or branch scope.');
+                }
+                if ($scope === 'gym' && ! $gymId) {
+                    $this->invalid('gym_id', 'A gym event requires a gym.');
+                }
+                if ($branchId && ! Branch::query()->whereKey($branchId)->where('gym_id', $gymId)->exists()) {
+                    $this->invalid('branch_id', 'The selected branch does not belong to this gym.');
+                }
+                $hostUserId = array_key_exists('host_user_id', $data) ? $data['host_user_id'] : $event?->host_user_id;
+                if ($hostUserId) {
+                    $hostIsEligible = User::query()->whereKey($hostUserId)->where('is_active', true)->whereHas('roles', fn ($q) => $q->where('name', 'trainer'))
+                        ->when($scope === 'gym', fn ($q) => $q->whereHas('trainerProfile', fn ($profile) => $profile
+                            ->where('gym_id', $gymId)->where('is_active', true)->where('status', 'active')))->exists();
+                    if (! $hostIsEligible) {
+                        $this->invalid('host_user_id', 'Select an active trainer in the event scope.');
+                    }
+                }
+                $startsAt = $data['starts_at'] ?? $event?->starts_at;
+                if ($data['status'] === 'published' && $startsAt && Carbon::parse($startsAt)->lte(now())) {
+                    $this->invalid('starts_at', 'A published event must start in the future.');
+                }
+                if ($data['status'] === 'published' && ! $event?->published_at) {
+                    $data['published_at'] = now();
+                }
+                if (! $event) {
+                    $data['created_by_user_id'] = $actor->id;
+                }
+                $oldCoverPath = $event?->cover_image_path;
+                if ($coverImage instanceof UploadedFile) {
+                    $coverMedia = $this->images->storeSingle($coverImage, 'events/covers', options: [
+                        'max_width' => 2000,
+                        'max_height' => 1200,
+                        'thumb_width' => 800,
+                        'thumb_height' => 450,
+                        'thumb_mode' => 'crop',
+                    ]);
+                    $newCoverPath = $coverMedia['path'];
+                    $data['cover_image_path'] = $newCoverPath;
+                    $data['cover_image_url'] = null;
+                } elseif ($removeCoverImage) {
+                    $data['cover_image_path'] = null;
+                    $data['cover_image_url'] = null;
+                }
+                $event ??= new Event;
+                $event->fill($data)->save();
+                if (($coverImage instanceof UploadedFile || $removeCoverImage) && filled($oldCoverPath)) {
+                    $oldCoverPathToDelete = $oldCoverPath;
+                }
+                if ($event->wasChanged('capacity')) {
+                    $this->fillAvailableSpots($event);
+                }
+                $hostChanged = $previousHostUserId !== $event->host_user_id;
+                $materiallyChanged = $event->wasChanged(['starts_at', 'ends_at', 'location_name', 'address', 'latitude', 'longitude']);
+                if (! $wasPublished && $event->status === 'published') {
+                    SendEventPublishedNotifications::dispatch($event->id);
+                    if (! $hostChanged) {
+                        $this->notifyHostAfterCommit($event, NotificationType::EventPublished->value, 'You are hosting an event', "You are listed as the host for {$event->title}.");
+                    }
+                }
+                if ($hostChanged) {
+                    $this->notifyHostAfterCommit($event, NotificationType::EventUpdated->value, 'You were assigned as event host', "Your gym assigned you to host {$event->title}. Open Events to manage it.");
+                    if ($previousHostUserId) {
+                        $this->notifySpecificHostAfterCommit($previousHostUserId, $event, 'Event host assignment changed', "You are no longer the host for {$event->title}.");
+                    }
+                }
+                if ($event->wasChanged(['starts_at', 'ends_at'])) {
+                    foreach ($event->bookings()->where('status', 'reserved')->get() as $booking) {
+                        $this->scheduleReminders($booking, $event);
+                    }
+                }
+                if ($wasPublished && $materiallyChanged) {
+                    SendEventBookingAudienceNotification::dispatch(
+                        $event->id,
+                        NotificationType::EventUpdated->value,
+                        'Event details updated',
+                        "The schedule or location for {$event->title} has changed. Open the event to review it.",
+                    );
+                    if ($event->host_user_id !== $actor->id) {
+                        $this->notifyHostAfterCommit($event, NotificationType::EventUpdated->value, 'Hosted event updated', "The schedule or location for {$event->title} has changed.");
+                    }
+                }
+
+                return $event->fresh(['gym', 'branch', 'host']);
+            });
+        } catch (\Throwable $exception) {
+            if (filled($newCoverPath)) {
+                $this->images->deleteManagedImage($newCoverPath);
             }
 
-            return $event->fresh(['gym', 'branch', 'host']);
-        });
+            throw $exception;
+        }
+
+        if (filled($oldCoverPathToDelete)) {
+            $this->images->deleteManagedImage($oldCoverPathToDelete);
+        }
+
+        return $savedEvent;
     }
 
     public function cancelEvent(Event $event, string $reason): Event

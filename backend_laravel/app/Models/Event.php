@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Media\StoredImage;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,7 +16,7 @@ class Event extends Model
     protected $fillable = [
         'scope', 'booking_audience', 'app_visibility', 'public_booking_enabled', 'registration_form_schema',
         'public_token', 'public_link_rotated_at', 'gym_id', 'branch_id', 'created_by_user_id', 'host_user_id', 'title', 'category',
-        'description', 'cover_image_url', 'starts_at', 'ends_at', 'timezone', 'booking_opens_at',
+        'description', 'cover_image_path', 'cover_image_url', 'starts_at', 'ends_at', 'timezone', 'booking_opens_at',
         'booking_closes_at', 'cancellation_closes_at', 'capacity', 'waitlist_enabled', 'pricing_type',
         'price_amount', 'currency', 'payment_note', 'location_name', 'address', 'latitude', 'longitude',
         'status', 'published_at', 'cancelled_at', 'cancellation_reason',
@@ -69,5 +70,10 @@ class Event extends Model
     public function reminders(): HasMany
     {
         return $this->hasMany(EventReminder::class);
+    }
+
+    public function getCoverImageUrlAttribute(?string $value): ?string
+    {
+        return StoredImage::publicUrl($this->cover_image_path, $value);
     }
 }

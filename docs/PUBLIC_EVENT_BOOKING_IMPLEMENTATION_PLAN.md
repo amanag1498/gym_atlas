@@ -180,6 +180,7 @@ Completed in the current working tree:
 - Phase 2 authenticated claim and Member-app deep-link/login continuity, including safe duplicate merge without gym enrollment.
 - Phase 3 transactional guest email for confirmation, reminders, promotion, event changes, and cancellation. Linked users continue through the existing in-app/FCM/WhatsApp notification service.
 - Gym and platform Laravel controls for audience, app visibility, public booking, QR, link preview, and guest-safe attendance.
+- Managed event-cover uploads for gym and platform admins. Images are validated, optimized, stored on the public disk, replaceable/removable, and old managed files are cleaned up automatically; raw cover URL entry is no longer exposed.
 - Public event API, authenticated token resolver, Android App Links, iOS associated-domain path, and custom Member-app scheme.
 - Operational isolation: suspended gyms and inactive branches cannot expose or accept new public bookings, while existing secure guest management links remain usable.
 - Production hardening audit: booking eligibility and event edits are checked under the event row lock; impossible audience/visibility combinations are rejected; link-only authenticated bookings require possession of the UUID; claim links remain usable after public booking is disabled; and public POST uses redirect-after-submit to prevent browser refresh duplicates.

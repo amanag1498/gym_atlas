@@ -14,7 +14,7 @@
         : ['hosting_gym' => 'Hosting gym member app', 'link_only' => 'Link only'];
 @endphp
 
-<form method="POST" action="{{ $formAction }}" class="space-y-5" data-event-form>
+<form method="POST" action="{{ $formAction }}" enctype="multipart/form-data" class="space-y-5" data-event-form>
     @csrf
     @if ($isEdit)
         @method('PUT')
@@ -44,7 +44,22 @@
                     <x-form-input name="title" label="Event title" :value="$event->title ?? null" placeholder="Morning Zumba" required />
                     <x-form-input name="category" label="Category" :value="$event->category ?? null" placeholder="Zumba, workshop, community" />
                     <x-form-select name="host_user_id" label="Event host" :selected="$event->host_user_id ?? null" :options="['' => 'No named host'] + $hosts->pluck('name', 'id')->all()" />
-                    <x-form-input name="cover_image_url" label="Cover image URL" type="url" :value="$event->cover_image_url ?? null" placeholder="https://..." />
+                    <div>
+                        <label for="cover_image" class="panel-label">Event cover image</label>
+                        @if($isEdit && $event->cover_image_url)
+                            <img src="{{ $event->cover_image_url }}" alt="{{ $event->title }} cover" class="mb-3 h-36 w-full rounded-2xl border border-slate-200 object-cover dark:border-slate-700">
+                        @endif
+                        <input id="cover_image" name="cover_image" type="file" accept="image/jpeg,image/png,image/webp" class="panel-input block w-full file:mr-4 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-brand-700">
+                        <p class="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">JPG, PNG, or WebP. Minimum 600×300, maximum 8 MB. Atlas optimizes and stores the image.</p>
+                        @error('cover_image')<p class="mt-1 text-xs font-medium text-rose-600">{{ $message }}</p>@enderror
+                        @if($isEdit && $event->cover_image_url)
+                            <label class="mt-3 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                                <input type="hidden" name="remove_cover_image" value="0">
+                                <input type="checkbox" name="remove_cover_image" value="1" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+                                Remove current cover image
+                            </label>
+                        @endif
+                    </div>
                     <div class="md:col-span-2">
                         <label for="description" class="panel-label">Description</label>
                         <textarea id="description" name="description" rows="4" class="panel-textarea" placeholder="What members should know before reserving a spot">{{ old('description', $event->description ?? null) }}</textarea>
