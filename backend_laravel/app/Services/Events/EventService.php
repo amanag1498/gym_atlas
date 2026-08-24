@@ -393,10 +393,10 @@ class EventService
             if ($wasPublished && isset($data['status']) && $data['status'] !== 'published') {
                 $this->invalid('status', 'A published event cannot be moved back to draft. Cancel it instead.');
             }
-            $timezone = (string) ($data['timezone'] ?? $event?->timezone ?? 'UTC');
+            $timezone = (string) ($data['timezone'] ?? $event?->timezone ?? config('app.timezone'));
             foreach (['starts_at', 'ends_at', 'booking_opens_at', 'booking_closes_at', 'cancellation_closes_at'] as $field) {
                 if (! empty($data[$field])) {
-                    $data[$field] = Carbon::parse($data[$field], $timezone)->utc();
+                    $data[$field] = Carbon::parse($data[$field], $timezone)->setTimezone(config('app.timezone'));
                 }
             }
             if ($event && array_key_exists('capacity', $data)) {

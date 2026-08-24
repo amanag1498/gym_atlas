@@ -193,7 +193,7 @@ class EventLifecycleFeatureTest extends TestCase
 
         $event = Event::query()->findOrFail($response->json('data.id'));
         $this->assertSame('Asia/Kolkata', $event->timezone);
-        $this->assertSame(10, $event->starts_at->hour);
+        $this->assertSame(16, $event->starts_at->hour);
         $this->assertNull($event->gym_id);
     }
 

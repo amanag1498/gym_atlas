@@ -45,7 +45,7 @@ class EventNotificationService
             $title.' — '.$event->title,
             $body,
             array_values(array_filter([
-                'When: '.$event->starts_at->timezone($event->timezone ?: 'UTC')->format('D, j M Y · g:i A'),
+                'When: '.$event->starts_at->timezone($event->timezone ?: config('app.timezone'))->format('D, j M Y · g:i A'),
                 $event->location_name ? 'Where: '.$event->location_name : null,
                 $manageUrl ? 'Manage your booking: '.$manageUrl : null,
             ])),

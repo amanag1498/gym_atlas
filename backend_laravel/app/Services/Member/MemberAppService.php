@@ -738,8 +738,8 @@ class MemberAppService
             ];
         }
 
-        $localStart = Carbon::parse($localToday, $timezone)->startOfDay()->utc();
-        $localEnd = Carbon::parse($localToday, $timezone)->endOfDay()->utc();
+        $localStart = Carbon::parse($localToday, $timezone)->startOfDay()->setTimezone(config('app.timezone'));
+        $localEnd = Carbon::parse($localToday, $timezone)->endOfDay()->setTimezone(config('app.timezone'));
 
         $todayCheckIn = AttendanceLog::query()
             ->where('member_id', $user->id)

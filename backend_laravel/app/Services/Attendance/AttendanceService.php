@@ -70,7 +70,8 @@ class AttendanceService
         ?string $sourceDevice = null,
         mixed $checkedInAt = null,
     ): AttendanceLog {
-        $checkedAt = $checkedInAt ? Carbon::parse($checkedInAt) : now();
+        $checkedAt = ($checkedInAt ? Carbon::parse($checkedInAt) : now())
+            ->setTimezone(config('app.timezone'));
 
         return DB::transaction(function () use ($gym, $branch, $member, $checkedInBy, $method, $notes, $sourceDevice, $checkedAt): AttendanceLog {
             $gym = Gym::query()->findOrFail($gym->id);
@@ -157,8 +158,8 @@ class AttendanceService
             }
 
             if ($gym->prevent_duplicate_same_day_checkins) {
-                $localStart = Carbon::parse($localDate, $timezone)->startOfDay()->utc();
-                $localEnd = Carbon::parse($localDate, $timezone)->endOfDay()->utc();
+                $localStart = Carbon::parse($localDate, $timezone)->startOfDay()->setTimezone(config('app.timezone'));
+                $localEnd = Carbon::parse($localDate, $timezone)->endOfDay()->setTimezone(config('app.timezone'));
                 $alreadyCheckedIn = AttendanceLog::query()
                     ->where('gym_id', $gym->id)
                     ->where('branch_id', $branch->id)
@@ -208,8 +209,8 @@ class AttendanceService
             : ($date ?: now()->timezone($timezone)->toDateString());
 
         return [
-            Carbon::parse($localDate, $timezone)->startOfDay()->utc(),
-            Carbon::parse($localDate, $timezone)->endOfDay()->utc(),
+            Carbon::parse($localDate, $timezone)->startOfDay()->setTimezone(config('app.timezone')),
+            Carbon::parse($localDate, $timezone)->endOfDay()->setTimezone(config('app.timezone')),
         ];
     }
 }
