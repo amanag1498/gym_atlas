@@ -4,6 +4,14 @@
     $dateValue = static fn ($value) => $value?->timezone($timezone)->format('Y-m-d\\TH:i');
     $selectedStatus = old('status', $event->status ?? 'published');
     $selectedPricing = old('pricing_type', $event->pricing_type ?? 'free');
+    $selectedAudience = old('booking_audience', $event->booking_audience ?? ($panel === 'admin' ? 'atlas_members' : 'gym_members'));
+    $selectedVisibility = old('app_visibility', $event->app_visibility ?? ($panel === 'admin' ? 'all_atlas' : 'hosting_gym'));
+    $audienceOptions = $panel === 'admin'
+        ? ['atlas_members' => 'Any Atlas member', 'anyone' => 'Anyone with the public link']
+        : ['gym_members' => 'Members of the hosting gym', 'atlas_members' => 'Any Atlas member', 'anyone' => 'Anyone with the public link'];
+    $visibilityOptions = $panel === 'admin'
+        ? ['all_atlas' => 'All Atlas member apps', 'link_only' => 'Link only']
+        : ['hosting_gym' => 'Hosting gym member app', 'all_atlas' => 'All Atlas member apps', 'link_only' => 'Link only'];
 @endphp
 
 <form method="POST" action="{{ $formAction }}" class="space-y-5" data-event-form>
@@ -98,6 +106,22 @@
                 </div>
 
                 <div class="mt-5 space-y-4">
+                    <x-form-select name="booking_audience" label="Who can book?" :selected="$selectedAudience" :options="$audienceOptions" data-event-audience />
+                    <p class="-mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">This controls eligibility only. Booking never enrolls a guest into the hosting gym.</p>
+
+                    <x-form-select name="app_visibility" label="Where it appears" :selected="$selectedVisibility" :options="$visibilityOptions" data-event-visibility />
+
+                    <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70" data-public-booking-control>
+                        <input type="hidden" name="public_booking_enabled" value="0">
+                        <label class="flex cursor-pointer items-start gap-3">
+                            <input type="checkbox" name="public_booking_enabled" value="1" class="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500" @checked(old('public_booking_enabled', $event->public_booking_enabled ?? false)) data-public-booking-checkbox>
+                            <span>
+                                <span class="block text-sm font-semibold text-slate-900 dark:text-white">Accept public-link bookings</span>
+                                <span class="mt-1 block text-xs leading-5 text-slate-500 dark:text-slate-400" data-public-booking-help>Guests can reserve without an Atlas account. Their booking does not create an Atlas profile or gym membership.</span>
+                            </span>
+                        </label>
+                    </div>
+
                     <x-form-input name="capacity" label="Capacity" type="number" min="1" :value="$event->capacity ?? null" placeholder="Leave empty for unlimited" />
                     <x-form-select name="pricing_type" label="Booking type" :selected="$selectedPricing" :options="['free' => 'Free reservation', 'pay_at_venue' => 'Pay at venue']" data-event-pricing />
                     <div data-event-price-field>
@@ -146,13 +170,45 @@
                     const pricing = form.querySelector('[data-event-pricing]');
                     const priceField = form.querySelector('[data-event-price-field]');
                     const priceInput = priceField?.querySelector('input');
+                    const audience = form.querySelector('[data-event-audience]');
+                    const visibility = form.querySelector('[data-event-visibility]');
+                    const publicBooking = form.querySelector('[data-public-booking-checkbox]');
+                    const publicBookingHelp = form.querySelector('[data-public-booking-help]');
                     const syncPricing = () => {
                         const isVenuePaid = pricing?.value === 'pay_at_venue';
                         priceField?.classList.toggle('hidden', !isVenuePaid);
                         if (priceInput) priceInput.required = isVenuePaid;
                     };
+                    const syncPublicBooking = () => {
+                        if (!publicBooking) return;
+                        const available = audience?.value === 'anyone';
+                        publicBooking.disabled = !available;
+                        if (!available) publicBooking.checked = false;
+                        if (publicBookingHelp) {
+                            publicBookingHelp.textContent = available
+                                ? 'Guests can reserve without an Atlas account. Their booking does not create an Atlas profile or gym membership.'
+                                : 'Choose “Anyone with the public link” to accept guest bookings.';
+                        }
+                    };
+                    const syncVisibility = () => {
+                        if (!visibility || !audience) return;
+                        const linkOnly = visibility.value === 'link_only';
+                        if (linkOnly) {
+                            audience.value = 'anyone';
+                            publicBooking.checked = true;
+                        }
+                    };
                     pricing?.addEventListener('change', syncPricing);
+                    audience?.addEventListener('change', () => { syncVisibility(); syncPublicBooking(); });
+                    visibility?.addEventListener('change', () => { syncVisibility(); syncPublicBooking(); });
+                    publicBooking?.addEventListener('change', () => {
+                        if (!publicBooking.checked && visibility?.value === 'link_only') {
+                            visibility.value = '{{ $panel === 'admin' ? 'all_atlas' : 'hosting_gym' }}';
+                        }
+                    });
                     syncPricing();
+                    syncVisibility();
+                    syncPublicBooking();
                 });
             });
         </script>

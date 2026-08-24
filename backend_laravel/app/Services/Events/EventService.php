@@ -17,6 +17,7 @@ use App\Services\Members\GymMemberAccessService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class EventService
@@ -33,10 +34,16 @@ class EventService
         $profiles = $this->memberAccess->scopeAccessibleProfiles($profileQuery)->get(['gym_id', 'branch_id']);
 
         return $this->baseUpcomingQuery($user)->where(function (Builder $query) use ($profiles): void {
-            $query->where('scope', 'global');
+            $query->where(function (Builder $visible): void {
+                $visible->where('app_visibility', 'all_atlas')
+                    ->whereIn('booking_audience', ['atlas_members', 'anyone']);
+            })->orWhere(function (Builder $legacy): void {
+                $legacy->where('scope', 'global')->whereNull('app_visibility');
+            });
             foreach ($profiles as $profile) {
                 $query->orWhere(function (Builder $scope) use ($profile): void {
                     $scope->where('scope', 'gym')->where('gym_id', $profile->gym_id)
+                        ->where('app_visibility', '!=', 'link_only')
                         ->where(fn (Builder $branch) => $branch->whereNull('branch_id')->when($profile->branch_id, fn (Builder $q) => $q->orWhere('branch_id', $profile->branch_id)));
                 });
             }
@@ -69,29 +76,39 @@ class EventService
         });
     }
 
-    public function book(User $user, Event $event): EventBooking
+    public function book(User $user, Event $event, bool $publicLinkAccess = false, ?string $bookingPhone = null): EventBooking
     {
-        if (! $this->memberQuery($user)->whereKey($event->id)->exists()) {
-            $this->invalid('event', 'This event is not available to your account.');
-        }
-
-        return DB::transaction(function () use ($user, $event): EventBooking {
+        return DB::transaction(function () use ($user, $event, $publicLinkAccess, $bookingPhone): EventBooking {
             $event = Event::query()->lockForUpdate()->findOrFail($event->id);
-            if ($event->starts_at->isPast() || ($event->booking_opens_at && now()->lt($event->booking_opens_at)) || ($event->booking_closes_at && now()->gt($event->booking_closes_at))) {
-                $this->invalid('event', 'Booking is not open for this event.');
+            $this->ensureEventOperational($event);
+            $available = $publicLinkAccess
+                ? $event->public_booking_enabled && $event->booking_audience === 'anyone'
+                : $this->memberQuery($user)->whereKey($event->id)->exists();
+            if (! $available) {
+                $this->invalid('event', 'This event is not available to your account.');
+            }
+            $this->ensureBookingOpen($event);
+            $phone = preg_replace('/\D+/', '', (string) ($bookingPhone ?: $user->phone)) ?: null;
+            if (! $phone || strlen($phone) < 7 || strlen($phone) > 15) {
+                $this->invalid('phone', 'A valid mobile number is required for event booking.');
+            }
+            if (blank($user->phone) && filled($bookingPhone)) {
+                $user->forceFill(['phone' => $phone])->save();
             }
             $existing = EventBooking::query()->where('event_id', $event->id)->where('user_id', $user->id)->lockForUpdate()->first();
             if ($existing && in_array($existing->status, ['reserved', 'waitlisted', 'attended'], true)) {
-                return $existing;
+                if ($existing->attendee_phone !== $phone) {
+                    $existing->update(['attendee_phone' => $phone]);
+                }
+
+                return $existing->fresh(['event']);
             }
 
-            $reserved = EventBooking::query()->where('event_id', $event->id)->whereIn('status', ['reserved', 'attended'])->count();
-            $status = $event->capacity === null || $reserved < $event->capacity ? 'reserved' : 'waitlisted';
-            if ($status === 'waitlisted' && ! $event->waitlist_enabled) {
-                $this->invalid('event', 'This event is full.');
-            }
+            $status = $this->nextBookingStatus($event);
 
             $booking = EventBooking::query()->updateOrCreate(['event_id' => $event->id, 'user_id' => $user->id], [
+                'attendee_name' => $user->name, 'attendee_email' => $user->email, 'attendee_phone' => $phone,
+                'booking_source' => 'member_app',
                 'status' => $status, 'booked_at' => now(), 'cancelled_at' => null, 'cancellation_reason' => null,
                 'price_amount_snapshot' => $event->price_amount, 'currency_snapshot' => $event->currency,
                 'payment_note_snapshot' => $event->payment_note,
@@ -108,20 +125,228 @@ class EventService
         });
     }
 
+    public function publicEvent(string $publicToken): Event
+    {
+        $query = Event::query()
+            ->with(['gym:id,name,logo,logo_url', 'branch:id,name', 'host:id,name,avatar'])
+            ->withCount(['bookings as reserved_count' => fn ($query) => $query->whereIn('status', ['reserved', 'attended'])])
+            ->where('public_token', $publicToken)
+            ->where('public_booking_enabled', true)
+            ->where('booking_audience', 'anyone')
+            ->where('status', 'published')
+            ->where('ends_at', '>=', now());
+        $this->scopeOperationalEvents($query);
+
+        return $query->firstOrFail();
+    }
+
+    /** @return array{booking: EventBooking, manage_token: string} */
+    public function bookGuest(Event $event, array $data): array
+    {
+        return DB::transaction(function () use ($event, $data): array {
+            $event = Event::query()->lockForUpdate()->findOrFail($event->id);
+            $this->ensureEventOperational($event);
+            if (! $event->public_booking_enabled || $event->booking_audience !== 'anyone') {
+                $this->invalid('event', 'Public booking is not enabled for this event.');
+            }
+            $this->ensureBookingOpen($event);
+
+            $email = Str::lower(trim((string) $data['email']));
+            $phone = preg_replace('/\D+/', '', (string) $data['phone']) ?: null;
+            if (! $phone || strlen($phone) < 7 || strlen($phone) > 15) {
+                $this->invalid('phone', 'Enter a valid mobile number.');
+            }
+            $answers = (array) ($data['answers'] ?? []);
+            $allowedAnswerKeys = [];
+            foreach ((array) $event->registration_form_schema as $field) {
+                $key = isset($field['key']) ? (string) $field['key'] : '';
+                if ($key === '') {
+                    continue;
+                }
+                $allowedAnswerKeys[] = $key;
+                if (! empty($field['required']) && ! filled($answers[$key] ?? null)) {
+                    $this->invalid('answers.'.$key, ($field['label'] ?? Str::headline($key)).' is required.');
+                }
+                if (($field['type'] ?? null) === 'select' && filled($answers[$key] ?? null)
+                    && ! in_array($answers[$key], (array) ($field['options'] ?? []), true)) {
+                    $this->invalid('answers.'.$key, 'Select a valid option.');
+                }
+            }
+            $answers = array_intersect_key($answers, array_flip($allowedAnswerKeys));
+            $attendeeKey = hash_hmac('sha256', $email, (string) config('app.key'));
+            $existing = EventBooking::query()->where('event_id', $event->id)->where('attendee_key', $attendeeKey)->lockForUpdate()->first();
+            if ($existing && in_array($existing->status, ['reserved', 'waitlisted', 'attended'], true)) {
+                $this->invalid('email', 'A booking already exists for these contact details. Use its manage link instead.');
+            }
+
+            $status = $this->nextBookingStatus($event);
+            $manageToken = Str::random(64);
+            $attributes = [
+                'user_id' => null,
+                'attendee_name' => trim((string) $data['name']),
+                'attendee_email' => $email,
+                'attendee_phone' => $phone,
+                'attendee_key' => $attendeeKey,
+                'booking_source' => 'public_web',
+                'manage_token_hash' => hash('sha256', $manageToken),
+                'manage_token_ciphertext' => $manageToken,
+                'registration_answers' => $answers ?: null,
+                'status' => $status,
+                'booked_at' => now(),
+                'cancelled_at' => null,
+                'cancellation_reason' => null,
+                'price_amount_snapshot' => $event->price_amount,
+                'currency_snapshot' => $event->currency,
+                'payment_note_snapshot' => $event->payment_note,
+            ];
+            if ($existing) {
+                $existing->update($attributes);
+                $booking = $existing;
+            } else {
+                $booking = $event->bookings()->create($attributes);
+            }
+            if ($status === 'reserved') {
+                $this->scheduleReminders($booking, $event);
+            }
+            DB::afterCommit(fn () => $this->notifier->sendBooking(
+                $booking->fresh(['user']), $event,
+                $status === 'reserved' ? NotificationType::EventBookingConfirmed->value : NotificationType::EventWaitlisted->value,
+                $status === 'reserved' ? 'Event booking confirmed' : 'You joined the waitlist',
+                $status === 'reserved' ? "Your spot for {$event->title} is confirmed." : "You are on the waitlist for {$event->title}.",
+                $manageToken,
+            ));
+
+            return ['booking' => $booking->fresh(['event', 'user']), 'manage_token' => $manageToken];
+        });
+    }
+
+    public function guestBooking(Event $event, EventBooking $booking, string $manageToken): EventBooking
+    {
+        if ($booking->event_id !== $event->id || ! $booking->manage_token_hash
+            || ! hash_equals($booking->manage_token_hash, hash('sha256', $manageToken))) {
+            abort(404);
+        }
+
+        return $booking->load(['event.gym', 'event.branch']);
+    }
+
+    public function eventByPublicTokenForManagement(string $publicToken): Event
+    {
+        return Event::query()->with(['gym', 'branch', 'host'])->where('public_token', $publicToken)->firstOrFail();
+    }
+
+    public function publicEventForClaim(string $publicToken, string $manageToken): Event
+    {
+        if (preg_match('/^[A-Za-z0-9]{64}$/', $manageToken) !== 1) {
+            abort(404);
+        }
+        $event = $this->eventByPublicTokenForManagement($publicToken);
+        $booking = EventBooking::query()
+            ->where('event_id', $event->id)
+            ->where('manage_token_hash', hash('sha256', $manageToken))
+            ->firstOrFail();
+        $this->guestBooking($event, $booking, $manageToken);
+
+        return $event->load(['gym:id,name', 'branch:id,name', 'host:id,name,avatar'])
+            ->loadCount(['bookings as reserved_count' => fn ($query) => $query->whereIn('status', ['reserved', 'attended'])]);
+    }
+
+    public function cancelGuest(Event $event, EventBooking $booking, string $manageToken): EventBooking
+    {
+        $this->guestBooking($event, $booking, $manageToken);
+
+        return DB::transaction(function () use ($event, $booking, $manageToken): EventBooking {
+            $event = Event::query()->lockForUpdate()->findOrFail($event->id);
+            $booking = EventBooking::query()->lockForUpdate()->findOrFail($booking->id);
+            $this->guestBooking($event, $booking, $manageToken);
+            $this->ensureCancellationOpen($event, $booking);
+            $wasReserved = $booking->status === 'reserved';
+            $booking->update(['status' => 'cancelled', 'cancelled_at' => now()]);
+            $booking->reminders()->where('status', 'pending')->update(['status' => 'cancelled']);
+            if ($wasReserved) {
+                $this->promoteWaitlist($event);
+            }
+            DB::afterCommit(fn () => $this->notifier->sendBooking(
+                $booking->fresh(['user']), $event, NotificationType::EventBookingCancelled->value,
+                'Event booking cancelled', "Your booking for {$event->title} was cancelled.",
+            ));
+
+            return $booking->fresh();
+        });
+    }
+
+    public function claimGuestBooking(User $user, Event $event, string $manageToken): EventBooking
+    {
+        return DB::transaction(function () use ($user, $event, $manageToken): EventBooking {
+            $event = Event::query()->lockForUpdate()->findOrFail($event->id);
+            $guest = EventBooking::query()->where('event_id', $event->id)
+                ->where('manage_token_hash', hash('sha256', $manageToken))->lockForUpdate()->first();
+            if (! $guest || $guest->user_id || ! in_array($guest->status, ['reserved', 'waitlisted'], true)) {
+                $this->invalid('manage_token', 'This guest booking cannot be claimed.');
+            }
+
+            $existing = EventBooking::query()->where('event_id', $event->id)->where('user_id', $user->id)->lockForUpdate()->first();
+            if (! $existing) {
+                $guest->update([
+                    'user_id' => $user->id,
+                    'booking_source' => 'claimed_guest',
+                    'claimed_by_user_id' => $user->id,
+                    'claimed_at' => now(),
+                    'manage_token_hash' => null,
+                    'manage_token_ciphertext' => null,
+                ]);
+                $guest->reminders()->update(['user_id' => $user->id]);
+                if ($guest->status === 'reserved') {
+                    $this->scheduleReminders($guest, $event);
+                }
+
+                return $guest->fresh(['event', 'user']);
+            }
+
+            $existingWasConfirmed = in_array($existing->status, ['reserved', 'attended'], true);
+            $guestWasConfirmed = $guest->status === 'reserved';
+            if (! in_array($existing->status, ['reserved', 'attended'], true) && $guestWasConfirmed) {
+                $earliestBookedAt = $existing->booked_at->lte($guest->booked_at) ? $existing->booked_at : $guest->booked_at;
+                $existing->update([
+                    'status' => 'reserved', 'booked_at' => $earliestBookedAt,
+                    'cancelled_at' => null, 'cancellation_reason' => null, 'booking_source' => 'claimed_guest',
+                    'attendee_name' => $guest->attendee_name, 'attendee_email' => $guest->attendee_email,
+                    'attendee_phone' => $guest->attendee_phone, 'registration_answers' => $guest->registration_answers,
+                    'price_amount_snapshot' => $guest->price_amount_snapshot, 'currency_snapshot' => $guest->currency_snapshot,
+                    'payment_note_snapshot' => $guest->payment_note_snapshot, 'claimed_at' => now(),
+                ]);
+            } elseif (! in_array($existing->status, ['reserved', 'waitlisted', 'attended'], true)) {
+                $earliestBookedAt = $existing->booked_at->lte($guest->booked_at) ? $existing->booked_at : $guest->booked_at;
+                $existing->update([
+                    'status' => $guest->status, 'booked_at' => $earliestBookedAt,
+                    'cancelled_at' => null, 'cancellation_reason' => null, 'booking_source' => 'claimed_guest',
+                    'claimed_at' => now(),
+                ]);
+            }
+
+            $guest->reminders()->whereIn('status', ['pending', 'processing'])->update(['status' => 'cancelled']);
+            $guest->update([
+                'status' => 'duplicate_merged', 'cancelled_at' => now(), 'claimed_by_user_id' => $user->id,
+                'claimed_at' => now(), 'manage_token_hash' => null,
+                'manage_token_ciphertext' => null,
+            ]);
+            if ($existing->fresh()->status === 'reserved') {
+                $this->scheduleReminders($existing->fresh(), $event);
+            }
+            if ($guestWasConfirmed && $existingWasConfirmed) {
+                $this->promoteWaitlist($event);
+            }
+
+            return $existing->fresh(['event', 'user']);
+        });
+    }
+
     public function cancel(User $user, Event $event): EventBooking
     {
         return DB::transaction(function () use ($user, $event): EventBooking {
             $event = Event::query()->lockForUpdate()->findOrFail($event->id);
-            if ($event->status !== 'published' || $event->starts_at->isPast()) {
-                $this->invalid('booking', 'This event is no longer open for booking changes.');
-            }
-            if ($event->cancellation_closes_at && now()->gt($event->cancellation_closes_at)) {
-                $this->invalid('booking', 'The cancellation window has closed.');
-            }
             $booking = EventBooking::query()->where('event_id', $event->id)->where('user_id', $user->id)->lockForUpdate()->firstOrFail();
-            if (! in_array($booking->status, ['reserved', 'waitlisted'], true)) {
-                $this->invalid('booking', 'This booking cannot be cancelled.');
-            }
+            $this->ensureCancellationOpen($event, $booking);
             $wasReserved = $booking->status === 'reserved';
             $booking->update(['status' => 'cancelled', 'cancelled_at' => now()]);
             $booking->reminders()->where('status', 'pending')->update(['status' => 'cancelled']);
@@ -137,6 +362,9 @@ class EventService
     public function save(User $actor, array $data, ?Event $event = null): Event
     {
         return DB::transaction(function () use ($actor, $data, $event): Event {
+            if ($event?->exists) {
+                $event = Event::query()->lockForUpdate()->findOrFail($event->id);
+            }
             $wasPublished = $event?->status === 'published';
             $previousHostUserId = $event?->host_user_id;
             if ($event && in_array($event->status, ['cancelled', 'completed'], true)) {
@@ -164,6 +392,25 @@ class EventService
             $data['waitlist_enabled'] = $data['waitlist_enabled'] ?? $event?->waitlist_enabled ?? true;
             $data['status'] = $data['status'] ?? $event?->status ?? 'draft';
             $scope = (string) ($data['scope'] ?? $event?->scope ?? 'gym');
+            $data['booking_audience'] ??= $event?->booking_audience ?? ($scope === 'global' ? 'atlas_members' : 'gym_members');
+            $data['app_visibility'] ??= $event?->app_visibility ?? ($scope === 'global' ? 'all_atlas' : 'hosting_gym');
+            $data['public_booking_enabled'] = (bool) ($data['public_booking_enabled'] ?? $event?->public_booking_enabled ?? false);
+            if ($data['public_booking_enabled'] && $data['booking_audience'] !== 'anyone') {
+                $this->invalid('booking_audience', 'Public booking requires the Anyone audience.');
+            }
+            if ($scope === 'global' && $data['booking_audience'] === 'gym_members') {
+                $this->invalid('booking_audience', 'A global event cannot be limited to a hosting gym.');
+            }
+            if ($scope === 'global' && $data['app_visibility'] === 'hosting_gym') {
+                $this->invalid('app_visibility', 'A global event cannot use hosting-gym visibility.');
+            }
+            if ($data['app_visibility'] === 'all_atlas' && $data['booking_audience'] === 'gym_members') {
+                $this->invalid('app_visibility', 'An event shown to all Atlas members cannot be limited to one gym.');
+            }
+            if ($data['app_visibility'] === 'link_only'
+                && ($data['booking_audience'] !== 'anyone' || ! $data['public_booking_enabled'])) {
+                $this->invalid('app_visibility', 'Link-only events must allow anyone with the public booking link.');
+            }
             $gymId = $data['gym_id'] ?? $event?->gym_id;
             $branchId = $data['branch_id'] ?? $event?->branch_id;
             if ($scope === 'global' && ($gymId !== null || $branchId !== null)) {
@@ -296,7 +543,7 @@ class EventService
                         continue;
                     }
                     try {
-                        $this->notifier->send($reminder->user, $reminder->event, NotificationType::EventReminder->value, 'Upcoming event reminder', "{$reminder->event->title} starts {$reminder->event->starts_at->diffForHumans()}.");
+                        $this->notifier->sendBooking($reminder->booking, $reminder->event, NotificationType::EventReminder->value, 'Upcoming event reminder', "{$reminder->event->title} starts {$reminder->event->starts_at->diffForHumans()}.");
                         $reminder->update(['status' => 'sent', 'sent_at' => now()]);
                         $sent++;
                     } catch (\Throwable $exception) {
@@ -331,12 +578,72 @@ class EventService
             ->where('status', 'published')->where('ends_at', '>=', now())->orderBy('starts_at');
     }
 
+    private function scopeOperationalEvents(Builder $query): Builder
+    {
+        return $query->where(function (Builder $scope): void {
+            $scope->where('scope', 'global')->orWhere(function (Builder $gymEvent): void {
+                $gymEvent->where('scope', 'gym')
+                    ->whereHas('gym', fn (Builder $gym) => $gym
+                        ->where('is_active', true)
+                        ->where('status', 'active')
+                        ->where('operational_access_enabled', true))
+                    ->where(function (Builder $branch): void {
+                        $branch->whereNull('branch_id')->orWhereHas('branch', fn (Builder $activeBranch) => $activeBranch
+                            ->where('is_active', true)
+                            ->where('status', 'active'));
+                    });
+            });
+        });
+    }
+
     private function scheduleReminders(EventBooking $booking, Event $event): void
     {
         foreach (['24h' => $event->starts_at->copy()->subDay(), '1h' => $event->starts_at->copy()->subHour()] as $type => $when) {
             EventReminder::query()->updateOrCreate(['event_booking_id' => $booking->id, 'type' => $type],
                 ['event_id' => $event->id, 'user_id' => $booking->user_id, 'scheduled_for' => $when, 'status' => $when->isFuture() ? 'pending' : 'cancelled', 'sent_at' => null]);
         }
+    }
+
+    private function ensureBookingOpen(Event $event): void
+    {
+        if ($event->status !== 'published' || $event->starts_at->isPast()
+            || ($event->booking_opens_at && now()->lt($event->booking_opens_at))
+            || ($event->booking_closes_at && now()->gt($event->booking_closes_at))) {
+            $this->invalid('event', 'Booking is not open for this event.');
+        }
+    }
+
+    private function ensureEventOperational(Event $event): void
+    {
+        $query = Event::query()->whereKey($event->id);
+        $this->scopeOperationalEvents($query);
+        if (! $query->exists()) {
+            $this->invalid('event', 'This event is not currently available.');
+        }
+    }
+
+    private function ensureCancellationOpen(Event $event, EventBooking $booking): void
+    {
+        if ($event->status !== 'published' || $event->starts_at->isPast()) {
+            $this->invalid('booking', 'This event is no longer open for booking changes.');
+        }
+        if ($event->cancellation_closes_at && now()->gt($event->cancellation_closes_at)) {
+            $this->invalid('booking', 'The cancellation window has closed.');
+        }
+        if (! in_array($booking->status, ['reserved', 'waitlisted'], true)) {
+            $this->invalid('booking', 'This booking cannot be cancelled.');
+        }
+    }
+
+    private function nextBookingStatus(Event $event): string
+    {
+        $reserved = EventBooking::query()->where('event_id', $event->id)->whereIn('status', ['reserved', 'attended'])->count();
+        $status = $event->capacity === null || $reserved < $event->capacity ? 'reserved' : 'waitlisted';
+        if ($status === 'waitlisted' && ! $event->waitlist_enabled) {
+            $this->invalid('event', 'This event is full.');
+        }
+
+        return $status;
     }
 
     private function promoteWaitlist(Event $event): void
@@ -347,10 +654,10 @@ class EventService
         }
         $next->update(['status' => 'reserved', 'promoted_at' => now()]);
         $this->scheduleReminders($next, $event);
-        $user = User::query()->find($next->user_id);
-        if ($user) {
-            DB::afterCommit(fn () => $this->notifier->send($user, $event, NotificationType::EventWaitlistPromoted->value, 'Your event spot is confirmed', "A spot opened for {$event->title}. Your booking is now confirmed."));
-        }
+        DB::afterCommit(fn () => $this->notifier->sendBooking(
+            $next->fresh(['user']), $event, NotificationType::EventWaitlistPromoted->value,
+            'Your event spot is confirmed', "A spot opened for {$event->title}. Your booking is now confirmed.",
+        ));
     }
 
     private function fillAvailableSpots(Event $event): void

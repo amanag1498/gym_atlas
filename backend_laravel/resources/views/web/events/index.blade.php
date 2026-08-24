@@ -126,6 +126,13 @@
                                                 <div class="mt-1 flex flex-wrap gap-1.5">
                                                     @if ($event->category)<x-status-badge :label="$event->category" tone="info" />@endif
                                                     <x-status-badge :label="$event->location_name ?: 'Location pending'" tone="neutral" />
+                                                    @if ($event->public_booking_enabled)
+                                                        <x-status-badge label="Public booking" tone="success" />
+                                                    @elseif (($event->booking_audience ?? null) === 'atlas_members')
+                                                        <x-status-badge label="All Atlas members" tone="info" />
+                                                    @else
+                                                        <x-status-badge label="Gym members" tone="neutral" />
+                                                    @endif
                                                 </div>
                                             </div>
                                         </div>

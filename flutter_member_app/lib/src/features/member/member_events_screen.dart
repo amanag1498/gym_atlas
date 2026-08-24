@@ -14,9 +14,13 @@ class MemberEventsScreen extends StatefulWidget {
     super.key,
     required this.repository,
     this.initialEventId,
+    this.initialPublicToken,
+    this.initialManageToken,
   });
   final MemberRepository repository;
   final int? initialEventId;
+  final String? initialPublicToken;
+  final String? initialManageToken;
   @override
   State<MemberEventsScreen> createState() => _MemberEventsScreenState();
 }
@@ -72,22 +76,62 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
 
   Future<void> _openInitialEventOnce(List<Map<String, dynamic>> events) async {
     final target = widget.initialEventId;
-    if (_initialEventHandled || target == null) return;
+    final publicToken = widget.initialPublicToken;
+    if (_initialEventHandled || (target == null && publicToken == null)) return;
     _initialEventHandled = true;
 
     Map<String, dynamic>? event;
-    final matches = events.where((item) => _int(item['id']) == target);
-    if (matches.isNotEmpty) {
+    Map<String, dynamic>? claimedBooking;
+    var claimSucceeded = false;
+    final matches = target == null
+        ? const <Map<String, dynamic>>[]
+        : events.where((item) => _int(item['id']) == target).toList();
+    if (matches.isNotEmpty && widget.initialManageToken == null) {
       event = matches.first;
     } else {
       try {
-        final response = await widget.repository.fetchEvent(target);
-        final detail = _map(response['data']);
-        if (detail.isNotEmpty) event = detail;
+        var resolvedId = target;
+        Map<String, dynamic>? publicEvent;
+        if (resolvedId == null && publicToken != null) {
+          final publicResponse = await widget.repository.fetchPublicEvent(
+            publicToken,
+            manageToken: widget.initialManageToken,
+          );
+          publicEvent = _map(publicResponse['data']);
+          resolvedId = _int(publicEvent['id']);
+          if (resolvedId == null || resolvedId <= 0) {
+            throw const FormatException('Public event id is missing.');
+          }
+        }
+        if (widget.initialManageToken != null) {
+          final claimResponse = await widget.repository.claimEventBooking(
+            resolvedId!,
+            widget.initialManageToken!,
+          );
+          claimedBooking = _map(claimResponse['data']);
+          claimSucceeded = claimedBooking.isNotEmpty;
+        }
+        final detail = publicToken != null && !claimSucceeded
+            ? _map(
+                (await widget.repository.fetchPublicEvent(publicToken))['data'],
+              )
+            : _map((await widget.repository.fetchEvent(resolvedId!))['data']);
+        if (detail.isNotEmpty) {
+          event = <String, dynamic>{
+            ...detail,
+            if (claimedBooking != null) 'booking': claimedBooking,
+          };
+        }
       } catch (_) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('This event is no longer available.')),
+            SnackBar(
+              content: Text(
+                widget.initialManageToken == null
+                    ? 'This event is no longer available.'
+                    : 'This booking link is invalid, expired, or already claimed.',
+              ),
+            ),
           );
         }
         return;
@@ -95,9 +139,32 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
     }
 
     if (!mounted || event == null) return;
+    if (claimSucceeded) {
+      final claimedEvent = event;
+      setState(() {
+        _events = _replaceEvent(_events, claimedEvent);
+        _bookedEvents = _replaceEvent(_bookedEvents, claimedEvent);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Event booking added to your Atlas profile.'),
+        ),
+      );
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _showEvent(event!);
     });
+  }
+
+  List<Map<String, dynamic>> _replaceEvent(
+    List<Map<String, dynamic>> events,
+    Map<String, dynamic> replacement,
+  ) {
+    final eventId = _int(replacement['id']);
+    return <Map<String, dynamic>>[
+      replacement,
+      ...events.where((event) => _int(event['id']) != eventId),
+    ];
   }
 
   Future<List<Map<String, dynamic>>> _fetchUpcoming() async {
@@ -231,6 +298,62 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
         ),
       ),
     );
+  }
+
+  Future<String?> _requestBookingPhone() async {
+    final controller = TextEditingController();
+    String? errorText;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add your mobile number'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'The event organizer needs a contact number for booking updates. No OTP verification is required.',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.done,
+                decoration: InputDecoration(
+                  labelText: 'Mobile number',
+                  hintText: '+91 98765 43210',
+                  errorText: errorText,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final value = controller.text.trim();
+                final digits = value.replaceAll(RegExp(r'\D'), '');
+                if (digits.length < 7 || digits.length > 15) {
+                  setDialogState(
+                    () => errorText = 'Enter a valid mobile number.',
+                  );
+                  return;
+                }
+                Navigator.pop(dialogContext, value);
+              },
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    return result;
   }
 
   Future<void> _showEvent(Map<String, dynamic> event) async {
@@ -451,16 +574,35 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
                     onPressed: !actionEnabled
                         ? null
                         : () async {
-                            Navigator.pop(sheetContext);
+                            String? bookingPhone;
+                            if (!booked &&
+                                event['booking_requires_phone'] == true) {
+                              bookingPhone = await _requestBookingPhone();
+                              if (bookingPhone == null) return;
+                            }
+                            if (sheetContext.mounted) {
+                              Navigator.pop(sheetContext);
+                            }
                             try {
                               Map<String, dynamic> response;
                               if (booked) {
                                 response = await widget.repository
                                     .cancelEventBooking(_int(event['id'])!);
                               } else {
-                                response = await widget.repository.bookEvent(
-                                  _int(event['id'])!,
-                                );
+                                final publicToken = event['public_token']
+                                    ?.toString();
+                                response =
+                                    event['app_visibility'] == 'link_only' &&
+                                        publicToken != null &&
+                                        publicToken.isNotEmpty
+                                    ? await widget.repository.bookPublicEvent(
+                                        publicToken,
+                                        phone: bookingPhone,
+                                      )
+                                    : await widget.repository.bookEvent(
+                                        _int(event['id'])!,
+                                        phone: bookingPhone,
+                                      );
                               }
                               await _load();
                               if (mounted) {

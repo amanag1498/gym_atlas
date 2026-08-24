@@ -8,6 +8,8 @@ use App\Http\Resources\EventBookingResource;
 use App\Http\Resources\EventResource;
 use App\Models\Event;
 use App\Models\EventBooking;
+use App\Models\Branch;
+use App\Models\Gym;
 use App\Services\Audit\AuditLogService;
 use App\Services\Authorization\ScopeResolver;
 use App\Services\Events\EventService;
@@ -21,7 +23,13 @@ class EventController extends Controller
     {
         $gym = $this->scope->resolveGym($request);
         $branch = $this->scope->resolveBranch($request, false);
-        $p = Event::query()->where('gym_id', $gym->id)->when($branch, fn ($q) => $q->where(fn ($s) => $s->whereNull('branch_id')->orWhere('branch_id', $branch->id)))->with(['gym:id,name', 'branch:id,name', 'host:id,name,avatar'])->withCount(['bookings as reserved_count' => fn ($q) => $q->whereIn('status', ['reserved', 'attended'])])->latest('starts_at')->paginate(30);
+        $accessibleBranchIds = $this->scope->branchesQuery($request->user())->where('gym_id', $gym->id)->pluck('id');
+        $p = Event::query()->where('gym_id', $gym->id)
+            ->where(fn ($scope) => $scope->whereNull('branch_id')->orWhereIn('branch_id', $accessibleBranchIds))
+            ->when($branch, fn ($q) => $q->where(fn ($s) => $s->whereNull('branch_id')->orWhere('branch_id', $branch->id)))
+            ->with(['gym:id,name', 'branch:id,name', 'host:id,name,avatar'])
+            ->withCount(['bookings as reserved_count' => fn ($q) => $q->whereIn('status', ['reserved', 'attended'])])
+            ->latest('starts_at')->paginate(30);
 
         return $this->paginated($p, EventResource::collection($p->getCollection()), 'Gym events fetched successfully.');
     }
@@ -39,7 +47,8 @@ class EventController extends Controller
     public function update(SaveEventRequest $request, Event $event)
     {
         $gym = $this->scope->resolveGym($request);
-        abort_unless($event->gym_id === $gym->id, 403);
+        $branch = $this->scope->resolveBranch($request, false);
+        $this->assertEventAccessible($request, $gym, $branch, $event);
         $old = $event->toArray();
         $event = $this->events->save($request->user(), $request->safe()->except(['scope', 'gym_id', 'branch_id']), $event);
         $this->audit->log('gym.event.updated', 'update', $request, $event, $gym, $event->branch, oldValues: $old, newValues: $event->toArray());
@@ -50,7 +59,8 @@ class EventController extends Controller
     public function cancel(Request $request, Event $event)
     {
         $gym = $this->scope->resolveGym($request);
-        abort_unless($event->gym_id === $gym->id, 403);
+        $branch = $this->scope->resolveBranch($request, false);
+        $this->assertEventAccessible($request, $gym, $branch, $event);
         $data = $request->validate(['reason' => ['required', 'string', 'max:500']]);
         $updated = $this->events->cancelEvent($event, $data['reason']);
         $this->audit->log('gym.event.cancelled', 'update', $request, $updated, $gym, $event->branch, newValues: $updated->toArray());
@@ -61,7 +71,8 @@ class EventController extends Controller
     public function roster(Request $request, Event $event)
     {
         $gym = $this->scope->resolveGym($request);
-        abort_unless($event->gym_id === $gym->id, 403);
+        $branch = $this->scope->resolveBranch($request, false);
+        $this->assertEventAccessible($request, $gym, $branch, $event);
         $p = $event->bookings()->with('user:id,name,email,phone,avatar')->orderBy('booked_at')->paginate(100);
 
         return $this->paginated($p, EventBookingResource::collection($p->getCollection()), 'Event roster fetched successfully.');
@@ -70,11 +81,24 @@ class EventController extends Controller
     public function attendance(Request $request, Event $event, EventBooking $booking)
     {
         $gym = $this->scope->resolveGym($request);
-        abort_unless($event->gym_id === $gym->id && $booking->event_id === $event->id, 403);
+        $branch = $this->scope->resolveBranch($request, false);
+        $this->assertEventAccessible($request, $gym, $branch, $event);
+        abort_unless($booking->event_id === $event->id, 403);
         $data = $request->validate(['status' => ['required', 'in:attended,no_show']]);
         $updated = $this->events->checkIn($request->user(), $booking, $data['status'] === 'no_show');
         $this->audit->log('gym.event_attendance.updated', 'update', $request, $updated, $gym, $event->branch, newValues: $updated->toArray(), context: ['event_id' => $event->id]);
 
         return $this->success(EventBookingResource::make($updated), 'Roster attendance updated.');
+    }
+
+    private function assertEventAccessible(Request $request, Gym $gym, ?Branch $selectedBranch, Event $event): void
+    {
+        abort_unless($event->gym_id === $gym->id, 403);
+        if ($event->branch_id === null) {
+            return;
+        }
+
+        abort_unless($this->scope->canAccessBranch($request->user(), $event->branch_id), 403);
+        abort_if($selectedBranch && $selectedBranch->id !== $event->branch_id, 403);
     }
 }

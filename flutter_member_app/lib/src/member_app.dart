@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import '../core/theme/app_theme.dart';
 import 'core/api_client.dart';
 import 'core/fcm_token_service.dart';
+import 'core/member_route_redirect.dart';
 import 'core/secure_storage_service.dart';
 import 'features/auth/auth_gate.dart';
 import 'features/auth/auth_service.dart';
@@ -109,42 +110,28 @@ class _MemberAppState extends State<MemberApp> {
         ),
         GoRoute(
           path: '/events/:eventId',
-          pageBuilder: (context, state) => _buildPage(
-            state,
-            MemberEventsScreen(
-              repository: memberRepository,
-              initialEventId: int.tryParse(
-                state.pathParameters['eventId'] ?? '',
+          pageBuilder: (context, state) {
+            final reference = state.pathParameters['eventId'] ?? '';
+            return _buildPage(
+              state,
+              MemberEventsScreen(
+                repository: memberRepository,
+                initialEventId: int.tryParse(reference),
+                initialPublicToken: int.tryParse(reference) == null
+                    ? reference
+                    : null,
+                initialManageToken: eventClaimToken(state.uri),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ],
       redirect: (context, state) {
-        final location = state.matchedLocation;
-
-        if (sessionController.initializing) {
-          return location == '/' ? null : '/';
-        }
-
-        if (!sessionController.isAuthenticated) {
-          if (location == '/login') return null;
-          if (location.startsWith('/join/')) {
-            final token = state.pathParameters['token'];
-            return '/login?join=${Uri.encodeComponent(token ?? '')}';
-          }
-          return '/login';
-        }
-
-        if (location == '/login' && state.uri.queryParameters['join'] != null) {
-          return '/join/${state.uri.queryParameters['join']}';
-        }
-
-        if (location == '/' || location == '/login') {
-          return '/home';
-        }
-
-        return null;
+        return memberRouteRedirect(
+          uri: state.uri,
+          initializing: sessionController.initializing,
+          isAuthenticated: sessionController.isAuthenticated,
+        );
       },
     );
     sessionController.addListener(_openPendingChatIfReady);

@@ -16,6 +16,13 @@ class MemberRepository {
       );
   Future<Map<String, dynamic>> fetchEvent(int eventId) =>
       _client.get('/member/events/$eventId');
+  Future<Map<String, dynamic>> fetchPublicEvent(
+    String publicToken, {
+    String? manageToken,
+  }) => _client.get(
+    '/member/events/public/${Uri.encodeComponent(publicToken)}',
+    queryParameters: manageToken == null ? null : {'manage_token': manageToken},
+  );
   Future<Map<String, dynamic>> fetchEventBookings({
     int page = 1,
     int perPage = 100,
@@ -23,8 +30,25 @@ class MemberRepository {
     '/member/events/bookings',
     queryParameters: {'page': page, 'per_page': perPage},
   );
-  Future<Map<String, dynamic>> bookEvent(int eventId) =>
-      _client.post('/member/events/$eventId/book');
+  Future<Map<String, dynamic>> bookEvent(int eventId, {String? phone}) =>
+      _client.post(
+        '/member/events/$eventId/book',
+        data: phone == null ? null : {'phone': phone},
+      );
+  Future<Map<String, dynamic>> bookPublicEvent(
+    String publicToken, {
+    String? phone,
+  }) => _client.post(
+    '/member/events/public/${Uri.encodeComponent(publicToken)}/book',
+    data: phone == null ? null : {'phone': phone},
+  );
+  Future<Map<String, dynamic>> claimEventBooking(
+    int eventId,
+    String manageToken,
+  ) => _client.post(
+    '/member/events/$eventId/claim-booking',
+    data: {'manage_token': manageToken},
+  );
   Future<Map<String, dynamic>> cancelEventBooking(int eventId) =>
       _client.post('/member/events/$eventId/cancel-booking');
   Future<Map<String, dynamic>> fetchAttendanceHistory({

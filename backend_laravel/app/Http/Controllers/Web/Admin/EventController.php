@@ -9,8 +9,13 @@ use App\Models\EventBooking;
 use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Events\EventService;
+use Endroid\QrCode\Builder\Builder;
+use Endroid\QrCode\Color\Color;
+use Endroid\QrCode\ErrorCorrectionLevel;
+use Endroid\QrCode\Writer\SvgWriter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
 
 class EventController extends Controller
@@ -61,7 +66,7 @@ class EventController extends Controller
             'bookings as attended_bookings_count' => fn ($query) => $query->where('status', 'attended'),
         ]);
 
-        return view('web.events.show', ['pageTitle' => $event->title, 'breadcrumbs' => ['Platform', 'Events', $event->title], 'panel' => 'admin', 'event' => $event, 'bookings' => $event->bookings()->with('user')->orderBy('booked_at')->paginate(100), 'canManageEvents' => true, 'canCheckIn' => true]);
+        return view('web.events.show', ['pageTitle' => $event->title, 'breadcrumbs' => ['Platform', 'Events', $event->title], 'panel' => 'admin', 'event' => $event, 'bookings' => $event->bookings()->with('user')->orderBy('booked_at')->paginate(100), 'canManageEvents' => true, 'canCheckIn' => true, 'publicEventUrl' => $event->public_token ? route('public.events.show', $event->public_token) : null]);
     }
 
     public function edit(Event $event): View
@@ -99,5 +104,31 @@ class EventController extends Controller
         $this->audit->log('platform.event_attendance.updated', 'update', $request, $booking, newValues: $booking->toArray(), context: ['event_id' => $event->id]);
 
         return back()->with('status', 'Attendance updated.');
+    }
+
+    public function qr(Request $request, Event $event): Response
+    {
+        abort_unless(
+            $event->scope === 'global'
+                && $event->public_token
+                && $event->status === 'published'
+                && $event->booking_audience === 'anyone'
+                && $event->public_booking_enabled,
+            404,
+        );
+
+        $result = (new Builder(
+            writer: new SvgWriter,
+            data: route('public.events.show', $event->public_token),
+            errorCorrectionLevel: ErrorCorrectionLevel::Medium,
+            size: 720,
+            margin: 30,
+            foregroundColor: new Color(37, 69, 244),
+        ))->build();
+
+        return response($result->getString(), 200, [
+            'Content-Type' => $result->getMimeType(),
+            'Content-Disposition' => ($request->boolean('download') ? 'attachment' : 'inline').'; filename="gym-atlas-event-'.$event->id.'.svg"',
+        ]);
     }
 }

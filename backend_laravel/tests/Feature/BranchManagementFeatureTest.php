@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\RoleName;
 use App\Models\Branch;
+use App\Models\Event;
 use App\Models\Facility;
 use App\Models\Gym;
 use App\Models\MemberProfile;
@@ -130,6 +131,29 @@ class BranchManagementFeatureTest extends TestCase
 
         $this->actingAs($manager, 'sanctum')
             ->getJson('/api/gym/branches/'.$branchB->id, $headers)
+            ->assertForbidden();
+
+        $hiddenEvent = Event::query()->create([
+            'scope' => 'gym',
+            'gym_id' => $gym->id,
+            'branch_id' => $branchB->id,
+            'created_by_user_id' => $owner->id,
+            'title' => 'Hidden branch event',
+            'starts_at' => now()->addDays(2),
+            'ends_at' => now()->addDays(2)->addHour(),
+            'timezone' => 'Asia/Kolkata',
+            'pricing_type' => 'free',
+            'currency' => 'INR',
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($manager, 'sanctum')
+            ->getJson('/api/gym/events', $headers)
+            ->assertOk()
+            ->assertJsonMissing(['id' => $hiddenEvent->id]);
+
+        $this->actingAs($manager, 'sanctum')
+            ->getJson('/api/gym/events/'.$hiddenEvent->id.'/bookings', $headers)
             ->assertForbidden();
     }
 

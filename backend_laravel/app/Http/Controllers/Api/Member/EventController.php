@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Member;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Event\ClaimGuestEventBookingRequest;
 use App\Http\Resources\EventBookingResource;
 use App\Http\Resources\EventResource;
 use App\Models\Event;
@@ -38,6 +39,16 @@ class EventController extends Controller
         return $this->success(EventResource::make($resolved));
     }
 
+    public function publicShow(Request $request, string $publicToken)
+    {
+        $event = $request->filled('manage_token')
+            ? $this->events->publicEventForClaim($publicToken, (string) $request->input('manage_token'))
+            : $this->events->publicEvent($publicToken);
+        $event->load(['bookings' => fn ($query) => $query->where('user_id', $request->user()->id)]);
+
+        return $this->success(EventResource::make($event));
+    }
+
     public function bookings(Request $request)
     {
         $userId = $request->user()->id;
@@ -54,8 +65,18 @@ class EventController extends Controller
 
     public function book(Request $request, Event $event)
     {
-        $booking = $this->events->book($request->user(), $event);
+        $booking = $this->events->book($request->user(), $event, false, $this->bookingPhone($request));
         $this->audit->log('member.event.booked', 'create', $request, $booking, $event->gym, $event->branch, newValues: $booking->toArray(), context: ['event_id' => $event->id]);
+
+        return $this->success(EventBookingResource::make($booking), 'Event booking saved.', 201);
+    }
+
+    public function bookPublic(Request $request, string $publicToken)
+    {
+        $event = $this->events->publicEvent($publicToken);
+        $booking = $this->events->book($request->user(), $event, true, $this->bookingPhone($request));
+        $this->audit->log('member.event.booked', 'create', $request, $booking, $event->gym, $event->branch,
+            newValues: $booking->toArray(), context: ['event_id' => $event->id, 'booking_source' => 'public_link']);
 
         return $this->success(EventBookingResource::make($booking), 'Event booking saved.', 201);
     }
@@ -66,5 +87,28 @@ class EventController extends Controller
         $this->audit->log('member.event_booking.cancelled', 'update', $request, $booking, $event->gym, $event->branch, newValues: $booking->toArray(), context: ['event_id' => $event->id]);
 
         return $this->success(EventBookingResource::make($booking), 'Event booking cancelled.');
+    }
+
+    public function claim(ClaimGuestEventBookingRequest $request, Event $event)
+    {
+        $booking = $this->events->claimGuestBooking($request->user(), $event, $request->validated('manage_token'));
+        $this->audit->log('member.event_booking.claimed', 'update', $request, $booking, $event->gym, $event->branch,
+            newValues: $booking->toArray(), context: ['event_id' => $event->id]);
+
+        return $this->success(EventBookingResource::make($booking), 'Event booking added to your Atlas profile.');
+    }
+
+    private function bookingPhone(Request $request): ?string
+    {
+        $data = $request->validate([
+            'phone' => [
+                'nullable',
+                'string',
+                'max:32',
+                'regex:/^[+0-9() .-]{7,32}$/',
+            ],
+        ]);
+
+        return $data['phone'] ?? null;
     }
 }

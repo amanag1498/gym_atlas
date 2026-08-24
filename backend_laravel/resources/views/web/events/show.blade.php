@@ -20,6 +20,22 @@
         $mapHref = $event->latitude !== null && $event->longitude !== null
             ? 'https://www.google.com/maps/search/?api=1&query='.urlencode($event->latitude.','.$event->longitude)
             : null;
+        $audienceLabel = match ($event->booking_audience ?? 'gym_members') {
+            'anyone' => 'Anyone with the link',
+            'atlas_members' => 'Any Atlas member',
+            default => 'Hosting gym members',
+        };
+        $visibilityLabel = match ($event->app_visibility ?? 'hosting_gym') {
+            'all_atlas' => 'All Atlas member apps',
+            'link_only' => 'Link only',
+            default => 'Hosting gym member app',
+        };
+        $qrRoute = $panel === 'admin'
+            ? route('web.admin.events.qr', ['event' => $event])
+            : route('web.gym.events.qr', array_merge(request()->only(['gym', 'branch']), ['event' => $event]));
+        $publicShareReady = $event->status === 'published'
+            && ($event->booking_audience ?? null) === 'anyone'
+            && $event->public_booking_enabled;
     @endphp
 
     @section('page_actions')
@@ -70,6 +86,8 @@
                     <div class="panel-card-muted p-4"><div class="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Host</div><div class="mt-2 font-semibold text-slate-950 dark:text-white">{{ $event->host?->name ?: 'No named host' }}</div><div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $event->host ? 'Can manage this event in the Trainer app' : 'Management remains with the workspace' }}</div></div>
                     <div class="panel-card-muted p-4"><div class="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Reservation type</div><div class="mt-2 font-semibold text-slate-950 dark:text-white">{{ $event->pricing_type === 'pay_at_venue' ? '₹'.number_format((float) $event->price_amount, 2).' at venue' : 'Free reservation' }}</div><div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $event->payment_note ?: 'No additional payment instructions' }}</div></div>
                     <div class="panel-card-muted p-4 sm:col-span-2"><div class="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Venue</div><div class="mt-2 font-semibold text-slate-950 dark:text-white">{{ $event->location_name ?: 'Location not set' }}</div><div class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $event->address ?: 'No venue address provided' }}</div>@if($mapHref)<a href="{{ $mapHref }}" target="_blank" rel="noopener" class="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 dark:text-brand-300"><i class="ti ti-map-pin"></i>Open directions</a>@endif</div>
+                    <div class="panel-card-muted p-4"><div class="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Who can book</div><div class="mt-2 font-semibold text-slate-950 dark:text-white">{{ $audienceLabel }}</div><div class="mt-1 text-xs text-slate-500 dark:text-slate-400">Eligibility is separate from gym enrollment.</div></div>
+                    <div class="panel-card-muted p-4"><div class="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">App visibility</div><div class="mt-2 font-semibold text-slate-950 dark:text-white">{{ $visibilityLabel }}</div><div class="mt-1 text-xs text-slate-500 dark:text-slate-400">Controls discovery in Atlas member apps.</div></div>
                 </div>
             </x-premium-card>
 
@@ -83,6 +101,33 @@
                         <div class="flex items-center justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Waitlist</span><x-status-badge :label="$event->waitlist_enabled ? 'Enabled' : 'Disabled'" :tone="$event->waitlist_enabled ? 'success' : 'neutral'" /></div>
                     </div>
                 </x-premium-card>
+
+                @if ($canManageEvents && $publicEventUrl)
+                    <x-premium-card class="p-5">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 class="panel-section-title">Public booking link</h3>
+                                <p class="panel-section-copy">Share this page or print its QR for reception and promotions.</p>
+                            </div>
+                            <x-status-badge :label="$publicShareReady ? 'Accepting guests' : 'Not active'" :tone="$publicShareReady ? 'success' : 'neutral'" />
+                        </div>
+                        @if ($publicShareReady)
+                            <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/70">
+                                <img src="{{ $qrRoute }}" alt="Public booking QR for {{ $event->title }}" class="mx-auto h-40 w-40">
+                            </div>
+                            <div class="mt-3 flex gap-2">
+                                <input id="public-event-link" value="{{ $publicEventUrl }}" readonly class="panel-input min-w-0 flex-1 text-xs">
+                                <button type="button" class="panel-btn-secondary !px-3" onclick="navigator.clipboard.writeText(document.getElementById('public-event-link').value)">Copy</button>
+                            </div>
+                            <div class="mt-3 grid grid-cols-2 gap-2">
+                                <a href="{{ $publicEventUrl }}" target="_blank" rel="noopener" class="panel-btn-secondary justify-center"><i class="ti ti-external-link"></i>Preview</a>
+                                <a href="{{ $qrRoute }}?download=1" class="panel-btn-primary justify-center"><i class="ti ti-download"></i>QR SVG</a>
+                            </div>
+                        @else
+                            <p class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">Publish the event, choose “Anyone with the public link,” and enable public booking to activate its share link.</p>
+                        @endif
+                    </x-premium-card>
+                @endif
 
                 @if ($canManageEvents && $event->status === 'published')
                     <x-premium-card class="border-rose-200 bg-rose-50/40 p-5 dark:border-rose-500/20 dark:bg-rose-500/5">
@@ -108,7 +153,7 @@
             @if ($bookings->count() > 0)
                 <div class="overflow-x-auto">
                     <table class="panel-table min-w-[900px]">
-                        <thead><tr><th>Member</th><th>Booked</th><th>Reservation</th><th>Check-in</th><th class="text-right">Attendance action</th></tr></thead>
+                        <thead><tr><th>Attendee</th><th>Contact</th><th>Booked</th><th>Reservation</th><th>Check-in</th><th class="text-right">Attendance action</th></tr></thead>
                         <tbody>
                             @foreach ($bookings as $booking)
                                 @php
@@ -118,10 +163,20 @@
                                     $attendanceRoute = $panel === 'admin'
                                         ? route('web.admin.events.attendance', ['event' => $event, 'booking' => $booking])
                                         : route('web.gym.events.attendance', array_merge(request()->only(['gym', 'branch']), ['event' => $event, 'booking' => $booking]));
+                                    $attendeeName = $booking->user?->name ?: ($booking->attendee_name ?: 'Guest attendee');
+                                    $attendeeEmail = $booking->user?->email ?: $booking->attendee_email;
+                                    $attendeePhone = $booking->user?->phone ?: $booking->attendee_phone;
+                                    $sourceLabel = match ($booking->booking_source ?? null) {
+                                        'public_web' => 'Guest',
+                                        'claimed_guest' => 'Claimed guest',
+                                        'admin' => 'Admin added',
+                                        default => $booking->user ? 'Atlas member' : 'Guest',
+                                    };
                                 @endphp
                                 <tr>
-                                    <td><div class="flex items-center gap-3"><div class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50 text-sm font-semibold text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">{{ strtoupper(substr($booking->user->name, 0, 1)) }}</div><div><div class="font-semibold text-slate-950 dark:text-white">{{ $booking->user->name }}</div><div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $booking->user->email }}{{ $booking->user->phone ? ' · '.$booking->user->phone : '' }}</div></div></div></td>
-                                    <td class="text-sm text-slate-600 dark:text-slate-300">{{ $booking->booked_at->format('d M Y, g:i A') }}</td>
+                                    <td><div class="flex items-center gap-3"><div class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50 text-sm font-semibold text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">{{ strtoupper(substr($attendeeName, 0, 1)) }}</div><div><div class="flex flex-wrap items-center gap-2"><span class="font-semibold text-slate-950 dark:text-white">{{ $attendeeName }}</span><x-status-badge :label="$sourceLabel" :tone="$booking->user ? 'info' : 'neutral'" /></div></div></div></td>
+                                    <td class="text-sm text-slate-600 dark:text-slate-300"><div>{{ $attendeeEmail ?: 'No email' }}</div><div class="mt-1 font-semibold text-slate-800 dark:text-slate-200">{{ $attendeePhone ?: 'No phone' }}</div></td>
+                                    <td class="text-sm text-slate-600 dark:text-slate-300">{{ $booking->booked_at?->format('d M Y, g:i A') ?: 'Unknown' }}</td>
                                     <td><x-status-badge :label="str($booking->status)->replace('_', ' ')->title()" /></td>
                                     <td class="text-sm text-slate-600 dark:text-slate-300">{{ $booking->checked_in_at?->format('d M Y, g:i A') ?: 'Not checked in' }}</td>
                                     <td>
@@ -140,7 +195,7 @@
                     </table>
                 </div>
             @else
-                <div class="p-5"><x-empty-state title="No bookings yet" message="Member reservations and waitlist entries will appear here after the event is published." /></div>
+                <div class="p-5"><x-empty-state title="No bookings yet" message="Atlas member and public guest reservations will appear here after the event is published." /></div>
             @endif
 
             @if ($bookings->hasPages())

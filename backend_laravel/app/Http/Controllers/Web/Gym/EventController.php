@@ -7,12 +7,18 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Event\SaveEventRequest;
 use App\Models\Event;
 use App\Models\EventBooking;
+use App\Models\Gym;
 use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Events\EventService;
 use App\Services\Web\GymWebPanelService;
+use Endroid\QrCode\Builder\Builder;
+use Endroid\QrCode\Color\Color;
+use Endroid\QrCode\ErrorCorrectionLevel;
+use Endroid\QrCode\Writer\SvgWriter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
 
 class EventController extends Controller
@@ -22,11 +28,13 @@ class EventController extends Controller
     public function index(Request $request): View
     {
         $gym = $this->panel->resolveGym($request);
-        $this->panel->assertPermission($request, PermissionName::EventsView->value, $gym);
         $branch = $this->panel->resolveBranch($request, $gym);
+        $this->panel->assertPermission($request, PermissionName::EventsView->value, $gym, $branch?->id);
+        $accessibleBranchIds = $this->panel->accessibleBranchIds($request, $gym);
 
         $eventQuery = Event::query()
             ->where('gym_id', $gym->id)
+            ->where(fn ($scope) => $scope->whereNull('branch_id')->orWhereIn('branch_id', $accessibleBranchIds))
             ->when($branch, fn ($query) => $query->where(fn ($scope) => $scope->whereNull('branch_id')->orWhere('branch_id', $branch->id)));
 
         return view('web.events.index', [
@@ -56,8 +64,8 @@ class EventController extends Controller
     public function store(SaveEventRequest $request): RedirectResponse
     {
         $gym = $this->panel->resolveGym($request);
-        $this->panel->assertPermission($request, PermissionName::EventsManage->value, $gym);
         $branch = $this->panel->resolveBranch($request, $gym);
+        $this->panel->assertPermission($request, PermissionName::EventsManage->value, $gym, $branch?->id);
         $event = $this->events->save($request->user(), [...$request->validated(), 'scope' => 'gym', 'gym_id' => $gym->id, 'branch_id' => $branch?->id]);
         $this->audit->log('gym.event.created', 'create', $request, $event, $gym, $branch, newValues: $event->toArray());
 
@@ -67,8 +75,8 @@ class EventController extends Controller
     public function show(Request $request, Event $event): View
     {
         $gym = $this->panel->resolveGym($request);
-        $this->panel->assertPermission($request, PermissionName::EventBookingsView->value, $gym);
-        abort_unless($event->gym_id === $gym->id, 404);
+        $permissionBranchId = $this->assertEventAccessible($request, $gym, $event);
+        $this->panel->assertPermission($request, PermissionName::EventBookingsView->value, $gym, $permissionBranchId);
 
         $event->load(['host', 'branch'])->loadCount([
             'bookings as confirmed_bookings_count' => fn ($query) => $query->whereIn('status', ['reserved', 'attended']),
@@ -76,14 +84,15 @@ class EventController extends Controller
             'bookings as attended_bookings_count' => fn ($query) => $query->where('status', 'attended'),
         ]);
 
-        return view('web.events.show', ['pageTitle' => $event->title, 'breadcrumbs' => ['Gym', 'Events', $event->title], 'panel' => 'gym', 'gym' => $gym, 'event' => $event, 'bookings' => $event->bookings()->with('user')->orderBy('booked_at')->paginate(100), 'canManageEvents' => $this->panel->canPermission($request, PermissionName::EventsManage->value, $gym, $event->branch_id), 'canCheckIn' => $this->panel->canPermission($request, PermissionName::EventCheckIn->value, $gym, $event->branch_id)]);
+        return view('web.events.show', ['pageTitle' => $event->title, 'breadcrumbs' => ['Gym', 'Events', $event->title], 'panel' => 'gym', 'gym' => $gym, 'event' => $event, 'bookings' => $event->bookings()->with('user')->orderBy('booked_at')->paginate(100), 'canManageEvents' => $this->panel->canPermission($request, PermissionName::EventsManage->value, $gym, $event->branch_id), 'canCheckIn' => $this->panel->canPermission($request, PermissionName::EventCheckIn->value, $gym, $event->branch_id), 'publicEventUrl' => $event->public_token ? route('public.events.show', $event->public_token) : null]);
     }
 
     public function edit(Request $request, Event $event): View
     {
         $gym = $this->panel->resolveGym($request);
-        $this->panel->assertPermission($request, PermissionName::EventsManage->value, $gym);
-        abort_unless($event->gym_id === $gym->id && in_array($event->status, ['draft', 'published'], true), 404);
+        $permissionBranchId = $this->assertEventAccessible($request, $gym, $event);
+        $this->panel->assertPermission($request, PermissionName::EventsManage->value, $gym, $permissionBranchId);
+        abort_unless(in_array($event->status, ['draft', 'published'], true), 404);
 
         return view('web.events.edit', ['pageTitle' => 'Edit '.$event->title, 'breadcrumbs' => ['Gym', 'Events', 'Edit'], 'panel' => 'gym', 'gym' => $gym, 'event' => $event, 'hosts' => User::query()->whereHas('trainerProfile', fn ($q) => $q->where('gym_id', $gym->id)->where('is_active', true)->where('status', 'active'))->orderBy('name')->get(['id', 'name'])]);
     }
@@ -91,8 +100,8 @@ class EventController extends Controller
     public function update(SaveEventRequest $request, Event $event): RedirectResponse
     {
         $gym = $this->panel->resolveGym($request);
-        $this->panel->assertPermission($request, PermissionName::EventsManage->value, $gym);
-        abort_unless($event->gym_id === $gym->id, 404);
+        $permissionBranchId = $this->assertEventAccessible($request, $gym, $event);
+        $this->panel->assertPermission($request, PermissionName::EventsManage->value, $gym, $permissionBranchId);
         $old = $event->toArray();
         $event = $this->events->save($request->user(), $request->safe()->except(['scope', 'gym_id', 'branch_id']), $event);
         $this->audit->log('gym.event.updated', 'update', $request, $event, $gym, $event->branch, oldValues: $old, newValues: $event->toArray());
@@ -103,8 +112,8 @@ class EventController extends Controller
     public function cancel(Request $request, Event $event): RedirectResponse
     {
         $gym = $this->panel->resolveGym($request);
-        $this->panel->assertPermission($request, PermissionName::EventsManage->value, $gym);
-        abort_unless($event->gym_id === $gym->id, 404);
+        $permissionBranchId = $this->assertEventAccessible($request, $gym, $event);
+        $this->panel->assertPermission($request, PermissionName::EventsManage->value, $gym, $permissionBranchId);
         $data = $request->validate(['reason' => ['required', 'string', 'max:500']]);
         $event = $this->events->cancelEvent($event, $data['reason']);
         $this->audit->log('gym.event.cancelled', 'update', $request, $event, $gym, $event->branch, newValues: $event->toArray());
@@ -115,12 +124,54 @@ class EventController extends Controller
     public function attendance(Request $request, Event $event, EventBooking $booking): RedirectResponse
     {
         $gym = $this->panel->resolveGym($request);
-        $this->panel->assertPermission($request, PermissionName::EventCheckIn->value, $gym);
-        abort_unless($event->gym_id === $gym->id && $booking->event_id === $event->id, 404);
+        $permissionBranchId = $this->assertEventAccessible($request, $gym, $event);
+        $this->panel->assertPermission($request, PermissionName::EventCheckIn->value, $gym, $permissionBranchId);
+        abort_unless($booking->event_id === $event->id, 404);
         $data = $request->validate(['status' => ['required', 'in:attended,no_show']]);
         $booking = $this->events->checkIn($request->user(), $booking, $data['status'] === 'no_show');
         $this->audit->log('gym.event_attendance.updated', 'update', $request, $booking, $gym, $event->branch, newValues: $booking->toArray(), context: ['event_id' => $event->id]);
 
         return back()->with('status', 'Attendance updated.');
+    }
+
+    public function qr(Request $request, Event $event): Response
+    {
+        $gym = $this->panel->resolveGym($request);
+        $permissionBranchId = $this->assertEventAccessible($request, $gym, $event);
+        $this->panel->assertPermission($request, PermissionName::EventsManage->value, $gym, $permissionBranchId);
+        abort_unless(
+            $event->gym_id === $gym->id
+                && $event->public_token
+                && $event->status === 'published'
+                && $event->booking_audience === 'anyone'
+                && $event->public_booking_enabled,
+            404,
+        );
+
+        $result = (new Builder(
+            writer: new SvgWriter,
+            data: route('public.events.show', $event->public_token),
+            errorCorrectionLevel: ErrorCorrectionLevel::Medium,
+            size: 720,
+            margin: 30,
+            foregroundColor: new Color(37, 69, 244),
+        ))->build();
+
+        return response($result->getString(), 200, [
+            'Content-Type' => $result->getMimeType(),
+            'Content-Disposition' => ($request->boolean('download') ? 'attachment' : 'inline').'; filename="gym-atlas-event-'.$event->id.'.svg"',
+        ]);
+    }
+
+    private function assertEventAccessible(Request $request, Gym $gym, Event $event): ?int
+    {
+        abort_unless($event->gym_id === $gym->id, 404);
+        $selectedBranch = $this->panel->resolveBranch($request, $gym);
+        if ($event->branch_id !== null) {
+            abort_unless(in_array($event->branch_id, $this->panel->accessibleBranchIds($request, $gym), true), 404);
+            abort_if($selectedBranch && $selectedBranch->id !== $event->branch_id, 404);
+        }
+
+        return $event->branch_id ?? $selectedBranch?->id;
     }
 }

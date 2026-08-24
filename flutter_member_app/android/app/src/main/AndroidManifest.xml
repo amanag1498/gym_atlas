@@ -45,12 +45,21 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="gymatlas.in" android:pathPrefix="/join/" />
+                <data android:scheme="https" android:host="gymatlas.in" android:pathPrefix="/events/" />
+                <data android:scheme="https" android:host="www.gymatlas.in" android:pathPrefix="/join/" />
+                <data android:scheme="https" android:host="www.gymatlas.in" android:pathPrefix="/events/" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="gymatlasmember" android:host="join" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="gymatlasmember" />
             </intent-filter>
             <intent-filter>
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE"/>

@@ -21,6 +21,12 @@ class EventResource extends JsonResource
         return [
             'id' => $this->id,
             'scope' => $this->scope,
+            'public_token' => $this->public_token,
+            'booking_audience' => $this->booking_audience,
+            'app_visibility' => $this->app_visibility,
+            'public_booking_enabled' => $this->public_booking_enabled,
+            'public_url' => $this->public_booking_enabled && $this->public_token ? route('public.events.show', $this->public_token) : null,
+            'registration_form_schema' => $this->registration_form_schema,
             'gym_id' => $this->gym_id,
             'branch_id' => $this->branch_id,
             'gym' => $this->whenLoaded('gym', fn () => $this->gym ? ['id' => $this->gym->id, 'name' => $this->gym->name] : null),
@@ -50,6 +56,7 @@ class EventResource extends JsonResource
             'longitude' => $this->longitude,
             'status' => $this->status,
             'can_book' => $bookingOpen && ! $fullWithoutWaitlist && ! $hasActiveBooking,
+            'booking_requires_phone' => $request->user() !== null && blank($request->user()->phone),
             'can_cancel_booking' => $booking && in_array($booking->status, ['reserved', 'waitlisted'], true)
                 && $this->status === 'published'
                 && $this->starts_at?->isFuture()

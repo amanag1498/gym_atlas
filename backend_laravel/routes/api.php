@@ -66,6 +66,7 @@ use App\Http\Controllers\Api\PlatformAdmin\WhatsAppInboxController as PlatformWh
 use App\Http\Controllers\Api\PlatformAdmin\WorkoutBookController as PlatformWorkoutBookController;
 use App\Http\Controllers\Api\Public\AuthController;
 use App\Http\Controllers\Api\Public\DiscoveryController;
+use App\Http\Controllers\Api\Public\EventController as PublicEventController;
 use App\Http\Controllers\Api\Public\FcmTokenController;
 use App\Http\Controllers\Api\Public\NotificationController as PublicNotificationController;
 use App\Http\Controllers\Api\Public\PublicContextController;
@@ -96,6 +97,7 @@ Route::post('webhooks/whatsapp', [WhatsAppWebhookController::class, 'receive']);
 
 Route::prefix('public')->group(function (): void {
     Route::get('health', [PublicContextController::class, 'health']);
+    Route::get('events/{publicToken}', [PublicEventController::class, 'show'])->whereUuid('publicToken')->middleware('throttle:60,1');
     Route::post('auth/google/login', [AuthController::class, 'googleLogin']);
     Route::post('auth/firebase/login', [AuthController::class, 'firebaseLogin']);
     Route::get('discovery/gyms', [DiscoveryController::class, 'index']);
@@ -796,9 +798,12 @@ Route::prefix('member')
         Route::put('whatsapp-consents', [WhatsAppConsentController::class, 'update']);
         Route::get('events', [MemberEventController::class, 'index'])->middleware('permission:event.view');
         Route::get('events/bookings', [MemberEventController::class, 'bookings'])->middleware('permission:event.view');
+        Route::get('events/public/{publicToken}', [MemberEventController::class, 'publicShow'])->whereUuid('publicToken')->middleware('permission:event.view');
+        Route::post('events/public/{publicToken}/book', [MemberEventController::class, 'bookPublic'])->whereUuid('publicToken')->middleware(['permission:event.view', 'throttle:30,1']);
         Route::get('events/{event}', [MemberEventController::class, 'show'])->middleware('permission:event.view');
         Route::post('events/{event}/book', [MemberEventController::class, 'book'])->middleware(['permission:event.view', 'throttle:30,1']);
         Route::post('events/{event}/cancel-booking', [MemberEventController::class, 'cancel'])->middleware(['permission:event.view', 'throttle:30,1']);
+        Route::post('events/{event}/claim-booking', [MemberEventController::class, 'claim'])->middleware(['permission:event.view', 'throttle:10,1']);
     });
 
 Route::prefix('member')

@@ -23,13 +23,23 @@ class SendEventPublishedNotifications implements ShouldQueue
 
     public function handle(EventNotificationService $notifications, GymMemberAccessService $memberAccess): void
     {
-        $event = Event::query()->find($this->eventId);
+        $event = Event::query()->with(['gym:id,is_active,status,operational_access_enabled', 'branch:id,is_active,status'])->find($this->eventId);
         if (! $event || $event->status !== 'published' || $event->starts_at->isPast()) {
+            return;
+        }
+        if ($event->scope === 'gym' && (! $event->gym
+            || ! $event->gym->is_active
+            || $event->gym->status !== 'active'
+            || ! $event->gym->operational_access_enabled
+            || ($event->branch_id && (! $event->branch || ! $event->branch->is_active || $event->branch->status !== 'active')))) {
+            return;
+        }
+        if ($event->app_visibility === 'link_only') {
             return;
         }
 
         User::query()->where('is_active', true)->whereHas('roles', fn ($q) => $q->where('name', 'member'))
-            ->when($event->scope === 'gym', fn ($q) => $q->whereHas('memberProfiles', function ($profiles) use ($event, $memberAccess): void {
+            ->when($event->app_visibility !== 'all_atlas' && $event->scope === 'gym', fn ($q) => $q->whereHas('memberProfiles', function ($profiles) use ($event, $memberAccess): void {
                 $profiles->where('gym_id', $event->gym_id)->when($event->branch_id, fn ($branch) => $branch->where('branch_id', $event->branch_id));
                 $memberAccess->scopeAccessibleProfiles($profiles);
             }))

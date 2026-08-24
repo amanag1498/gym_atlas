@@ -31,6 +31,9 @@ class SaveEventRequest extends FormRequest
             'cancellation_closes_at' => ['nullable', 'date', 'before_or_equal:starts_at'],
             'capacity' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'waitlist_enabled' => ['sometimes', 'boolean'],
+            'booking_audience' => ['sometimes', Rule::in(['gym_members', 'atlas_members', 'anyone'])],
+            'app_visibility' => ['sometimes', Rule::in(['hosting_gym', 'all_atlas', 'link_only'])],
+            'public_booking_enabled' => ['sometimes', 'boolean'],
             'pricing_type' => ['required', Rule::in(['free', 'pay_at_venue'])],
             'price_amount' => ['nullable', 'numeric', 'min:0', 'max:99999999.99', 'required_if:pricing_type,pay_at_venue'],
             'currency' => ['nullable', 'string', 'size:3'],
@@ -41,5 +44,16 @@ class SaveEventRequest extends FormRequest
             'longitude' => ['nullable', 'numeric', 'between:-180,180', 'required_with:latitude'],
             'status' => ['sometimes', Rule::in(['draft', 'published'])],
         ];
+    }
+
+    public function after(): array
+    {
+        return [function ($validator): void {
+            $event = $this->route('event');
+            $audience = $this->input('booking_audience', $event?->booking_audience);
+            if ($this->boolean('public_booking_enabled', (bool) $event?->public_booking_enabled) && $audience !== 'anyone') {
+                $validator->errors()->add('public_booking_enabled', 'Public booking can only be enabled when anyone with the link is allowed to book.');
+            }
+        }];
     }
 }

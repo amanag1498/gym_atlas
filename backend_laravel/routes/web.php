@@ -44,6 +44,7 @@ use App\Http\Controllers\Web\Gym\TrialRequestController as WebGymTrialRequestCon
 use App\Http\Controllers\Web\IndependentTrainerMemberInvitationController;
 use App\Http\Controllers\Web\MemberEmailInvitationController;
 use App\Http\Controllers\Web\Public\GymSelfEnrollmentController as PublicGymSelfEnrollmentController;
+use App\Http\Controllers\Web\Public\EventBookingController as PublicEventBookingController;
 use App\Http\Controllers\Web\Public\WhatsAppOnboardingController;
 use App\Http\Controllers\Web\TrainerEmailInvitationController;
 use App\Http\Requests\Web\Public\StoreContactSubmissionRequest;
@@ -60,6 +61,17 @@ use App\Services\Trials\TrialRequestService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+
+Route::get('/events/{publicToken}', [PublicEventBookingController::class, 'show'])
+    ->whereUuid('publicToken')->middleware('throttle:60,1')->name('public.events.show');
+Route::post('/events/{publicToken}/book', [PublicEventBookingController::class, 'store'])
+    ->whereUuid('publicToken')->middleware('throttle:10,1')->name('public.events.book');
+Route::get('/events/{publicToken}/bookings/{booking}/{manageToken}', [PublicEventBookingController::class, 'manage'])
+    ->whereUuid('publicToken')->whereNumber('booking')->whereAlphaNumeric('manageToken')
+    ->middleware('throttle:30,1')->name('public.events.manage');
+Route::post('/events/{publicToken}/bookings/{booking}/{manageToken}/cancel', [PublicEventBookingController::class, 'cancel'])
+    ->whereUuid('publicToken')->whereNumber('booking')->whereAlphaNumeric('manageToken')
+    ->middleware('throttle:10,1')->name('public.events.cancel');
 
 Route::get('/whatsapp/onboarding/{token}', [WhatsAppOnboardingController::class, 'show'])
     ->middleware('throttle:30,1')
@@ -355,6 +367,7 @@ Route::prefix('admin')
         Route::get('/events/{event}', [AdminEventController::class, 'show'])->name('events.show');
         Route::get('/events/{event}/edit', [AdminEventController::class, 'edit'])->name('events.edit');
         Route::put('/events/{event}', [AdminEventController::class, 'update'])->name('events.update');
+        Route::get('/events/{event}/qr.svg', [AdminEventController::class, 'qr'])->name('events.qr');
         Route::post('/events/{event}/cancel', [AdminEventController::class, 'cancel'])->name('events.cancel');
         Route::put('/events/{event}/bookings/{booking}/attendance', [AdminEventController::class, 'attendance'])->name('events.attendance');
         Route::get('/diet-plans/{dietPlan}', [AdminDietPlanController::class, 'show'])->name('diet-plans.show');
@@ -520,6 +533,7 @@ Route::prefix('gym')
         Route::get('/events/{event}', [WebGymEventController::class, 'show'])->name('events.show');
         Route::get('/events/{event}/edit', [WebGymEventController::class, 'edit'])->name('events.edit');
         Route::put('/events/{event}', [WebGymEventController::class, 'update'])->name('events.update');
+        Route::get('/events/{event}/qr.svg', [WebGymEventController::class, 'qr'])->name('events.qr');
         Route::post('/events/{event}/cancel', [WebGymEventController::class, 'cancel'])->name('events.cancel');
         Route::put('/events/{event}/bookings/{booking}/attendance', [WebGymEventController::class, 'attendance'])->name('events.attendance');
 

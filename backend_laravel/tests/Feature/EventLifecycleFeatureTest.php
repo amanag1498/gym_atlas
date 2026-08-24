@@ -58,6 +58,32 @@ class EventLifecycleFeatureTest extends TestCase
         $this->assertDatabaseCount('event_reminders', 2);
     }
 
+    public function test_member_without_profile_phone_must_supply_it_for_the_event_roster(): void
+    {
+        $admin = $this->user(RoleName::PlatformAdmin);
+        $member = $this->user(RoleName::Member);
+        $member->forceFill(['phone' => null])->save();
+        $event = $this->event($admin, capacity: 5);
+
+        Sanctum::actingAs($member);
+        $this->getJson("/api/member/events/{$event->id}")
+            ->assertOk()
+            ->assertJsonPath('data.booking_requires_phone', true);
+        $this->postJson("/api/member/events/{$event->id}/book")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('phone');
+        $this->postJson("/api/member/events/{$event->id}/book", ['phone' => '+91 98765 43210'])
+            ->assertCreated()
+            ->assertJsonPath('data.attendee_phone', '919876543210');
+
+        $this->assertDatabaseHas('event_bookings', [
+            'event_id' => $event->id,
+            'user_id' => $member->id,
+            'attendee_phone' => '919876543210',
+        ]);
+        $this->assertSame('919876543210', $member->fresh()->phone);
+    }
+
     public function test_capacity_waitlist_and_cancellation_promotion_are_atomic_and_idempotent(): void
     {
         $admin = $this->user(RoleName::PlatformAdmin);
@@ -462,7 +488,10 @@ class EventLifecycleFeatureTest extends TestCase
 
     private function user(RoleName $role): User
     {
-        $user = User::factory()->create(['is_active' => true]);
+        $user = User::factory()->create([
+            'is_active' => true,
+            'phone' => $role === RoleName::Member ? '9876543210' : null,
+        ]);
         $user->assignRole($role->value);
         $user->forceFill(['active_role' => $role->value])->save();
 

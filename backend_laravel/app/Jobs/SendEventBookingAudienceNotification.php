@@ -34,7 +34,7 @@ class SendEventBookingAudienceNotification implements ShouldQueue
         $event->bookings()->whereIn('status', $this->bookingStatuses)->with('user')
             ->chunkById(200, function ($bookings) use ($event, $notifications): void {
                 foreach ($bookings as $booking) {
-                    $notifications->send($booking->user, $event, $this->type, $this->title, $this->body);
+                    $notifications->sendBooking($booking, $event, $this->type, $this->title, $this->body);
                 }
             });
     }
