@@ -24,6 +24,8 @@ Allow a gym or the Gym Atlas platform to publish an event that:
 
 Defaults preserve current behaviour: gym events use `gym_members` and `hosting_gym`; global events use `atlas_members` and `all_atlas`.
 
+`all_atlas` is platform-only discovery. A gym cannot broadcast its event into every Atlas Member app. When a gym chooses `atlas_members`, members outside that gym can resolve and book only after opening the UUID event link or QR. Hosting-gym members may still discover the event normally when visibility is `hosting_gym`.
+
 ### Guest bookings do not create Atlas accounts
 
 Submitting an unverified form must not create a login-capable `users` row or a gym `member_profiles` row. The booking stores an attendee snapshot and a secure management token. Account creation/association happens only after verified Google/Apple authentication or possession of the secure booking-management link.
@@ -86,7 +88,7 @@ All public mutation routes require rate limiting, CSRF protection, honeypot vali
 ## Atlas member experience
 
 - Hosting-gym members continue to discover and book the event in the app.
-- `atlas_members` and `anyone` events can be opened by any eligible authenticated member.
+- Gym `atlas_members` events can be opened by any authenticated member who possesses the event link, but are not added to the global Member-app feed.
 - `app_visibility` decides whether an event appears in feeds; possession of a valid public link may still allow detail access.
 - Event deep links survive login and reopen the original event.
 - Claiming attaches a guest reservation to the authenticated user without creating a gym membership.

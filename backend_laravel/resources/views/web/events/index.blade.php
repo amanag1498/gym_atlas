@@ -129,7 +129,7 @@
                                                     @if ($event->public_booking_enabled)
                                                         <x-status-badge label="Public booking" tone="success" />
                                                     @elseif (($event->booking_audience ?? null) === 'atlas_members')
-                                                        <x-status-badge label="All Atlas members" tone="info" />
+                                                        <x-status-badge :label="$panel === 'gym' ? 'Atlas members via link' : 'All Atlas members'" tone="info" />
                                                     @else
                                                         <x-status-badge label="Gym members" tone="neutral" />
                                                     @endif

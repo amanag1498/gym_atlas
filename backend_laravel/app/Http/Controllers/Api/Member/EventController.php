@@ -43,7 +43,7 @@ class EventController extends Controller
     {
         $event = $request->filled('manage_token')
             ? $this->events->publicEventForClaim($publicToken, (string) $request->input('manage_token'))
-            : $this->events->publicEvent($publicToken);
+            : $this->events->memberLinkedEvent($publicToken);
         $event->load(['bookings' => fn ($query) => $query->where('user_id', $request->user()->id)]);
 
         return $this->success(EventResource::make($event));
@@ -73,7 +73,7 @@ class EventController extends Controller
 
     public function bookPublic(Request $request, string $publicToken)
     {
-        $event = $this->events->publicEvent($publicToken);
+        $event = $this->events->memberLinkedEvent($publicToken);
         $booking = $this->events->book($request->user(), $event, true, $this->bookingPhone($request));
         $this->audit->log('member.event.booked', 'create', $request, $booking, $event->gym, $event->branch,
             newValues: $booking->toArray(), context: ['event_id' => $event->id, 'booking_source' => 'public_link']);

@@ -12,6 +12,6 @@ class EventController extends Controller
 
     public function show(string $publicToken)
     {
-        return $this->success(EventResource::make($this->events->publicEvent($publicToken)));
+        return $this->success(EventResource::make($this->events->shareableEvent($publicToken)));
     }
 }

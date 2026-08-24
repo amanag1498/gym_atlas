@@ -119,6 +119,7 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
         if (detail.isNotEmpty) {
           event = <String, dynamic>{
             ...detail,
+            if (publicToken != null) '_opened_via_event_link': true,
             if (claimedBooking != null) 'booking': claimedBooking,
           };
         }
@@ -592,7 +593,7 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
                                 final publicToken = event['public_token']
                                     ?.toString();
                                 response =
-                                    event['app_visibility'] == 'link_only' &&
+                                    event['_opened_via_event_link'] == true &&
                                         publicToken != null &&
                                         publicToken.isNotEmpty
                                     ? await widget.repository.bookPublicEvent(

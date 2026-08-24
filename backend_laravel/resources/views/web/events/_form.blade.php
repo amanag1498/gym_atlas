@@ -8,10 +8,10 @@
     $selectedVisibility = old('app_visibility', $event->app_visibility ?? ($panel === 'admin' ? 'all_atlas' : 'hosting_gym'));
     $audienceOptions = $panel === 'admin'
         ? ['atlas_members' => 'Any Atlas member', 'anyone' => 'Anyone with the public link']
-        : ['gym_members' => 'Members of the hosting gym', 'atlas_members' => 'Any Atlas member', 'anyone' => 'Anyone with the public link'];
+        : ['gym_members' => 'Members of the hosting gym', 'atlas_members' => 'Any Atlas member with the link', 'anyone' => 'Anyone with the public link'];
     $visibilityOptions = $panel === 'admin'
         ? ['all_atlas' => 'All Atlas member apps', 'link_only' => 'Link only']
-        : ['hosting_gym' => 'Hosting gym member app', 'all_atlas' => 'All Atlas member apps', 'link_only' => 'Link only'];
+        : ['hosting_gym' => 'Hosting gym member app', 'link_only' => 'Link only'];
 @endphp
 
 <form method="POST" action="{{ $formAction }}" class="space-y-5" data-event-form>
@@ -107,7 +107,7 @@
 
                 <div class="mt-5 space-y-4">
                     <x-form-select name="booking_audience" label="Who can book?" :selected="$selectedAudience" :options="$audienceOptions" data-event-audience />
-                    <p class="-mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">This controls eligibility only. Booking never enrolls a guest into the hosting gym.</p>
+                    <p class="-mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{{ $panel === 'gym' ? 'Atlas members outside this gym can book only after opening the event link; the event is never broadcast to all Member apps.' : 'This controls eligibility. Booking never enrolls an attendee into a gym.' }}</p>
 
                     <x-form-select name="app_visibility" label="Where it appears" :selected="$selectedVisibility" :options="$visibilityOptions" data-event-visibility />
 
@@ -171,7 +171,6 @@
                     const priceField = form.querySelector('[data-event-price-field]');
                     const priceInput = priceField?.querySelector('input');
                     const audience = form.querySelector('[data-event-audience]');
-                    const visibility = form.querySelector('[data-event-visibility]');
                     const publicBooking = form.querySelector('[data-public-booking-checkbox]');
                     const publicBookingHelp = form.querySelector('[data-public-booking-help]');
                     const syncPricing = () => {
@@ -190,24 +189,9 @@
                                 : 'Choose “Anyone with the public link” to accept guest bookings.';
                         }
                     };
-                    const syncVisibility = () => {
-                        if (!visibility || !audience) return;
-                        const linkOnly = visibility.value === 'link_only';
-                        if (linkOnly) {
-                            audience.value = 'anyone';
-                            publicBooking.checked = true;
-                        }
-                    };
                     pricing?.addEventListener('change', syncPricing);
-                    audience?.addEventListener('change', () => { syncVisibility(); syncPublicBooking(); });
-                    visibility?.addEventListener('change', () => { syncVisibility(); syncPublicBooking(); });
-                    publicBooking?.addEventListener('change', () => {
-                        if (!publicBooking.checked && visibility?.value === 'link_only') {
-                            visibility.value = '{{ $panel === 'admin' ? 'all_atlas' : 'hosting_gym' }}';
-                        }
-                    });
+                    audience?.addEventListener('change', syncPublicBooking);
                     syncPricing();
-                    syncVisibility();
                     syncPublicBooking();
                 });
             });

@@ -12,6 +12,7 @@
             && (!$event->booking_opens_at || now()->gte($event->booking_opens_at))
             && (!$event->booking_closes_at || now()->lte($event->booking_closes_at));
         $full = $available === 0;
+        $guestBookingAllowed = $event->booking_audience === 'anyone' && $event->public_booking_enabled;
     @endphp
     <div class="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6 lg:py-12">
         <div class="mx-auto grid max-w-6xl overflow-hidden rounded-[2rem] border border-white/10 bg-white/[.06] shadow-2xl backdrop-blur lg:grid-cols-[1.05fr_.95fr]">
@@ -44,14 +45,16 @@
 
             <section class="bg-white p-7 text-slate-900 sm:p-10">
                 @if(session('status'))<div class="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{{ session('status') }}</div>@endif
-                <p class="text-xs font-bold uppercase tracking-[.18em] text-indigo-600">Reserve your place</p>
-                <h2 class="mt-2 text-2xl font-bold tracking-tight">{{ $full && $event->waitlist_enabled ? 'Join the waitlist' : 'Book this event' }}</h2>
+                <p class="text-xs font-bold uppercase tracking-[.18em] text-indigo-600">{{ $guestBookingAllowed ? 'Reserve your place' : 'Atlas member booking' }}</p>
+                <h2 class="mt-2 text-2xl font-bold tracking-tight">{{ $guestBookingAllowed ? ($full && $event->waitlist_enabled ? 'Join the waitlist' : 'Book this event') : 'Open this event in the Member app' }}</h2>
                 <div class="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
                     <span class="rounded-full bg-slate-100 px-3 py-2">{{ $event->pricing_type === 'free' ? 'Free entry' : $event->currency.' '.number_format((float) $event->price_amount, 2).' · pay at venue' }}</span>
                     @if($available !== null)<span class="rounded-full {{ $available > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' }} px-3 py-2">{{ $available > 0 ? $available.' places left' : ($event->waitlist_enabled ? 'Waitlist available' : 'Fully booked') }}</span>@endif
                 </div>
 
-                @if($bookingOpen && (!$full || $event->waitlist_enabled))
+                @if(! $guestBookingAllowed)
+                    <div class="mt-7 rounded-2xl border border-indigo-100 bg-indigo-50 p-5 text-sm leading-6 text-indigo-900">This gym shared the event by link. Sign in to the Atlas Member app to reserve your place. It will not enroll you into the hosting gym.</div>
+                @elseif($bookingOpen && (!$full || $event->waitlist_enabled))
                     <form method="POST" action="{{ route('public.events.book', $event->public_token) }}" class="mt-7 space-y-5">
                         @csrf
                         <input name="website" value="" tabindex="-1" autocomplete="off" class="hidden" aria-hidden="true">

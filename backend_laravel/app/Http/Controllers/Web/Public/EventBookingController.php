@@ -19,7 +19,7 @@ class EventBookingController extends Controller
 
     public function show(string $publicToken): View
     {
-        return view('public.events.show', ['event' => $this->events->publicEvent($publicToken)]);
+        return view('public.events.show', ['event' => $this->events->shareableEvent($publicToken)]);
     }
 
     public function store(StorePublicEventBookingRequest $request, string $publicToken): RedirectResponse

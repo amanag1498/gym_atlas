@@ -30,7 +30,7 @@ class PublicEventBookingFeatureTest extends TestCase
         Mail::fake();
     }
 
-    public function test_public_event_page_and_read_api_only_expose_enabled_anyone_events(): void
+    public function test_share_page_remains_available_when_guest_booking_is_disabled(): void
     {
         $event = $this->publicEvent();
 
@@ -46,8 +46,11 @@ class PublicEventBookingFeatureTest extends TestCase
             ->assertJsonMissingPath('data.bookings');
 
         $event->update(['public_booking_enabled' => false]);
-        $this->get(route('public.events.show', $event->public_token))->assertNotFound();
-        $this->getJson('/api/public/events/'.$event->public_token)->assertNotFound();
+        $this->get(route('public.events.show', $event->public_token))
+            ->assertOk()
+            ->assertSee('Atlas member booking')
+            ->assertDontSee('No Atlas account or gym membership is required.');
+        $this->getJson('/api/public/events/'.$event->public_token)->assertOk();
         $this->post(route('public.events.book', $event->public_token), [
             'name' => 'Blocked Guest', 'email' => 'blocked@example.com', 'phone' => '9876543210',
         ])->assertNotFound();
@@ -84,6 +87,33 @@ class PublicEventBookingFeatureTest extends TestCase
         $this->postJson('/api/member/events/'.$event->id.'/book')
             ->assertUnprocessable()
             ->assertJsonValidationErrors('event');
+        $this->postJson('/api/member/events/public/'.$event->public_token.'/book')
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'reserved');
+    }
+
+    public function test_external_atlas_member_can_book_gym_event_only_after_opening_its_link(): void
+    {
+        $event = $this->publicEvent();
+        $event->update([
+            'booking_audience' => 'atlas_members',
+            'app_visibility' => 'hosting_gym',
+            'public_booking_enabled' => false,
+        ]);
+        $member = $this->member();
+        Sanctum::actingAs($member);
+
+        $this->getJson('/api/member/events')
+            ->assertOk()
+            ->assertJsonMissing(['id' => $event->id]);
+        $this->getJson('/api/member/events/'.$event->id)->assertNotFound();
+        $this->postJson('/api/member/events/'.$event->id.'/book')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('event');
+
+        $this->getJson('/api/member/events/public/'.$event->public_token)
+            ->assertOk()
+            ->assertJsonPath('data.id', $event->id);
         $this->postJson('/api/member/events/public/'.$event->public_token.'/book')
             ->assertCreated()
             ->assertJsonPath('data.status', 'reserved');
@@ -154,7 +184,9 @@ class PublicEventBookingFeatureTest extends TestCase
         $event->update(['public_booking_enabled' => false]);
 
         Sanctum::actingAs($member);
-        $this->getJson('/api/member/events/public/'.$event->public_token)->assertNotFound();
+        $this->getJson('/api/member/events/public/'.$event->public_token)
+            ->assertOk()
+            ->assertJsonPath('data.id', $event->id);
         $this->getJson('/api/member/events/public/'.$event->public_token.'?manage_token='.$result['manage_token'])
             ->assertOk()
             ->assertJsonPath('data.id', $event->id);

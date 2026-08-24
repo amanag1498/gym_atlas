@@ -7,8 +7,10 @@ use App\Models\Event;
 use App\Models\EventBooking;
 use App\Models\Gym;
 use App\Models\User;
+use App\Services\Events\EventService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class EventManagementUiTest extends TestCase
@@ -76,6 +78,7 @@ class EventManagementUiTest extends TestCase
             ->assertSee('Create a new event')
             ->assertSee('Who can book?')
             ->assertSee('Accept public-link bookings')
+            ->assertDontSee('All Atlas member apps')
             ->assertSee('Event schedule')
             ->assertSee($event->title);
 
@@ -166,13 +169,35 @@ class EventManagementUiTest extends TestCase
                 'public_booking_enabled' => '0',
             ])->assertSessionHasErrors('booking_audience');
 
-        $this->post(route('web.admin.events.store'), $base + [
-            'booking_audience' => 'atlas_members',
-            'app_visibility' => 'link_only',
-            'public_booking_enabled' => '0',
-        ])->assertSessionHasErrors('app_visibility');
-
         $this->assertDatabaseMissing('events', ['title' => 'Invalid event']);
+    }
+
+    public function test_gym_event_cannot_be_broadcast_to_all_atlas_member_apps(): void
+    {
+        $owner = $this->user(RoleName::GymOwner);
+        $gym = Gym::query()->create([
+            'owner_user_id' => $owner->id,
+            'name' => 'Link Share Gym',
+            'slug' => 'link-share-gym',
+            'status' => 'active',
+            'is_active' => true,
+            'operational_access_enabled' => true,
+        ]);
+
+        $this->expectException(ValidationException::class);
+        app(EventService::class)->save($owner, [
+            'scope' => 'gym',
+            'gym_id' => $gym->id,
+            'title' => 'Must stay link scoped',
+            'starts_at' => now()->addWeek(),
+            'ends_at' => now()->addWeek()->addHour(),
+            'timezone' => 'Asia/Kolkata',
+            'booking_audience' => 'atlas_members',
+            'app_visibility' => 'all_atlas',
+            'public_booking_enabled' => false,
+            'pricing_type' => 'free',
+            'status' => 'draft',
+        ]);
     }
 
     private function user(RoleName $role): User

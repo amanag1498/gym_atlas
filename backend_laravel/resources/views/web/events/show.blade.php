@@ -22,7 +22,7 @@
             : null;
         $audienceLabel = match ($event->booking_audience ?? 'gym_members') {
             'anyone' => 'Anyone with the link',
-            'atlas_members' => 'Any Atlas member',
+            'atlas_members' => $event->scope === 'gym' ? 'Any Atlas member with the link' : 'Any Atlas member',
             default => 'Hosting gym members',
         };
         $visibilityLabel = match ($event->app_visibility ?? 'hosting_gym') {
@@ -34,8 +34,8 @@
             ? route('web.admin.events.qr', ['event' => $event])
             : route('web.gym.events.qr', array_merge(request()->only(['gym', 'branch']), ['event' => $event]));
         $publicShareReady = $event->status === 'published'
-            && ($event->booking_audience ?? null) === 'anyone'
-            && $event->public_booking_enabled;
+            && in_array($event->booking_audience, ['atlas_members', 'anyone'], true);
+        $guestBookingReady = $event->booking_audience === 'anyone' && $event->public_booking_enabled;
     @endphp
 
     @section('page_actions')
@@ -109,7 +109,7 @@
                                 <h3 class="panel-section-title">Public booking link</h3>
                                 <p class="panel-section-copy">Share this page or print its QR for reception and promotions.</p>
                             </div>
-                            <x-status-badge :label="$publicShareReady ? 'Accepting guests' : 'Not active'" :tone="$publicShareReady ? 'success' : 'neutral'" />
+                            <x-status-badge :label="$guestBookingReady ? 'Accepting guests' : ($publicShareReady ? 'Atlas link access' : 'Not active')" :tone="$publicShareReady ? 'success' : 'neutral'" />
                         </div>
                         @if ($publicShareReady)
                             <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/70">
@@ -124,7 +124,7 @@
                                 <a href="{{ $qrRoute }}?download=1" class="panel-btn-primary justify-center"><i class="ti ti-download"></i>QR SVG</a>
                             </div>
                         @else
-                            <p class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">Publish the event, choose “Anyone with the public link,” and enable public booking to activate its share link.</p>
+                            <p class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">Publish the event and allow Atlas members or public guests with the link to activate sharing.</p>
                         @endif
                     </x-premium-card>
                 @endif

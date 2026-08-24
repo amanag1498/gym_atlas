@@ -112,8 +112,7 @@ class EventController extends Controller
             $event->scope === 'global'
                 && $event->public_token
                 && $event->status === 'published'
-                && $event->booking_audience === 'anyone'
-                && $event->public_booking_enabled,
+                && in_array($event->booking_audience, ['atlas_members', 'anyone'], true),
             404,
         );
 

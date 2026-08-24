@@ -35,7 +35,8 @@ class EventService
 
         return $this->baseUpcomingQuery($user)->where(function (Builder $query) use ($profiles): void {
             $query->where(function (Builder $visible): void {
-                $visible->where('app_visibility', 'all_atlas')
+                $visible->where('scope', 'global')
+                    ->where('app_visibility', 'all_atlas')
                     ->whereIn('booking_audience', ['atlas_members', 'anyone']);
             })->orWhere(function (Builder $legacy): void {
                 $legacy->where('scope', 'global')->whereNull('app_visibility');
@@ -82,7 +83,7 @@ class EventService
             $event = Event::query()->lockForUpdate()->findOrFail($event->id);
             $this->ensureEventOperational($event);
             $available = $publicLinkAccess
-                ? $event->public_booking_enabled && $event->booking_audience === 'anyone'
+                ? in_array($event->booking_audience, ['atlas_members', 'anyone'], true)
                 : $this->memberQuery($user)->whereKey($event->id)->exists();
             if (! $available) {
                 $this->invalid('event', 'This event is not available to your account.');
@@ -138,6 +139,25 @@ class EventService
         $this->scopeOperationalEvents($query);
 
         return $query->firstOrFail();
+    }
+
+    public function shareableEvent(string $publicToken): Event
+    {
+        $query = Event::query()
+            ->with(['gym:id,name,logo,logo_url', 'branch:id,name', 'host:id,name,avatar'])
+            ->withCount(['bookings as reserved_count' => fn ($query) => $query->whereIn('status', ['reserved', 'attended'])])
+            ->where('public_token', $publicToken)
+            ->whereIn('booking_audience', ['atlas_members', 'anyone'])
+            ->where('status', 'published')
+            ->where('ends_at', '>=', now());
+        $this->scopeOperationalEvents($query);
+
+        return $query->firstOrFail();
+    }
+
+    public function memberLinkedEvent(string $publicToken): Event
+    {
+        return $this->shareableEvent($publicToken);
     }
 
     /** @return array{booking: EventBooking, manage_token: string} */
@@ -404,12 +424,14 @@ class EventService
             if ($scope === 'global' && $data['app_visibility'] === 'hosting_gym') {
                 $this->invalid('app_visibility', 'A global event cannot use hosting-gym visibility.');
             }
+            if ($scope === 'gym' && $data['app_visibility'] === 'all_atlas') {
+                $this->invalid('app_visibility', 'Gym events cannot be broadcast to every Atlas member app. Share the event link instead.');
+            }
             if ($data['app_visibility'] === 'all_atlas' && $data['booking_audience'] === 'gym_members') {
                 $this->invalid('app_visibility', 'An event shown to all Atlas members cannot be limited to one gym.');
             }
-            if ($data['app_visibility'] === 'link_only'
-                && ($data['booking_audience'] !== 'anyone' || ! $data['public_booking_enabled'])) {
-                $this->invalid('app_visibility', 'Link-only events must allow anyone with the public booking link.');
+            if ($data['app_visibility'] === 'link_only' && $data['booking_audience'] === 'gym_members') {
+                $this->invalid('app_visibility', 'Link-only events must allow Atlas members or public guests with the link.');
             }
             $gymId = $data['gym_id'] ?? $event?->gym_id;
             $branchId = $data['branch_id'] ?? $event?->branch_id;
