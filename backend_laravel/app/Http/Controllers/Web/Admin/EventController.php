@@ -9,10 +9,7 @@ use App\Models\EventBooking;
 use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Events\EventService;
-use Endroid\QrCode\Builder\Builder;
-use Endroid\QrCode\Color\Color;
-use Endroid\QrCode\ErrorCorrectionLevel;
-use Endroid\QrCode\Writer\SvgWriter;
+use App\Services\Qr\BrandedQrCodeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -20,7 +17,11 @@ use Illuminate\View\View;
 
 class EventController extends Controller
 {
-    public function __construct(private readonly EventService $events, private readonly AuditLogService $audit) {}
+    public function __construct(
+        private readonly EventService $events,
+        private readonly AuditLogService $audit,
+        private readonly BrandedQrCodeService $qrCodes,
+    ) {}
 
     public function index(): View
     {
@@ -116,18 +117,22 @@ class EventController extends Controller
             404,
         );
 
-        $result = (new Builder(
-            writer: new SvgWriter,
-            data: route('public.events.show', $event->public_token),
-            errorCorrectionLevel: ErrorCorrectionLevel::Medium,
-            size: 720,
-            margin: 30,
-            foregroundColor: new Color(37, 69, 244),
-        ))->build();
+        $download = $request->boolean('download');
+        $url = route('public.events.show', $event->public_token);
+        $svg = $download
+            ? $this->qrCodes->poster(
+                $url,
+                'ATLAS EVENT',
+                $event->title,
+                $event->starts_at->timezone($event->timezone)->format('D, d M Y · g:i A'),
+                footer: 'Reserve your place · Powered by GymAtlas',
+            )
+            : $this->qrCodes->code($url);
 
-        return response($result->getString(), 200, [
-            'Content-Type' => $result->getMimeType(),
-            'Content-Disposition' => ($request->boolean('download') ? 'attachment' : 'inline').'; filename="gym-atlas-event-'.$event->id.'.svg"',
+        return response($svg, 200, [
+            'Content-Type' => 'image/svg+xml',
+            'Content-Disposition' => ($download ? 'attachment' : 'inline').'; filename="gym-atlas-event-'.$event->id.($download ? '-poster' : '').'.svg"',
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 }

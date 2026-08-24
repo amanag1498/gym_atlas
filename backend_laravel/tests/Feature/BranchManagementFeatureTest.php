@@ -52,6 +52,11 @@ class BranchManagementFeatureTest extends TestCase
         $this->attachToGym($owner, $gym);
         $this->loginGymUser($owner);
 
+        $this->get(route('web.gym.branches.create', ['gym' => $gym->id]))
+            ->assertOk()
+            ->assertSee('Find on map')
+            ->assertSee('Copy hours from');
+
         $this->post(route('web.gym.branches.store', ['gym' => $gym->id]), [
             'name' => 'North Branch',
             'city' => 'Delhi',

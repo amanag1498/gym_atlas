@@ -48,7 +48,13 @@ class PlatformGymManagementTest extends TestCase
             'password' => 'secret123',
         ])->assertRedirect(route('web.admin.dashboard'));
 
-        $this->get(route('web.admin.gyms.create'))->assertOk()->assertSee('Create Gym');
+        $this->get(route('web.admin.gyms.create'))
+            ->assertOk()
+            ->assertSee('Create Gym')
+            ->assertSee('Find on map')
+            ->assertSee('Use my location')
+            ->assertSee('Copy hours from')
+            ->assertSee('Copy to selected days');
 
         $response = $this->post(route('web.admin.gyms.store'), [
             'owner_mode' => 'new',

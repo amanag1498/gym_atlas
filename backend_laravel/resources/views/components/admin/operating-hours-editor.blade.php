@@ -24,6 +24,40 @@
 
     <textarea id="{{ $id }}" name="{{ $name }}" class="hidden" aria-hidden="true">@json($value)</textarea>
 
+    <div class="rounded-2xl border border-brand-100 bg-brand-50/70 p-4 dark:border-brand-500/20 dark:bg-brand-500/5" data-hours-bulk>
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <label class="block min-w-44">
+                <span class="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-200">Copy hours from</span>
+                <select class="panel-select" data-hours-source>
+                    @foreach (['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as $day)
+                        <option value="{{ $day }}">{{ ucfirst($day) }}</option>
+                    @endforeach
+                </select>
+            </label>
+            <div class="min-w-0 flex-1">
+                <span class="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-200">Apply to days</span>
+                <div class="flex flex-wrap gap-2" data-hours-targets>
+                    @foreach (['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as $day)
+                        <label class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                            <input type="checkbox" value="{{ $day }}" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" data-hours-target @checked(in_array($day, ['tuesday', 'wednesday', 'thursday', 'friday'], true))>
+                            {{ substr(ucfirst($day), 0, 3) }}
+                        </label>
+                    @endforeach
+                </div>
+            </div>
+            <button type="button" class="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700" data-hours-apply>
+                Copy to selected days
+            </button>
+        </div>
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+            <span class="text-xs text-slate-500 dark:text-slate-400">Quick select:</span>
+            <button type="button" class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" data-hours-preset="weekdays">Weekdays</button>
+            <button type="button" class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" data-hours-preset="weekend">Weekend</button>
+            <button type="button" class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" data-hours-preset="all">Every day</button>
+            <span class="text-xs font-medium text-emerald-600 dark:text-emerald-300" data-hours-bulk-status aria-live="polite"></span>
+        </div>
+    </div>
+
     <div class="space-y-3" data-operating-hours-days></div>
 </div>
 
@@ -58,6 +92,8 @@
                 document.querySelectorAll('[data-operating-hours-editor]').forEach((editor) => {
                     const input = document.getElementById(editor.dataset.inputId);
                     const daysContainer = editor.querySelector('[data-operating-hours-days]');
+                    const sourceSelect = editor.querySelector('[data-hours-source]');
+                    const bulkStatus = editor.querySelector('[data-hours-bulk-status]');
                     let state;
 
                     try {
@@ -152,6 +188,7 @@
                     editor.addEventListener('click', (event) => {
                         const addButton = event.target.closest('[data-add-slot]');
                         const removeButton = event.target.closest('[data-remove-slot]');
+                        const presetButton = event.target.closest('[data-hours-preset]');
 
                         if (addButton) {
                             addSlot(addButton.dataset.addSlot);
@@ -160,6 +197,36 @@
                         if (removeButton) {
                             const [day, index] = removeButton.dataset.removeSlot.split(':');
                             removeSlot(day, Number(index));
+                        }
+
+                        if (presetButton) {
+                            const presets = {
+                                weekdays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+                                weekend: ['saturday', 'sunday'],
+                                all: days,
+                            };
+                            const selected = presets[presetButton.dataset.hoursPreset] || [];
+                            editor.querySelectorAll('[data-hours-target]').forEach((checkbox) => {
+                                checkbox.checked = selected.includes(checkbox.value);
+                            });
+                        }
+
+                        if (event.target.closest('[data-hours-apply]')) {
+                            const sourceDay = sourceSelect.value;
+                            const targets = [...editor.querySelectorAll('[data-hours-target]:checked')]
+                                .map((checkbox) => checkbox.value)
+                                .filter((day) => day !== sourceDay);
+
+                            if (targets.length === 0) {
+                                bulkStatus.textContent = 'Select at least one different target day.';
+                                return;
+                            }
+
+                            targets.forEach((day) => {
+                                state[day] = state[sourceDay].map((slot) => ({ ...slot }));
+                            });
+                            bulkStatus.textContent = `Copied ${dayLabel(sourceDay)} hours to ${targets.length} day${targets.length === 1 ? '' : 's'}.`;
+                            render();
                         }
                     });
 

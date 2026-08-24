@@ -69,12 +69,24 @@
                     </label>
 
                     <div class="grid gap-4 md:grid-cols-2">
-                        <x-form-input name="address" label="Address" :value="old('address', $gym->address ?: $gym->address_line)" placeholder="Street address" />
-                        <x-form-input name="city" label="City" :value="old('city', $gym->city)" placeholder="City" required />
+                        <x-admin.location-picker
+                            id="platform_gym_location"
+                            class="md:col-span-2"
+                            :address-value="$gym->address ?: $gym->address_line"
+                            :latitude-value="$gym->latitude"
+                            :longitude-value="$gym->longitude"
+                            city-name="city"
+                            :city-value="$gym->city"
+                            :city-required="true"
+                            state-name="state"
+                            :state-value="$gym->state"
+                            pincode-name="pincode"
+                            :pincode-value="$gym->pincode"
+                            country-name="country"
+                            :country-value="$gym->country ?: 'India'"
+                        />
                         <x-form-input name="contact_number" label="Contact Number" :value="old('contact_number', $gym->contact_number)" placeholder="+91 98765 43210" />
                         <x-form-input name="instagram_profile" label="Instagram Profile" :value="old('instagram_profile', $gym->instagram_profile)" placeholder="@gymatlas or instagram.com/gymatlas" />
-                        <x-form-input name="state" label="State" :value="old('state', $gym->state)" placeholder="State" />
-                        <x-form-input name="pincode" label="Pincode" :value="old('pincode', $gym->pincode)" placeholder="Pincode" />
                     </div>
 
                     <div>
@@ -87,10 +99,6 @@
                         />
                     </div>
 
-                    <div class="grid gap-4 md:grid-cols-2">
-                        <x-form-input name="latitude" label="Latitude" :value="old('latitude', $gym->latitude)" placeholder="Latitude" />
-                        <x-form-input name="longitude" label="Longitude" :value="old('longitude', $gym->longitude)" placeholder="Longitude" />
-                    </div>
                 </div>
             </x-premium-card>
 

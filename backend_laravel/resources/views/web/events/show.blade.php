@@ -33,6 +33,7 @@
         $qrRoute = $panel === 'admin'
             ? route('web.admin.events.qr', ['event' => $event])
             : route('web.gym.events.qr', array_merge(request()->only(['gym', 'branch']), ['event' => $event]));
+        $qrDownloadRoute = $qrRoute.(str_contains($qrRoute, '?') ? '&' : '?').'download=1';
         $publicShareReady = $event->status === 'published'
             && in_array($event->booking_audience, ['atlas_members', 'anyone'], true);
         $guestBookingReady = $event->booking_audience === 'anyone' && $event->public_booking_enabled;
@@ -112,16 +113,21 @@
                             <x-status-badge :label="$guestBookingReady ? 'Accepting guests' : ($publicShareReady ? 'Atlas link access' : 'Not active')" :tone="$publicShareReady ? 'success' : 'neutral'" />
                         </div>
                         @if ($publicShareReady)
-                            <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/70">
-                                <img src="{{ $qrRoute }}" alt="Public booking QR for {{ $event->title }}" class="mx-auto h-40 w-40">
-                            </div>
+                            <x-admin.branded-qr-preview
+                                class="mt-4"
+                                :src="$qrRoute"
+                                :alt="'Public booking QR for '.$event->title"
+                                eyebrow="SCAN TO BOOK"
+                                caption="Scan to view event details and reserve a place"
+                                size="sm"
+                            />
                             <div class="mt-3 flex gap-2">
                                 <input id="public-event-link" value="{{ $publicEventUrl }}" readonly class="panel-input min-w-0 flex-1 text-xs">
                                 <button type="button" class="panel-btn-secondary !px-3" onclick="navigator.clipboard.writeText(document.getElementById('public-event-link').value)">Copy</button>
                             </div>
                             <div class="mt-3 grid grid-cols-2 gap-2">
                                 <a href="{{ $publicEventUrl }}" target="_blank" rel="noopener" class="panel-btn-secondary justify-center"><i class="ti ti-external-link"></i>Preview</a>
-                                <a href="{{ $qrRoute }}?download=1" class="panel-btn-primary justify-center"><i class="ti ti-download"></i>QR SVG</a>
+                                <a href="{{ $qrDownloadRoute }}" class="panel-btn-primary justify-center"><i class="ti ti-download"></i>Print poster</a>
                             </div>
                         @else
                             <p class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">Publish the event and allow Atlas members or public guests with the link to activate sharing.</p>

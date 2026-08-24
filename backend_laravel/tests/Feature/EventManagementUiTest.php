@@ -49,7 +49,19 @@ class EventManagementUiTest extends TestCase
             ->assertSee('Confirmed')
             ->assertSee('Event details')
             ->assertSee('Public booking link')
+            ->assertSee('Print poster')
             ->assertSee('Attendee and waitlist roster');
+
+        $this->get(route('web.admin.events.qr', $event))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/svg+xml')
+            ->assertHeader('X-Content-Type-Options', 'nosniff')
+            ->assertSee('data:image/png;base64,', false);
+
+        $this->get(route('web.admin.events.qr', ['event' => $event, 'download' => 1]))
+            ->assertOk()
+            ->assertDownload('gym-atlas-event-'.$event->id.'-poster.svg')
+            ->assertSee('Open your camera and scan to continue', false);
 
         $this->get(route('web.admin.events.edit', $event))
             ->assertOk()
@@ -80,7 +92,9 @@ class EventManagementUiTest extends TestCase
             ->assertSee('Create a new event')
             ->assertSee('Who can book?')
             ->assertSee('Accept public-link bookings')
+            ->assertSee('Find on map')
             ->assertDontSee('All Atlas member apps')
+            ->assertSee('Use gym address')
             ->assertSee('Event schedule')
             ->assertSee($event->title);
 
@@ -89,7 +103,13 @@ class EventManagementUiTest extends TestCase
             ->assertSee('Confirmed')
             ->assertSee('Event details')
             ->assertSee('Public booking link')
+            ->assertSee('Print poster')
             ->assertSee('Attendee and waitlist roster');
+
+        $this->get(route('web.gym.events.qr', ['gym' => $gym->id, 'event' => $event, 'download' => 1]))
+            ->assertOk()
+            ->assertDownload('gym-atlas-event-'.$event->id.'-poster.svg')
+            ->assertSee(mb_strtoupper($gym->name), false);
 
         $this->get(route('web.gym.events.edit', ['gym' => $gym->id, 'event' => $event]))
             ->assertOk()

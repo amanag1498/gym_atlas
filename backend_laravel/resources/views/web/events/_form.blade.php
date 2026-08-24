@@ -12,6 +12,19 @@
     $visibilityOptions = $panel === 'admin'
         ? ['all_atlas' => 'All Atlas member apps', 'link_only' => 'Link only']
         : ['hosting_gym' => 'Hosting gym member app', 'link_only' => 'Link only'];
+    $gymLocationPreset = $panel === 'gym' && isset($gym)
+        ? [
+            'label' => 'Use gym address',
+            'location_name' => $gym->name,
+            'address' => $gym->address ?: $gym->address_line,
+            'city' => $gym->city,
+            'state' => $gym->state,
+            'pincode' => $gym->pincode,
+            'country' => $gym->country,
+            'latitude' => $gym->latitude,
+            'longitude' => $gym->longitude,
+        ]
+        : null;
 @endphp
 
 <form method="POST" action="{{ $formAction }}" enctype="multipart/form-data" class="space-y-5" data-event-form>
@@ -99,11 +112,18 @@
                     </div>
                 </div>
 
-                <div class="mt-5 grid gap-4 md:grid-cols-2">
+                <div class="mt-5 space-y-4">
                     <x-form-input name="location_name" label="Location name" :value="$event->location_name ?? null" placeholder="Studio A" />
-                    <x-form-input name="address" label="Address" :value="$event->address ?? null" placeholder="Full venue address" />
-                    <x-form-input name="latitude" label="Latitude" type="number" step="0.0000001" :value="$event->latitude ?? null" placeholder="28.6139000" />
-                    <x-form-input name="longitude" label="Longitude" type="number" step="0.0000001" :value="$event->longitude ?? null" placeholder="77.2090000" />
+                    <x-admin.location-picker
+                        id="event_location"
+                        label="Venue address"
+                        :address-max="2000"
+                        :address-value="$event->address ?? null"
+                        :latitude-value="$event->latitude ?? null"
+                        :longitude-value="$event->longitude ?? null"
+                        :preset="$gymLocationPreset"
+                        location-name-target="location_name"
+                    />
                 </div>
             </div>
         </div>

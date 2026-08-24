@@ -69,6 +69,14 @@
 }
 
 @layer components {
+    .atlas-location-map {
+        @apply h-80 w-full;
+    }
+
+    .dark .atlas-location-map .leaflet-tile-pane {
+        filter: brightness(0.72) contrast(1.12) saturate(0.75);
+    }
+
     .panel-shell {
         @apply min-h-screen;
     }

@@ -25,6 +25,37 @@ class GymSelfEnrollmentFeatureTest extends TestCase
         $this->seed(PermissionSeeder::class);
     }
 
+    public function test_gym_owner_can_view_branded_enrollment_qr_and_download_print_poster(): void
+    {
+        [$gym, $branch, $link] = $this->gymFixture('branded-qr');
+        $owner = User::factory()->create([
+            'active_role' => RoleName::GymOwner->value,
+            'is_active' => true,
+            'password' => 'secret123',
+        ]);
+        $owner->assignRole(RoleName::GymOwner->value);
+        $gym->update(['owner_user_id' => $owner->id]);
+        $owner->gyms()->syncWithoutDetaching([$gym->id => ['is_primary' => true]]);
+        $owner->branches()->syncWithoutDetaching([$branch->id => ['is_primary' => true]]);
+        $this->post('/gym/login', [
+            'email' => $owner->email,
+            'password' => 'secret123',
+        ])->assertRedirect(route('web.gym.dashboard'));
+
+        $route = route('web.gym.self-enrollment.qr', ['gym' => $gym->id, 'link' => $link]);
+        $this->get($route)
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/svg+xml')
+            ->assertHeader('X-Content-Type-Options', 'nosniff')
+            ->assertSee('data:image/png;base64,', false);
+
+        $this->get(route('web.gym.self-enrollment.qr', ['gym' => $gym->id, 'link' => $link, 'download' => 1]))
+            ->assertOk()
+            ->assertDownload('gym-atlas-enrollment-'.$link->id.'-poster.svg')
+            ->assertSee($gym->name, false)
+            ->assertSee('Open your camera and scan to continue', false);
+    }
+
     public function test_new_visitor_creates_reusable_account_and_active_gym_profile_without_invitation(): void
     {
         [$gym, $branch, $link] = $this->gymFixture('new');

@@ -31,6 +31,7 @@ class UpdatePlatformGymRequest extends FormRequest
             'instagram_profile' => ['nullable', 'string', 'max:255'],
             'city' => ['required', 'string', 'max:120'],
             'state' => ['nullable', 'string', 'max:120'],
+            'country' => ['nullable', 'string', 'max:120'],
             'pincode' => ['nullable', 'string', 'max:20'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],

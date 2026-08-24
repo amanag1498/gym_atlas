@@ -9,8 +9,31 @@
                 @php($url = route('public.self-enrollment.show', $link->token))
                 <x-premium-card class="p-6">
                     <div class="flex flex-col gap-5 sm:flex-row">
-                        <div class="shrink-0 rounded-2xl border border-slate-200 bg-white p-3"><img src="{{ route('web.gym.self-enrollment.qr', ['link' => $link->id] + request()->query()) }}" alt="Enrollment QR for {{ $link->name }}" class="h-44 w-44"></div>
-                        <div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2"><h2 class="text-xl font-semibold text-slate-950 dark:text-white">{{ $link->branch?->name ?? 'All branches' }}</h2><x-status-badge :label="$link->is_active ? 'Active' : 'Disabled'" :tone="$link->is_active ? 'success' : 'danger'" /></div><p class="mt-2 text-sm text-slate-500">{{ $link->name }} · {{ $link->submissions_count }} submissions</p><div class="mt-4 flex gap-2"><input id="link-{{ $link->id }}" value="{{ $url }}" readonly class="panel-input min-w-0 flex-1 text-xs"><button type="button" class="panel-btn-secondary !px-3" onclick="navigator.clipboard.writeText(document.getElementById('link-{{ $link->id }}').value)">Copy</button></div><div class="mt-4 flex flex-wrap gap-2"><a href="{{ route('web.gym.self-enrollment.qr', ['link' => $link->id, 'download' => 1] + request()->query()) }}" class="panel-btn-primary">Download SVG</a><form method="POST" action="{{ route('web.gym.self-enrollment.toggle', ['link' => $link->id] + request()->query()) }}">@csrf<button class="panel-btn-secondary">{{ $link->is_active ? 'Disable' : 'Enable' }}</button></form><form method="POST" action="{{ route('web.gym.self-enrollment.rotate', ['link' => $link->id] + request()->query()) }}" data-confirm-submit data-confirm-title="Replace this QR?" data-confirm-message="The printed and copied old link will stop working immediately." data-confirm-button="Generate new QR">@csrf<button class="panel-btn-secondary">Regenerate</button></form></div></div>
+                        <x-admin.branded-qr-preview
+                            class="shrink-0"
+                            :src="route('web.gym.self-enrollment.qr', ['link' => $link->id] + request()->query())"
+                            :alt="'Enrollment QR for '.$link->name"
+                            eyebrow="SCAN TO JOIN"
+                            :caption="'Join '.($link->branch?->name ?? $gym->name).' with GymAtlas'"
+                            tone="enrollment"
+                        />
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h2 class="text-xl font-semibold text-slate-950 dark:text-white">{{ $link->branch?->name ?? 'All branches' }}</h2>
+                                <x-status-badge :label="$link->is_active ? 'Active' : 'Disabled'" :tone="$link->is_active ? 'success' : 'danger'" />
+                            </div>
+                            <p class="mt-2 text-sm text-slate-500">{{ $link->name }} · {{ $link->submissions_count }} submissions</p>
+                            <p class="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">The downloaded poster includes the gym name, branch, scan instructions, and a high-resolution branded QR suitable for a reception desk or wall display.</p>
+                            <div class="mt-4 flex gap-2">
+                                <input id="link-{{ $link->id }}" value="{{ $url }}" readonly class="panel-input min-w-0 flex-1 text-xs">
+                                <button type="button" class="panel-btn-secondary !px-3" onclick="navigator.clipboard.writeText(document.getElementById('link-{{ $link->id }}').value)">Copy</button>
+                            </div>
+                            <div class="mt-4 flex flex-wrap gap-2">
+                                <a href="{{ route('web.gym.self-enrollment.qr', ['link' => $link->id, 'download' => 1] + request()->query()) }}" class="panel-btn-primary"><i class="ti ti-download"></i>Print poster</a>
+                                <form method="POST" action="{{ route('web.gym.self-enrollment.toggle', ['link' => $link->id] + request()->query()) }}">@csrf<button class="panel-btn-secondary">{{ $link->is_active ? 'Disable' : 'Enable' }}</button></form>
+                                <form method="POST" action="{{ route('web.gym.self-enrollment.rotate', ['link' => $link->id] + request()->query()) }}" data-confirm-submit data-confirm-title="Replace this QR?" data-confirm-message="The printed and copied old link will stop working immediately." data-confirm-button="Generate new QR">@csrf<button class="panel-btn-secondary">Regenerate</button></form>
+                            </div>
+                        </div>
                     </div>
                 </x-premium-card>
             @endforeach

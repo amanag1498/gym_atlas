@@ -11,7 +11,6 @@
     <x-form-input name="name" label="Branch Name" :value="$branch?->name" required />
     <x-form-input name="slug" label="Slug" :value="$branch?->slug" placeholder="Optional auto-generated" />
 
-    <x-form-input name="address" label="Address" :value="$branch?->address ?: $branch?->address_line" />
     <div>
         <label for="city_id" class="panel-label">Linked City</label>
         <select id="city_id" name="city_id" class="panel-select">
@@ -22,16 +21,23 @@
         </select>
     </div>
 
-    <x-form-input name="city" label="Display City" :value="$branch?->city" placeholder="Shown in listings and branch cards" />
-    <x-form-input name="state" label="State" :value="$branch?->state" />
-
-    <x-form-input name="country" label="Country" :value="$branch?->country ?: 'India'" />
-    <x-form-input name="pincode" label="Pincode" :value="$branch?->pincode" />
+    <x-admin.location-picker
+        id="branch_location"
+        class="md:col-span-2"
+        :address-value="$branch?->address ?: $branch?->address_line"
+        :latitude-value="$branch?->latitude"
+        :longitude-value="$branch?->longitude"
+        city-name="city"
+        :city-value="$branch?->city"
+        state-name="state"
+        :state-value="$branch?->state"
+        pincode-name="pincode"
+        :pincode-value="$branch?->pincode"
+        country-name="country"
+        :country-value="$branch?->country ?: 'India'"
+    />
 
     <x-form-input name="timezone" label="Timezone" :value="$branch?->timezone ?: ($gym->timezone ?? config('app.timezone'))" />
-    <x-form-input name="latitude" label="Latitude" :value="$branch?->latitude" />
-
-    <x-form-input name="longitude" label="Longitude" :value="$branch?->longitude" />
 
     <div class="md:col-span-2">
         <x-admin.operating-hours-editor

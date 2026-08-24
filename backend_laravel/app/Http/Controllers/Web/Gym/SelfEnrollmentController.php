@@ -8,11 +8,8 @@ use App\Models\GymSelfEnrollmentLink;
 use App\Models\GymSelfEnrollmentSubmission;
 use App\Services\Audit\AuditLogService;
 use App\Services\Members\GymSelfEnrollmentService;
+use App\Services\Qr\BrandedQrCodeService;
 use App\Services\Web\GymWebPanelService;
-use Endroid\QrCode\Builder\Builder;
-use Endroid\QrCode\Color\Color;
-use Endroid\QrCode\ErrorCorrectionLevel;
-use Endroid\QrCode\Writer\SvgWriter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -24,6 +21,7 @@ class SelfEnrollmentController extends Controller
         private readonly GymWebPanelService $gymWebPanelService,
         private readonly GymSelfEnrollmentService $service,
         private readonly AuditLogService $auditLogService,
+        private readonly BrandedQrCodeService $qrCodes,
     ) {}
 
     public function index(Request $request): View
@@ -67,20 +65,24 @@ class SelfEnrollmentController extends Controller
 
     public function qr(Request $request, GymSelfEnrollmentLink $link): Response
     {
-        $this->authorizeLink($request, $link);
+        $gym = $this->authorizeLink($request, $link);
         $url = route('public.self-enrollment.show', $link->token);
-        $result = (new Builder(
-            writer: new SvgWriter,
-            data: $url,
-            errorCorrectionLevel: ErrorCorrectionLevel::Medium,
-            size: 720,
-            margin: 30,
-            foregroundColor: new Color(15, 118, 110),
-        ))->build();
+        $download = $request->boolean('download');
+        $svg = $download
+            ? $this->qrCodes->poster(
+                $url,
+                'MEMBER ENROLLMENT',
+                $gym->name,
+                $link->branch?->name ?? 'Join this gym with GymAtlas',
+                'enrollment',
+                'Secure member enrollment · Powered by GymAtlas',
+            )
+            : $this->qrCodes->code($url, 'enrollment');
 
-        return response($result->getString(), 200, [
-            'Content-Type' => $result->getMimeType(),
-            'Content-Disposition' => ($request->boolean('download') ? 'attachment' : 'inline').'; filename="gym-atlas-enrollment-'.$link->id.'.svg"',
+        return response($svg, 200, [
+            'Content-Type' => 'image/svg+xml',
+            'Content-Disposition' => ($download ? 'attachment' : 'inline').'; filename="gym-atlas-enrollment-'.$link->id.($download ? '-poster' : '').'.svg"',
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 

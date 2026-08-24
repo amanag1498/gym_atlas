@@ -52,8 +52,6 @@
                     @method('PUT')
 
                     <x-form-input name="name" label="Gym Name" :value="$gym->name" required />
-                    <x-form-input name="city" label="City" :value="$gym->city" required />
-
                     <div class="md:col-span-2">
                         <label for="description" class="panel-label">Description</label>
                         <textarea id="description" name="description" class="panel-textarea" rows="4">{{ old('description', $gym->description) }}</textarea>
@@ -89,14 +87,24 @@
                     <x-form-input name="logo_url" label="Fallback Logo URL" :value="$gym->logo_url" />
                     <x-form-input name="cover_image_url" label="Fallback Cover URL" :value="$gym->cover_image_url" />
 
-                    <x-form-input name="address" label="Address" :value="$gym->address ?: $gym->address_line" />
-                    <x-form-input name="state" label="State" :value="$gym->state" />
+                    <x-admin.location-picker
+                        id="gym_profile_location"
+                        class="md:col-span-2"
+                        :address-value="$gym->address ?: $gym->address_line"
+                        :latitude-value="$gym->latitude"
+                        :longitude-value="$gym->longitude"
+                        city-name="city"
+                        :city-value="$gym->city"
+                        :city-required="true"
+                        state-name="state"
+                        :state-value="$gym->state"
+                        pincode-name="pincode"
+                        :pincode-value="$gym->pincode"
+                        country-name="country"
+                        :country-value="$gym->country ?: 'India'"
+                    />
                     <x-form-input name="contact_number" label="Contact Number" :value="$gym->contact_number" />
                     <x-form-input name="instagram_profile" label="Instagram Profile" :value="$gym->instagram_profile" />
-                    <x-form-input name="country" label="Country" :value="$gym->country ?: 'India'" />
-                    <x-form-input name="pincode" label="Pincode" :value="$gym->pincode" />
-                    <x-form-input name="latitude" label="Latitude" :value="$gym->latitude" />
-                    <x-form-input name="longitude" label="Longitude" :value="$gym->longitude" />
                     <x-form-input name="timezone" label="Timezone" :value="$gym->timezone" />
 
                     <div class="md:col-span-2">
