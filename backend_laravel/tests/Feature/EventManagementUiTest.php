@@ -92,7 +92,7 @@ class EventManagementUiTest extends TestCase
             ->assertSee('Create a new event')
             ->assertSee('Who can book?')
             ->assertSee('Accept public-link bookings')
-            ->assertSee('Find on map')
+            ->assertSee('Search Google Maps')
             ->assertDontSee('All Atlas member apps')
             ->assertSee('Use gym address')
             ->assertSee('Event schedule')

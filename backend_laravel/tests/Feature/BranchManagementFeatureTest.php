@@ -51,11 +51,21 @@ class BranchManagementFeatureTest extends TestCase
 
         $this->attachToGym($owner, $gym);
         $this->loginGymUser($owner);
+        config()->set('services.google.maps_browser_key', 'restricted-browser-test-key');
+        config()->set('services.google.maps_id', 'test-map-id');
 
         $this->get(route('web.gym.branches.create', ['gym' => $gym->id]))
             ->assertOk()
-            ->assertSee('Find on map')
+            ->assertSee('Search Google Maps')
+            ->assertSee('name="google-maps-api-key" content="restricted-browser-test-key"', false)
+            ->assertSee('name="google-maps-id" content="test-map-id"', false)
             ->assertSee('Copy hours from');
+
+        $this->post(route('web.gym.branches.store', ['gym' => $gym->id]), [
+            'name' => 'Incomplete Pin Branch',
+            'city' => 'Delhi',
+            'latitude' => '28.6139000',
+        ])->assertSessionHasErrors('longitude');
 
         $this->post(route('web.gym.branches.store', ['gym' => $gym->id]), [
             'name' => 'North Branch',

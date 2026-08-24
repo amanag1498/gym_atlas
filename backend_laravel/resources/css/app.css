@@ -73,8 +73,54 @@
         @apply h-80 w-full;
     }
 
-    .dark .atlas-location-map .leaflet-tile-pane {
-        filter: brightness(0.72) contrast(1.12) saturate(0.75);
+    .atlas-location-picker,
+    .atlas-hours-editor {
+        color-scheme: light;
+    }
+
+    .dark .atlas-location-picker,
+    .dark .atlas-hours-editor {
+        color-scheme: dark;
+    }
+
+    .atlas-location-picker .panel-input,
+    .atlas-hours-editor .panel-input,
+    .atlas-hours-editor .panel-select {
+        @apply border-slate-300 bg-white text-slate-950 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500;
+        -webkit-text-fill-color: currentColor;
+        opacity: 1;
+    }
+
+    .atlas-hours-editor .panel-select option {
+        @apply bg-white text-slate-950 dark:bg-slate-900 dark:text-slate-100;
+    }
+
+    .atlas-location-picker input:disabled,
+    .atlas-location-picker button:disabled,
+    .atlas-hours-editor input:disabled,
+    .atlas-hours-editor button:disabled,
+    .atlas-hours-editor select:disabled {
+        @apply cursor-not-allowed opacity-60;
+    }
+
+    .atlas-location-suggestion {
+        @apply border-slate-200 bg-white text-slate-800 hover:bg-brand-50 hover:text-brand-700 focus:bg-brand-50 focus:text-brand-700 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-brand-500/10 dark:hover:text-brand-300 dark:focus:bg-brand-500/10 dark:focus:text-brand-300;
+    }
+
+    .atlas-location-picker input[type='number'],
+    .atlas-hours-editor input[type='time'] {
+        @apply text-slate-950 dark:text-slate-100;
+    }
+
+    .atlas-location-picker input[type='number']::-webkit-inner-spin-button,
+    .atlas-hours-editor input[type='time']::-webkit-calendar-picker-indicator {
+        opacity: 0.72;
+    }
+
+    .dark .atlas-location-picker input[type='number']::-webkit-inner-spin-button,
+    .dark .atlas-hours-editor input[type='time']::-webkit-calendar-picker-indicator {
+        filter: invert(1);
+        opacity: 0.78;
     }
 
     .panel-shell {

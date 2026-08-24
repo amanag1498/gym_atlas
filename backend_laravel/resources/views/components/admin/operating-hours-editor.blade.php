@@ -10,7 +10,7 @@
     data-operating-hours-editor
     data-input-id="{{ $id }}"
     data-initial='@json($value)'
-    class="space-y-4"
+    class="atlas-hours-editor space-y-4 text-slate-900 dark:text-slate-100"
 >
     <div class="flex items-start justify-between gap-3">
         <div>

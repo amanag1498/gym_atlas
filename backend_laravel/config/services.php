@@ -41,6 +41,9 @@ return [
             explode(',', (string) env('GOOGLE_CLIENT_IDS', '')),
         ))),
         'certs_url' => env('GOOGLE_CERTS_URL', 'https://www.googleapis.com/oauth2/v1/certs'),
+        'maps_browser_key' => env('GOOGLE_MAPS_BROWSER_KEY'),
+        'maps_id' => env('GOOGLE_MAPS_ID'),
+        'maps_region' => env('GOOGLE_MAPS_REGION', 'IN'),
     ],
 
     'firebase' => [

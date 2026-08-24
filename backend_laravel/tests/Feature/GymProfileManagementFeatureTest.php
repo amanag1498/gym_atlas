@@ -60,7 +60,7 @@ class GymProfileManagementFeatureTest extends TestCase
 
         $this->get(route('web.gym.profile.edit', ['gym' => $gym->id, 'branch' => $branch->id]))
             ->assertOk()
-            ->assertSee('Find on map')
+            ->assertSee('Search Google Maps')
             ->assertSee('Copy hours from');
 
         $this->put(route('web.gym.profile.update', ['gym' => $gym->id, 'branch' => $branch->id]), [

@@ -51,7 +51,7 @@ class PlatformGymManagementTest extends TestCase
         $this->get(route('web.admin.gyms.create'))
             ->assertOk()
             ->assertSee('Create Gym')
-            ->assertSee('Find on map')
+            ->assertSee('Search Google Maps')
             ->assertSee('Use my location')
             ->assertSee('Copy hours from')
             ->assertSee('Copy to selected days');

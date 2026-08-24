@@ -25,6 +25,11 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="csrf-token" content="{{ csrf_token() }}" />
     <meta name="description" content="Gym ecosystem control panel" />
+    @if (config('services.google.maps_browser_key'))
+        <meta name="google-maps-api-key" content="{{ config('services.google.maps_browser_key') }}" />
+    @endif
+    <meta name="google-maps-id" content="{{ config('services.google.maps_id') }}" />
+    <meta name="google-maps-region" content="{{ config('services.google.maps_region', 'IN') }}" />
 
     <link rel="icon" href="{{ asset('tailadmin/images/logo/logo-icon.svg') }}" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />

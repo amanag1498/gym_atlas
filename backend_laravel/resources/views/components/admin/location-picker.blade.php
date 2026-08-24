@@ -28,7 +28,7 @@
 @endphp
 
 <div
-    {{ $attributes->class(['space-y-4']) }}
+    {{ $attributes->class(['atlas-location-picker space-y-4 text-slate-900 dark:text-slate-100']) }}
     data-location-picker
     data-picker-id="{{ $id }}"
     data-initial-latitude="{{ $latitude }}"
@@ -46,16 +46,20 @@
                 type="text"
                 value="{{ old($addressName, $addressValue) }}"
                 class="panel-input"
-                placeholder="Search an area, landmark, or full address"
+                placeholder="Search Google Maps for a gym, landmark, or address"
                 maxlength="{{ $addressMax }}"
-                autocomplete="street-address"
+                autocomplete="off"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded="false"
+                aria-controls="{{ $id }}_location_results"
                 data-location-address
             >
             @error($addressName)<p class="mt-1 text-xs font-medium text-rose-600">{{ $message }}</p>@enderror
         </div>
         <div class="flex flex-wrap gap-2">
             <button type="button" class="inline-flex h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-wait disabled:opacity-60" data-location-search>
-                <i class="ti ti-search"></i> Find on map
+                <i class="ti ti-brand-google-maps"></i> Search Google Maps
             </button>
             <button type="button" class="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-brand-300 hover:text-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200" data-location-current>
                 <i class="ti ti-current-location"></i> Use my location
@@ -68,12 +72,12 @@
         </div>
     </div>
 
-    <div class="hidden overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900" data-location-results></div>
+    <div id="{{ $id }}_location_results" role="listbox" aria-label="Google Maps address suggestions" class="hidden overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900" data-location-results></div>
 
     <div class="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-900">
         <div class="atlas-location-map" data-location-map></div>
         <div class="pointer-events-none absolute left-3 top-3 z-[500] rounded-lg bg-white/95 px-3 py-2 text-xs font-medium text-slate-700 shadow dark:bg-slate-950/90 dark:text-slate-200">
-            Search or tap the map to place the pin
+            Search or click the map to place the pin
         </div>
     </div>
 
@@ -82,7 +86,7 @@
             {{ $hasCoordinates ? 'Map pin saved.' : 'No map pin selected yet. The typed address can still be saved.' }}
         </p>
         <p class="text-[11px] text-slate-400">
-            Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" class="underline">OpenStreetMap contributors</a>
+            Powered by Google Maps
         </p>
     </div>
 

@@ -1,6 +1,3 @@
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-
 const themeStorageKey = 'gym-ecosystem-panel-theme';
 const sidebarStorageKey = 'gym-ecosystem-panel-sidebar-collapsed';
 
@@ -192,35 +189,109 @@ const initializePreloader = () => {
     }, 350);
 };
 
-let geocodingQueue = Promise.resolve();
-let lastGeocodingRequestAt = 0;
+let googleMapsPromise;
 
-const requestOpenStreetMap = (url) => {
-    const request = async () => {
-        const elapsed = Date.now() - lastGeocodingRequestAt;
+const loadGoogleMaps = () => {
+    if (window.google?.maps?.importLibrary) {
+        return Promise.resolve(window.google.maps);
+    }
 
-        if (elapsed < 1100) {
-            await new Promise((resolve) => window.setTimeout(resolve, 1100 - elapsed));
-        }
+    if (googleMapsPromise) {
+        return googleMapsPromise;
+    }
 
-        lastGeocodingRequestAt = Date.now();
-        const response = await fetch(url, { headers: { Accept: 'application/json' } });
+    const apiKey = document.querySelector('meta[name="google-maps-api-key"]')?.content?.trim();
 
-        if (!response.ok) {
-            throw new Error('The map search service is temporarily unavailable.');
-        }
+    if (!apiKey) {
+        return Promise.reject(new Error('Google Maps is not configured. Add GOOGLE_MAPS_BROWSER_KEY on the server.'));
+    }
 
-        return response.json();
-    };
+    googleMapsPromise = new Promise((resolve, reject) => {
+        const callbackName = `gymAtlasGoogleMapsReady${Date.now()}`;
+        const script = document.createElement('script');
 
-    const queued = geocodingQueue.then(request, request);
-    geocodingQueue = queued.catch(() => undefined);
+        window[callbackName] = () => {
+            delete window[callbackName];
+            resolve(window.google.maps);
+        };
 
-    return queued;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&loading=async&callback=${callbackName}`;
+        script.async = true;
+        script.onerror = () => {
+            delete window[callbackName];
+            googleMapsPromise = undefined;
+            reject(new Error('Google Maps could not be loaded. Check the browser key and its website/API restrictions.'));
+        };
+        document.head.appendChild(script);
+    });
+
+    return googleMapsPromise;
 };
 
-const initializeLocationPickers = () => {
-    document.querySelectorAll('[data-location-picker]').forEach((picker) => {
+const locationErrorMessage = (error) => {
+    if (error?.code === 1) {
+        return 'Location permission is blocked. Allow Location for this site in browser settings, then try again.';
+    }
+
+    if (error?.code === 2) {
+        return 'Your current location is unavailable. Search and select the address instead.';
+    }
+
+    if (error?.code === 3) {
+        return 'Finding your location timed out. Try again or search the address instead.';
+    }
+
+    return 'Your location could not be read. Search and select the address instead.';
+};
+
+const initializeLocationPickers = async () => {
+    const pickers = [...document.querySelectorAll('[data-location-picker]')];
+
+    if (pickers.length === 0) {
+        return;
+    }
+
+    let maps;
+    let Map;
+    let Geocoder;
+    let AutocompleteSessionToken;
+    let AutocompleteSuggestion;
+    let AdvancedMarkerElement;
+
+    try {
+        maps = await loadGoogleMaps();
+        const [mapsLibrary, placesLibrary, geocodingLibrary, markerLibrary] = await Promise.all([
+            maps.importLibrary('maps'),
+            maps.importLibrary('places'),
+            maps.importLibrary('geocoding'),
+            maps.importLibrary('marker'),
+        ]);
+        ({ Map } = mapsLibrary);
+        ({ Geocoder } = geocodingLibrary);
+        ({ AutocompleteSessionToken, AutocompleteSuggestion } = placesLibrary);
+        ({ AdvancedMarkerElement } = markerLibrary);
+    } catch (error) {
+        pickers.forEach((picker) => {
+            const status = picker.querySelector('[data-location-status]');
+            const mapElement = picker.querySelector('[data-location-map]');
+
+            if (status) {
+                status.textContent = error.message;
+                status.classList.add('text-rose-600', 'dark:text-rose-400');
+            }
+            if (mapElement) {
+                mapElement.innerHTML = '<div class="flex h-full items-center justify-center px-6 text-center text-sm text-slate-500">Google Maps is unavailable. You can still enter the address manually.</div>';
+            }
+            picker.querySelector('[data-location-search]')?.setAttribute('disabled', 'disabled');
+            picker.querySelector('[data-location-current]')?.setAttribute('disabled', 'disabled');
+        });
+        return;
+    }
+
+    const mapId = document.querySelector('meta[name="google-maps-id"]')?.content?.trim();
+    const region = document.querySelector('meta[name="google-maps-region"]')?.content?.trim().toLowerCase() || 'in';
+
+    pickers.forEach((picker) => {
         const mapElement = picker.querySelector('[data-location-map]');
         const addressInput = picker.querySelector('[data-location-address]');
         const latitudeInput = picker.querySelector('[data-location-latitude]');
@@ -245,16 +316,29 @@ const initializeLocationPickers = () => {
         const initialLatitude = Number.parseFloat(picker.dataset.initialLatitude);
         const initialLongitude = Number.parseFloat(picker.dataset.initialLongitude);
         const hasInitialCoordinates = Number.isFinite(initialLatitude) && Number.isFinite(initialLongitude);
-        const map = L.map(mapElement, { scrollWheelZoom: false }).setView(
-            hasInitialCoordinates ? [initialLatitude, initialLongitude] : [22.5937, 78.9629],
-            hasInitialCoordinates ? 16 : 5,
-        );
-        let marker = null;
+        const mapOptions = {
+            center: hasInitialCoordinates
+                ? { lat: initialLatitude, lng: initialLongitude }
+                : { lat: 22.5937, lng: 78.9629 },
+            zoom: hasInitialCoordinates ? 16 : 5,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: true,
+            gestureHandling: 'cooperative',
+        };
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '&copy; OpenStreetMap contributors',
-        }).addTo(map);
+        if (mapId) {
+            mapOptions.mapId = mapId;
+        }
+
+        const map = new Map(mapElement, mapOptions);
+        const geocoder = new Geocoder();
+        let marker = null;
+        let sessionToken = new AutocompleteSessionToken();
+        let searchSequence = 0;
+        let searchTimer;
+        let selectedAddress = hasInitialCoordinates ? addressInput.value.trim() : '';
+        let isApplyingLocation = false;
 
         const setStatus = (message, isError = false) => {
             status.textContent = message;
@@ -262,73 +346,136 @@ const initializeLocationPickers = () => {
             status.classList.toggle('dark:text-rose-400', isError);
         };
 
+        const updateInput = (input, value, dispatchChange = true) => {
+            if (!input) return;
+            input.value = value ?? '';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            if (dispatchChange) {
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        };
+
+        const clearCoordinates = () => {
+            updateInput(latitudeInput, '', false);
+            updateInput(longitudeInput, '', false);
+
+            if (!marker) return;
+            if (mapId) {
+                marker.map = null;
+            } else {
+                marker.setMap(null);
+            }
+            marker = null;
+        };
+
         const setCoordinates = (latitude, longitude, moveMap = true) => {
             if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
                 return;
             }
 
-            latitudeInput.value = latitude.toFixed(7);
-            longitudeInput.value = longitude.toFixed(7);
+            updateInput(latitudeInput, latitude.toFixed(7), false);
+            updateInput(longitudeInput, longitude.toFixed(7), false);
 
             if (!marker) {
-                marker = L.circleMarker([latitude, longitude], {
-                    radius: 9,
-                    color: '#ffffff',
-                    weight: 3,
-                    fillColor: '#465fff',
-                    fillOpacity: 1,
-                }).addTo(map);
+                marker = mapId
+                    ? new AdvancedMarkerElement({
+                        map,
+                        position: { lat: latitude, lng: longitude },
+                        title: 'Selected location',
+                    })
+                    : new maps.Marker({
+                        map,
+                        position: { lat: latitude, lng: longitude },
+                        title: 'Selected location',
+                    });
+            } else if (mapId) {
+                marker.position = { lat: latitude, lng: longitude };
             } else {
-                marker.setLatLng([latitude, longitude]);
+                marker.setPosition({ lat: latitude, lng: longitude });
             }
 
             if (moveMap) {
-                map.setView([latitude, longitude], Math.max(map.getZoom(), 16));
+                map.panTo({ lat: latitude, lng: longitude });
+                map.setZoom(Math.max(map.getZoom() || 0, 16));
             }
+        };
+
+        const componentValue = (components, types, short = false) => {
+            const component = (components || []).find((item) => types.some((type) => item.types?.includes(type)));
+            return short
+                ? component?.shortText || component?.short_name || ''
+                : component?.longText || component?.long_name || '';
         };
 
         const applyAddress = (payload, fallbackAddress = '') => {
-            const details = payload?.address || {};
+            const components = payload?.addressComponents || payload?.address_components || [];
             const addressMax = Number.parseInt(picker.dataset.addressMax || '255', 10);
-            addressInput.value = (payload?.display_name || fallbackAddress || addressInput.value).slice(0, addressMax);
+            const formattedAddress = (payload?.formattedAddress || payload?.formatted_address || fallbackAddress || addressInput.value).slice(0, addressMax);
+            const city = componentValue(components, [
+                'locality',
+                'postal_town',
+                'administrative_area_level_3',
+                'sublocality_level_1',
+                'administrative_area_level_2',
+            ]);
 
-            if (cityInput) {
-                cityInput.value = details.city || details.town || details.village || details.municipality || details.county || cityInput.value;
+            isApplyingLocation = true;
+            updateInput(addressInput, formattedAddress);
+            updateInput(cityInput, city);
+            updateInput(stateInput, componentValue(components, ['administrative_area_level_1']));
+            updateInput(pincodeInput, componentValue(components, ['postal_code']));
+            updateInput(countryInput, componentValue(components, ['country']));
+
+            if (locationNameInput && !locationNameInput.value.trim()) {
+                updateInput(locationNameInput, payload?.displayName || payload?.name || '');
             }
-            if (stateInput) {
-                stateInput.value = details.state || stateInput.value;
-            }
-            if (pincodeInput) {
-                pincodeInput.value = details.postcode || pincodeInput.value;
-            }
-            if (countryInput) {
-                countryInput.value = details.country || countryInput.value;
-            }
+
+            selectedAddress = formattedAddress.trim();
+            isApplyingLocation = false;
         };
 
-        const chooseLocation = (payload) => {
-            const latitude = Number.parseFloat(payload.lat);
-            const longitude = Number.parseFloat(payload.lon);
+        const chooseLocation = async (prediction) => {
+            setStatus('Loading the selected place…');
+            const place = prediction.toPlace();
+            await place.fetchFields({
+                fields: ['displayName', 'formattedAddress', 'location', 'addressComponents'],
+            });
+            const latitude = place.location?.lat();
+            const longitude = place.location?.lng();
+
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+                throw new Error('Google Maps did not return coordinates for that place. Try another result.');
+            }
+
+            applyAddress(place);
             setCoordinates(latitude, longitude);
-            applyAddress(payload);
             results.replaceChildren();
             results.classList.add('hidden');
-            setStatus('Address and map pin selected.');
+            addressInput.setAttribute('aria-expanded', 'false');
+            sessionToken = new AutocompleteSessionToken();
+            setStatus('Google Maps address and pin selected.');
         };
 
         const reverseGeocode = async (latitude, longitude) => {
             setStatus('Pin selected. Finding the address…');
 
             try {
-                const payload = await requestOpenStreetMap(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}&addressdetails=1&accept-language=en`);
-                applyAddress(payload);
-                setStatus('Address and map pin selected.');
+                const response = await geocoder.geocode({ location: { lat: latitude, lng: longitude } });
+                const place = response.results?.[0];
+
+                if (!place) {
+                    throw new Error('No address found.');
+                }
+
+                applyAddress(place);
+                setCoordinates(latitude, longitude, false);
+                setStatus('Google Maps address and pin selected.');
             } catch (error) {
                 setStatus('The pin is saved, but the address could not be filled automatically. You can type it manually.', true);
             }
         };
 
-        const search = async () => {
+        const search = async ({ selectFirst = false } = {}) => {
             const query = addressInput.value.trim();
 
             if (query.length < 3) {
@@ -337,52 +484,144 @@ const initializeLocationPickers = () => {
                 return;
             }
 
-            searchButton.disabled = true;
-            setStatus('Searching the map…');
+            const sequence = ++searchSequence;
+            if (searchButton) searchButton.disabled = true;
+            setStatus('Searching Google Maps…');
 
             try {
-                const payload = await requestOpenStreetMap(`https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&limit=5&addressdetails=1&accept-language=en`);
+                const response = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
+                    input: query,
+                    sessionToken,
+                    region,
+                    language: document.documentElement.lang || 'en',
+                });
+
+                if (sequence !== searchSequence) {
+                    return;
+                }
+
+                const predictions = response.suggestions
+                    .map((suggestion) => suggestion.placePrediction)
+                    .filter(Boolean)
+                    .slice(0, 5);
                 results.replaceChildren();
 
-                if (!Array.isArray(payload) || payload.length === 0) {
+                if (predictions.length === 0) {
                     results.classList.add('hidden');
+                    addressInput.setAttribute('aria-expanded', 'false');
                     setStatus('No matching place was found. Try adding the city or pincode.', true);
                     return;
                 }
 
-                payload.forEach((place) => {
+                predictions.forEach((prediction) => {
                     const button = document.createElement('button');
                     button.type = 'button';
-                    button.className = 'block w-full border-b border-slate-100 px-4 py-3 text-left text-sm text-slate-700 transition last:border-0 hover:bg-brand-50 hover:text-brand-700 dark:border-slate-800 dark:text-slate-200 dark:hover:bg-brand-500/10';
-                    button.textContent = place.display_name;
-                    button.addEventListener('click', () => chooseLocation(place));
+                    button.setAttribute('role', 'option');
+                    button.className = 'atlas-location-suggestion block w-full border-b px-4 py-3 text-left text-sm transition last:border-0';
+                    button.textContent = prediction.text.toString();
+                    button.addEventListener('click', async () => {
+                        button.disabled = true;
+                        try {
+                            await chooseLocation(prediction);
+                        } catch (error) {
+                            button.disabled = false;
+                            setStatus(error.message || 'That place could not be selected.', true);
+                        }
+                    });
+                    button.addEventListener('keydown', (event) => {
+                        const options = [...results.querySelectorAll('[role="option"]')];
+                        const index = options.indexOf(button);
+
+                        if (event.key === 'ArrowDown') {
+                            event.preventDefault();
+                            options[(index + 1) % options.length]?.focus();
+                        } else if (event.key === 'ArrowUp') {
+                            event.preventDefault();
+                            (index === 0 ? addressInput : options[index - 1])?.focus();
+                        } else if (event.key === 'Escape') {
+                            results.classList.add('hidden');
+                            addressInput.setAttribute('aria-expanded', 'false');
+                            addressInput.focus();
+                        }
+                    });
                     results.appendChild(button);
                 });
 
+                if (selectFirst) {
+                    await chooseLocation(predictions[0]);
+                    return;
+                }
+
                 results.classList.remove('hidden');
-                setStatus('Choose the correct result below.');
+                addressInput.setAttribute('aria-expanded', 'true');
+                setStatus('Choose the correct Google Maps result below.');
             } catch (error) {
                 results.classList.add('hidden');
-                setStatus(error.message || 'Map search failed. You can still type the address manually.', true);
+                addressInput.setAttribute('aria-expanded', 'false');
+                setStatus(error.message || 'Google Maps search failed. You can still type the address manually.', true);
             } finally {
-                searchButton.disabled = false;
+                if (searchButton) searchButton.disabled = false;
             }
         };
 
-        map.on('click', ({ latlng }) => {
-            setCoordinates(latlng.lat, latlng.lng, false);
-            reverseGeocode(latlng.lat, latlng.lng);
+        map.addListener('click', (event) => {
+            const latitude = event.latLng?.lat();
+            const longitude = event.latLng?.lng();
+
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+            setCoordinates(latitude, longitude, false);
+            void reverseGeocode(latitude, longitude);
         });
 
-        searchButton?.addEventListener('click', search);
+        searchButton?.addEventListener('click', () => void search());
+        addressInput.addEventListener('input', () => {
+            if (isApplyingLocation) {
+                return;
+            }
+
+            if (addressInput.value.trim() !== selectedAddress) {
+                selectedAddress = '';
+                if (latitudeInput.value || longitudeInput.value) {
+                    clearCoordinates();
+                    setStatus('Address changed. Select a Google Maps result to save the matching coordinates.');
+                }
+            }
+
+            window.clearTimeout(searchTimer);
+            if (addressInput.value.trim().length < 3) {
+                results.replaceChildren();
+                results.classList.add('hidden');
+                addressInput.setAttribute('aria-expanded', 'false');
+                return;
+            }
+            searchTimer = window.setTimeout(() => void search(), 350);
+        });
         addressInput.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowDown' && !results.classList.contains('hidden')) {
+                event.preventDefault();
+                results.querySelector('[role="option"]')?.focus();
+                return;
+            }
+
+            if (event.key === 'Escape') {
+                results.classList.add('hidden');
+                addressInput.setAttribute('aria-expanded', 'false');
+                return;
+            }
+
             if (event.key === 'Enter') {
                 event.preventDefault();
-                search();
+                window.clearTimeout(searchTimer);
+                void search({ selectFirst: true });
             }
         });
 
         currentButton?.addEventListener('click', () => {
+            if (!window.isSecureContext) {
+                setStatus('Current location requires HTTPS. Search and select the address instead.', true);
+                return;
+            }
+
             if (!navigator.geolocation) {
                 setStatus('Location access is not available in this browser.', true);
                 return;
@@ -397,9 +636,9 @@ const initializeLocationPickers = () => {
                         currentButton.disabled = false;
                     });
                 },
-                () => {
+                (error) => {
                     currentButton.disabled = false;
-                    setStatus('Location access was not allowed. Search the address or tap the map instead.', true);
+                    setStatus(locationErrorMessage(error), true);
                 },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
             );
@@ -409,12 +648,15 @@ const initializeLocationPickers = () => {
             try {
                 const preset = JSON.parse(picker.dataset.locationPreset || '{}');
                 const addressMax = Number.parseInt(picker.dataset.addressMax || '255', 10);
-                addressInput.value = (preset.address || '').slice(0, addressMax);
-                if (cityInput) cityInput.value = preset.city || '';
-                if (stateInput) stateInput.value = preset.state || '';
-                if (pincodeInput) pincodeInput.value = preset.pincode || '';
-                if (countryInput) countryInput.value = preset.country || '';
-                if (locationNameInput) locationNameInput.value = preset.location_name || locationNameInput.value;
+                isApplyingLocation = true;
+                updateInput(addressInput, (preset.address || '').slice(0, addressMax));
+                updateInput(cityInput, preset.city || '');
+                updateInput(stateInput, preset.state || '');
+                updateInput(pincodeInput, preset.pincode || '');
+                updateInput(countryInput, preset.country || '');
+                if (locationNameInput) updateInput(locationNameInput, preset.location_name || locationNameInput.value);
+                selectedAddress = addressInput.value.trim();
+                isApplyingLocation = false;
 
                 const latitude = Number.parseFloat(preset.latitude);
                 const longitude = Number.parseFloat(preset.longitude);
@@ -422,8 +664,7 @@ const initializeLocationPickers = () => {
                     setCoordinates(latitude, longitude);
                     setStatus('Gym address and map pin applied.');
                 } else {
-                    latitudeInput.value = '';
-                    longitudeInput.value = '';
+                    clearCoordinates();
                     setStatus('Gym address applied. Search it to add a precise map pin.');
                 }
             } catch (error) {
@@ -452,5 +693,5 @@ document.addEventListener('DOMContentLoaded', () => {
     initializePanelChrome();
     initializeConfirmationModal();
     initializePreloader();
-    initializeLocationPickers();
+    void initializeLocationPickers();
 });
