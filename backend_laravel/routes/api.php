@@ -1,9 +1,12 @@
 <?php
 
+use App\Http\Controllers\Api\Biometric\DeviceGatewayController;
+use App\Http\Controllers\Api\Biometric\EbioServerWebhookController;
 use App\Http\Controllers\Api\Chat\TrainerMemberChatController;
 use App\Http\Controllers\Api\FoodCatalogController;
 use App\Http\Controllers\Api\Gym\Admin\AttendanceController;
 use App\Http\Controllers\Api\Gym\Admin\AuditLogController as GymAuditLogController;
+use App\Http\Controllers\Api\Gym\Admin\BiometricDeviceController as GymBiometricDeviceController;
 use App\Http\Controllers\Api\Gym\Admin\BranchController as GymBranchController;
 use App\Http\Controllers\Api\Gym\Admin\DashboardController as GymDashboardController;
 use App\Http\Controllers\Api\Gym\Admin\DietPlanController as GymDietPlanController;
@@ -94,6 +97,16 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('webhooks/whatsapp', [WhatsAppWebhookController::class, 'verify']);
 Route::post('webhooks/whatsapp', [WhatsAppWebhookController::class, 'receive']);
+
+Route::prefix('biometric/devices/{deviceUuid}')->middleware('throttle:biometric-device')->group(function (): void {
+    Route::post('events', [DeviceGatewayController::class, 'event']);
+    Route::post('heartbeat', [DeviceGatewayController::class, 'heartbeat']);
+    Route::get('commands', [DeviceGatewayController::class, 'commands']);
+    Route::post('commands/{command}/acknowledge', [DeviceGatewayController::class, 'acknowledgeCommand']);
+});
+Route::post('integrations/essl/ebioserver/{deviceUuid}/{webhookToken}', EbioServerWebhookController::class)
+    ->middleware('throttle:biometric-device')
+    ->where('webhookToken', '[A-Za-z0-9]{64}');
 
 Route::prefix('public')->group(function (): void {
     Route::get('health', [PublicContextController::class, 'health']);
@@ -484,6 +497,20 @@ Route::prefix('gym')
         Route::post('attendance/manual', [AttendanceController::class, 'manual'])
             ->middleware('permission:attendance.manage');
         Route::post('attendance/biometric-scan', [AttendanceController::class, 'biometricScan'])
+            ->middleware('permission:attendance.manage');
+        Route::get('biometric-devices', [GymBiometricDeviceController::class, 'index'])
+            ->middleware('permission:attendance.manage');
+        Route::post('biometric-devices', [GymBiometricDeviceController::class, 'store'])
+            ->middleware('permission:attendance.manage');
+        Route::put('biometric-devices/{device}', [GymBiometricDeviceController::class, 'update'])
+            ->middleware('permission:attendance.manage');
+        Route::get('members/{member}/biometric-enrollments', [GymBiometricDeviceController::class, 'member'])
+            ->middleware('permission:attendance.manage');
+        Route::post('members/{member}/biometric-enrollments', [GymBiometricDeviceController::class, 'enroll'])
+            ->middleware('permission:attendance.manage');
+        Route::post('biometric-enrollments/{link}/confirm', [GymBiometricDeviceController::class, 'confirm'])
+            ->middleware('permission:attendance.manage');
+        Route::post('biometric-enrollments/{link}/revoke', [GymBiometricDeviceController::class, 'revoke'])
             ->middleware('permission:attendance.manage');
         Route::get('membership-plans', [MembershipPlanController::class, 'index'])
             ->middleware('permission:membership_plan.view|membership_plan.manage');

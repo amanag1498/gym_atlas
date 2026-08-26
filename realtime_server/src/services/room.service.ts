@@ -13,6 +13,7 @@ export class RoomService {
 
     if (user.activeRole === 'platform_admin') {
       joinTargets.add(rooms.platformAnnouncements());
+      joinTargets.add(rooms.platformOperations());
     }
 
     for (const gymId of user.gymIds) {
@@ -21,6 +22,15 @@ export class RoomService {
 
     for (const scope of user.branchScopes) {
       joinTargets.add(rooms.branchAnnouncements(scope.gymId, scope.branchId));
+    }
+
+    if (user.permissions.includes('attendance.manage')) {
+      for (const gymId of user.gymIds) {
+        joinTargets.add(rooms.gymOperations(gymId));
+      }
+      for (const scope of user.branchScopes) {
+        joinTargets.add(rooms.branchOperations(scope.gymId, scope.branchId));
+      }
     }
 
     if (user.activeRole === 'trainer') {

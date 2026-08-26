@@ -34,7 +34,13 @@ class AttendanceController extends Controller
             ], 'Biometric attendance is unavailable until an active gym membership and biometric profile are assigned.');
         }
 
-        $biometricReady = $profile->biometric_enabled && filled($profile->biometric_identifier);
+        $deviceLinks = $profile->biometricMemberLinks()
+            ->with('device:id,name,vendor,model,branch_id,is_active')
+            ->whereNot('status', 'revoked')
+            ->get();
+        $enrolledLinks = $deviceLinks->where('status', 'enrolled')->where(fn ($link) => $link->device?->is_active);
+        $legacyReady = $deviceLinks->isEmpty() && $profile->biometric_enabled && filled($profile->biometric_identifier);
+        $biometricReady = $legacyReady || $enrolledLinks->isNotEmpty();
 
         return $this->success([
             'enabled' => $biometricReady,
@@ -43,6 +49,15 @@ class AttendanceController extends Controller
             'biometric_registered' => filled($profile->biometric_identifier),
             'biometric_identifier' => null,
             'biometric_identifier_masked' => $this->maskedBiometricIdentifier($profile->biometric_identifier),
+            'setup_status' => $deviceLinks->isEmpty() ? ($legacyReady ? 'legacy_enrolled' : 'not_started') : ($biometricReady ? 'enrolled' : 'pending'),
+            'devices' => $deviceLinks->map(fn ($link): array => [
+                'device_id' => $link->biometric_device_id,
+                'name' => $link->device?->name,
+                'vendor' => $link->device?->vendor,
+                'model' => $link->device?->model,
+                'status' => $link->status,
+                'modalities' => $link->modalities,
+            ])->values(),
             'branch_id' => $branch->id,
             'gym_id' => $profile->gym_id,
             'check_in_status' => $attendanceStatus,

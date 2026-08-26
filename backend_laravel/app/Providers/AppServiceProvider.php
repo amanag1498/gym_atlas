@@ -46,5 +46,7 @@ class AppServiceProvider extends ServiceProvider
             ->by('chat-sender:'.$request->integer('sender_id')));
         RateLimiter::for('internal-chat-read', fn (Request $request): Limit => Limit::perMinute(240)
             ->by('chat-reader:'.$request->integer('user_id')));
+        RateLimiter::for('biometric-device', fn (Request $request): Limit => Limit::perMinute(600)
+            ->by('biometric-device:'.(string) $request->route('deviceUuid')));
     }
 }

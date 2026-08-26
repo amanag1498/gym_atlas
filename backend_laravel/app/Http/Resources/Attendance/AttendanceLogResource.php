@@ -20,6 +20,10 @@ class AttendanceLogResource extends JsonResource
             'checked_in_at' => $this->checked_in_at?->toIso8601String(),
             'notes' => $this->notes,
             'source_device' => $this->source_device,
+            'biometric_device_id' => $this->biometric_device_id,
+            'biometric_device_event_id' => $this->biometric_device_event_id,
+            'occurred_at_device' => $this->occurred_at_device?->toIso8601String(),
+            'received_at' => $this->received_at?->toIso8601String(),
             'gym' => $this->whenLoaded('gym', fn (): array => [
                 'id' => $this->gym?->id,
                 'name' => $this->gym?->name,

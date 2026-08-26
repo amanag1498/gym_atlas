@@ -213,17 +213,14 @@
         <div data-existing-profile-field>
             <x-form-input name="emergency_contact_phone" label="Emergency Contact Phone" :value="$memberProfile?->emergency_contact_phone" />
         </div>
-        <div data-existing-profile-field>
-            <x-form-input name="biometric_identifier" label="Biometric Identifier" :value="$memberProfile?->biometric_identifier" placeholder="Scanner member code / biometric template id" />
-            <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">This identifier is matched by the biometric attendance desk during scan.</p>
-        </div>
-        <div data-existing-profile-field class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/70">
-            <input type="hidden" name="biometric_enabled" value="0">
-            <label class="flex items-center gap-3 text-sm font-medium text-slate-800 dark:text-slate-100">
-                <input type="checkbox" name="biometric_enabled" value="1" @checked(old('biometric_enabled', $memberProfile?->biometric_enabled))>
-                Enable biometric attendance
-            </label>
-            <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Attendance scan access is granted only when biometric is enabled and the identifier is set.</p>
+        <div data-existing-profile-field class="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-4 dark:border-violet-500/20 dark:bg-violet-500/10">
+            <div class="font-semibold text-slate-950 dark:text-white">Biometric access is device-managed</div>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Atlas generates the machine ID and tracks face/fingerprint enrollment separately for each terminal.</p>
+            @if ($member)
+                <a class="panel-btn-secondary mt-3" href="{{ route('web.gym.members.biometrics.show', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}">Manage biometric setup</a>
+            @else
+                <p class="mt-2 text-xs font-medium text-violet-700 dark:text-violet-200">Create the member first, then use Manage Biometrics from their profile.</p>
+            @endif
         </div>
     </div>
 </div>

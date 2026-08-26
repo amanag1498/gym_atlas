@@ -4,6 +4,8 @@ namespace App\Services\Attendance;
 
 use App\Enums\AttendanceCheckInMethod;
 use App\Models\AttendanceLog;
+use App\Models\BiometricDevice;
+use App\Models\BiometricDeviceEvent;
 use App\Models\Branch;
 use App\Models\Gym;
 use App\Models\MemberMembership;
@@ -60,6 +62,21 @@ class AttendanceService
         );
     }
 
+    public function recordBiometricDeviceCheckIn(BiometricDevice $device, BiometricDeviceEvent $event, MemberProfile $profile, mixed $checkedInAt): AttendanceLog
+    {
+        return $this->recordCheckIn(
+            gym: $device->gym,
+            branch: $device->branch,
+            member: $profile->user,
+            checkedInBy: null,
+            method: AttendanceCheckInMethod::Biometric->value,
+            sourceDevice: $device->name,
+            checkedInAt: $checkedInAt,
+            biometricDevice: $device,
+            biometricDeviceEvent: $event,
+        );
+    }
+
     private function recordCheckIn(
         Gym $gym,
         Branch $branch,
@@ -69,11 +86,13 @@ class AttendanceService
         ?string $notes = null,
         ?string $sourceDevice = null,
         mixed $checkedInAt = null,
+        ?BiometricDevice $biometricDevice = null,
+        ?BiometricDeviceEvent $biometricDeviceEvent = null,
     ): AttendanceLog {
         $checkedAt = ($checkedInAt ? Carbon::parse($checkedInAt) : now())
             ->setTimezone(config('app.timezone'));
 
-        return DB::transaction(function () use ($gym, $branch, $member, $checkedInBy, $method, $notes, $sourceDevice, $checkedAt): AttendanceLog {
+        return DB::transaction(function () use ($gym, $branch, $member, $checkedInBy, $method, $notes, $sourceDevice, $checkedAt, $biometricDevice, $biometricDeviceEvent): AttendanceLog {
             $gym = Gym::query()->findOrFail($gym->id);
             $branch = Branch::query()->findOrFail($branch->id);
             $member = User::query()->findOrFail($member->id);
@@ -183,6 +202,11 @@ class AttendanceService
                 'checked_in_at' => $checkedAt,
                 'notes' => $notes,
                 'source_device' => $sourceDevice ?: Str::limit((string) request()->userAgent(), 255, ''),
+                'scan_reference_hash' => $biometricDeviceEvent ? hash('sha256', $biometricDevice->id.':'.$biometricDeviceEvent->payload_hash) : null,
+                'biometric_device_id' => $biometricDevice?->id,
+                'biometric_device_event_id' => $biometricDeviceEvent?->id,
+                'occurred_at_device' => $biometricDeviceEvent?->occurred_at_device,
+                'received_at' => $biometricDeviceEvent?->received_at,
             ]);
         });
     }

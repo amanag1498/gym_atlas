@@ -23,6 +23,7 @@
 **/build/
 **/.pub-cache/
 **/.metadata
+**/devtools_options.yaml
 **/android/.gradle/
 **/ios/Pods/
 **/ios/.symlinks/

@@ -41,6 +41,13 @@ export interface InternalAnnouncementPayload {
   data?: Record<string, unknown>;
 }
 
+export interface InternalBiometricPayload {
+  gymId: number;
+  branchId: number;
+  event: 'biometric:device_status' | 'biometric:event_processed' | 'biometric:enrollment_status';
+  data: Record<string, unknown>;
+}
+
 export interface InternalChatMessagePayload {
   room: string;
   trainerId: number;

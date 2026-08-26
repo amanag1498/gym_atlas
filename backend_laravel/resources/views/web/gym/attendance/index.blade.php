@@ -23,6 +23,7 @@
                     </p>
                 </div>
                 <div class="flex flex-wrap gap-2">
+                    <a href="{{ route('web.gym.biometric-devices.index', $scopeQuery) }}" class="panel-btn-secondary">Biometric Devices</a>
                     <a href="{{ route('web.gym.attendance.index', $scopeQuery + ['today' => 1]) }}" class="panel-btn-secondary">Today</a>
                     @if ($canManageAttendance)
                         <a href="{{ route('web.gym.attendance.manual', $scopeQuery) }}" class="panel-btn-primary">Manual Check-in</a>

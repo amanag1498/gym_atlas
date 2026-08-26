@@ -65,6 +65,7 @@
 
             <div class="flex flex-wrap gap-3 px-5 py-4 lg:px-6">
                 <a href="{{ route('web.gym.members.edit', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}" class="panel-btn-secondary">Edit / Trainer</a>
+                <a href="{{ route('web.gym.members.biometrics.show', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}" class="panel-btn-secondary">Manage Biometrics</a>
                 @if ($canManageMemberships)
                     <a href="{{ route('web.gym.members.assign-membership', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}" class="panel-btn-secondary">{{ $hasCurrentMembership ? 'Change Membership Plan' : 'Assign Membership' }}</a>
                     <a href="{{ route('web.gym.members.custom-fee', ['member' => $member->id, 'member_membership_id' => $currentMembership?->id] + request()->query()) }}" class="panel-btn-primary">Custom Fee</a>

@@ -7,10 +7,11 @@
     'emptyLabel' => null,
     'branchSource' => null,
     'required' => false,
+    'fieldId' => null,
 ])
 
 @php
-    $fieldId = str_replace(['[', ']'], ['_', ''], $name);
+    $fieldId = $fieldId ?: str_replace(['[', ']'], ['_', ''], $name);
     $selectedId = old($name, data_get($initialItem, 'id'));
     $selectedLabel = $selectedId ? data_get($initialItem, 'label', 'Selected user') : '';
 @endphp

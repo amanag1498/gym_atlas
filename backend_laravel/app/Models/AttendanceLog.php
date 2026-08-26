@@ -20,13 +20,30 @@ class AttendanceLog extends Model
         'checked_in_at',
         'notes',
         'source_device',
+        'scan_reference_hash',
+        'biometric_device_id',
+        'biometric_device_event_id',
+        'occurred_at_device',
+        'received_at',
     ];
 
     protected function casts(): array
     {
         return [
             'checked_in_at' => 'datetime',
+            'occurred_at_device' => 'datetime',
+            'received_at' => 'datetime',
         ];
+    }
+
+    public function biometricDevice(): BelongsTo
+    {
+        return $this->belongsTo(BiometricDevice::class);
+    }
+
+    public function biometricDeviceEvent(): BelongsTo
+    {
+        return $this->belongsTo(BiometricDeviceEvent::class);
     }
 
     public function gym(): BelongsTo

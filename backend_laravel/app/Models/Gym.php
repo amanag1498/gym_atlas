@@ -120,6 +120,11 @@ class Gym extends Model
         return $this->belongsTo(User::class, 'owner_user_id');
     }
 
+    public function biometricDevices(): HasMany
+    {
+        return $this->hasMany(BiometricDevice::class);
+    }
+
     public function cityRecord(): BelongsTo
     {
         return $this->belongsTo(City::class, 'city_id');

@@ -86,6 +86,11 @@ class MemberProfile extends Model
         return $this->hasMany(AttendanceLog::class, 'member_id', 'user_id');
     }
 
+    public function biometricMemberLinks(): HasMany
+    {
+        return $this->hasMany(BiometricMemberLink::class);
+    }
+
     public function trainerNotes(): HasMany
     {
         return $this->hasMany(TrainerMemberNote::class, 'member_id', 'user_id');

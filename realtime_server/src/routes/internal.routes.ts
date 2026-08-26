@@ -4,6 +4,7 @@ import { ActiveChatService } from '../services/active-chat.service';
 import { rooms } from '../socket/rooms';
 import type {
   InternalAnnouncementPayload,
+  InternalBiometricPayload,
   InternalChatMessagePayload,
   InternalChatReadPayload,
   InternalNotificationPayload,
@@ -60,6 +61,51 @@ export function buildInternalRoutes(io: Server, activeChatService: ActiveChatSer
     response.json({
       success: true,
       message: 'Announcement event published.',
+    });
+  });
+
+  router.post('/biometric', (request, response) => {
+    const payload = request.body as InternalBiometricPayload | null;
+    const allowedEvents = new Set([
+      'biometric:device_status',
+      'biometric:event_processed',
+      'biometric:enrollment_status',
+    ]);
+
+    if (!payload
+      || !Number.isSafeInteger(payload.gymId)
+      || payload.gymId <= 0
+      || !Number.isSafeInteger(payload.branchId)
+      || payload.branchId <= 0
+      || typeof payload.event !== 'string'
+      || !allowedEvents.has(payload.event)
+      || !payload.data
+      || typeof payload.data !== 'object'
+      || Array.isArray(payload.data)
+      || JSON.stringify(payload.data).length > 16_384) {
+      response.status(422).json({
+        success: false,
+        message: 'Invalid biometric event.',
+      });
+      return;
+    }
+
+    const event = {
+      gymId: payload.gymId,
+      branchId: payload.branchId,
+      event: payload.event,
+      data: payload.data,
+      createdAt: new Date().toISOString(),
+    };
+
+    io.to(rooms.platformOperations())
+      .to(rooms.gymOperations(payload.gymId))
+      .to(rooms.branchOperations(payload.gymId, payload.branchId))
+      .emit('biometric:update', event);
+
+    response.json({
+      success: true,
+      message: 'Biometric event published.',
     });
   });
 

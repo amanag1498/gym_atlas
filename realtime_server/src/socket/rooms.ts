@@ -6,6 +6,9 @@ export const rooms = {
   gymAnnouncements: (gymId: number): string => `gym:${gymId}:announcements`,
   branchAnnouncements: (gymId: number, branchId: number): string => `gym:${gymId}:branch:${branchId}:announcements`,
   platformAnnouncements: (): string => 'platform:announcements',
+  platformOperations: (): string => 'platform:operations',
+  gymOperations: (gymId: number): string => `gym:${gymId}:operations`,
+  branchOperations: (gymId: number, branchId: number): string => `gym:${gymId}:branch:${branchId}:operations`,
   trainerMemberChat: (trainerId: number, memberId: number): string => `trainer:${trainerId}:member:${memberId}`,
 };
 

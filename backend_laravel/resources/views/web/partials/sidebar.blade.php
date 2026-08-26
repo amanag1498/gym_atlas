@@ -77,6 +77,7 @@
                     ['label' => 'Custom Fees', 'icon' => 'ti-discount-2', 'route' => 'web.gym.custom-fees.index', 'active' => ['web.gym.custom-fees.*', 'web.gym.members.custom-fee*']],
                     ['label' => 'Payments', 'icon' => 'ti-cash-banknote', 'route' => 'web.gym.payments.index', 'active' => ['web.gym.payments.*']],
                     ['label' => 'Attendance', 'icon' => 'ti-scan', 'route' => 'web.gym.attendance.index', 'active' => ['web.gym.attendance.*']],
+                    ['label' => 'Biometric Devices', 'icon' => 'ti-fingerprint', 'route' => 'web.gym.biometric-devices.index', 'active' => ['web.gym.biometric-devices.*']],
                 ],
             ],
             [

@@ -125,6 +125,11 @@ class Branch extends Model
         return $this->hasMany(AttendanceLog::class);
     }
 
+    public function biometricDevices(): HasMany
+    {
+        return $this->hasMany(BiometricDevice::class);
+    }
+
     public function announcements(): HasMany
     {
         return $this->hasMany(Announcement::class);

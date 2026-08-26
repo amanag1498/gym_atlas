@@ -71,11 +71,13 @@ class StoreMemberRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $this->merge([
-            'biometric_identifier' => filled($this->input('biometric_identifier'))
-                ? trim((string) $this->input('biometric_identifier'))
-                : null,
-        ]);
+        if ($this->exists('biometric_identifier')) {
+            $this->merge([
+                'biometric_identifier' => filled($this->input('biometric_identifier'))
+                    ? trim((string) $this->input('biometric_identifier'))
+                    : null,
+            ]);
+        }
 
         $status = $this->input('status');
 
@@ -86,7 +88,7 @@ class StoreMemberRequest extends FormRequest
             ]);
         }
 
-        if (! $this->filled('biometric_identifier')) {
+        if ($this->exists('biometric_identifier') && ! $this->filled('biometric_identifier')) {
             $this->merge([
                 'biometric_enabled' => false,
             ]);

@@ -38,6 +38,7 @@ npm run dev
 Protected with `x-internal-api-key: <SOCKET_INTERNAL_API_KEY>`.
 
 - `POST /internal/notifications`
+- `POST /internal/biometric` (permission-scoped device, enrollment, and attendance updates)
 - `POST /internal/announcements`
 - `POST /internal/chat/messages`
 - `POST /internal/chat/read`

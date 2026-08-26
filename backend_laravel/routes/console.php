@@ -35,6 +35,14 @@ Schedule::command('memberships:reconcile-lifecycle')
     ->dailyAt('00:10')
     ->name('membership-lifecycle-reconciliation')
     ->withoutOverlapping();
+Schedule::command('biometric:reconcile-devices')
+    ->everyMinute()
+    ->name('biometric-device-health-reconciliation')
+    ->withoutOverlapping();
+Schedule::command('biometric:dispatch-ebioserver')
+    ->everyMinute()
+    ->name('ebioserver-command-dispatch')
+    ->withoutOverlapping();
 Schedule::call(fn () => app(ReminderService::class)->runDueReminders())
     ->dailyAt('09:00')
     ->name('membership-and-attendance-email-reminders')
