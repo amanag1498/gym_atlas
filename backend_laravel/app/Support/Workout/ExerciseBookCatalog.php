@@ -101,25 +101,32 @@ class ExerciseBookCatalog
         }
 
         return $query->where(function (Builder $builder) use ($bodyPart, $normalizedColumn, $patterns, $precedingPatterns): void {
-            foreach ($precedingPatterns as $pattern) {
-                $builder->whereRaw("{$normalizedColumn} NOT LIKE ?", [$pattern]);
-            }
+            $builder->where('body_part', $bodyPart)
+                ->orWhere(function (Builder $legacy) use ($bodyPart, $normalizedColumn, $patterns, $precedingPatterns): void {
+                    $legacy->where(function (Builder $missingBodyPart): void {
+                        $missingBodyPart->whereNull('body_part')->orWhere('body_part', '');
+                    });
 
-            $requestedPatterns = $patterns[$bodyPart] ?? [];
-            if ($requestedPatterns === []) {
-                foreach (collect($patterns)->flatten() as $pattern) {
-                    $builder->whereRaw("{$normalizedColumn} NOT LIKE ?", [$pattern]);
-                }
+                    foreach ($precedingPatterns as $pattern) {
+                        $legacy->whereRaw("{$normalizedColumn} NOT LIKE ?", [$pattern]);
+                    }
 
-                return;
-            }
+                    $requestedPatterns = $patterns[$bodyPart] ?? [];
+                    if ($requestedPatterns === []) {
+                        foreach (collect($patterns)->flatten() as $pattern) {
+                            $legacy->whereRaw("{$normalizedColumn} NOT LIKE ?", [$pattern]);
+                        }
 
-            $builder->where(function (Builder $matching) use ($normalizedColumn, $requestedPatterns): void {
-                foreach ($requestedPatterns as $index => $pattern) {
-                    $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
-                    $matching->{$method}("{$normalizedColumn} LIKE ?", [$pattern]);
-                }
-            });
+                        return;
+                    }
+
+                    $legacy->where(function (Builder $matching) use ($normalizedColumn, $requestedPatterns): void {
+                        foreach ($requestedPatterns as $index => $pattern) {
+                            $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
+                            $matching->{$method}("{$normalizedColumn} LIKE ?", [$pattern]);
+                        }
+                    });
+                });
         });
     }
 
@@ -144,13 +151,18 @@ class ExerciseBookCatalog
         $sql = 'CASE';
         $bindings = [];
 
+        foreach (self::BODY_PART_ORDER as $index => $bodyPart) {
+            $sql .= ' WHEN body_part = ? THEN '.($index + 1);
+            $bindings[] = $bodyPart;
+        }
+
         foreach ($cases as [$position, $patterns]) {
             $conditions = [];
             foreach ($patterns as $pattern) {
                 $conditions[] = "{$normalizedColumn} LIKE ?";
                 $bindings[] = $pattern;
             }
-            $sql .= ' WHEN ('.implode(' OR ', $conditions).") THEN {$position}";
+            $sql .= " WHEN (body_part IS NULL OR body_part = '') AND (".implode(' OR ', $conditions).") THEN {$position}";
         }
 
         return $query->orderByRaw($sql.' ELSE 13 END', $bindings)->orderBy('name')->orderBy('id');
@@ -166,6 +178,7 @@ class ExerciseBookCatalog
             'body_part' => $bodyPart,
             'body_part_label' => self::bodyPartLabel($bodyPart),
             'muscle_group' => $exercise->muscle_group,
+            'target_muscle' => $exercise->target_muscle,
             'secondary_muscles' => $exercise->secondary_muscles ?? [],
             'equipment' => $exercise->equipment,
             'difficulty' => $exercise->difficulty,

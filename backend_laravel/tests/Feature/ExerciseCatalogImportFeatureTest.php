@@ -9,6 +9,7 @@ use App\Models\ExerciseSource;
 use App\Models\ExerciseTranslation;
 use App\Models\User;
 use App\Services\Workout\ExerciseCatalogImporter;
+use App\Support\Workout\ExerciseBookCatalog;
 use Database\Seeders\ExerciseCatalogSeeder;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -77,6 +78,7 @@ class ExerciseCatalogImportFeatureTest extends TestCase
         $exercise = Exercise::query()->where('name', 'Test Sit-up')->firstOrFail();
         $exerciseId = $exercise->id;
         $this->assertSame('core', $exercise->body_part);
+        $this->assertSame('core', $exercise->muscle_group);
         $this->assertSame('abs', $exercise->target_muscle);
         $this->assertTrue($exercise->is_bodyweight);
         $this->assertTrue($exercise->is_active);
@@ -218,9 +220,65 @@ class ExerciseCatalogImportFeatureTest extends TestCase
         ]);
         $existing->refresh();
         $this->assertSame('Test Sit-up', $existing->name);
-        $this->assertSame('hip flexors', $existing->muscle_group);
+        $this->assertSame('core', $existing->muscle_group);
         $this->assertSame('abs', $existing->target_muscle);
         $this->assertSame('https://owned.example.test/sit-up.jpg', $existing->image_url);
+    }
+
+    public function test_body_part_filter_uses_canonical_body_part_instead_of_upstream_supporting_muscle(): void
+    {
+        $chest = Exercise::query()->create([
+            'name' => 'Canonical Chest Exercise',
+            'body_part' => 'chest',
+            'muscle_group' => 'shoulders',
+            'target_muscle' => 'pectorals',
+            'is_global' => true,
+            'status' => 'approved',
+            'review_status' => 'approved',
+            'is_active' => true,
+        ]);
+        Exercise::query()->create([
+            'name' => 'Triceps Exercise With Chest Support',
+            'body_part' => 'arms',
+            'muscle_group' => 'chest',
+            'target_muscle' => 'triceps',
+            'is_global' => true,
+            'status' => 'approved',
+            'review_status' => 'approved',
+            'is_active' => true,
+        ]);
+
+        $query = Exercise::query()->where('is_global', true);
+        ExerciseBookCatalog::applyBodyPartFilter($query, 'chest');
+
+        $this->assertSame([$chest->id], $query->pluck('id')->all());
+    }
+
+    public function test_taxonomy_repair_preserves_existing_publication_and_translation_review_state(): void
+    {
+        $path = $this->dataset();
+        $importer = app(ExerciseCatalogImporter::class);
+        $metadata = ['source_key' => 'hasaneyldrm_exercises_dataset', 'license_code' => 'MIT'];
+        $importer->importFile($path, $metadata, apply: true, publish: true);
+
+        $exercise = Exercise::query()->where('name', 'Test Sit-up')->firstOrFail();
+        $exercise->update(['muscle_group' => 'chest']);
+        ExerciseSource::query()->where('exercise_id', $exercise->id)->update([
+            'content_checksum' => str_repeat('0', 64),
+        ]);
+
+        $importer->importFile($path, $metadata, apply: true, publish: false);
+
+        $exercise->refresh();
+        $this->assertSame('core', $exercise->muscle_group);
+        $this->assertTrue($exercise->is_active);
+        $this->assertSame('approved', $exercise->status);
+        $this->assertSame('approved', $exercise->review_status);
+        $this->assertDatabaseHas('exercise_translations', [
+            'exercise_id' => $exercise->id,
+            'locale' => 'en',
+            'review_status' => 'approved',
+        ]);
     }
 
     public function test_catalog_seeder_validates_count_and_runs_the_idempotent_import(): void

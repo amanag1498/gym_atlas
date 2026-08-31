@@ -21,6 +21,8 @@ Audit basis: local `openGym-main` commit `220b7bdb6683765623a172a3f4ecc55d68b7c6
 - Member exercise search now queries the paginated server catalog and displays localized instructions/steps and optional future previews.
 - Trainer catalog consumption supports localization, larger pagination, new filters, and richer exercise metadata.
 - Trainer-created exercises now retain body part, target muscle, inferred tracking mode, and bodyweight semantics.
+- Corrected upstream taxonomy semantics: `body_part` drives catalog sections, `target` drives the primary target, and the source `muscle_group` value is not used as a primary grouping field because it describes supporting muscles in this dataset.
+- Added `scripts/repair_exercise_catalog_taxonomy.sh`, which performs a strict dry run by default and an idempotent source-ID-based repair with `--apply` while preserving publication state and exercise IDs.
 
 Real-source validation against the current upstream JSON found 1,324 accepted rows, zero rejected rows, 13,240 instruction translations, six duplicate normalized names requiring review, and 5,296 media-field references intentionally ignored. An isolated apply created zero media rows and left all 1,324 exercises inactive/pending review; the next dry run reported all 1,324 unchanged.
 

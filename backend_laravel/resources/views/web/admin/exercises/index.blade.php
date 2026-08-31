@@ -110,7 +110,8 @@
                                                 @endif
                                             </td>
                                             <td class="text-sm text-slate-600 dark:text-slate-300">
-                                                <div>{{ str($exercise['muscle_group'])->replace('_', ' ')->title() }}</div>
+                                                <div>{{ str($exercise['body_part_label'])->title() }}</div>
+                                                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">Target: {{ str($exercise['target_muscle'] ?: $exercise['muscle_group'])->replace('_', ' ')->title() }}</div>
                                                 <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $exercise['equipment'] ?: 'No equipment set' }} • {{ $exercise['difficulty'] ?: 'No difficulty' }}</div>
                                                 @if (!empty($exercise['secondary_muscles']))
                                                     <div class="mt-2 flex flex-wrap gap-2">

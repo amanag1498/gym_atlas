@@ -13,7 +13,7 @@ use Throwable;
 
 class ExerciseCatalogImporter
 {
-    public const IMPORTER_VERSION = '2';
+    public const IMPORTER_VERSION = '3';
 
     private const MEDIA_FIELDS = ['image', 'image_url', 'gif', 'gif_url', 'video', 'video_url', 'media_id', 'attribution'];
 
@@ -135,15 +135,19 @@ class ExerciseCatalogImporter
                     }
 
                     foreach ($record['translations'] as $locale => $translation) {
+                        $translationAttributes = [
+                            'name' => null,
+                            'instructions' => $translation['instructions'],
+                            'instruction_steps' => $translation['steps'],
+                            'source' => $metadata['source_key'],
+                        ];
+                        if ($publish) {
+                            $translationAttributes['review_status'] = 'approved';
+                        }
+
                         $exercise->translations()->updateOrCreate(
                             ['locale' => $locale],
-                            [
-                                'name' => null,
-                                'instructions' => $translation['instructions'],
-                                'instruction_steps' => $translation['steps'],
-                                'source' => $metadata['source_key'],
-                                'review_status' => $publish ? 'approved' : 'imported',
-                            ],
+                            $translationAttributes,
                         );
                         $report['translations_upserted']++;
                     }
@@ -267,13 +271,16 @@ class ExerciseCatalogImporter
 
             $content = Arr::except($record, self::MEDIA_FIELDS);
             $this->sortRecursively($content);
+            $canonicalBodyPart = $this->canonicalBodyPart($bodyPart, $target);
             $prepared[] = [
                 'external_id' => $externalId,
                 'normalized_name' => $normalizedName,
                 'name' => $name,
-                'body_part' => $this->canonicalBodyPart($bodyPart, $target),
+                'body_part' => $canonicalBodyPart,
                 'target' => Str::lower($target),
-                'muscle_group' => Str::lower(trim((string) ($record['muscle_group'] ?? $target))),
+                // Upstream muscle_group describes a supporting muscle. Gym Atlas
+                // uses muscle_group as the broad primary catalog group.
+                'muscle_group' => $canonicalBodyPart,
                 'secondary_muscles' => array_values(array_filter(array_map(
                     fn ($muscle) => Str::lower(trim((string) $muscle)),
                     is_array($record['secondary_muscles'] ?? null) ? $record['secondary_muscles'] : [],

@@ -71,14 +71,7 @@ class CatalogController extends Controller
             ->withCount(['templateExercises', 'planExercises', 'sessionExercises', 'personalRecords', 'translations', 'media'])
             ->where('is_global', true);
 
-        if ($request->filled('search')) {
-            $search = '%'.$request->string('search')->trim().'%';
-            $query->where(function ($builder) use ($search): void {
-                $builder->where('name', 'like', $search)
-                    ->orWhere('muscle_group', 'like', $search)
-                    ->orWhere('equipment', 'like', $search);
-            });
-        }
+        $query->searchCatalog($request->string('search')->toString());
 
         if ($request->filled('body_part')) {
             ExerciseBookCatalog::applyBodyPartFilter($query, $request->string('body_part')->toString());
