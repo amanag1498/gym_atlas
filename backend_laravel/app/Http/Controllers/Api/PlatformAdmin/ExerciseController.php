@@ -21,17 +21,24 @@ class ExerciseController extends Controller
     public function index(Request $request)
     {
         $query = Exercise::query()
+            ->with(['translations', 'previewMedia', 'sources'])
+            ->withCount(['translations', 'media'])
             ->where('is_global', true)
-            ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')));
+            ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
+            ->when($request->filled('review_status'), fn ($query) => $query->where('review_status', $request->string('review_status')))
+            ->when($request->filled('is_active'), fn ($query) => $query->where('is_active', $request->boolean('is_active')))
+            ->when($request->filled('source_key'), fn ($query) => $query->whereHas('sources', fn ($sources) => $sources->where('source_key', $request->string('source_key'))))
+            ->when($request->string('media')->toString() === 'ready', fn ($query) => $query->whereHas('media', fn ($media) => $media->where('status', 'active')))
+            ->when($request->string('media')->toString() === 'missing', fn ($query) => $query->whereDoesntHave('media', fn ($media) => $media->where('status', 'active')));
 
-        if ($request->filled('search')) {
-            $search = '%'.$request->string('search')->trim().'%';
-            $query->where(function ($builder) use ($search): void {
-                $builder->where('name', 'like', $search)
-                    ->orWhere('muscle_group', 'like', $search)
-                    ->orWhere('equipment', 'like', $search);
-            });
-        }
+        $query->searchCatalog($request->string('search')->toString())
+            ->applyCatalogFilters(array_filter([
+                'equipment' => $request->filled('equipment') ? $request->string('equipment')->trim()->toString() : null,
+                'target_muscle' => $request->filled('target_muscle') ? $request->string('target_muscle')->trim()->toString() : null,
+                'difficulty' => $request->filled('difficulty') ? $request->string('difficulty')->trim()->toString() : null,
+                'tracking_mode' => $request->filled('tracking_mode') ? $request->string('tracking_mode')->trim()->toString() : null,
+                'is_bodyweight' => $request->has('is_bodyweight') ? $request->boolean('is_bodyweight') : null,
+            ], fn ($value) => $value !== null && $value !== ''));
 
         if ($request->filled('body_part')) {
             ExerciseBookCatalog::applyBodyPartFilter($query, $request->string('body_part')->toString());
@@ -78,7 +85,12 @@ class ExerciseController extends Controller
     public function update(UpdateExerciseRequest $request, Exercise $exercise)
     {
         $oldValues = $exercise->toArray();
-        $exercise->update($request->validated());
+        $attributes = $request->validated();
+        if (array_key_exists('review_status', $attributes)) {
+            $attributes['reviewed_by_user_id'] = $attributes['review_status'] === 'approved' ? $request->user()->id : null;
+            $attributes['reviewed_at'] = $attributes['review_status'] === 'approved' ? now() : null;
+        }
+        $exercise->update($attributes);
 
         $this->auditLogService->log(
             event: 'exercise.global.updated',

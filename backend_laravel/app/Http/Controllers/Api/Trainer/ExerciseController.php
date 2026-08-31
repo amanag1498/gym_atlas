@@ -24,6 +24,7 @@ class ExerciseController extends Controller
         $branchIds = $this->scopeResolver->branchesQuery($request->user())->pluck('branches.id');
 
         $paginator = Exercise::query()
+            ->with(['translations', 'previewMedia'])
             ->where(function ($query) use ($gymIds, $branchIds): void {
                 $query->where('is_global', true)
                     ->orWhere(function ($builder) use ($gymIds, $branchIds): void {
@@ -34,7 +35,14 @@ class ExerciseController extends Controller
                     });
             })
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
-            ->when($request->filled('search'), fn ($query) => $query->where('name', 'like', '%'.$request->string('search').'%'))
+            ->searchCatalog($request->string('search')->toString())
+            ->applyCatalogFilters(array_filter([
+                'equipment' => $request->filled('equipment') ? $request->string('equipment')->trim()->toString() : null,
+                'target_muscle' => $request->filled('target_muscle') ? $request->string('target_muscle')->trim()->toString() : null,
+                'difficulty' => $request->filled('difficulty') ? $request->string('difficulty')->trim()->toString() : null,
+                'tracking_mode' => $request->filled('tracking_mode') ? $request->string('tracking_mode')->trim()->toString() : null,
+                'is_bodyweight' => $request->has('is_bodyweight') ? $request->boolean('is_bodyweight') : null,
+            ], fn ($value) => $value !== null && $value !== ''))
             ->orderBy('name')
             ->paginate((int) $request->integer('per_page', 15));
 

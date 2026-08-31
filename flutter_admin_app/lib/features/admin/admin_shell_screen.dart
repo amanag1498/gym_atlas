@@ -3143,10 +3143,22 @@ class __CollectionSectionState extends State<_CollectionSection> {
         params['status'] = 'inactive';
         break;
       case 'exercises_approved':
-        params['status'] = 'approved';
+        params['review_status'] = 'approved';
         break;
-      case 'exercises_pending':
-        params['status'] = 'pending';
+      case 'exercises_imported':
+        params['review_status'] = 'imported';
+        break;
+      case 'exercises_in_review':
+        params['review_status'] = 'in_review';
+        break;
+      case 'exercises_inactive':
+        params['is_active'] = false;
+        break;
+      case 'exercises_media_ready':
+        params['media'] = 'ready';
+        break;
+      case 'exercises_media_missing':
+        params['media'] = 'missing';
         break;
       case 'trainers_active':
         params['is_active'] = true;
@@ -3241,8 +3253,12 @@ class __CollectionSectionState extends State<_CollectionSection> {
         ];
       case 'Exercises':
         return const [
+          _QuickFilterOption('exercises_imported', 'Imported'),
+          _QuickFilterOption('exercises_in_review', 'In Review'),
           _QuickFilterOption('exercises_approved', 'Approved'),
-          _QuickFilterOption('exercises_pending', 'Pending'),
+          _QuickFilterOption('exercises_inactive', 'Inactive'),
+          _QuickFilterOption('exercises_media_ready', 'Preview Ready'),
+          _QuickFilterOption('exercises_media_missing', 'Preview Missing'),
         ];
       case 'Trainers':
         return const [
@@ -15047,12 +15063,26 @@ class _CollectionRecordCard extends StatelessWidget {
         return 'Due ${_formatCurrency(item['due_amount'])} • Paid ${_formatCurrency(item['amount_paid'])}';
       case 'Announcements':
         return item['message']?.toString() ?? fallback;
+      case 'Exercises':
+        return [
+              item['body_part_label'],
+              item['target_muscle'] ?? item['muscle_group'],
+              item['equipment'],
+            ]
+            .where((value) => value?.toString().trim().isNotEmpty == true)
+            .join(' • ');
       default:
         return fallback;
     }
   }
 
   String _statusText() {
+    if (destinationTitle == 'Exercises' && item['review_status'] != null) {
+      return item['review_status']
+          .toString()
+          .replaceAll('_', ' ')
+          .toUpperCase();
+    }
     if (item['payment_status'] != null) {
       return item['payment_status'].toString().toUpperCase();
     }
@@ -15095,6 +15125,26 @@ class _CollectionRecordCard extends StatelessWidget {
           _InlineBadge(label: 'Expiry ${item['expiry_date'] ?? '--'}'),
           if ((item['due_amount'] as num?)?.toDouble() != 0)
             const _InlineBadge(label: 'Attention'),
+        ];
+      case 'Exercises':
+        final sources = (item['sources'] as List<dynamic>? ?? const []);
+        final source = sources.isNotEmpty && sources.first is Map
+            ? Map<String, dynamic>.from(sources.first as Map)
+            : const <String, dynamic>{};
+        return [
+          _InlineBadge(
+            label: item['is_active'] == true ? 'Active' : 'Inactive',
+          ),
+          _InlineBadge(
+            label: '${item['translations_count'] ?? 0} translations',
+          ),
+          _InlineBadge(
+            label: item['preview_media'] != null
+                ? 'Preview ready'
+                : 'Preview missing',
+          ),
+          if (source['source_key'] != null)
+            _InlineBadge(label: source['source_key'].toString()),
         ];
       default:
         return const <Widget>[];

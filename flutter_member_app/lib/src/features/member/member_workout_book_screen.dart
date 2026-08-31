@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -84,6 +86,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   final _minutesController = TextEditingController(text: '45');
   final _planNotesController = TextEditingController();
   final _exerciseSearchController = TextEditingController();
+  Timer? _exerciseSearchDebounce;
   final _setsController = TextEditingController(text: '4');
   final _repsController = TextEditingController(text: '10');
   final _targetWeightController = TextEditingController();
@@ -109,6 +112,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _initializeDefaultBuilderDays();
+    _exerciseSearchController.addListener(_scheduleExerciseSearch);
     _load();
   }
 
@@ -122,6 +126,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     _minutesController.dispose();
     _planNotesController.dispose();
     _exerciseSearchController.dispose();
+    _exerciseSearchDebounce?.cancel();
     _setsController.dispose();
     _repsController.dispose();
     _targetWeightController.dispose();
@@ -153,7 +158,13 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
         widget.repository.fetchWorkoutBooks(queryParameters: catalogQuery),
         widget.repository.fetchRecommendedWorkoutBooks(),
         widget.repository.fetchWorkoutPlans(),
-        widget.repository.fetchWorkoutExercises(),
+        widget.repository.fetchWorkoutExercises(
+          queryParameters: {
+            'per_page': 50,
+            'locale':
+                WidgetsBinding.instance.platformDispatcher.locale.languageCode,
+          },
+        ),
       ]);
 
       _books = apiPageItems(responses[0]);
@@ -229,7 +240,14 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       }
       if (_exercisePage.hasMore) {
         final response = await widget.repository.fetchWorkoutExercises(
-          queryParameters: {'page': _exercisePage.nextPage},
+          queryParameters: {
+            'page': _exercisePage.nextPage,
+            'per_page': 50,
+            'locale':
+                WidgetsBinding.instance.platformDispatcher.locale.languageCode,
+            if (_exerciseSearchController.text.trim().isNotEmpty)
+              'search': _exerciseSearchController.text.trim(),
+          },
         );
         _exercises = mergeApiPageItems(_exercises, apiPageItems(response));
         _exercisePage = ApiPagination.fromResponse(response);
@@ -242,6 +260,46 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  void _scheduleExerciseSearch() {
+    _exerciseSearchDebounce?.cancel();
+    _exerciseSearchDebounce = Timer(
+      const Duration(milliseconds: 350),
+      _searchExercises,
+    );
+  }
+
+  Future<void> _searchExercises() async {
+    try {
+      final response = await widget.repository.fetchWorkoutExercises(
+        queryParameters: {
+          'page': 1,
+          'per_page': 50,
+          'locale':
+              WidgetsBinding.instance.platformDispatcher.locale.languageCode,
+          if (_exerciseSearchController.text.trim().isNotEmpty)
+            'search': _exerciseSearchController.text.trim(),
+        },
+      );
+      if (!mounted) return;
+
+      setState(() {
+        _exercises = apiPageItems(response);
+        _exercisePage = ApiPagination.fromResponse(response);
+        if (_selectedBuilderExerciseId != null &&
+            _exerciseById(_selectedBuilderExerciseId) == null) {
+          _selectedBuilderExerciseId = _exercises.isEmpty
+              ? null
+              : (_exercises.first['id'] as num?)?.toInt();
+        }
+      });
+    } catch (exception) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(exception.toString())));
     }
   }
 
@@ -320,6 +378,14 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       return 'full_body';
     }
     return 'other';
+  }
+
+  String _exerciseDisplayName(Map<String, dynamic> exercise) {
+    final localized = exercise['localized_name']?.toString().trim() ?? '';
+    if (localized.isNotEmpty) return localized;
+
+    final canonical = exercise['name']?.toString().trim() ?? '';
+    return canonical.isNotEmpty ? canonical : 'Exercise';
   }
 
   String _bodyPartLabel(String bodyPart) {
@@ -519,6 +585,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
         return true;
       }
       return <String>[
+        exercise['localized_name']?.toString() ?? '',
         exercise['name']?.toString() ?? '',
         exercise['muscle_group']?.toString() ?? '',
         exercise['body_part_label']?.toString() ?? '',
@@ -815,7 +882,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                     return DropdownMenuItem<int>(
                       value: id,
                       child: Text(
-                        '${exercise['name']?.toString() ?? 'Exercise'} • ${_bodyPartLabel(_bodyPartKeyForExercise(exercise))}',
+                        '${_exerciseDisplayName(exercise)} • ${_bodyPartLabel(_bodyPartKeyForExercise(exercise))}',
                         overflow: TextOverflow.ellipsis,
                       ),
                     );
@@ -1009,12 +1076,18 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     final badges = <String>[
       if ((exerciseMeta['body_part_label']?.toString() ?? '').isNotEmpty)
         exerciseMeta['body_part_label'].toString(),
+      if ((exerciseMeta['target_muscle']?.toString() ?? '').isNotEmpty)
+        'Target: ${exerciseMeta['target_muscle']}',
       if ((exerciseMeta['muscle_group']?.toString() ?? '').isNotEmpty)
         exerciseMeta['muscle_group'].toString(),
       if ((exerciseMeta['equipment']?.toString() ?? '').isNotEmpty)
         exerciseMeta['equipment'].toString(),
       if ((exerciseMeta['difficulty']?.toString() ?? '').isNotEmpty)
         exerciseMeta['difficulty'].toString(),
+      if ((exerciseMeta['default_tracking_mode']?.toString() ?? '').isNotEmpty)
+        exerciseMeta['default_tracking_mode'].toString(),
+      if (exerciseMeta['is_bodyweight'] == true) 'Bodyweight',
+      if (exerciseMeta['is_per_side'] == true) 'Per side',
     ];
 
     final secondary =
@@ -1022,6 +1095,15 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
             .map((item) => item.toString())
             .where((item) => item.isNotEmpty)
             .toList();
+    final instructionSteps =
+        (exerciseMeta['instruction_steps'] as List<dynamic>? ?? const [])
+            .map((item) => item.toString().trim())
+            .where((item) => item.isNotEmpty)
+            .toList();
+    final preview = exerciseMeta['preview_media'];
+    final previewUrl = preview is Map
+        ? preview['url']?.toString().trim() ?? ''
+        : '';
 
     return Container(
       width: double.infinity,
@@ -1033,6 +1115,23 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (previewUrl.isNotEmpty) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                previewUrl,
+                height: 180,
+                width: double.infinity,
+                fit: BoxFit.contain,
+                semanticLabel: '${_exerciseDisplayName(exerciseMeta)} preview',
+                errorBuilder: (context, error, stackTrace) => const SizedBox(
+                  height: 72,
+                  child: Center(child: Text('Preview unavailable')),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -1053,7 +1152,22 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
               ),
             ),
           ],
-          if ((exerciseMeta['instructions']?.toString() ?? '').isNotEmpty) ...[
+          if (instructionSteps.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ...instructionSteps.indexed.map(
+              (entry) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '${entry.$1 + 1}. ${entry.$2}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            ),
+          ] else if ((exerciseMeta['instructions']?.toString() ?? '')
+              .isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
               exerciseMeta['instructions'].toString(),
@@ -2113,9 +2227,9 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                                                         (exercise['id'] as num?)
                                                             ?.toInt(),
                                                     child: Text(
-                                                      exercise['name']
-                                                              ?.toString() ??
-                                                          'Exercise',
+                                                      _exerciseDisplayName(
+                                                        exercise,
+                                                      ),
                                                       overflow:
                                                           TextOverflow.ellipsis,
                                                     ),

@@ -39,10 +39,15 @@
             <div class="space-y-6">
                 <div class="admin-detail-grid">
                     <x-form-input name="name" label="Exercise Name" :value="old('name', $exercise->name)" placeholder="Barbell Back Squat" required />
+                    <x-form-select name="body_part" label="Body Part" :selected="old('body_part', $exercise->body_part)" :options="['' => 'Select Body Part'] + collect(\App\Support\Workout\ExerciseBookCatalog::BODY_PART_ORDER)->mapWithKeys(fn ($part) => [$part => \App\Support\Workout\ExerciseBookCatalog::bodyPartLabel($part)])->all()" />
                     <x-form-input name="muscle_group" label="Muscle Group" :value="old('muscle_group', $exercise->muscle_group)" placeholder="legs" required />
+                    <x-form-input name="target_muscle" label="Target Muscle" :value="old('target_muscle', $exercise->target_muscle)" placeholder="quadriceps" />
                     <x-form-input name="equipment" label="Equipment" :value="old('equipment', $exercise->equipment)" placeholder="barbell" />
                     <x-form-input name="difficulty" label="Difficulty" :value="old('difficulty', $exercise->difficulty)" placeholder="intermediate" />
+                    <x-form-input name="movement_pattern" label="Movement Pattern" :value="old('movement_pattern', $exercise->movement_pattern)" placeholder="squat" />
+                    <x-form-select name="default_tracking_mode" label="Tracking" :selected="old('default_tracking_mode', $exercise->default_tracking_mode ?: 'reps')" :options="['reps' => 'Reps', 'timed' => 'Timed', 'cardio' => 'Cardio', 'distance' => 'Distance']" />
                     <x-form-select name="status" label="Status" :selected="old('status', $exercise->status)" :options="$statusOptions" />
+                    <x-form-select name="review_status" label="Review Status" :selected="old('review_status', $exercise->review_status ?: 'approved')" :options="['imported' => 'Imported', 'in_review' => 'In Review', 'approved' => 'Approved', 'rejected' => 'Rejected', 'archived' => 'Archived']" />
                     <div class="panel-card-muted px-4 py-4">
                         <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Activation</div>
                         <label class="mt-3 flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
@@ -53,9 +58,25 @@
                     </div>
                 </div>
 
+                <div class="grid gap-4 md:grid-cols-3">
+                    @foreach ([
+                        'is_bodyweight' => ['Bodyweight', 'Exercise can be performed using body weight.'],
+                        'supports_external_load' => ['External Load', 'Allow weight/load tracking.'],
+                        'is_per_side' => ['Per Side', 'Track left and right sides separately.'],
+                    ] as $field => [$label, $help])
+                        <div class="panel-card-muted px-4 py-4">
+                            <label class="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
+                                <input type="hidden" name="{{ $field }}" value="0">
+                                <input type="checkbox" class="mt-1" name="{{ $field }}" value="1" @checked(old($field, $exercise->{$field} ?? ($field === 'supports_external_load')))>
+                                <span><span class="font-semibold text-slate-950 dark:text-white">{{ $label }}</span><br>{{ $help }}</span>
+                            </label>
+                        </div>
+                    @endforeach
+                </div>
+
                 <div class="admin-detail-grid">
-                    <x-form-input name="image_url" label="Image URL" :value="old('image_url', $exercise->image_url)" placeholder="https://..." />
-                    <x-form-input name="video_url" label="Video URL" :value="old('video_url', $exercise->video_url)" placeholder="https://..." />
+                    <x-form-input name="image_url" label="Legacy Image URL (optional)" :value="old('image_url', $exercise->image_url)" placeholder="https://..." />
+                    <x-form-input name="video_url" label="Legacy Video URL (optional)" :value="old('video_url', $exercise->video_url)" placeholder="https://..." />
                 </div>
 
                 <div>
@@ -94,6 +115,21 @@
                 </div>
 
                 @if ($isEdit)
+                    <div class="panel-card-muted px-4 py-4">
+                        <h3 class="text-sm font-semibold text-slate-950 dark:text-white">Source & Preview</h3>
+                        <div class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                            <div><span class="font-semibold text-slate-950 dark:text-white">Translations:</span> {{ $exercise->translations_count ?? 0 }}</div>
+                            <div><span class="font-semibold text-slate-950 dark:text-white">Media records:</span> {{ $exercise->media_count ?? 0 }}</div>
+                            @forelse ($exercise->sources as $source)
+                                <div class="rounded-xl border border-slate-200/80 p-3 dark:border-slate-800">
+                                    <div class="font-semibold text-slate-950 dark:text-white">{{ $source->source_key }} · {{ $source->source_external_id }}</div>
+                                    <div class="mt-1">License {{ $source->license_code }} · synced {{ $source->last_synced_at?->diffForHumans() }}</div>
+                                </div>
+                            @empty
+                                <div>Manual/internal exercise with no external source record.</div>
+                            @endforelse
+                        </div>
+                    </div>
                     <div class="panel-card-muted px-4 py-4">
                         <h3 class="text-sm font-semibold text-slate-950 dark:text-white">Operational Context</h3>
                         <div class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">

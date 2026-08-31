@@ -158,7 +158,7 @@ class ExerciseBookCatalog
 
     public static function exerciseToArray(Exercise $exercise): array
     {
-        $bodyPart = self::bodyPartForMuscleGroup($exercise->muscle_group);
+        $bodyPart = $exercise->body_part ?: self::bodyPartForMuscleGroup($exercise->muscle_group);
 
         return [
             'id' => $exercise->id,
@@ -174,7 +174,26 @@ class ExerciseBookCatalog
             'video_url' => $exercise->video_url,
             'is_global' => $exercise->is_global,
             'status' => $exercise->status,
+            'review_status' => $exercise->review_status,
             'is_active' => $exercise->is_active,
+            'translations_count' => $exercise->translations_count ?? 0,
+            'media_count' => $exercise->media_count ?? 0,
+            'preview_media' => $exercise->previewMedia ? [
+                'kind' => $exercise->previewMedia->kind,
+                'source_type' => $exercise->previewMedia->source_type,
+            ] : null,
+            'sources' => $exercise->relationLoaded('sources') ? $exercise->sources->map(fn ($source) => [
+                'source_key' => $source->source_key,
+                'license_code' => $source->license_code,
+            ])->values()->all() : [],
+            'creator' => $exercise->relationLoaded('creator') && $exercise->creator ? [
+                'id' => $exercise->creator->id,
+                'name' => $exercise->creator->name,
+            ] : null,
+            'template_exercises_count' => $exercise->template_exercises_count ?? 0,
+            'plan_exercises_count' => $exercise->plan_exercises_count ?? 0,
+            'session_exercises_count' => $exercise->session_exercises_count ?? 0,
+            'personal_records_count' => $exercise->personal_records_count ?? 0,
             'created_by_user_id' => $exercise->created_by_user_id,
             'created_at' => $exercise->created_at?->toIso8601String(),
             'updated_at' => $exercise->updated_at?->toIso8601String(),

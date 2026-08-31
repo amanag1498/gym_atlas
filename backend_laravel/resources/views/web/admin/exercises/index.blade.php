@@ -16,14 +16,14 @@
                 </div>
                 <div class="admin-detail-grid-compact w-full xl:max-w-xl">
                     <div class="panel-card-muted px-4 py-4">
-                        <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Video Ready</div>
-                        <div class="mt-2 text-lg font-semibold text-slate-950 dark:text-white">{{ $videoReadyExercises }}</div>
-                        <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">exercises with linked demo video</div>
+                        <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Needs Review</div>
+                        <div class="mt-2 text-lg font-semibold text-slate-950 dark:text-white">{{ $reviewExercises }}</div>
+                        <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">imported or in-review exercises</div>
                     </div>
                     <div class="panel-card-muted px-4 py-4">
-                        <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Image Ready</div>
-                        <div class="mt-2 text-lg font-semibold text-slate-950 dark:text-white">{{ $imageReadyExercises }}</div>
-                        <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">exercises with visual media</div>
+                        <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Licensed Preview</div>
+                        <div class="mt-2 text-lg font-semibold text-slate-950 dark:text-white">{{ $mediaReadyExercises }}</div>
+                        <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">active URL or local-file previews</div>
                     </div>
                 </div>
             </div>
@@ -33,11 +33,11 @@
             <x-stat-card label="Exercises" :value="$totalExercises" hint="Seeded catalog size" tone="sky" />
             <x-stat-card label="Body Parts" :value="count($groupedExercises)" hint="Grouped selection buckets" tone="emerald" />
             <x-stat-card label="Active" :value="$activeExercises" hint="Available in builders" tone="violet" />
-            <x-stat-card label="Media Ready" :value="$videoReadyExercises + $imageReadyExercises" hint="Video or image attached" tone="amber" />
+            <x-stat-card label="Media Ready" :value="$mediaReadyExercises" hint="Licensed preview attached" tone="amber" />
         </div>
 
         <x-premium-card class="p-5">
-            <form method="GET" class="grid gap-4 md:grid-cols-[minmax(0,1.8fr)_minmax(220px,1fr)_auto]">
+            <form method="GET" class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
                 <x-form-input name="search" label="Search" :value="request('search')" placeholder="Search by exercise, muscle group, or equipment" />
                 <x-form-select
                     name="body_part"
@@ -45,6 +45,10 @@
                     :selected="request('body_part')"
                     :options="['' => 'All Body Parts'] + $bodyPartOptions"
                 />
+                <x-form-select name="review_status" label="Review" :selected="request('review_status')" :options="['' => 'All Review States', 'imported' => 'Imported', 'in_review' => 'In Review', 'approved' => 'Approved', 'rejected' => 'Rejected', 'archived' => 'Archived']" />
+                <x-form-select name="availability" label="Availability" :selected="request('availability')" :options="['' => 'All Availability', 'active' => 'Active', 'inactive' => 'Inactive']" />
+                <x-form-select name="source_key" label="Source" :selected="request('source_key')" :options="['' => 'All Sources'] + array_combine($sourceOptions, $sourceOptions)" />
+                <x-form-select name="media" label="Preview" :selected="request('media')" :options="['' => 'All Preview States', 'ready' => 'Preview Ready', 'missing' => 'Preview Missing']" />
                 <div class="flex items-end gap-2">
                     <x-action-button type="submit">Apply Filters</x-action-button>
                     <x-action-button as="a" href="{{ route('web.admin.exercises.index') }}" variant="secondary">Reset</x-action-button>
@@ -97,7 +101,10 @@
                                         <tr>
                                             <td>
                                                 <div class="font-semibold text-slate-950 dark:text-white">{{ $exercise['name'] }}</div>
-                                                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ str($exercise['status'])->title() }} • {{ !empty($exercise['is_active']) ? 'Active' : 'Inactive' }}</div>
+                                                <div class="mt-1 flex flex-wrap gap-2">
+                                                    <x-status-badge :label="str($exercise['review_status'] ?? 'approved')->replace('_', ' ')->title()" :tone="($exercise['review_status'] ?? null) === 'approved' ? 'success' : 'warning'" />
+                                                    <x-status-badge :label="!empty($exercise['is_active']) ? 'Active' : 'Inactive'" :tone="!empty($exercise['is_active']) ? 'success' : 'neutral'" />
+                                                </div>
                                                 @if (!empty($exercise['instructions']))
                                                     <div class="mt-2 text-sm text-slate-600 dark:text-slate-300">{{ \Illuminate\Support\Str::limit($exercise['instructions'], 110) }}</div>
                                                 @endif
@@ -114,8 +121,8 @@
                                                 @endif
                                             </td>
                                             <td class="text-sm text-slate-600 dark:text-slate-300">
-                                                <div>{{ !empty($exercise['video_url']) ? 'Video linked' : 'No video' }}</div>
-                                                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ !empty($exercise['image_url']) ? 'Image linked' : 'No image' }}</div>
+                                                <div>{{ !empty($exercise['preview_media']) ? str($exercise['preview_media']['kind'])->upper().' preview ready' : 'No licensed preview' }}</div>
+                                                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $exercise['media_count'] ?? 0 }} media • {{ $exercise['translations_count'] ?? 0 }} translations</div>
                                             </td>
                                             <td class="text-sm text-slate-600 dark:text-slate-300">
                                                 <div>Plans {{ $exercise['plan_exercises_count'] ?? 0 }}</div>
@@ -124,8 +131,8 @@
                                                 <div class="mt-1 font-semibold text-slate-900 dark:text-slate-100">Total {{ $usageTotal }}</div>
                                             </td>
                                             <td class="text-sm text-slate-600 dark:text-slate-300">
-                                                <div>{{ data_get($exercise, 'creator.name', 'System') }}</div>
-                                                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ !empty($exercise['is_global']) ? 'Global library' : 'Local' }}</div>
+                                                <div>{{ data_get($exercise, 'sources.0.source_key', data_get($exercise, 'creator.name', 'Manual/System')) }}</div>
+                                                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ data_get($exercise, 'sources.0.license_code', 'Internal content') }}</div>
                                             </td>
                                             <td>
                                                 <div class="flex justify-end gap-2">

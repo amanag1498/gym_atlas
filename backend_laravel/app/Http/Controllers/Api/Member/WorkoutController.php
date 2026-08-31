@@ -124,6 +124,7 @@ class WorkoutController extends Controller
     {
         $profile = $this->memberAppService->memberProfileFor($request->user());
         $query = Exercise::query()
+            ->with(['translations', 'previewMedia'])
             ->where('is_active', true)
             ->where(function ($builder) use ($profile): void {
                 $builder->where('is_global', true)
@@ -146,14 +147,8 @@ class WorkoutController extends Controller
             })
             ->orderBy('name');
 
-        if ($request->filled('search')) {
-            $search = '%'.$request->string('search')->trim().'%';
-            $query->where(function ($builder) use ($search): void {
-                $builder->where('name', 'like', $search)
-                    ->orWhere('muscle_group', 'like', $search)
-                    ->orWhere('equipment', 'like', $search);
-            });
-        }
+        $query->searchCatalog($request->string('search')->toString())
+            ->applyCatalogFilters($this->exerciseFilters($request));
 
         if ($request->filled('body_part')) {
             ExerciseBookCatalog::applyBodyPartFilter($query, $request->string('body_part')->toString());
@@ -173,6 +168,17 @@ class WorkoutController extends Controller
             ExerciseResource::collection($exercises->getCollection()),
             'Workout exercises fetched successfully.'
         );
+    }
+
+    private function exerciseFilters(Request $request): array
+    {
+        return array_filter([
+            'equipment' => $request->filled('equipment') ? $request->string('equipment')->trim()->toString() : null,
+            'target_muscle' => $request->filled('target_muscle') ? $request->string('target_muscle')->trim()->toString() : null,
+            'difficulty' => $request->filled('difficulty') ? $request->string('difficulty')->trim()->toString() : null,
+            'tracking_mode' => $request->filled('tracking_mode') ? $request->string('tracking_mode')->trim()->toString() : null,
+            'is_bodyweight' => $request->has('is_bodyweight') ? $request->boolean('is_bodyweight') : null,
+        ], fn ($value) => $value !== null && $value !== '');
     }
 
     public function plans(Request $request)

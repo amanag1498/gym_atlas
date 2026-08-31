@@ -13,6 +13,7 @@ use App\Http\Requests\PlatformAdmin\UpsertFitnessGoalRequest;
 use App\Http\Requests\PlatformAdmin\UpsertTrainerSpecializationRequest;
 use App\Models\City;
 use App\Models\Exercise;
+use App\Models\ExerciseSource;
 use App\Models\Facility;
 use App\Models\FitnessGoal;
 use App\Models\PlatformBanner;
@@ -66,13 +67,9 @@ class CatalogController extends Controller
     public function exercises(Request $request): View
     {
         $query = Exercise::query()
-            ->with(['creator:id,name'])
-            ->withCount(['templateExercises', 'planExercises', 'sessionExercises', 'personalRecords'])
-            ->where('is_global', true)
-            ->where(function ($builder): void {
-                $builder->where('status', 'approved')
-                    ->orWhere('is_active', true);
-            });
+            ->with(['creator:id,name', 'sources', 'previewMedia'])
+            ->withCount(['templateExercises', 'planExercises', 'sessionExercises', 'personalRecords', 'translations', 'media'])
+            ->where('is_global', true);
 
         if ($request->filled('search')) {
             $search = '%'.$request->string('search')->trim().'%';
@@ -87,6 +84,21 @@ class CatalogController extends Controller
             ExerciseBookCatalog::applyBodyPartFilter($query, $request->string('body_part')->toString());
         }
 
+        if ($request->filled('review_status')) {
+            $query->where('review_status', $request->string('review_status')->toString());
+        }
+        if ($request->filled('availability')) {
+            $query->where('is_active', $request->string('availability')->toString() === 'active');
+        }
+        if ($request->filled('source_key')) {
+            $query->whereHas('sources', fn ($sources) => $sources->where('source_key', $request->string('source_key')->toString()));
+        }
+        if ($request->filled('media')) {
+            $request->string('media')->toString() === 'ready'
+                ? $query->whereHas('media', fn ($media) => $media->where('status', 'active'))
+                : $query->whereDoesntHave('media', fn ($media) => $media->where('status', 'active'));
+        }
+
         ExerciseBookCatalog::applyBodyPartOrder($query);
 
         $exercises = $query->paginate(25)->withQueryString();
@@ -96,10 +108,11 @@ class CatalogController extends Controller
             'breadcrumbs' => ['Platform', 'Exercise Book'],
             'groupedExercises' => ExerciseBookCatalog::grouped($exercises->getCollection()),
             'exercises' => $exercises,
-            'totalExercises' => $exercises->total(),
+            'totalExercises' => Exercise::query()->where('is_global', true)->count(),
             'activeExercises' => Exercise::query()->where('is_global', true)->where('is_active', true)->count(),
-            'videoReadyExercises' => Exercise::query()->where('is_global', true)->whereNotNull('video_url')->count(),
-            'imageReadyExercises' => Exercise::query()->where('is_global', true)->whereNotNull('image_url')->count(),
+            'reviewExercises' => Exercise::query()->where('is_global', true)->whereIn('review_status', ['imported', 'in_review'])->count(),
+            'mediaReadyExercises' => Exercise::query()->where('is_global', true)->whereHas('media', fn ($media) => $media->where('status', 'active'))->count(),
+            'sourceOptions' => ExerciseSource::query()->select('source_key')->distinct()->orderBy('source_key')->pluck('source_key')->all(),
             'bodyPartOptions' => collect(ExerciseBookCatalog::BODY_PART_ORDER)
                 ->mapWithKeys(fn (string $key) => [$key => ExerciseBookCatalog::bodyPartLabel($key)])
                 ->all(),
@@ -128,7 +141,13 @@ class CatalogController extends Controller
             'created_by_user_id' => $request->user()->id,
             'is_global' => true,
             'status' => $request->validated('status', ExerciseStatus::Approved->value),
+            'review_status' => $request->validated('review_status', 'approved'),
+            'reviewed_by_user_id' => $request->validated('review_status', 'approved') === 'approved' ? $request->user()->id : null,
+            'reviewed_at' => $request->validated('review_status', 'approved') === 'approved' ? now() : null,
             'is_active' => $request->boolean('is_active', true),
+            'is_bodyweight' => $request->boolean('is_bodyweight'),
+            'supports_external_load' => $request->boolean('supports_external_load', true),
+            'is_per_side' => $request->boolean('is_per_side'),
         ]);
 
         $this->auditLogService->log(
@@ -150,7 +169,8 @@ class CatalogController extends Controller
     public function editExercise(Exercise $exercise): View
     {
         abort_unless($exercise->is_global, 404);
-        $exercise->load('creator')->loadCount(['templateExercises', 'planExercises', 'sessionExercises', 'personalRecords']);
+        $exercise->load(['creator', 'reviewer', 'sources', 'translations', 'media', 'previewMedia'])
+            ->loadCount(['templateExercises', 'planExercises', 'sessionExercises', 'personalRecords', 'translations', 'media']);
 
         return view('web.admin.exercises.edit', [
             'pageTitle' => 'Edit Exercise',
@@ -169,6 +189,11 @@ class CatalogController extends Controller
             ...$request->validated(),
             'secondary_muscles' => $this->normalizeSecondaryMuscles($request->input('secondary_muscles')),
             'is_active' => $request->boolean('is_active'),
+            'is_bodyweight' => $request->boolean('is_bodyweight'),
+            'supports_external_load' => $request->boolean('supports_external_load'),
+            'is_per_side' => $request->boolean('is_per_side'),
+            'reviewed_by_user_id' => $request->validated('review_status') === 'approved' ? $request->user()->id : null,
+            'reviewed_at' => $request->validated('review_status') === 'approved' ? now() : null,
         ]);
 
         $this->auditLogService->log(

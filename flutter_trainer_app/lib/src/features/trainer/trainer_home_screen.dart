@@ -314,7 +314,13 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         coachingRequest(_repository.fetchWorkoutTemplates, 'workout templates'),
         coachingRequest(_repository.fetchWorkoutPlans, 'workout plans'),
         coachingRequest(_repository.fetchNotifications, 'notifications'),
-        coachingRequest(_repository.fetchExercises, 'exercises'),
+        coachingRequest(
+          () => _repository.fetchExercises(
+            locale:
+                WidgetsBinding.instance.platformDispatcher.locale.languageCode,
+          ),
+          'exercises',
+        ),
         coachingRequest(_repository.fetchTrialRequests, 'trial requests'),
       ]);
       List<Map<String, dynamic>> independentMembers = const [];
@@ -522,6 +528,8 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       if (_exercisePage.hasMore) {
         final response = await _repository.fetchExercises(
           page: _exercisePage.nextPage,
+          locale:
+              WidgetsBinding.instance.platformDispatcher.locale.languageCode,
         );
         _exercises = mergeApiPageItems(_exercises, apiPageItems(response));
         _exercisePage = ApiPagination.fromResponse(response);
@@ -6023,9 +6031,9 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       if (query.isEmpty) {
         return true;
       }
-      return (exercise['name']?.toString().toLowerCase() ?? '').contains(
-            query,
-          ) ||
+      return (exercise['localized_name']?.toString().toLowerCase() ?? '')
+              .contains(query) ||
+          (exercise['name']?.toString().toLowerCase() ?? '').contains(query) ||
           (exercise['muscle_group']?.toString().toLowerCase() ?? '').contains(
             query,
           ) ||
@@ -6429,7 +6437,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                               return DropdownMenuItem<int>(
                                 value: (exercise['id'] as num?)?.toInt(),
                                 child: Text(
-                                  '${exercise['name']?.toString() ?? 'Exercise'} • $bodyPart',
+                                  '${_exerciseDisplayName(exercise)} • $bodyPart',
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               );
@@ -6685,7 +6693,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: _TrainerWorkoutTile(
-                        title: exercise['name']?.toString() ?? 'Exercise',
+                        title: _exerciseDisplayName(exercise),
                         subtitle:
                             [
                                   _exerciseBodyPartLabel(exercise),
@@ -6970,11 +6978,22 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                   'gym_id': gymId,
                   if (branchId != null) 'branch_id': branchId,
                   'name': name,
+                  'body_part': bodyPart,
                   'muscle_group': muscle.isEmpty ? bodyPart : muscle,
+                  'target_muscle': muscle.isEmpty ? bodyPart : muscle,
                   'equipment':
                       _newExerciseEquipmentController.text.trim().isEmpty
                       ? null
                       : _newExerciseEquipmentController.text.trim(),
+                  'default_tracking_mode': bodyPart == 'cardio'
+                      ? 'cardio'
+                      : 'reps',
+                  'is_bodyweight':
+                      _newExerciseEquipmentController.text
+                          .trim()
+                          .toLowerCase()
+                          .replaceAll(' ', '') ==
+                      'bodyweight',
                   'difficulty':
                       _newExerciseDifficultyController.text.trim().isEmpty
                       ? null
@@ -7851,6 +7870,14 @@ String _exerciseBodyPartLabel(Map<String, dynamic> exercise) {
   return _bodyPartLabel(exercise['body_part']?.toString() ?? '');
 }
 
+String _exerciseDisplayName(Map<String, dynamic> exercise) {
+  final localized = exercise['localized_name']?.toString().trim() ?? '';
+  if (localized.isNotEmpty) return localized;
+
+  final canonical = exercise['name']?.toString().trim() ?? '';
+  return canonical.isNotEmpty ? canonical : 'Exercise';
+}
+
 String _bodyPartLabel(String value) {
   final normalized = value.trim().replaceAll('-', '_').toLowerCase();
   if (normalized.isEmpty) {
@@ -7876,6 +7903,20 @@ class _SelectedExerciseBodyPart extends StatelessWidget {
     if (exercise.isEmpty) {
       return const SizedBox.shrink();
     }
+    final details = <String>[
+      _exerciseBodyPartLabel(exercise),
+      if ((exercise['target_muscle']?.toString().trim() ?? '').isNotEmpty)
+        'Target: ${exercise['target_muscle']}',
+      if ((exercise['equipment']?.toString().trim() ?? '').isNotEmpty)
+        exercise['equipment'].toString(),
+      if ((exercise['default_tracking_mode']?.toString().trim() ?? '')
+          .isNotEmpty)
+        exercise['default_tracking_mode'].toString(),
+      if (exercise['is_bodyweight'] == true) 'Bodyweight',
+      if (exercise['is_per_side'] == true) 'Per side',
+    ];
+    final instructions = exercise['instructions']?.toString().trim() ?? '';
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -7903,8 +7944,8 @@ class _SelectedExerciseBodyPart extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Body part',
+                Text(
+                  _exerciseDisplayName(exercise),
                   style: TextStyle(
                     color: _TrainerWorkoutColor.gray,
                     fontSize: 10,
@@ -7913,13 +7954,26 @@ class _SelectedExerciseBodyPart extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  _exerciseBodyPartLabel(exercise),
+                  details.join(' • '),
                   style: const TextStyle(
                     color: _TrainerWorkoutColor.black,
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
+                if (instructions.isNotEmpty) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    instructions,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _TrainerWorkoutColor.gray,
+                      fontSize: 11,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

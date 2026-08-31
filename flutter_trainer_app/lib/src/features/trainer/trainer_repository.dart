@@ -290,12 +290,26 @@ class TrainerRepository {
   Future<Map<String, dynamic>> fetchExercises({
     int page = 1,
     String? search,
+    String? equipment,
+    String? targetMuscle,
+    String? trackingMode,
+    bool? isBodyweight,
+    String? locale,
+    int perPage = 100,
   }) async => _client.get(
     '/trainer/exercises',
     queryParameters: {
       'page': page,
-      'per_page': 20,
+      'per_page': perPage,
       if (search != null && search.trim().isNotEmpty) 'search': search,
+      if (equipment != null && equipment.trim().isNotEmpty)
+        'equipment': equipment,
+      if (targetMuscle != null && targetMuscle.trim().isNotEmpty)
+        'target_muscle': targetMuscle,
+      if (trackingMode != null && trackingMode.trim().isNotEmpty)
+        'tracking_mode': trackingMode,
+      if (isBodyweight != null) 'is_bodyweight': isBodyweight,
+      if (locale != null && locale.trim().isNotEmpty) 'locale': locale,
     },
   );
   Future<Map<String, dynamic>> fetchWorkoutTemplates({int page = 1}) async =>
