@@ -52,4 +52,29 @@ class TrialRequest extends Model
     {
         return $this->belongsTo(User::class, 'assigned_trainer_id');
     }
+
+    public function linkedMemberHasGymProfile(): bool
+    {
+        if (! $this->member_id) {
+            return false;
+        }
+
+        $member = $this->relationLoaded('member') ? $this->member : null;
+        if ($member?->relationLoaded('memberProfiles')) {
+            return $member->memberProfiles->contains(
+                fn (MemberProfile $profile) => (int) $profile->gym_id === (int) $this->gym_id
+            );
+        }
+
+        return MemberProfile::query()
+            ->where('user_id', $this->member_id)
+            ->where('gym_id', $this->gym_id)
+            ->exists();
+    }
+
+    public function canConvert(): bool
+    {
+        return in_array($this->status, ['accepted', 'completed'], true)
+            && ! $this->linkedMemberHasGymProfile();
+    }
 }

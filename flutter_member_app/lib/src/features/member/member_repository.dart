@@ -192,6 +192,30 @@ class MemberRepository {
     '/member/workout-exercises',
     queryParameters: queryParameters,
   );
+  Future<Map<String, dynamic>> fetchWorkoutExercise(
+    int exerciseId, {
+    int? equipmentProfileId,
+  }) => _client.get(
+    '/member/workout-exercises/$exerciseId',
+    queryParameters: {
+      if (equipmentProfileId != null)
+        'equipment_profile_id': equipmentProfileId,
+    },
+  );
+  Future<Map<String, dynamic>> favouriteWorkoutExercise(int exerciseId) =>
+      _client.post('/member/workout-exercises/$exerciseId/favourite');
+  Future<Map<String, dynamic>> unfavouriteWorkoutExercise(int exerciseId) =>
+      _client.delete('/member/workout-exercises/$exerciseId/favourite');
+  Future<Map<String, dynamic>> fetchEquipmentProfiles() =>
+      _client.get('/member/equipment-profiles');
+  Future<Map<String, dynamic>> saveEquipmentProfile(
+    Map<String, dynamic> payload, {
+    int? profileId,
+  }) => profileId == null
+      ? _client.post('/member/equipment-profiles', data: payload)
+      : _client.put('/member/equipment-profiles/$profileId', data: payload);
+  Future<Map<String, dynamic>> deleteEquipmentProfile(int profileId) =>
+      _client.delete('/member/equipment-profiles/$profileId');
   Future<Map<String, dynamic>> fetchWorkoutHistory({
     int page = 1,
     int perPage = 15,
@@ -420,6 +444,8 @@ class MemberRepository {
   Future<Map<String, dynamic>> submitTrialRequest(
     Map<String, dynamic> payload,
   ) => _client.post('/member/trial-requests', data: payload);
+  Future<Map<String, dynamic>> fetchTrialEligibility(int gymId) =>
+      _client.get('/member/trial-requests/eligibility/$gymId');
   Future<Map<String, dynamic>> fetchTrialRequests({
     int page = 1,
     int perPage = 50,

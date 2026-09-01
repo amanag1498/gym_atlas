@@ -33,6 +33,7 @@ use App\Http\Controllers\Api\Gym\GymContextController;
 use App\Http\Controllers\Api\Member\AttendanceController as MemberAttendanceController;
 use App\Http\Controllers\Api\Member\DietPlanController as MemberDietPlanController;
 use App\Http\Controllers\Api\Member\EventController as MemberEventController;
+use App\Http\Controllers\Api\Member\ExerciseCatalogController as MemberExerciseCatalogController;
 use App\Http\Controllers\Api\Member\FavoriteGymController;
 use App\Http\Controllers\Api\Member\GymSelfEnrollmentController;
 use App\Http\Controllers\Api\Member\IndependentTrainerController;
@@ -55,6 +56,7 @@ use App\Http\Controllers\Api\PlatformAdmin\DashboardController as PlatformDashbo
 use App\Http\Controllers\Api\PlatformAdmin\DietPlanTemplateController as PlatformDietPlanTemplateController;
 use App\Http\Controllers\Api\PlatformAdmin\EventController as PlatformEventController;
 use App\Http\Controllers\Api\PlatformAdmin\ExerciseController as PlatformExerciseController;
+use App\Http\Controllers\Api\PlatformAdmin\ExerciseImportController as PlatformExerciseImportController;
 use App\Http\Controllers\Api\PlatformAdmin\FoodCatalogController as PlatformFoodCatalogController;
 use App\Http\Controllers\Api\PlatformAdmin\GymController as PlatformGymController;
 use App\Http\Controllers\Api\PlatformAdmin\GymOwnerController as PlatformGymOwnerController;
@@ -377,9 +379,21 @@ Route::prefix('platform-admin')
             ->middleware('permission:platform.banners.manage');
         Route::get('exercises', [PlatformExerciseController::class, 'index'])
             ->middleware('permission:exercise.view|exercise.manage');
+        Route::get('exercise-imports', [PlatformExerciseImportController::class, 'index'])
+            ->middleware('permission:exercise.view|exercise.manage');
+        Route::get('exercise-imports/{exerciseImportBatch}', [PlatformExerciseImportController::class, 'show'])
+            ->middleware('permission:exercise.view|exercise.manage');
+        Route::post('exercise-imports/{exerciseImportBatch}/publish', [PlatformExerciseImportController::class, 'publish'])
+            ->middleware('permission:exercise.manage');
         Route::post('exercises', [PlatformExerciseController::class, 'store'])
             ->middleware('permission:exercise.manage');
         Route::put('exercises/{exercise}', [PlatformExerciseController::class, 'update'])
+            ->middleware('permission:exercise.manage');
+        Route::get('exercises/{exercise}/substitutions', [PlatformExerciseController::class, 'substitutions'])
+            ->middleware('permission:exercise.view|exercise.manage');
+        Route::post('exercises/{exercise}/substitutions', [PlatformExerciseController::class, 'storeSubstitution'])
+            ->middleware('permission:exercise.manage');
+        Route::delete('exercise-substitutions/{exerciseSubstitution}', [PlatformExerciseController::class, 'destroySubstitution'])
             ->middleware('permission:exercise.manage');
         Route::get('announcements', [PlatformAnnouncementController::class, 'index'])
             ->middleware('permission:announcement.view|announcement.manage');
@@ -741,6 +755,8 @@ Route::prefix('trainer')
             ->middleware('permission:workout_session.view|progress.view');
         Route::get('exercises', [TrainerExerciseController::class, 'index'])
             ->middleware('permission:exercise.view|exercise.manage');
+        Route::get('exercises/{exercise}', [TrainerExerciseController::class, 'show'])
+            ->middleware('permission:exercise.view|exercise.manage');
         Route::post('exercises', [TrainerExerciseController::class, 'store'])
             ->middleware('permission:exercise.manage');
         Route::get('workout-templates', [TrainerWorkoutTemplateController::class, 'index'])
@@ -809,6 +825,7 @@ Route::prefix('member')
     ->group(function (): void {
         Route::get('trial-requests', [TrialRequestController::class, 'index']);
         Route::post('trial-requests', [TrialRequestController::class, 'store']);
+        Route::get('trial-requests/eligibility/{gym}', [TrialRequestController::class, 'eligibility']);
         Route::get('trial-requests/{trialRequest}', [TrialRequestController::class, 'show']);
         Route::get('gym-invitations', [MemberGymInvitationController::class, 'index']);
         Route::post('gym-invitations/{invitation}/accept', [MemberGymInvitationController::class, 'accept']);
@@ -882,6 +899,20 @@ Route::prefix('member')
         Route::get('workout-books/recommended', [MemberWorkoutController::class, 'recommendedBooks'])
             ->middleware('permission:workout_template.view|workout_plan.view');
         Route::get('workout-exercises', [MemberWorkoutController::class, 'exercises'])
+            ->middleware('permission:exercise.view|workout_plan.view|workout_session.manage');
+        Route::get('workout-exercises/{exercise}', [MemberExerciseCatalogController::class, 'show'])
+            ->middleware('permission:exercise.view|workout_plan.view|workout_session.manage');
+        Route::post('workout-exercises/{exercise}/favourite', [MemberExerciseCatalogController::class, 'favourite'])
+            ->middleware('permission:exercise.view|workout_plan.view|workout_session.manage');
+        Route::delete('workout-exercises/{exercise}/favourite', [MemberExerciseCatalogController::class, 'unfavourite'])
+            ->middleware('permission:exercise.view|workout_plan.view|workout_session.manage');
+        Route::get('equipment-profiles', [MemberExerciseCatalogController::class, 'equipmentProfiles'])
+            ->middleware('permission:exercise.view|workout_plan.view|workout_session.manage');
+        Route::post('equipment-profiles', [MemberExerciseCatalogController::class, 'storeEquipmentProfile'])
+            ->middleware('permission:exercise.view|workout_plan.view|workout_session.manage');
+        Route::put('equipment-profiles/{equipmentProfile}', [MemberExerciseCatalogController::class, 'updateEquipmentProfile'])
+            ->middleware('permission:exercise.view|workout_plan.view|workout_session.manage');
+        Route::delete('equipment-profiles/{equipmentProfile}', [MemberExerciseCatalogController::class, 'destroyEquipmentProfile'])
             ->middleware('permission:exercise.view|workout_plan.view|workout_session.manage');
         Route::post('workout-book-plans/{workoutTemplate}/adopt', [MemberWorkoutController::class, 'adoptPlan'])
             ->middleware('permission:workout_plan.manage|workout_session.manage');

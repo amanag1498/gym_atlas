@@ -295,6 +295,7 @@ class TrainerRepository {
     String? trackingMode,
     bool? isBodyweight,
     String? locale,
+    bool recent = false,
     int perPage = 100,
   }) async => _client.get(
     '/trainer/exercises',
@@ -309,6 +310,19 @@ class TrainerRepository {
       if (trackingMode != null && trackingMode.trim().isNotEmpty)
         'tracking_mode': trackingMode,
       if (isBodyweight != null) 'is_bodyweight': isBodyweight,
+      if (locale != null && locale.trim().isNotEmpty) 'locale': locale,
+      if (recent) 'recent': true,
+    },
+  );
+  Future<Map<String, dynamic>> fetchExercise(
+    int exerciseId, {
+    List<String>? availableEquipment,
+    String? locale,
+  }) => _client.get(
+    '/trainer/exercises/$exerciseId',
+    queryParameters: {
+      if (availableEquipment != null && availableEquipment.isNotEmpty)
+        'available_equipment': availableEquipment,
       if (locale != null && locale.trim().isNotEmpty) 'locale': locale,
     },
   );

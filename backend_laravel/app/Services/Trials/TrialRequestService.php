@@ -6,11 +6,13 @@ use App\Enums\NotificationType;
 use App\Enums\RoleName;
 use App\Models\Branch;
 use App\Models\Gym;
+use App\Models\MemberProfile;
 use App\Models\TrainerProfile;
 use App\Models\TrialRequest;
 use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Authorization\ScopeResolver;
+use App\Services\Members\GymMemberAccessService;
 use App\Services\Notification\NotificationService;
 use App\Services\Notification\TransactionalEmailService;
 use App\Services\Users\ManagedUserService;
@@ -30,6 +32,7 @@ class TrialRequestService
         private readonly AuditLogService $auditLogService,
         private readonly ManagedUserService $managedUserService,
         private readonly TransactionalEmailService $transactionalEmailService,
+        private readonly GymMemberAccessService $gymMemberAccessService,
     ) {}
 
     public function createPublic(array $data, ?User $actor = null, ?Request $request = null): TrialRequest
@@ -46,6 +49,13 @@ class TrialRequestService
             || $gym->approval_status === 'rejected') {
             throw ValidationException::withMessages([
                 'gym_id' => ['Trial requests are not enabled for this gym.'],
+            ]);
+        }
+
+        if ($actor?->hasRole(RoleName::Member->value)
+            && ! $this->trialEligibilityFor($actor, $gym)['can_request_trial']) {
+            throw ValidationException::withMessages([
+                'gym_id' => ['You are already a member of this gym and cannot request a trial here.'],
             ]);
         }
 
@@ -158,7 +168,7 @@ class TrialRequestService
                 newValues: $trialRequest->toArray(),
             );
 
-            return $trialRequest->load(['gym', 'branch', 'member', 'assignedTrainer']);
+            return $trialRequest->load(['gym', 'branch', 'member.memberProfiles', 'assignedTrainer']);
         });
     }
 
@@ -170,10 +180,28 @@ class TrialRequestService
         ]), $member, $request);
     }
 
+    /** @return array{can_request_trial: bool, already_gym_member: bool, reason: ?string} */
+    public function trialEligibilityFor(User $member, Gym $gym): array
+    {
+        $alreadyGymMember = $this->gymMemberAccessService->scopeAccessibleProfiles(
+            MemberProfile::query()
+                ->where('user_id', $member->id)
+                ->where('gym_id', $gym->id)
+        )->exists();
+
+        return [
+            'can_request_trial' => ! $alreadyGymMember,
+            'already_gym_member' => $alreadyGymMember,
+            'reason' => $alreadyGymMember
+                ? 'You are already a member of this gym, so a trial is not needed.'
+                : null,
+        ];
+    }
+
     public function queryForActor(User $actor, ?Request $request = null): Builder
     {
         $query = TrialRequest::query()
-            ->with(['gym', 'branch', 'member', 'assignedTrainer'])
+            ->with(['gym', 'branch', 'member.memberProfiles', 'assignedTrainer'])
             ->latest('id');
 
         if ($actor->active_role === RoleName::PlatformAdmin->value) {
@@ -404,7 +432,7 @@ class TrialRequestService
                 newValues: $trialRequest->fresh()->toArray(),
             );
 
-            return $trialRequest->fresh(['gym', 'branch', 'member', 'assignedTrainer']);
+            return $trialRequest->fresh(['gym', 'branch', 'member.memberProfiles', 'assignedTrainer']);
         });
     }
 
@@ -439,7 +467,36 @@ class TrialRequestService
         $trialRequest = $this->resolveForActor($actor, $trialRequest);
 
         return DB::transaction(function () use ($trialRequest, $data, $request): array {
+            $trialRequest = TrialRequest::query()
+                ->with(['gym', 'branch', 'member.memberProfiles', 'assignedTrainer'])
+                ->lockForUpdate()
+                ->findOrFail($trialRequest->id);
+
+            if (! in_array($trialRequest->status, ['accepted', 'completed'], true)) {
+                throw ValidationException::withMessages([
+                    'status' => ['Only accepted or completed trial requests can be converted.'],
+                ]);
+            }
+
             $existingMember = $this->resolveExistingMemberUser($trialRequest, $data);
+            $candidateUserIds = collect([$trialRequest->member_id, $existingMember?->id])
+                ->filter()
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values();
+
+            $existingGymProfile = MemberProfile::query()
+                ->where('gym_id', $trialRequest->gym_id)
+                ->whereIn('user_id', $candidateUserIds)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existingGymProfile) {
+                throw ValidationException::withMessages([
+                    'existing_user_id' => ['This person is already present in the gym member list and cannot be converted again.'],
+                ]);
+            }
+
             $payload = [
                 'name' => $data['name'] ?? $trialRequest->name ?? $existingMember?->name ?? 'Trial Member',
                 'email' => $data['email'] ?? $trialRequest->email ?? $existingMember?->email ?? ('trial+'.Str::random(10).'@example.com'),
@@ -491,7 +548,7 @@ class TrialRequestService
             }
 
             return [
-                'trial_request' => $trialRequest->fresh(['gym', 'branch', 'member', 'assignedTrainer']),
+                'trial_request' => $trialRequest->fresh(['gym', 'branch', 'member.memberProfiles', 'assignedTrainer']),
                 'member' => $memberUser->fresh(['memberProfile']),
             ];
         });

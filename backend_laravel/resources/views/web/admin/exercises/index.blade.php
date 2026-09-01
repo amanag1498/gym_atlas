@@ -3,6 +3,7 @@
 @section('content')
     @section('page_actions')
         <x-action-button as="a" href="{{ route('web.admin.exercises.create') }}">Add Exercise</x-action-button>
+        <x-action-button as="a" href="{{ route('web.admin.exercise-imports.index') }}" variant="secondary">Import Review</x-action-button>
         <x-action-button as="a" href="{{ route('web.admin.workout-books.create') }}" variant="secondary">Create Workout Book</x-action-button>
     @endsection
 

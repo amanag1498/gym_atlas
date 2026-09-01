@@ -5905,6 +5905,9 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   int? _selectedExerciseId;
   bool _savingPlan = false;
   bool _savingExercise = false;
+  bool _loadingExerciseCatalog = false;
+  bool _recentExercisesOnly = false;
+  List<Map<String, dynamic>> _catalogExercises = const [];
   int _workoutTabIndex = 1;
   String _selectedDayKey = 'Mon';
   final Set<String> _selectedWeekDays = <String>{'Mon', 'Wed', 'Fri'};
@@ -5937,6 +5940,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   @override
   void initState() {
     super.initState();
+    _catalogExercises = widget.exercises;
     _selectedAssignmentKey =
         _validAssignmentKey(widget.initialAssignmentKey) ??
         (widget.members.firstOrNull == null
@@ -5960,6 +5964,9 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   @override
   void didUpdateWidget(covariant _WorkoutPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!_recentExercisesOnly && widget.exercises != oldWidget.exercises) {
+      _catalogExercises = widget.exercises;
+    }
     if (widget.initialAssignmentKey != oldWidget.initialAssignmentKey) {
       final focusedAssignmentKey = _validAssignmentKey(
         widget.initialAssignmentKey,
@@ -6005,6 +6012,121 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     return exists ? assignmentKey : null;
   }
 
+  Future<void> _setRecentExercises(bool recent) async {
+    if (_loadingExerciseCatalog) return;
+    if (!recent) {
+      setState(() {
+        _recentExercisesOnly = false;
+        _catalogExercises = widget.exercises;
+        _selectedExerciseId = (_catalogExercises.firstOrNull?['id'] as num?)
+            ?.toInt();
+      });
+      return;
+    }
+    setState(() => _loadingExerciseCatalog = true);
+    try {
+      final response = await widget.repository.fetchExercises(
+        recent: true,
+        perPage: 50,
+        locale: WidgetsBinding.instance.platformDispatcher.locale.languageCode,
+      );
+      if (!mounted) return;
+      final recentExercises = apiPageItems(response);
+      setState(() {
+        _recentExercisesOnly = true;
+        _catalogExercises = recentExercises;
+        _selectedExerciseId = (recentExercises.firstOrNull?['id'] as num?)
+            ?.toInt();
+      });
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingExerciseCatalog = false);
+    }
+  }
+
+  Future<void> _showTrainerExerciseDetail(Map<String, dynamic> exercise) async {
+    final id = (exercise['id'] as num?)?.toInt();
+    if (id == null) return;
+    try {
+      final response = await widget.repository.fetchExercise(
+        id,
+        locale: WidgetsBinding.instance.platformDispatcher.locale.languageCode,
+      );
+      if (!mounted) return;
+      final data = response['data'];
+      if (data is! Map) return;
+      final rawDetail = data['exercise'];
+      final detail = rawDetail is Map
+          ? Map<String, dynamic>.from(rawDetail)
+          : exercise;
+      final substitutions = data['substitutions'] as List? ?? const [];
+      final notes = data['recent_coaching_notes'] as List? ?? const [];
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) => SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _exerciseDisplayName(detail),
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 12),
+                _SelectedExerciseBodyPart(exercise: detail),
+                if (notes.isNotEmpty) ...[
+                  const SizedBox(height: 18),
+                  Text('Recent coaching notes (${notes.length})'),
+                ],
+                if (substitutions.isNotEmpty) ...[
+                  const SizedBox(height: 18),
+                  Text(
+                    'Curated substitutions',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  ...substitutions.whereType<Map>().map((item) {
+                    final replacement = item['exercise'];
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        replacement is Map
+                            ? _exerciseDisplayName(
+                                Map<String, dynamic>.from(replacement),
+                              )
+                            : 'Exercise',
+                      ),
+                      subtitle: Text(item['reason']?.toString() ?? 'Curated'),
+                      trailing: item['requires_trainer_approval'] == true
+                          ? const Icon(Icons.verified_user_outlined)
+                          : null,
+                    );
+                  }),
+                  Text(
+                    data['substitution_notice']?.toString() ?? '',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_workoutTabIndex == 2) {
@@ -6026,7 +6148,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       (item) => _assignmentKey(item) == _selectedAssignmentKey,
       orElse: () => widget.members.firstOrNull ?? const <String, dynamic>{},
     );
-    final filteredExercises = widget.exercises.where((exercise) {
+    final filteredExercises = _catalogExercises.where((exercise) {
       final query = _exerciseSearchController.text.trim().toLowerCase();
       if (query.isEmpty) {
         return true;
@@ -6416,6 +6538,33 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                               icon: Icons.search_rounded,
                             ),
                           ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              ChoiceChip(
+                                label: const Text('All exercises'),
+                                selected: !_recentExercisesOnly,
+                                onSelected: (_) => _setRecentExercises(false),
+                              ),
+                              ChoiceChip(
+                                avatar: _loadingExerciseCatalog
+                                    ? const SizedBox.square(
+                                        dimension: 14,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.history_rounded,
+                                        size: 16,
+                                      ),
+                                label: const Text('Recently assigned'),
+                                selected: _recentExercisesOnly,
+                                onSelected: (_) => _setRecentExercises(true),
+                              ),
+                            ],
+                          ),
                           const SizedBox(height: 14),
                           DropdownButtonFormField<int>(
                             key: ValueKey('exercise-$_selectedExerciseId'),
@@ -6451,11 +6600,29 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                           ),
                           const SizedBox(height: 14),
                           _SelectedExerciseBodyPart(
-                            exercise: widget.exercises.firstWhere(
+                            exercise: _catalogExercises.firstWhere(
                               (exercise) =>
                                   (exercise['id'] as num?)?.toInt() ==
                                   _selectedExerciseId,
                               orElse: () => const <String, dynamic>{},
+                            ),
+                          ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: () {
+                                final exercise = _catalogExercises.firstWhere(
+                                  (item) =>
+                                      (item['id'] as num?)?.toInt() ==
+                                      _selectedExerciseId,
+                                  orElse: () => const <String, dynamic>{},
+                                );
+                                if (exercise.isNotEmpty) {
+                                  _showTrainerExerciseDetail(exercise);
+                                }
+                              },
+                              icon: const Icon(Icons.info_outline_rounded),
+                              label: const Text('Details & substitutions'),
                             ),
                           ),
                           const SizedBox(height: 14),
@@ -7916,6 +8083,11 @@ class _SelectedExerciseBodyPart extends StatelessWidget {
       if (exercise['is_per_side'] == true) 'Per side',
     ];
     final instructions = exercise['instructions']?.toString().trim() ?? '';
+    final instructionSteps =
+        (exercise['instruction_steps'] as List<dynamic>? ?? const [])
+            .map((item) => item.toString().trim())
+            .where((item) => item.isNotEmpty)
+            .toList();
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -7961,7 +8133,22 @@ class _SelectedExerciseBodyPart extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                if (instructions.isNotEmpty) ...[
+                if (instructionSteps.isNotEmpty) ...[
+                  const SizedBox(height: 5),
+                  ...instructionSteps.indexed.map(
+                    (entry) => Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Text(
+                        '${entry.$1 + 1}. ${entry.$2}',
+                        style: const TextStyle(
+                          color: _TrainerWorkoutColor.gray,
+                          fontSize: 11,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                  ),
+                ] else if (instructions.isNotEmpty) ...[
                   const SizedBox(height: 5),
                   Text(
                     instructions,

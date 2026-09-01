@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\RoleName;
 use App\Models\Branch;
 use App\Models\Gym;
+use App\Models\MemberProfile;
 use App\Models\Notification;
 use App\Models\TrainerProfile;
 use App\Models\TrialRequest;
@@ -56,6 +57,56 @@ class TrialRequestManagementFeatureTest extends TestCase
             ->getJson('/api/gym/trial-requests', ['X-Gym-Id' => (string) $gym->id, 'X-Branch-Id' => (string) $branch->id])
             ->assertOk()
             ->assertJsonCount(2, 'data');
+    }
+
+    public function test_current_gym_member_cannot_request_a_trial_for_the_same_gym(): void
+    {
+        [, $gym, $branch] = $this->makeGymScope();
+        $member = User::factory()->create([
+            'active_role' => RoleName::Member->value,
+            'is_active' => true,
+        ]);
+        $member->assignRole(RoleName::Member->value);
+        $profile = MemberProfile::query()->create([
+            'user_id' => $member->id,
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'status' => 'active',
+            'membership_status' => 'active',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($member, 'sanctum')
+            ->getJson("/api/member/trial-requests/eligibility/{$gym->id}")
+            ->assertOk()
+            ->assertJsonPath('data.can_request_trial', false)
+            ->assertJsonPath('data.already_gym_member', true);
+
+        $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/trial-requests', [
+                'gym_id' => $gym->id,
+                'branch_id' => $branch->id,
+                'preferred_date' => now()->addDay()->toDateString(),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('gym_id');
+
+        $this->assertDatabaseMissing('trial_requests', [
+            'gym_id' => $gym->id,
+            'member_id' => $member->id,
+        ]);
+
+        $profile->update([
+            'status' => 'inactive',
+            'membership_status' => 'inactive',
+            'is_active' => false,
+        ]);
+
+        $this->actingAs($member, 'sanctum')
+            ->getJson("/api/member/trial-requests/eligibility/{$gym->id}")
+            ->assertOk()
+            ->assertJsonPath('data.can_request_trial', true)
+            ->assertJsonPath('data.already_gym_member', false);
     }
 
     public function test_accept_reject_and_assign_trainer_work(): void
@@ -152,6 +203,47 @@ class TrialRequestManagementFeatureTest extends TestCase
             'user_id' => $trial->member_id,
             'gym_id' => $gym->id,
             'branch_id' => $branch->id,
+        ]);
+    }
+
+    public function test_owner_cannot_convert_a_person_already_present_in_the_gym_member_list(): void
+    {
+        [$owner, $gym, $branch] = $this->makeGymScope();
+        $member = User::factory()->create([
+            'active_role' => RoleName::Member->value,
+            'is_active' => true,
+        ]);
+        $member->assignRole(RoleName::Member->value);
+        MemberProfile::query()->create([
+            'user_id' => $member->id,
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'status' => 'inactive',
+            'membership_status' => 'inactive',
+            'is_active' => false,
+        ]);
+        $trial = $this->makeTrial($gym, $branch, [
+            'member_id' => $member->id,
+            'email' => $member->email,
+            'status' => 'completed',
+        ]);
+        $headers = ['X-Gym-Id' => (string) $gym->id, 'X-Branch-Id' => (string) $branch->id];
+
+        $this->actingAs($owner, 'sanctum')
+            ->getJson("/api/gym/trial-requests/{$trial->id}", $headers)
+            ->assertOk()
+            ->assertJsonPath('data.can_convert', false)
+            ->assertJsonPath('data.conversion_block_reason', 'This person is already present in the gym member list.');
+
+        $this->actingAs($owner, 'sanctum')
+            ->postJson("/api/gym/trial-requests/{$trial->id}/convert", [], $headers)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('existing_user_id');
+
+        $this->assertDatabaseHas('trial_requests', [
+            'id' => $trial->id,
+            'status' => 'completed',
+            'member_id' => $member->id,
         ]);
     }
 

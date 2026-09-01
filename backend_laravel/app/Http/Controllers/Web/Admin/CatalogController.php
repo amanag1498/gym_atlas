@@ -13,6 +13,7 @@ use App\Http\Requests\PlatformAdmin\UpsertFitnessGoalRequest;
 use App\Http\Requests\PlatformAdmin\UpsertTrainerSpecializationRequest;
 use App\Models\City;
 use App\Models\Exercise;
+use App\Models\ExerciseImportBatch;
 use App\Models\ExerciseSource;
 use App\Models\Facility;
 use App\Models\FitnessGoal;
@@ -21,6 +22,7 @@ use App\Models\TrainerProfile;
 use App\Models\TrainerSpecialization;
 use App\Services\Audit\AuditLogService;
 use App\Services\Platform\PlatformFacilityManagementService;
+use App\Services\Workout\ExerciseCatalogReviewService;
 use App\Support\Workout\ExerciseBookCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,6 +33,7 @@ class CatalogController extends Controller
     public function __construct(
         private readonly AuditLogService $auditLogService,
         private readonly PlatformFacilityManagementService $platformFacilityManagementService,
+        private readonly ExerciseCatalogReviewService $exerciseCatalogReviewService,
     ) {}
 
     public function facilities(Request $request): View
@@ -124,6 +127,58 @@ class CatalogController extends Controller
             ]),
             'statusOptions' => $this->exerciseStatusOptions(),
         ]);
+    }
+
+    public function exerciseImports(): View
+    {
+        return view('web.admin.exercise-imports.index', [
+            'pageTitle' => 'Exercise Import Review',
+            'breadcrumbs' => ['Platform', 'Exercise Book', 'Import Review'],
+            'batches' => ExerciseImportBatch::query()
+                ->withCount('sources')
+                ->latest('id')
+                ->paginate(20),
+        ]);
+    }
+
+    public function exerciseImport(ExerciseImportBatch $exerciseImportBatch): View
+    {
+        $sources = $exerciseImportBatch->sources()
+            ->with(['exercise.translations' => fn ($query) => $query->where('locale', 'en')])
+            ->orderBy('source_external_id')
+            ->paginate(50);
+
+        return view('web.admin.exercise-imports.show', [
+            'pageTitle' => 'Exercise Import Batch #'.$exerciseImportBatch->id,
+            'breadcrumbs' => ['Platform', 'Exercise Book', 'Import Review', '#'.$exerciseImportBatch->id],
+            'batch' => $exerciseImportBatch,
+            'sources' => $sources,
+            'summary' => $this->exerciseCatalogReviewService->summary($exerciseImportBatch),
+            'assessments' => $this->exerciseCatalogReviewService->assessments($exerciseImportBatch, $sources->getCollection()),
+        ]);
+    }
+
+    public function publishExerciseImport(Request $request, ExerciseImportBatch $exerciseImportBatch): RedirectResponse
+    {
+        $request->validate(['confirm' => ['accepted']]);
+        $result = $this->exerciseCatalogReviewService->publishEligible($exerciseImportBatch, $request->user());
+
+        $this->auditLogService->log(
+            'web.platform.exercise_import.published',
+            'publish',
+            $request,
+            $exerciseImportBatch,
+            newValues: $result,
+            context: [
+                'source_key' => $exerciseImportBatch->source_key,
+                'source_commit' => $exerciseImportBatch->source_commit,
+            ],
+        );
+
+        return back()->with(
+            'status',
+            "Published {$result['published_now']} eligible exercises; {$result['blocked']} remain blocked for individual review.",
+        );
     }
 
     public function storeExercise(StoreExerciseRequest $request): RedirectResponse

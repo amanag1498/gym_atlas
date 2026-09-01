@@ -24,6 +24,7 @@ use App\Models\WorkoutTemplate;
 use App\Services\Audit\AuditLogService;
 use App\Services\Member\MemberAppService;
 use App\Services\Trainer\IndependentCoachingAccessService;
+use App\Services\Workout\ExerciseCatalogExperienceService;
 use App\Services\Workout\WorkoutAccessService;
 use App\Services\Workout\WorkoutPlanService;
 use App\Services\Workout\WorkoutSessionService;
@@ -40,6 +41,7 @@ class WorkoutController extends Controller
         private readonly AuditLogService $auditLogService,
         private readonly MemberAppService $memberAppService,
         private readonly IndependentCoachingAccessService $independentCoachingAccessService,
+        private readonly ExerciseCatalogExperienceService $exerciseCatalogExperienceService,
     ) {}
 
     public function books(Request $request)
@@ -126,6 +128,7 @@ class WorkoutController extends Controller
         $query = Exercise::query()
             ->with(['translations', 'previewMedia'])
             ->where('is_active', true)
+            ->where('status', 'approved')
             ->where(function ($builder) use ($profile): void {
                 $builder->where('is_global', true)
                     ->orWhere(function ($scoped) use ($profile): void {
@@ -149,6 +152,8 @@ class WorkoutController extends Controller
 
         $query->searchCatalog($request->string('search')->toString())
             ->applyCatalogFilters($this->exerciseFilters($request));
+
+        $this->exerciseCatalogExperienceService->applyMemberExperience($query, $request, $request->user());
 
         if ($request->filled('body_part')) {
             ExerciseBookCatalog::applyBodyPartFilter($query, $request->string('body_part')->toString());
@@ -175,7 +180,9 @@ class WorkoutController extends Controller
         return array_filter([
             'equipment' => $request->filled('equipment') ? $request->string('equipment')->trim()->toString() : null,
             'target_muscle' => $request->filled('target_muscle') ? $request->string('target_muscle')->trim()->toString() : null,
+            'secondary_muscle' => $request->filled('secondary_muscle') ? $request->string('secondary_muscle')->trim()->toString() : null,
             'difficulty' => $request->filled('difficulty') ? $request->string('difficulty')->trim()->toString() : null,
+            'movement_pattern' => $request->filled('movement_pattern') ? $request->string('movement_pattern')->trim()->toString() : null,
             'tracking_mode' => $request->filled('tracking_mode') ? $request->string('tracking_mode')->trim()->toString() : null,
             'is_bodyweight' => $request->has('is_bodyweight') ? $request->boolean('is_bodyweight') : null,
         ], fn ($value) => $value !== null && $value !== '');

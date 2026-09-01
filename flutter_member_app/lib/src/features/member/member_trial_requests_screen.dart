@@ -102,6 +102,12 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
       );
       final userState =
           contextData['user_state']?.toString() ?? 'independent_user';
+      final currentGymIds =
+          (contextData['gym_relationships'] as List<dynamic>? ?? const [])
+              .map((item) => Map<String, dynamic>.from(item as Map))
+              .map((item) => (item['gym_id'] as num?)?.toInt())
+              .whereType<int>()
+              .toSet();
       final serverTrials = apiPageItems(results[2]);
       final normalizedTrials = _reconcileTrialRequests(
         mergeApiPageItems(storedTrials, serverTrials),
@@ -112,13 +118,22 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
             .toSet(),
       );
 
-      _publicGyms = gyms;
+      _publicGyms = gyms
+          .where((gym) => !currentGymIds.contains((gym['id'] as num?)?.toInt()))
+          .toList();
       _trialRequests = normalizedTrials;
 
       if (widget.initialGym != null) {
         final initialGym = Map<String, dynamic>.from(widget.initialGym!);
-        _selectedGymId = (initialGym['id'] as num?)?.toInt();
-        await _hydrateGymBranches(initialGym);
+        final initialGymId = (initialGym['id'] as num?)?.toInt();
+        if (!currentGymIds.contains(initialGymId)) {
+          _selectedGymId = initialGymId;
+          await _hydrateGymBranches(initialGym);
+        } else {
+          _selectedGymId = null;
+          _selectedBranchId = null;
+          _availableBranches = const [];
+        }
       } else if (_selectedGymId != null) {
         final selected = _publicGyms.firstWhere(
           (gym) => (gym['id'] as num?)?.toInt() == _selectedGymId,
@@ -710,7 +725,7 @@ class _TrialRequestFormTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Choose the gym, pick your slot, and keep the request easy to follow.',
+                      'Choose the gym, pick your slot, and keep the request easy to follow. Gyms where you are already a member are excluded.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppColors.textSecondary,
                         fontWeight: FontWeight.w600,

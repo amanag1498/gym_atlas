@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Enums\RoleName;
+use App\Models\ActivityLog;
 use App\Models\Exercise;
+use App\Models\ExerciseImportBatch;
 use App\Models\ExerciseMedia;
 use App\Models\ExerciseSource;
 use App\Models\ExerciseTranslation;
@@ -189,6 +191,109 @@ class ExerciseCatalogImportFeatureTest extends TestCase
 
         $this->assertSame(2, Exercise::query()->where('is_active', true)->where('review_status', 'approved')->count());
         $this->assertSame(4, ExerciseTranslation::query()->where('review_status', 'approved')->count());
+    }
+
+    public function test_platform_admin_can_review_an_import_batch_and_publish_only_eligible_rows(): void
+    {
+        $this->withoutVite();
+        $this->artisan('exercise-catalog:import', [
+            'path' => $this->dataset(),
+            '--apply' => true,
+            '--source-commit' => 'review-test-commit',
+        ])->assertSuccessful();
+
+        $batch = ExerciseImportBatch::query()->sole();
+        $blocked = Exercise::query()->where('name', 'Test Treadmill')->firstOrFail();
+        $blocked->update(['body_part' => 'other']);
+
+        $this->seed(PermissionSeeder::class);
+        $admin = User::factory()->create([
+            'active_role' => RoleName::PlatformAdmin->value,
+            'is_active' => true,
+        ]);
+        $admin->assignRole(RoleName::PlatformAdmin->value);
+
+        $this->actingAs($admin)
+            ->get(route('web.admin.exercise-imports.index'))
+            ->assertOk()
+            ->assertSee('review-test-commit');
+        $this->actingAs($admin)
+            ->get(route('web.admin.exercise-imports.show', $batch))
+            ->assertOk()
+            ->assertSee('Body-part taxonomy is unresolved')
+            ->assertSee('Publish Eligible Rows');
+
+        $this->actingAs($admin)
+            ->post(route('web.admin.exercise-imports.publish', $batch), ['confirm' => true])
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Published 1 eligible exercises; 1 remain blocked for individual review.');
+
+        $published = Exercise::query()->where('name', 'Test Sit-up')->firstOrFail();
+        $this->assertTrue($published->is_active);
+        $this->assertSame('approved', $published->status);
+        $this->assertSame('approved', $published->review_status);
+        $this->assertSame($admin->id, $published->reviewed_by_user_id);
+        $this->assertFalse($blocked->fresh()->is_active);
+        $this->assertSame('imported', $blocked->fresh()->review_status);
+        $this->assertDatabaseHas('exercise_translations', [
+            'exercise_id' => $published->id,
+            'locale' => 'en',
+            'review_status' => 'approved',
+            'reviewed_by_user_id' => $admin->id,
+        ]);
+        $this->assertDatabaseHas('exercise_translations', [
+            'exercise_id' => $published->id,
+            'locale' => 'es',
+            'review_status' => 'imported',
+        ]);
+        $this->assertSame(1, data_get($batch->fresh()->counts, 'publication.published_now'));
+        $this->assertSame(1, data_get($batch->fresh()->counts, 'publication.blocked'));
+        $this->assertTrue(ActivityLog::query()->where('event', 'web.platform.exercise_import.published')->exists());
+
+        $this->actingAs($admin)
+            ->post(route('web.admin.exercise-imports.publish', $batch), ['confirm' => true])
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Published 0 eligible exercises; 1 remain blocked for individual review.');
+
+        Sanctum::actingAs($admin);
+        $this->getJson('/api/platform-admin/exercise-imports')
+            ->assertOk()
+            ->assertJsonPath('meta.pagination.total', 1)
+            ->assertJsonPath('data.0.source_commit', 'review-test-commit');
+        $this->getJson('/api/platform-admin/exercise-imports/'.$batch->id)
+            ->assertOk()
+            ->assertJsonPath('data.summary.published', 1)
+            ->assertJsonPath('data.summary.blocked', 1)
+            ->assertJsonPath('data.records.1.assessment.state', 'blocked');
+        $this->postJson('/api/platform-admin/exercise-imports/'.$batch->id.'/publish', ['confirm' => true])
+            ->assertOk()
+            ->assertJsonPath('data.published_now', 0)
+            ->assertJsonPath('data.already_published', 1)
+            ->assertJsonPath('data.blocked', 1);
+        $this->assertTrue(ActivityLog::query()->where('event', 'exercise_import.published')->exists());
+    }
+
+    public function test_exercise_import_publication_requires_explicit_confirmation(): void
+    {
+        $this->artisan('exercise-catalog:import', [
+            'path' => $this->dataset(),
+            '--apply' => true,
+        ])->assertSuccessful();
+
+        $this->seed(PermissionSeeder::class);
+        $admin = User::factory()->create([
+            'active_role' => RoleName::PlatformAdmin->value,
+            'is_active' => true,
+        ]);
+        $admin->assignRole(RoleName::PlatformAdmin->value);
+
+        $this->actingAs($admin)
+            ->from(route('web.admin.exercise-imports.show', ExerciseImportBatch::query()->sole()))
+            ->post(route('web.admin.exercise-imports.publish', ExerciseImportBatch::query()->sole()))
+            ->assertRedirect()
+            ->assertSessionHasErrors('confirm');
+
+        $this->assertSame(0, Exercise::query()->where('is_active', true)->count());
     }
 
     public function test_import_updates_an_existing_global_exercise_with_the_same_normalized_name(): void

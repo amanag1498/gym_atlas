@@ -2,7 +2,7 @@
 
 ## Status
 
-Implementation started. The exercise-catalog foundation, importer, initial API extensions, and initial Member/Trainer catalog consumption described below are implemented locally. Remaining phases are not complete merely because this document exists.
+Implementation started. Phase 1 source work and Phase 2 catalog-experience source work described below are implemented locally. The first production import review/publication and all later phases remain separate deployment or implementation gates.
 
 This plan incorporates the usable exercise-library, workout-execution, coaching, analytics, scheduling, localization, and portability ideas identified during the `openGym-main` comparison while preserving the existing Gym Atlas Laravel, Member App, Trainer App, shared Flutter, gym-admin, and platform-admin architecture.
 
@@ -23,8 +23,26 @@ Audit basis: local `openGym-main` commit `220b7bdb6683765623a172a3f4ecc55d68b7c6
 - Trainer-created exercises now retain body part, target muscle, inferred tracking mode, and bodyweight semantics.
 - Corrected upstream taxonomy semantics: `body_part` drives catalog sections, `target` drives the primary target, and the source `muscle_group` value is not used as a primary grouping field because it describes supporting muscles in this dataset.
 - Added `scripts/repair_exercise_catalog_taxonomy.sh`, which performs a strict dry run by default and an idempotent source-ID-based repair with `--apply` while preserving publication state and exercise IDs.
+- Added a Platform Admin import-review workflow with batch provenance, validation/change counts, translation coverage, per-row publication eligibility, and visible blockers.
+- Added explicit-confirmation staged publishing that approves only deterministic eligible exercises and their English source translation; non-English translations remain review-gated.
+- Bulk publication is idempotent, audit-logged, and leaves ambiguous merges, duplicate source names, unresolved taxonomy, invalid tracking semantics, inadequate English instructions, rejected/archived rows, and manually inactive approved rows untouched.
 
 Real-source validation against the current upstream JSON found 1,324 accepted rows, zero rejected rows, 13,240 instruction translations, six duplicate normalized names requiring review, and 5,296 media-field references intentionally ignored. An isolated apply created zero media rows and left all 1,324 exercises inactive/pending review; the next dry run reported all 1,324 unchanged.
+
+Phase 1 source implementation is now complete except for reviewing and publishing the first production batch. Production publication is deliberately not implied by local code completion and must be performed from the Platform Admin batch screen after server deployment and database backup.
+
+### Implemented Phase 2 catalog experience
+
+- Member and Trainer catalogs retain paginated server-side search and now cover secondary muscle, movement pattern, equipment-profile, favourites, and recents filtering in addition to the existing filters.
+- Member recents derive from active/completed workout sessions; Trainer recents derive from exercises assigned through Trainer workout plans. No duplicate recent-view ledger is introduced.
+- Member favourites are idempotent and scoped to the authenticated user.
+- Member equipment profiles support commercial gym, bodyweight, dumbbells and bench, resistance bands, home gym, and custom equipment selections. Profiles affect discovery only and do not hide historical workouts.
+- Member exercise detail includes localized catalog content, recent exercise history, personal record, favourite state, and curated substitutions.
+- Trainer exercise detail includes localized catalog content, recent in-scope plan coaching notes, and curated substitutions.
+- Curated substitutions use explicit database mappings managed through audited Platform Admin APIs, expose their reason and approval requirement, and include a visible safety notice. The system does not generate or claim medically safe replacements.
+- All additions are separate routes or additive response fields; `preview_media` remains nullable and text-only exercises remain usable.
+
+Phase 2 source implementation is complete locally. It still requires database migration, API deployment, updated Member/Trainer app builds, and production smoke testing before it is live.
 
 ## Confirmed product decisions
 

@@ -20,6 +20,10 @@ class TrialRequestResource extends JsonResource
             'preferred_date' => $this->preferred_date?->toDateString(),
             'preferred_time' => $this->preferred_time ? substr((string) $this->preferred_time, 0, 5) : null,
             'status' => $this->status,
+            'can_convert' => $this->canConvert(),
+            'conversion_block_reason' => $this->linkedMemberHasGymProfile()
+                ? 'This person is already present in the gym member list.'
+                : null,
             'assigned_trainer_id' => $this->assigned_trainer_id,
             'notes' => $this->notes,
             'gym' => $this->gym ? [

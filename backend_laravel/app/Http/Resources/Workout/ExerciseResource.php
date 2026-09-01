@@ -41,6 +41,8 @@ class ExerciseResource extends JsonResource
             'is_bodyweight' => $this->is_bodyweight,
             'supports_external_load' => $this->supports_external_load,
             'is_per_side' => $this->is_per_side,
+            'is_favourite' => $this->when($this->resource->offsetExists('is_favourite'), (bool) $this->is_favourite),
+            'recently_used_at' => $this->when($this->resource->offsetExists('recently_used_at'), $this->recently_used_at),
             'preview_media' => $this->previewMedia($this->relationLoaded('previewMedia') ? $this->previewMedia : null),
             'image_url' => $this->image_url,
             'video_url' => $this->video_url,

@@ -430,6 +430,9 @@ Route::prefix('admin')
 
         Route::get('/facilities', [AdminCatalogController::class, 'facilities'])->name('facilities.index');
         Route::get('/exercise-book', [AdminCatalogController::class, 'exercises'])->name('exercises.index');
+        Route::get('/exercise-book/imports', [AdminCatalogController::class, 'exerciseImports'])->name('exercise-imports.index');
+        Route::get('/exercise-book/imports/{exerciseImportBatch}', [AdminCatalogController::class, 'exerciseImport'])->name('exercise-imports.show');
+        Route::post('/exercise-book/imports/{exerciseImportBatch}/publish', [AdminCatalogController::class, 'publishExerciseImport'])->name('exercise-imports.publish');
         Route::get('/exercise-book/create', [AdminCatalogController::class, 'createExercise'])->name('exercises.create');
         Route::post('/exercise-book', [AdminCatalogController::class, 'storeExercise'])->name('exercises.store');
         Route::get('/exercise-book/{exercise}/edit', [AdminCatalogController::class, 'editExercise'])->name('exercises.edit');

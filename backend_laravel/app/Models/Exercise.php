@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -130,9 +131,21 @@ class Exercise extends Model
         return $query
             ->when($filters['equipment'] ?? null, fn (Builder $builder, string $equipment) => $builder->where('equipment', $equipment))
             ->when($filters['target_muscle'] ?? null, fn (Builder $builder, string $muscle) => $builder->where('target_muscle', $muscle))
+            ->when($filters['secondary_muscle'] ?? null, fn (Builder $builder, string $muscle) => $builder->whereJsonContains('secondary_muscles', $muscle))
             ->when($filters['difficulty'] ?? null, fn (Builder $builder, string $difficulty) => $builder->where('difficulty', $difficulty))
+            ->when($filters['movement_pattern'] ?? null, fn (Builder $builder, string $pattern) => $builder->where('movement_pattern', $pattern))
             ->when($filters['tracking_mode'] ?? null, fn (Builder $builder, string $mode) => $builder->where('default_tracking_mode', $mode))
             ->when(array_key_exists('is_bodyweight', $filters), fn (Builder $builder) => $builder->where('is_bodyweight', (bool) $filters['is_bodyweight']));
+    }
+
+    public function favoriteMembers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'member_favorite_exercises')->withTimestamps();
+    }
+
+    public function substitutions(): HasMany
+    {
+        return $this->hasMany(ExerciseSubstitution::class);
     }
 
     public function templateExercises(): HasMany

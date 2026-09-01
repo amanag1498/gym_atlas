@@ -11735,7 +11735,10 @@ class _TrialRequestCard extends StatelessWidget {
     final canAccept = status == 'pending';
     final canReject = status == 'pending' || status == 'accepted';
     final canComplete = status == 'accepted';
-    final canConvert = status == 'accepted' || status == 'completed';
+    final canConvert = trial.containsKey('can_convert')
+        ? trial['can_convert'] == true
+        : status == 'accepted' || status == 'completed';
+    final conversionBlockReason = trial['conversion_block_reason']?.toString();
 
     return PremiumCard(
       onTap: onTap,
@@ -11844,6 +11847,8 @@ class _TrialRequestCard extends StatelessWidget {
                   icon: Icons.person_add_rounded,
                   onPressed: onConvert,
                 ),
+              if (!canConvert && conversionBlockReason?.isNotEmpty == true)
+                _InlineBadge(label: conversionBlockReason!),
               QuickActionButton(
                 label: 'Detail',
                 icon: Icons.visibility_rounded,
@@ -11880,6 +11885,10 @@ class _TrialRequestDetailSheet extends StatelessWidget {
     final trainer = _recordMap(trial['assigned_trainer']);
     final member = _recordMap(trial['member']);
     final status = trial['status']?.toString() ?? 'pending';
+    final canConvert = trial.containsKey('can_convert')
+        ? trial['can_convert'] == true
+        : status == 'accepted' || status == 'completed';
+    final conversionBlockReason = trial['conversion_block_reason']?.toString();
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -11967,12 +11976,14 @@ class _TrialRequestDetailSheet extends StatelessWidget {
                     icon: Icons.flag_circle_rounded,
                     onPressed: onComplete,
                   ),
-                if (status == 'accepted' || status == 'completed')
+                if (canConvert)
                   QuickActionButton(
                     label: 'Convert',
                     icon: Icons.person_add_rounded,
                     onPressed: onConvert,
                   ),
+                if (!canConvert && conversionBlockReason?.isNotEmpty == true)
+                  _InlineBadge(label: conversionBlockReason!),
               ],
             ),
           ],

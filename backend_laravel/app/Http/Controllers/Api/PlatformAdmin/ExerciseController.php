@@ -8,6 +8,7 @@ use App\Http\Requests\PlatformAdmin\StoreExerciseRequest;
 use App\Http\Requests\PlatformAdmin\UpdateExerciseRequest;
 use App\Http\Resources\Workout\ExerciseResource;
 use App\Models\Exercise;
+use App\Models\ExerciseSubstitution;
 use App\Services\Audit\AuditLogService;
 use App\Support\Workout\ExerciseBookCatalog;
 use Illuminate\Http\Request;
@@ -102,5 +103,66 @@ class ExerciseController extends Controller
         );
 
         return $this->success(ExerciseResource::make($exercise->fresh()), 'Global exercise updated successfully.');
+    }
+
+    public function substitutions(Exercise $exercise)
+    {
+        $mappings = $exercise->substitutions()->with(['substitute.translations', 'substitute.previewMedia'])
+            ->orderBy('priority')->orderBy('id')->get();
+
+        return $this->success($mappings->map(fn (ExerciseSubstitution $mapping) => [
+            'id' => $mapping->id,
+            'exercise' => ExerciseResource::make($mapping->substitute),
+            'reason' => $mapping->reason,
+            'priority' => $mapping->priority,
+            'requires_trainer_approval' => $mapping->requires_trainer_approval,
+            'is_active' => $mapping->is_active,
+        ])->values(), 'Exercise substitutions fetched successfully.');
+    }
+
+    public function storeSubstitution(Request $request, Exercise $exercise)
+    {
+        $data = $request->validate([
+            'substitute_exercise_id' => ['required', 'integer', 'different:exercise_id', 'exists:exercises,id'],
+            'reason' => ['required', 'string', 'max:500'],
+            'priority' => ['sometimes', 'integer', 'between:1,1000'],
+            'requires_trainer_approval' => ['sometimes', 'boolean'],
+            'is_active' => ['sometimes', 'boolean'],
+        ]);
+        if ((int) $data['substitute_exercise_id'] === (int) $exercise->id) {
+            return $this->error('An exercise cannot substitute itself.', 422, [
+                'substitute_exercise_id' => ['Choose a different exercise.'],
+            ]);
+        }
+
+        $mapping = ExerciseSubstitution::query()->updateOrCreate([
+            'exercise_id' => $exercise->id,
+            'substitute_exercise_id' => $data['substitute_exercise_id'],
+        ], [
+            'reason' => $data['reason'],
+            'priority' => $data['priority'] ?? 100,
+            'requires_trainer_approval' => $data['requires_trainer_approval'] ?? true,
+            'is_active' => $data['is_active'] ?? true,
+            'created_by_user_id' => $request->user()->id,
+        ]);
+
+        $this->auditLogService->log(
+            event: 'exercise.substitution.curated', action: 'update', request: $request,
+            subject: $mapping, newValues: $mapping->toArray(),
+        );
+
+        return $this->success($mapping, 'Exercise substitution saved successfully.', $mapping->wasRecentlyCreated ? 201 : 200);
+    }
+
+    public function destroySubstitution(Request $request, ExerciseSubstitution $exerciseSubstitution)
+    {
+        $oldValues = $exerciseSubstitution->toArray();
+        $this->auditLogService->log(
+            event: 'exercise.substitution.deleted', action: 'delete', request: $request,
+            subject: $exerciseSubstitution, oldValues: $oldValues,
+        );
+        $exerciseSubstitution->delete();
+
+        return $this->success(null, 'Exercise substitution deleted successfully.');
     }
 }

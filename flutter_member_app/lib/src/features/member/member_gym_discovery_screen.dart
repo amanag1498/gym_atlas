@@ -1236,6 +1236,48 @@ class _MemberGymDetailScreenState extends State<MemberGymDetailScreen> {
   );
   late bool _isSaved = widget.isSaved;
   bool _savingGym = false;
+  bool _trialEligibilityLoading = true;
+  bool _canRequestTrial = false;
+  bool _alreadyGymMember = false;
+  String? _trialBlockReason;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTrialEligibility();
+  }
+
+  Future<void> _loadTrialEligibility() async {
+    final gymId = (_detail['id'] as num?)?.toInt();
+    if (gymId == null) {
+      setState(() {
+        _trialEligibilityLoading = false;
+        _trialBlockReason = 'Trial eligibility is unavailable for this gym.';
+      });
+      return;
+    }
+
+    try {
+      final response = await widget.repository.fetchTrialEligibility(gymId);
+      final eligibility = Map<String, dynamic>.from(
+        response['data'] as Map? ?? const {},
+      );
+      if (!mounted) return;
+      setState(() {
+        _canRequestTrial = eligibility['can_request_trial'] == true;
+        _alreadyGymMember = eligibility['already_gym_member'] == true;
+        _trialBlockReason = eligibility['reason']?.toString();
+        _trialEligibilityLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _trialEligibilityLoading = false;
+        _trialBlockReason =
+            'We could not verify trial eligibility. Please refresh and try again.';
+      });
+    }
+  }
 
   Future<void> _toggleSaved() async {
     final gymId = (_detail['id'] as num?)?.toInt();
@@ -1282,6 +1324,16 @@ class _MemberGymDetailScreenState extends State<MemberGymDetailScreen> {
   }
 
   Future<void> _openTrialSheet() async {
+    if (_trialEligibilityLoading || !_canRequestTrial) {
+      final message = _trialEligibilityLoading
+          ? 'Checking whether this gym is eligible for a trial.'
+          : (_trialBlockReason ?? 'A trial cannot be requested for this gym.');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+      return;
+    }
+
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => MemberTrialRequestsScreen(
@@ -1349,6 +1401,15 @@ class _MemberGymDetailScreenState extends State<MemberGymDetailScreen> {
     final isOpen = detail['is_open_now'] == true;
     final canShowPricing = detail['pricing_visible'] == true;
     final canShowContact = detail['contact_visible'] == true;
+    final gymOffersTrial = detail['trial_available'] == true;
+    final canRequestTrial = gymOffersTrial && _canRequestTrial;
+    final trialActionLabel = _trialEligibilityLoading
+        ? 'Checking eligibility'
+        : _alreadyGymMember
+        ? 'Already a member'
+        : gymOffersTrial
+        ? 'Request Trial'
+        : 'Trial unavailable';
     final feeSummary = Map<String, dynamic>.from(
       detail['fee_summary'] as Map? ?? const {},
     );
@@ -1517,7 +1578,9 @@ class _MemberGymDetailScreenState extends State<MemberGymDetailScreen> {
                 : 'Direct phone details are private, but you can still request a callback.',
             child: _ContactVisibilityPanel(
               canShowContact: canShowContact,
-              trialAvailable: detail['trial_available'] == true,
+              trialAvailable: canRequestTrial,
+              trialActionLabel: trialActionLabel,
+              trialBlockReason: _trialBlockReason,
               onRequestTrial: _openTrialSheet,
             ),
           ),
@@ -1538,12 +1601,8 @@ class _MemberGymDetailScreenState extends State<MemberGymDetailScreen> {
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: GradientButton(
-                  onPressed: detail['trial_available'] == true
-                      ? _openTrialSheet
-                      : null,
-                  label: detail['trial_available'] == true
-                      ? 'Request Trial'
-                      : 'Trial unavailable',
+                  onPressed: canRequestTrial ? _openTrialSheet : null,
+                  label: trialActionLabel,
                   icon: Icons.flash_on_rounded,
                   expanded: true,
                 ),
@@ -1750,11 +1809,15 @@ class _ContactVisibilityPanel extends StatelessWidget {
   const _ContactVisibilityPanel({
     required this.canShowContact,
     required this.trialAvailable,
+    required this.trialActionLabel,
+    required this.trialBlockReason,
     required this.onRequestTrial,
   });
 
   final bool canShowContact;
   final bool trialAvailable;
+  final String trialActionLabel;
+  final String? trialBlockReason;
   final VoidCallback onRequestTrial;
 
   @override
@@ -1809,7 +1872,9 @@ class _ContactVisibilityPanel extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      canShowContact
+                      trialBlockReason != null
+                          ? trialBlockReason!
+                          : canShowContact
                           ? 'Send your request and the gym can follow up.'
                           : 'This does not block you. Send a trial request and the gym receives your details.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1826,7 +1891,7 @@ class _ContactVisibilityPanel extends StatelessWidget {
           GradientButton(
             label: trialAvailable
                 ? 'Request Trial / Callback'
-                : 'Trial unavailable',
+                : trialActionLabel,
             icon: Icons.flash_on_rounded,
             expanded: true,
             onPressed: trialAvailable ? onRequestTrial : null,

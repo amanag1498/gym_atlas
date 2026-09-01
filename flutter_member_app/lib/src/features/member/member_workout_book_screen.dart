@@ -69,6 +69,9 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   ApiPagination _recommendedPage = const ApiPagination.singlePage();
   ApiPagination _planPage = const ApiPagination.singlePage();
   ApiPagination _exercisePage = const ApiPagination.singlePage();
+  List<Map<String, dynamic>> _equipmentProfiles = const [];
+  String _exerciseCatalogView = 'all';
+  int? _selectedEquipmentProfileId;
 
   bool get _hasMore =>
       _bookPage.hasMore ||
@@ -159,12 +162,9 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
         widget.repository.fetchRecommendedWorkoutBooks(),
         widget.repository.fetchWorkoutPlans(),
         widget.repository.fetchWorkoutExercises(
-          queryParameters: {
-            'per_page': 50,
-            'locale':
-                WidgetsBinding.instance.platformDispatcher.locale.languageCode,
-          },
+          queryParameters: _exerciseQuery(),
         ),
+        widget.repository.fetchEquipmentProfiles(),
       ]);
 
       _books = apiPageItems(responses[0]);
@@ -175,6 +175,24 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       _recommendedPage = ApiPagination.fromResponse(responses[1]);
       _planPage = ApiPagination.fromResponse(responses[2]);
       _exercisePage = ApiPagination.fromResponse(responses[3]);
+      final equipmentData = responses[4]['data'];
+      if (equipmentData is Map) {
+        _equipmentProfiles = (equipmentData['profiles'] as List? ?? const [])
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+        final defaultProfile = _equipmentProfiles
+            .where((profile) => profile['is_default'] == true)
+            .firstOrNull;
+        _selectedEquipmentProfileId ??= (defaultProfile?['id'] as num?)
+            ?.toInt();
+        if (_selectedEquipmentProfileId != null) {
+          final filteredExerciseResponse = await widget.repository
+              .fetchWorkoutExercises(queryParameters: _exerciseQuery());
+          _exercises = apiPageItems(filteredExerciseResponse);
+          _exercisePage = ApiPagination.fromResponse(filteredExerciseResponse);
+        }
+      }
       for (final day in _dayDrafts) {
         for (final exercise in day.exercises) {
           exercise.bodyPart ??= _exerciseGroups.isEmpty
@@ -241,12 +259,8 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       if (_exercisePage.hasMore) {
         final response = await widget.repository.fetchWorkoutExercises(
           queryParameters: {
+            ..._exerciseQuery(),
             'page': _exercisePage.nextPage,
-            'per_page': 50,
-            'locale':
-                WidgetsBinding.instance.platformDispatcher.locale.languageCode,
-            if (_exerciseSearchController.text.trim().isNotEmpty)
-              'search': _exerciseSearchController.text.trim(),
           },
         );
         _exercises = mergeApiPageItems(_exercises, apiPageItems(response));
@@ -274,14 +288,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   Future<void> _searchExercises() async {
     try {
       final response = await widget.repository.fetchWorkoutExercises(
-        queryParameters: {
-          'page': 1,
-          'per_page': 50,
-          'locale':
-              WidgetsBinding.instance.platformDispatcher.locale.languageCode,
-          if (_exerciseSearchController.text.trim().isNotEmpty)
-            'search': _exerciseSearchController.text.trim(),
-        },
+        queryParameters: _exerciseQuery(),
       );
       if (!mounted) return;
 
@@ -300,6 +307,256 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(exception.toString())));
+    }
+  }
+
+  Map<String, dynamic> _exerciseQuery() => <String, dynamic>{
+    'page': 1,
+    'per_page': 50,
+    'locale': WidgetsBinding.instance.platformDispatcher.locale.languageCode,
+    if (_exerciseSearchController.text.trim().isNotEmpty)
+      'search': _exerciseSearchController.text.trim(),
+    if (_exerciseCatalogView == 'favourites') 'favourites': true,
+    if (_exerciseCatalogView == 'recent') 'recent': true,
+    if (_selectedEquipmentProfileId != null)
+      'equipment_profile_id': _selectedEquipmentProfileId,
+  };
+
+  Future<void> _toggleExerciseFavourite(Map<String, dynamic> exercise) async {
+    final id = (exercise['id'] as num?)?.toInt();
+    if (id == null) return;
+    final wasFavourite = exercise['is_favourite'] == true;
+    try {
+      if (wasFavourite) {
+        await widget.repository.unfavouriteWorkoutExercise(id);
+      } else {
+        await widget.repository.favouriteWorkoutExercise(id);
+      }
+      if (!mounted) return;
+      setState(() => exercise['is_favourite'] = !wasFavourite);
+      if (wasFavourite && _exerciseCatalogView == 'favourites') {
+        await _searchExercises();
+      }
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    }
+  }
+
+  Future<void> _showExerciseDetails(Map<String, dynamic> exercise) async {
+    final id = (exercise['id'] as num?)?.toInt();
+    if (id == null) return;
+    try {
+      final response = await widget.repository.fetchWorkoutExercise(
+        id,
+        equipmentProfileId: _selectedEquipmentProfileId,
+      );
+      if (!mounted) return;
+      final data = response['data'];
+      if (data is! Map) return;
+      final detail = data['exercise'] is Map
+          ? Map<String, dynamic>.from(data['exercise'] as Map)
+          : exercise;
+      final history = data['recent_history'] as List? ?? const [];
+      final substitutions = data['substitutions'] as List? ?? const [];
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) => SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _exerciseDisplayName(detail),
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 12),
+                _buildExerciseMetaPanel(context, detail, showActions: false),
+                const SizedBox(height: 16),
+                Text('Recent workouts: ${history.length}'),
+                if (data['personal_record'] != null)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Text('Personal record available'),
+                  ),
+                if (substitutions.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Curated substitutions',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  ...substitutions.whereType<Map>().map((item) {
+                    final substitute = item['exercise'];
+                    final name = substitute is Map
+                        ? _exerciseDisplayName(
+                            Map<String, dynamic>.from(substitute),
+                          )
+                        : 'Exercise';
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(name),
+                      subtitle: Text(item['reason']?.toString() ?? 'Curated'),
+                      trailing: item['requires_trainer_approval'] == true
+                          ? const Icon(Icons.verified_user_outlined)
+                          : null,
+                    );
+                  }),
+                  Text(
+                    data['substitution_notice']?.toString() ?? '',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    }
+  }
+
+  Future<void> _showEquipmentProfileSheet() async {
+    final nameController = TextEditingController();
+    final equipmentController = TextEditingController();
+    var presetKey = 'bodyweight_only';
+    var isDefault = true;
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              20,
+              20,
+              20 + MediaQuery.viewInsetsOf(context).bottom,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Equipment profile',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: nameController,
+                    decoration: _memberWorkoutInputDecoration(
+                      'Profile name',
+                      icon: Icons.badge_outlined,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: presetKey,
+                    decoration: _memberWorkoutInputDecoration(
+                      'Setup',
+                      icon: Icons.home_repair_service_outlined,
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'commercial_gym',
+                        child: Text('Commercial gym'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'bodyweight_only',
+                        child: Text('Bodyweight only'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'dumbbells_and_bench',
+                        child: Text('Dumbbells and bench'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'resistance_bands',
+                        child: Text('Resistance bands'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'home_gym',
+                        child: Text('Home gym'),
+                      ),
+                      DropdownMenuItem(value: 'custom', child: Text('Custom')),
+                    ],
+                    onChanged: (value) =>
+                        setSheetState(() => presetKey = value ?? presetKey),
+                  ),
+                  if (presetKey == 'custom') ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: equipmentController,
+                      decoration: _memberWorkoutInputDecoration(
+                        'Equipment, comma separated',
+                        icon: Icons.edit_note_rounded,
+                      ),
+                    ),
+                  ],
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Use by default'),
+                    value: isDefault,
+                    onChanged: (value) =>
+                        setSheetState(() => isDefault = value),
+                  ),
+                  FilledButton.icon(
+                    onPressed: () async {
+                      final name = nameController.text.trim();
+                      if (name.isEmpty) return;
+                      await widget.repository.saveEquipmentProfile({
+                        'name': name,
+                        'preset_key': presetKey,
+                        'equipment': presetKey == 'custom'
+                            ? equipmentController.text
+                                  .split(',')
+                                  .map((item) => item.trim())
+                                  .where((item) => item.isNotEmpty)
+                                  .toList()
+                            : <String>[],
+                        'is_default': isDefault,
+                      });
+                      if (context.mounted) Navigator.pop(context, true);
+                    },
+                    icon: const Icon(Icons.save_outlined),
+                    label: const Text('Save profile'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    nameController.dispose();
+    equipmentController.dispose();
+    if (saved == true && mounted) {
+      final response = await widget.repository.fetchEquipmentProfiles();
+      final data = response['data'];
+      final profiles = data is Map
+          ? (data['profiles'] as List? ?? const [])
+                .whereType<Map>()
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList()
+          : <Map<String, dynamic>>[];
+      setState(() {
+        _equipmentProfiles = profiles;
+        _selectedEquipmentProfileId =
+            (profiles
+                        .where((profile) => profile['is_default'] == true)
+                        .firstOrNull?['id']
+                    as num?)
+                ?.toInt();
+      });
+      await _searchExercises();
     }
   }
 
@@ -864,6 +1121,65 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                   ),
                 ),
                 const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children:
+                      <(String, String, IconData)>[
+                        ('all', 'All', Icons.grid_view_rounded),
+                        ('favourites', 'Favourites', Icons.favorite_rounded),
+                        ('recent', 'Recent', Icons.history_rounded),
+                      ].map((option) {
+                        return ChoiceChip(
+                          avatar: Icon(option.$3, size: 16),
+                          label: Text(option.$2),
+                          selected: _exerciseCatalogView == option.$1,
+                          onSelected: (_) {
+                            setState(() => _exerciseCatalogView = option.$1);
+                            _searchExercises();
+                          },
+                        );
+                      }).toList(),
+                ),
+                if (_equipmentProfiles.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int?>(
+                    initialValue: _selectedEquipmentProfileId,
+                    decoration: _memberWorkoutInputDecoration(
+                      'Available equipment',
+                      icon: Icons.home_repair_service_outlined,
+                    ),
+                    items: <DropdownMenuItem<int?>>[
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text('Any equipment'),
+                      ),
+                      ..._equipmentProfiles.map(
+                        (profile) => DropdownMenuItem<int?>(
+                          value: (profile['id'] as num?)?.toInt(),
+                          child: Text(profile['name']?.toString() ?? 'Profile'),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      setState(() => _selectedEquipmentProfileId = value);
+                      _searchExercises();
+                    },
+                  ),
+                ],
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: _showEquipmentProfileSheet,
+                    icon: const Icon(Icons.tune_rounded),
+                    label: Text(
+                      _equipmentProfiles.isEmpty
+                          ? 'Set available equipment'
+                          : 'Add equipment profile',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
                   key: ValueKey(
                     'member-builder-exercise-$_selectedBuilderExerciseId-$query',
@@ -1053,8 +1369,9 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
 
   Widget _buildExerciseMetaPanel(
     BuildContext context,
-    Map<String, dynamic>? exerciseMeta,
-  ) {
+    Map<String, dynamic>? exerciseMeta, {
+    bool showActions = true,
+  }) {
     if (exerciseMeta == null) {
       return Container(
         width: double.infinity,
@@ -1115,6 +1432,38 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (showActions)
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _exerciseDisplayName(exerciseMeta),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: exerciseMeta['is_favourite'] == true
+                      ? 'Remove favourite'
+                      : 'Add favourite',
+                  onPressed: () => _toggleExerciseFavourite(exerciseMeta),
+                  icon: Icon(
+                    exerciseMeta['is_favourite'] == true
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    color: exerciseMeta['is_favourite'] == true
+                        ? Colors.redAccent
+                        : AppColors.textSecondary,
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Exercise details',
+                  onPressed: () => _showExerciseDetails(exerciseMeta),
+                  icon: const Icon(Icons.info_outline_rounded),
+                ),
+              ],
+            ),
           if (previewUrl.isNotEmpty) ...[
             ClipRRect(
               borderRadius: BorderRadius.circular(12),

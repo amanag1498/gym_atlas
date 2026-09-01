@@ -135,8 +135,10 @@
                                         <form method="POST" action="{{ route('web.gym.trial-requests.reject', array_merge(request()->only(['gym', 'branch']), ['trial' => $trialRequest->id])) }}">@csrf<x-action-button type="submit" variant="danger">Reject</x-action-button></form>
                                     @elseif ($canManage && $trialRequest->status === 'accepted')
                                         <form method="POST" action="{{ route('web.gym.trial-requests.complete', array_merge(request()->only(['gym', 'branch']), ['trial' => $trialRequest->id])) }}">@csrf<x-action-button type="submit">Mark visited</x-action-button></form>
-                                    @elseif ($canManage && $trialRequest->status === 'completed')
+                                    @elseif ($canManage && $trialRequest->status === 'completed' && $trialRequest->canConvert())
                                         <form method="POST" action="{{ route('web.gym.trial-requests.convert', array_merge(request()->only(['gym', 'branch']), ['trial' => $trialRequest->id])) }}">@csrf<x-action-button type="submit">Convert</x-action-button></form>
+                                    @elseif ($canManage && $trialRequest->status === 'completed' && $trialRequest->linkedMemberHasGymProfile())
+                                        <x-status-badge label="Already a member" tone="warning" />
                                     @endif
                                 </div>
                             </td>

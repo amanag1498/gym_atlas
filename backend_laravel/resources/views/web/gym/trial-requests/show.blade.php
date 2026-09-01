@@ -92,7 +92,7 @@
                             @endif
                         </div>
 
-                    @if (in_array($trial->status, ['accepted', 'completed'], true))
+                    @if ($trial->canConvert())
                         <form method="POST" action="{{ route('web.gym.trial-requests.convert', array_merge(request()->only(['gym', 'branch']), ['trial' => $trial->id])) }}" class="grid gap-4 border-t border-slate-200 pt-6 dark:border-white/10 md:grid-cols-2">
                         @csrf
                         <input name="name" value="{{ old('name', $trial->name) }}" class="panel-input" placeholder="Member name">
@@ -110,6 +110,10 @@
                             <x-action-button type="submit">Convert to Member</x-action-button>
                         </div>
                         </form>
+                    @elseif (in_array($trial->status, ['accepted', 'completed'], true) && $trial->linkedMemberHasGymProfile())
+                        <div class="border-t border-slate-200 pt-6 dark:border-white/10">
+                            <x-empty-state title="Already a gym member" message="This person is already present in the gym member list, so this trial cannot be converted again." />
+                        </div>
                     @endif
                     @else
                         <x-empty-state title="Lead management is locked" message="Your role can view this lead, but trainer assignment and status changes require trial management permission for this branch." />
