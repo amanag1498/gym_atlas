@@ -626,6 +626,25 @@ class TrainerRepository {
   ) => _client.put('/trainer/workout-plans/$planId', data: payload);
   Future<Map<String, dynamic>> deleteWorkoutPlan(int planId) =>
       _client.delete('/trainer/workout-plans/$planId');
+  Future<Map<String, dynamic>> fetchWorkoutProgressionRecommendations({
+    String? status,
+    int? memberId,
+    int perPage = 50,
+  }) => _client.get(
+    '/trainer/workout-progression-recommendations',
+    queryParameters: {
+      if (status != null) 'status': status,
+      if (memberId != null) 'member_id': memberId,
+      'per_page': perPage,
+    },
+  );
+  Future<Map<String, dynamic>> reviewWorkoutProgression(
+    int recommendationId,
+    Map<String, dynamic> payload,
+  ) => _client.post(
+    '/trainer/workout-progression-recommendations/$recommendationId/review',
+    data: payload,
+  );
   Future<Map<String, dynamic>> markNotificationRead(int notificationId) async {
     try {
       return await _client.post('/notifications/$notificationId/read');

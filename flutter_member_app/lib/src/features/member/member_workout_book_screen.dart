@@ -88,6 +88,12 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   final _durationController = TextEditingController(text: '4');
   final _minutesController = TextEditingController(text: '45');
   final _planNotesController = TextEditingController();
+  String _planProgressionPolicy = 'off';
+  final _planProgressionMinRepsController = TextEditingController(text: '8');
+  final _planProgressionMaxRepsController = TextEditingController(text: '12');
+  final _planProgressionIncrementController = TextEditingController(
+    text: '2.5',
+  );
   final _exerciseSearchController = TextEditingController();
   Timer? _exerciseSearchDebounce;
   final _setsController = TextEditingController(text: '4');
@@ -133,6 +139,9 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     _durationController.dispose();
     _minutesController.dispose();
     _planNotesController.dispose();
+    _planProgressionMinRepsController.dispose();
+    _planProgressionMaxRepsController.dispose();
+    _planProgressionIncrementController.dispose();
     _exerciseSearchController.dispose();
     _exerciseSearchDebounce?.cancel();
     _setsController.dispose();
@@ -1007,6 +1016,66 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                   icon: Icons.notes_rounded,
                 ),
               ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _planProgressionPolicy,
+                decoration: _memberWorkoutInputDecoration(
+                  'Automatic progression',
+                  icon: Icons.trending_up_rounded,
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'off', child: Text('Manual / off')),
+                  DropdownMenuItem(
+                    value: 'linear_load',
+                    child: Text('Linear load'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'double_progression',
+                    child: Text('Double progression'),
+                  ),
+                ],
+                onChanged: (value) =>
+                    setState(() => _planProgressionPolicy = value ?? 'off'),
+              ),
+              if (_planProgressionPolicy != 'off') ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    if (_planProgressionPolicy == 'double_progression') ...[
+                      SizedBox(
+                        width: 150,
+                        child: TextField(
+                          controller: _planProgressionMinRepsController,
+                          keyboardType: TextInputType.number,
+                          decoration: _memberWorkoutInputDecoration('Min reps'),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 150,
+                        child: TextField(
+                          controller: _planProgressionMaxRepsController,
+                          keyboardType: TextInputType.number,
+                          decoration: _memberWorkoutInputDecoration('Max reps'),
+                        ),
+                      ),
+                    ],
+                    SizedBox(
+                      width: 180,
+                      child: TextField(
+                        controller: _planProgressionIncrementController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: _memberWorkoutInputDecoration(
+                          'Load increase kg',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 18),
               Row(
                 children: [
@@ -1764,6 +1833,23 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     _durationController.text = '${plan['duration_weeks'] ?? 4}';
     _minutesController.text = '${plan['estimated_session_minutes'] ?? 45}';
     _planNotesController.text = plan['notes']?.toString() ?? '';
+    _planProgressionPolicy =
+        const {
+          'off',
+          'linear_load',
+          'double_progression',
+        }.contains(plan['progression_policy'])
+        ? plan['progression_policy'].toString()
+        : 'off';
+    final progressionConfig = Map<String, dynamic>.from(
+      plan['progression_config'] as Map? ?? const {},
+    );
+    _planProgressionMinRepsController.text =
+        progressionConfig['min_reps']?.toString() ?? '8';
+    _planProgressionMaxRepsController.text =
+        progressionConfig['max_reps']?.toString() ?? '12';
+    _planProgressionIncrementController.text =
+        progressionConfig['load_increment_kg']?.toString() ?? '2.5';
     final difficulty = plan['difficulty']?.toString() ?? 'intermediate';
     _difficulty =
         const <String>{
@@ -1890,6 +1976,28 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
           ? null
           : _planNotesController.text.trim(),
       'status': 'active',
+      'progression_policy': _planProgressionPolicy,
+      'progression_config': _planProgressionPolicy == 'off'
+          ? null
+          : {
+              'load_increment_kg':
+                  double.tryParse(
+                    _planProgressionIncrementController.text.trim(),
+                  ) ??
+                  2.5,
+              if (_planProgressionPolicy == 'double_progression')
+                'min_reps':
+                    int.tryParse(
+                      _planProgressionMinRepsController.text.trim(),
+                    ) ??
+                    8,
+              if (_planProgressionPolicy == 'double_progression')
+                'max_reps':
+                    int.tryParse(
+                      _planProgressionMaxRepsController.text.trim(),
+                    ) ??
+                    12,
+            },
       'weekly_schedule': _dayDrafts
           .where((day) => day.weekday != null)
           .map((day) => _weekdayLabel(day.weekday!))
@@ -1918,6 +2026,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
               'target_weight': item.targetWeight,
               'is_per_side': item.isPerSide,
               'is_bodyweight': item.isBodyweight,
+              if (item.trackingMode != 'reps') 'progression_policy': 'off',
               'rest_seconds': item.restSeconds,
               'notes': item.notes,
             };
@@ -1970,6 +2079,10 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     _durationController.text = '4';
     _minutesController.text = '45';
     _planNotesController.clear();
+    _planProgressionPolicy = 'off';
+    _planProgressionMinRepsController.text = '8';
+    _planProgressionMaxRepsController.text = '12';
+    _planProgressionIncrementController.text = '2.5';
     _exerciseSearchController.clear();
     _setsController.text = '4';
     _repsController.text = '10';

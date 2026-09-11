@@ -26,6 +26,11 @@ class StoreWorkoutTemplateRequest extends FormRequest
             'duration_weeks' => ['required', 'integer', 'min:1', 'max:52'],
             'weekly_schedule' => ['nullable', 'array'],
             'weekly_schedule.*' => ['string', 'max:50'],
+            'progression_policy' => ['nullable', Rule::in(['off', 'linear_load', 'double_progression'])],
+            'progression_config' => ['nullable', 'array'],
+            'progression_config.load_increment_kg' => ['nullable', 'numeric', 'gt:0', 'max:100'],
+            'progression_config.min_reps' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'progression_config.max_reps' => ['nullable', 'integer', 'min:1', 'max:100'],
             'notes' => ['nullable', 'string'],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
         ], $this->workoutDayRules());

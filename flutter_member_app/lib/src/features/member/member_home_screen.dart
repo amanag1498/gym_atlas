@@ -5842,41 +5842,59 @@ class __WorkoutPageState extends State<_WorkoutPage>
                   ..._sessionExercises.asMap().entries.map(
                     (entry) => Padding(
                       padding: const EdgeInsets.only(bottom: 14),
-                      child: _WorkoutExerciseCard(
-                        exercise: entry.value,
-                        initiallyExpanded: entry.key == 0,
-                        previousBest: _recordForExercise(
-                          personalRecords,
-                          entry.value,
-                        ),
-                        recentHistory:
-                            _exerciseHistoryCache[_exerciseId(entry.value)] ??
-                            const [],
-                        historyLoading:
-                            _exerciseHistoryLoading[_exerciseId(entry.value)] ==
-                            true,
-                        historyError:
-                            _exerciseHistoryError[_exerciseId(entry.value)],
-                        onLoadHistory: () => _loadExerciseHistory(entry.value),
-                        onAddSet: () => _addSet(entry.key),
-                        onDuplicateLastSet: () => _duplicateLastSet(entry.key),
-                        onUpdateExerciseNotes: (value) =>
-                            _updateExerciseNotes(entry.key, value),
-                        onUpdateSet: (setIndex, field, value) =>
-                            _updateSet(entry.key, setIndex, field, value),
-                        onDeleteSet: (setIndex) =>
-                            _deleteSet(entry.key, setIndex),
-                        onStartRest: (seconds) =>
-                            _startRest(entry.key, seconds),
-                        runningWorkSetIndex: _workExerciseIndex == entry.key
-                            ? _workSetIndex
-                            : null,
-                        workElapsedSeconds: _workExerciseIndex == entry.key
-                            ? _workElapsedSeconds
-                            : 0,
-                        onStartWork: (setIndex) =>
-                            _startWorkTimer(entry.key, setIndex),
-                        onFinishWork: _finishWorkTimer,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (_startsWorkoutGroup(entry.key)) ...[
+                            _WorkoutGroupHeader(exercise: entry.value),
+                            const SizedBox(height: 10),
+                          ],
+                          _WorkoutExerciseCard(
+                            exercise: entry.value,
+                            initiallyExpanded: entry.key == 0,
+                            previousBest: _recordForExercise(
+                              personalRecords,
+                              entry.value,
+                            ),
+                            recentHistory:
+                                _exerciseHistoryCache[_exerciseId(
+                                  entry.value,
+                                )] ??
+                                const [],
+                            historyLoading:
+                                _exerciseHistoryLoading[_exerciseId(
+                                  entry.value,
+                                )] ==
+                                true,
+                            historyError:
+                                _exerciseHistoryError[_exerciseId(entry.value)],
+                            onLoadHistory: () =>
+                                _loadExerciseHistory(entry.value),
+                            onAddSet: () => _addSet(entry.key),
+                            onDuplicateLastSet: () =>
+                                _duplicateLastSet(entry.key),
+                            onUpdateExerciseNotes: (value) =>
+                                _updateExerciseNotes(entry.key, value),
+                            onUpdateSet: (setIndex, field, value) =>
+                                _updateSet(entry.key, setIndex, field, value),
+                            onDeleteSet: (setIndex) =>
+                                _deleteSet(entry.key, setIndex),
+                            onSkipExercise: () => _skipExercise(entry.key),
+                            onStartRest: (seconds) => _startRest(
+                              entry.key,
+                              _groupAwareRestSeconds(entry.key, seconds),
+                            ),
+                            runningWorkSetIndex: _workExerciseIndex == entry.key
+                                ? _workSetIndex
+                                : null,
+                            workElapsedSeconds: _workExerciseIndex == entry.key
+                                ? _workElapsedSeconds
+                                : 0,
+                            onStartWork: (setIndex) =>
+                                _startWorkTimer(entry.key, setIndex),
+                            onFinishWork: _finishWorkTimer,
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -6201,7 +6219,9 @@ class __WorkoutPageState extends State<_WorkoutPage>
         'target_machine_level': exercise['target_machine_level'],
         'is_per_side': exercise['is_per_side'] == true,
         'is_bodyweight': exercise['is_bodyweight'] == true,
-        'performed_status': sets.isEmpty ? 'skipped' : 'completed',
+        'performed_status': exercise['performed_status'] == 'skipped'
+            ? 'skipped'
+            : (sets.isEmpty ? 'skipped' : 'completed'),
         'rest_timer_seconds': exercise['rest_timer_seconds'],
         'notes': exercise['notes']?.toString(),
         'sets': sets.map((set) {
@@ -6261,6 +6281,9 @@ class __WorkoutPageState extends State<_WorkoutPage>
           return {
             'id': exercise['id'],
             'notes': exercise['notes']?.toString(),
+            'performed_status': exercise['performed_status'] == 'skipped'
+                ? 'skipped'
+                : 'planned',
             'sets': sets.map((set) {
               final pace = (set['pace_seconds_per_km'] as num?)?.toInt() ?? 0;
               return {
@@ -6431,6 +6454,30 @@ class __WorkoutPageState extends State<_WorkoutPage>
     _scheduleDraftSave();
   }
 
+  void _skipExercise(int exerciseIndex) {
+    final exercise = _sessionExercises[exerciseIndex];
+    final mode = exercise['tracking_mode']?.toString() ?? 'reps';
+    final hasActual = (exercise['sets'] as List<dynamic>? ?? const []).any(
+      (item) => _setHasActual(mode, Map<String, dynamic>.from(item as Map)),
+    );
+    if (hasActual) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This exercise already has completed work, so it will remain in the workout summary.',
+          ),
+        ),
+      );
+      return;
+    }
+    setState(() {
+      final updated = Map<String, dynamic>.from(exercise);
+      updated['performed_status'] = 'skipped';
+      _sessionExercises = _replaceExercise(exerciseIndex, updated);
+    });
+    _scheduleDraftSave();
+  }
+
   void _updateSet(int exerciseIndex, int setIndex, String field, String value) {
     setState(() {
       final exercise = Map<String, dynamic>.from(
@@ -6445,7 +6492,7 @@ class __WorkoutPageState extends State<_WorkoutPage>
         case 'distance_meters':
         case 'speed_kph':
         case 'effort_value':
-          set[field] = double.tryParse(value) ?? 0;
+          set[field] = value.trim().isEmpty ? null : double.tryParse(value);
           break;
         case 'reps':
         case 'duration_seconds':
@@ -6454,13 +6501,35 @@ class __WorkoutPageState extends State<_WorkoutPage>
           set[field] = int.tryParse(value) ?? 0;
           break;
         default:
-          set[field] = value;
+          set[field] = value.trim().isEmpty ? null : value;
       }
       sets[setIndex] = set;
       exercise['sets'] = sets;
+      exercise['performed_status'] = 'planned';
       _sessionExercises = _replaceExercise(exerciseIndex, exercise);
     });
     _scheduleDraftSave();
+  }
+
+  bool _startsWorkoutGroup(int exerciseIndex) {
+    final key = _sessionExercises[exerciseIndex]['group_key']?.toString();
+    if (key == null || key.isEmpty) return false;
+    if (exerciseIndex == 0) return true;
+    return _sessionExercises[exerciseIndex - 1]['group_key']?.toString() != key;
+  }
+
+  int _groupAwareRestSeconds(int exerciseIndex, int plannedRestSeconds) {
+    final exercise = _sessionExercises[exerciseIndex];
+    final key = exercise['group_key']?.toString();
+    if (key == null || key.isEmpty || exercise['rest_after'] != 'group') {
+      return plannedRestSeconds;
+    }
+    final isLastInGroup =
+        exerciseIndex == _sessionExercises.length - 1 ||
+        _sessionExercises[exerciseIndex + 1]['group_key']?.toString() != key;
+    return isLastInGroup
+        ? plannedRestSeconds
+        : (exercise['transition_seconds'] as num?)?.toInt() ?? 0;
   }
 
   List<Map<String, dynamic>> _replaceExercise(
@@ -6475,7 +6544,18 @@ class __WorkoutPageState extends State<_WorkoutPage>
   void _startRest(int exerciseIndex, int seconds) {
     _cancelWorkTimer();
     _restTimer?.cancel();
-    final duration = seconds <= 0 ? 45 : seconds;
+    if (seconds <= 0) {
+      setState(() {
+        _restExerciseIndex = null;
+        _restRemainingSeconds = 0;
+        _restTotalSeconds = 0;
+        _restEndsAt = null;
+      });
+      _cancelRestNotification();
+      _scheduleDraftSave();
+      return;
+    }
+    final duration = seconds;
     setState(() {
       _restExerciseIndex = exerciseIndex;
       _restRemainingSeconds = duration;
@@ -7151,6 +7231,10 @@ class __WorkoutPageState extends State<_WorkoutPage>
     final exercises = (summary['exercises'] as List<dynamic>? ?? const [])
         .map((item) => Map<String, dynamic>.from(item as Map))
         .toList();
+    final progressions =
+        (summary['progression_recommendations'] as List<dynamic>? ?? const [])
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .toList();
     return showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
@@ -7203,6 +7287,22 @@ class __WorkoutPageState extends State<_WorkoutPage>
                     );
                   }),
                 ],
+                if (progressions.isNotEmpty) ...[
+                  const Divider(height: 28),
+                  Text(
+                    'Next workout',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  ...progressions.map(
+                    (recommendation) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        '${recommendation['explanation'] ?? 'Your prescription was reviewed.'}${recommendation['status'] == 'pending' ? ' Waiting for trainer approval.' : ''}',
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -7233,7 +7333,9 @@ class __WorkoutPageState extends State<_WorkoutPage>
     if (planned) {
       return '${values['reps'] ?? 'open'} reps • ${values['load'] ?? 0} kg';
     }
-    return '${(values['reps'] as num?)?.toInt() ?? 0} reps • max ${values['max_load'] ?? 0} kg';
+    final estimated = (values['best_estimated_one_rep_max'] as num?)
+        ?.toDouble();
+    return '${(values['reps'] as num?)?.toInt() ?? 0} reps • max ${values['max_load'] ?? 0} kg${estimated == null ? '' : ' • e1RM ${estimated.toStringAsFixed(1)} kg'}';
   }
 
   Future<void> _showCompletionCelebration(BuildContext context, bool hasPr) {
@@ -8344,6 +8446,46 @@ class _WorkoutInfoPill extends StatelessWidget {
   }
 }
 
+class _WorkoutGroupHeader extends StatelessWidget {
+  const _WorkoutGroupHeader({required this.exercise});
+
+  final Map<String, dynamic> exercise;
+
+  @override
+  Widget build(BuildContext context) {
+    final key = exercise['group_key']?.toString() ?? 'A';
+    final type = exercise['group_type'] == 'circuit' ? 'Circuit' : 'Superset';
+    final rounds = (exercise['group_rounds'] as num?)?.toInt() ?? 1;
+    final transition = (exercise['transition_seconds'] as num?)?.toInt() ?? 0;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.primaryBright.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: AppColors.primaryBright.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.sync_alt_rounded, color: AppColors.primaryBright),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '$key · $type · $rounds round${rounds == 1 ? '' : 's'} · $transition sec transitions',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _WorkoutExerciseCard extends StatefulWidget {
   const _WorkoutExerciseCard({
     required this.exercise,
@@ -8358,6 +8500,7 @@ class _WorkoutExerciseCard extends StatefulWidget {
     required this.onUpdateExerciseNotes,
     required this.onUpdateSet,
     required this.onDeleteSet,
+    required this.onSkipExercise,
     required this.onStartRest,
     required this.runningWorkSetIndex,
     required this.workElapsedSeconds,
@@ -8377,6 +8520,7 @@ class _WorkoutExerciseCard extends StatefulWidget {
   final ValueChanged<String> onUpdateExerciseNotes;
   final void Function(int setIndex, String field, String value) onUpdateSet;
   final ValueChanged<int> onDeleteSet;
+  final VoidCallback onSkipExercise;
   final ValueChanged<int> onStartRest;
   final int? runningWorkSetIndex;
   final int workElapsedSeconds;
@@ -8550,6 +8694,20 @@ class _WorkoutExerciseCardState extends State<_WorkoutExerciseCard> {
                   icon: Icons.repeat_rounded,
                   label: '$plannedReps reps target',
                 ),
+              if ((widget.exercise['group_key']?.toString() ?? '').isNotEmpty)
+                _WorkoutMetaChip(
+                  icon: Icons.link_rounded,
+                  label:
+                      '${widget.exercise['group_key']}${widget.exercise['group_order'] ?? ''}',
+                ),
+              if ((widget.exercise['progression_policy']?.toString() ??
+                      'off') !=
+                  'off')
+                _WorkoutMetaChip(
+                  icon: Icons.trending_up_rounded,
+                  label:
+                      '${widget.exercise['progression_policy'].toString().replaceAll('_', ' ')} v${widget.exercise['progression_version'] ?? 1}',
+                ),
               if ((exerciseInfo['muscle_group']?.toString() ?? '').isNotEmpty)
                 _WorkoutMetaChip(
                   icon: Icons.accessibility_new_rounded,
@@ -8636,6 +8794,15 @@ class _WorkoutExerciseCardState extends State<_WorkoutExerciseCard> {
                         }
                       },
                     ),
+                    QuickActionButton(
+                      label: widget.exercise['performed_status'] == 'skipped'
+                          ? 'Skipped'
+                          : 'Skip exercise',
+                      icon: Icons.skip_next_rounded,
+                      onTap: widget.exercise['performed_status'] == 'skipped'
+                          ? null
+                          : widget.onSkipExercise,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -8700,7 +8867,9 @@ class _WorkoutExerciseCardState extends State<_WorkoutExerciseCard> {
   String _formatBest(Map<String, dynamic> record) {
     final weight = (record['best_weight'] as num?)?.toDouble() ?? 0;
     final reps = (record['best_reps'] as num?)?.toInt() ?? 0;
-    return '${weight.toStringAsFixed(0)}kg x $reps';
+    final estimated = (record['best_estimated_one_rep_max'] as num?)
+        ?.toDouble();
+    return '${weight.toStringAsFixed(0)}kg x $reps${estimated == null ? '' : ' • e1RM ${estimated.toStringAsFixed(1)}kg'}';
   }
 
   String _trackingModeLabel(String mode) => switch (mode) {
@@ -8773,6 +8942,9 @@ class _WorkoutSetRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final setNumber = (set['set_number'] as num?)?.toInt() ?? 1;
     final restSeconds = (set['rest_seconds'] as num?)?.toInt() ?? 45;
+    final effortScale = const {'rir', 'rpe'}.contains(set['effort_scale'])
+        ? set['effort_scale']?.toString()
+        : null;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -8825,6 +8997,41 @@ class _WorkoutSetRow extends StatelessWidget {
           ],
           const SizedBox(height: 10),
           Wrap(spacing: 10, runSpacing: 10, children: _metricFields()),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  key: ValueKey('set-$setNumber-effort-$effortScale'),
+                  initialValue: effortScale ?? 'off',
+                  decoration: const InputDecoration(
+                    labelText: 'Effort (optional)',
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'off', child: Text('Not rated')),
+                    DropdownMenuItem(value: 'rir', child: Text('RIR')),
+                    DropdownMenuItem(value: 'rpe', child: Text('RPE')),
+                  ],
+                  onChanged: (value) {
+                    onChanged('effort_scale', value == 'off' ? '' : value!);
+                    if (value == 'off') onChanged('effort_value', '');
+                  },
+                ),
+              ),
+              if (effortScale != null) ...[
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _WorkoutNumberField(
+                    label: effortScale == 'rir' ? 'RIR 0-10' : 'RPE 1-10',
+                    value: set['effort_value'] as num?,
+                    decimal: true,
+                    showZero: true,
+                    onChanged: (value) => onChanged('effort_value', value),
+                  ),
+                ),
+              ],
+            ],
+          ),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -8915,18 +9122,22 @@ class _WorkoutNumberField extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.decimal = false,
+    this.showZero = false,
   });
 
   final String label;
   final num? value;
   final ValueChanged<String> onChanged;
   final bool decimal;
+  final bool showZero;
 
   @override
   Widget build(BuildContext context) {
     final numericValue = value ?? 0;
     return TextFormField(
-      initialValue: numericValue == 0 ? '' : numericValue.toString(),
+      initialValue: value == null
+          ? ''
+          : (numericValue == 0 && !showZero ? '' : numericValue.toString()),
       keyboardType: TextInputType.numberWithOptions(decimal: decimal),
       decoration: InputDecoration(labelText: label),
       onChanged: onChanged,

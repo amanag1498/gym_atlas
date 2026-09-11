@@ -5896,6 +5896,14 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   final _paceSecondsController = TextEditingController();
   final _exerciseNotesController = TextEditingController();
   String _trackingMode = 'reps';
+  final _groupKeyController = TextEditingController();
+  final _groupRoundsController = TextEditingController(text: '3');
+  final _transitionSecondsController = TextEditingController(text: '15');
+  String _groupType = 'superset';
+  String _progressionPolicy = 'off';
+  final _progressionMinRepsController = TextEditingController(text: '8');
+  final _progressionMaxRepsController = TextEditingController(text: '12');
+  final _progressionIncrementController = TextEditingController(text: '2.5');
   final _newExerciseNameController = TextEditingController();
   final _newExerciseBodyPartController = TextEditingController(text: 'chest');
   final _newExerciseMuscleController = TextEditingController();
@@ -5912,6 +5920,8 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   bool _savingExercise = false;
   bool _loadingExerciseCatalog = false;
   bool _recentExercisesOnly = false;
+  bool _loadingProgressions = false;
+  List<Map<String, dynamic>> _progressionRecommendations = const [];
   List<Map<String, dynamic>> _catalogExercises = const [];
   int _workoutTabIndex = 1;
   String _selectedDayKey = 'Mon';
@@ -5964,6 +5974,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       );
     }
     _loadDayIntoFields(_selectedDayKey);
+    unawaited(_loadProgressionRecommendations());
   }
 
   @override
@@ -6002,6 +6013,12 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     _speedKphController.dispose();
     _paceSecondsController.dispose();
     _exerciseNotesController.dispose();
+    _groupKeyController.dispose();
+    _groupRoundsController.dispose();
+    _transitionSecondsController.dispose();
+    _progressionMinRepsController.dispose();
+    _progressionMaxRepsController.dispose();
+    _progressionIncrementController.dispose();
     _newExerciseNameController.dispose();
     _newExerciseBodyPartController.dispose();
     _newExerciseMuscleController.dispose();
@@ -6713,6 +6730,110 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                             ],
                           ),
                           const SizedBox(height: 14),
+                          _WorkoutFieldGroup(
+                            children: [
+                              TextFormField(
+                                controller: _groupKeyController,
+                                decoration: _workoutInputDecoration(
+                                  'Group label (optional)',
+                                  icon: Icons.link_rounded,
+                                ).copyWith(hintText: 'A, B, Circuit 1'),
+                              ),
+                              DropdownButtonFormField<String>(
+                                initialValue: _groupType,
+                                decoration: _workoutInputDecoration(
+                                  'Group type',
+                                ),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: 'superset',
+                                    child: Text('Superset'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'circuit',
+                                    child: Text('Circuit'),
+                                  ),
+                                ],
+                                onChanged: (value) => setState(
+                                  () => _groupType = value ?? 'superset',
+                                ),
+                              ),
+                              TextFormField(
+                                controller: _groupRoundsController,
+                                keyboardType: TextInputType.number,
+                                decoration: _workoutInputDecoration('Rounds'),
+                              ),
+                              TextFormField(
+                                controller: _transitionSecondsController,
+                                keyboardType: TextInputType.number,
+                                decoration: _workoutInputDecoration(
+                                  'Transition sec',
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          DropdownButtonFormField<String>(
+                            initialValue: _progressionPolicy,
+                            decoration: _workoutInputDecoration(
+                              'Progression policy',
+                              icon: Icons.trending_up_rounded,
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'off',
+                                child: Text('Manual / off'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'linear_load',
+                                child: Text('Linear load'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'double_progression',
+                                child: Text('Double progression'),
+                              ),
+                            ],
+                            onChanged: _trackingMode == 'reps'
+                                ? (value) => setState(
+                                    () => _progressionPolicy = value ?? 'off',
+                                  )
+                                : null,
+                          ),
+                          if (_progressionPolicy != 'off') ...[
+                            const SizedBox(height: 14),
+                            _WorkoutFieldGroup(
+                              children: [
+                                if (_progressionPolicy ==
+                                    'double_progression') ...[
+                                  TextFormField(
+                                    controller: _progressionMinRepsController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: _workoutInputDecoration(
+                                      'Min reps',
+                                    ),
+                                  ),
+                                  TextFormField(
+                                    controller: _progressionMaxRepsController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: _workoutInputDecoration(
+                                      'Max reps',
+                                    ),
+                                  ),
+                                ],
+                                TextFormField(
+                                  controller: _progressionIncrementController,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  decoration: _workoutInputDecoration(
+                                    'Load increase kg',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: 14),
                           if (_trackingMode != 'reps') ...[
                             Wrap(
                               spacing: 12,
@@ -6822,15 +6943,24 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                               child: _TrainerWorkoutTile(
                                 title: entry.value.exerciseName,
                                 subtitle:
-                                    '${entry.value.sets} sets • ${entry.value.trackingMode} • ${entry.value.restSeconds} sec rest',
+                                    '${entry.value.sets} sets • ${entry.value.trackingMode} • ${entry.value.restSeconds} sec rest${entry.value.groupKey == null ? '' : ' • ${entry.value.groupKey}${entry.value.groupOrder} ${entry.value.groupType}'}${entry.value.progressionPolicy == 'off' ? '' : ' • progression'}',
                                 badge: entry.value.bodyPartLabel,
                                 icon: Icons.fitness_center_rounded,
-                                actionLabel: 'Remove',
-                                onAction: () => setState(() {
-                                  selectedDayDraft.exercises.removeAt(
-                                    entry.key,
-                                  );
-                                }),
+                                actionLabel: entry.key == 0
+                                    ? 'Move down'
+                                    : 'Move up',
+                                onAction: selectedDayDraft.exercises.length < 2
+                                    ? null
+                                    : () => _moveExercise(
+                                        selectedDayDraft,
+                                        entry.key,
+                                        entry.key == 0 ? 1 : -1,
+                                      ),
+                                secondaryActionLabel: 'Remove',
+                                onSecondaryAction: () => _removeExercise(
+                                  selectedDayDraft,
+                                  entry.key,
+                                ),
                               ),
                             ),
                           ),
@@ -6922,6 +7052,8 @@ class __WorkoutPageState extends State<_WorkoutPage> {
           onChanged: (index) => setState(() => _workoutTabIndex = index),
         ),
         const SizedBox(height: 16),
+        _buildProgressionReviewSection(context),
+        const SizedBox(height: 16),
         _TrainerWorkoutSection(
           title: 'Workout library',
           subtitle:
@@ -6999,6 +7131,64 @@ class __WorkoutPageState extends State<_WorkoutPage> {
           _workoutLoadMoreButton(),
         ],
       ],
+    );
+  }
+
+  Widget _buildProgressionReviewSection(BuildContext context) {
+    return _TrainerWorkoutSection(
+      title: 'Progression review',
+      subtitle:
+          'Approve, edit, or reject changes calculated from completed member sets.',
+      icon: Icons.trending_up_rounded,
+      child: _loadingProgressions
+          ? const LoadingStateView(
+              label: 'Loading progression recommendations...',
+            )
+          : _progressionRecommendations.isEmpty
+          ? Column(
+              children: [
+                const EmptyStateView(
+                  title: 'No pending changes',
+                  message:
+                      'Recommendations appear after members complete progression-enabled workouts.',
+                  icon: Icons.fact_check_outlined,
+                ),
+                TextButton.icon(
+                  onPressed: _loadProgressionRecommendations,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Refresh'),
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                ..._progressionRecommendations.map((recommendation) {
+                  final exercise = _map(recommendation['exercise']);
+                  final member = _map(recommendation['member']);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _TrainerWorkoutTile(
+                      title: exercise['name']?.toString() ?? 'Exercise',
+                      subtitle:
+                          '${member['name']?.toString() ?? 'Member'} • ${recommendation['explanation']?.toString() ?? 'Review the next prescription.'}',
+                      badge: 'v${recommendation['algorithm_version'] ?? 1}',
+                      icon: Icons.auto_graph_rounded,
+                      actionLabel: 'Approve',
+                      onAction: () =>
+                          _reviewProgression(recommendation, 'approve'),
+                      secondaryActionLabel: 'Edit / Reject',
+                      onSecondaryAction: () =>
+                          _openProgressionReview(recommendation),
+                    ),
+                  );
+                }),
+                TextButton.icon(
+                  onPressed: _loadProgressionRecommendations,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Refresh'),
+                ),
+              ],
+            ),
     );
   }
 
@@ -7154,6 +7344,11 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       _speedKphController.clear();
       _paceSecondsController.clear();
       _trackingMode = 'reps';
+      _groupKeyController.clear();
+      _groupRoundsController.text = '3';
+      _transitionSecondsController.text = '15';
+      _groupType = 'superset';
+      _progressionPolicy = 'off';
       _exerciseNotesController.clear();
     });
   }
@@ -7166,6 +7361,14 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     final exerciseId = (selectedExercise['id'] as num?)?.toInt();
     final sets = int.tryParse(_setsController.text.trim());
     final rest = int.tryParse(_restController.text.trim()) ?? 0;
+    final groupKey = _groupKeyController.text.trim().isEmpty
+        ? null
+        : _groupKeyController.text.trim();
+    final currentExercises = _ensureDayDraft(_selectedDayKey).exercises;
+    final groupOrder = groupKey == null
+        ? null
+        : currentExercises.where((item) => item.groupKey == groupKey).length +
+              1;
 
     if (exerciseId == null || sets == null || sets < 1) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -7200,12 +7403,61 @@ class __WorkoutPageState extends State<_WorkoutPage> {
           restSeconds: rest,
           isPerSide: selectedExercise['is_per_side'] == true,
           isBodyweight: selectedExercise['is_bodyweight'] == true,
+          groupKey: groupKey,
+          groupType: groupKey == null ? null : _groupType,
+          groupOrder: groupOrder,
+          groupRounds: groupKey == null
+              ? null
+              : int.tryParse(_groupRoundsController.text.trim()) ?? 1,
+          transitionSeconds: groupKey == null
+              ? null
+              : int.tryParse(_transitionSecondsController.text.trim()) ?? 0,
+          progressionPolicy: _trackingMode == 'reps'
+              ? _progressionPolicy
+              : 'off',
+          progressionMinReps: int.tryParse(
+            _progressionMinRepsController.text.trim(),
+          ),
+          progressionMaxReps: int.tryParse(
+            _progressionMaxRepsController.text.trim(),
+          ),
+          progressionIncrementKg: double.tryParse(
+            _progressionIncrementController.text.trim(),
+          ),
           notes: _exerciseNotesController.text.trim(),
         ),
       );
       _targetWeightController.clear();
       _exerciseNotesController.clear();
     });
+  }
+
+  void _moveExercise(_WorkoutDayDraft day, int index, int delta) {
+    final nextIndex = (index + delta).clamp(0, day.exercises.length - 1);
+    if (nextIndex == index) return;
+    setState(() {
+      final exercise = day.exercises.removeAt(index);
+      day.exercises.insert(nextIndex, exercise);
+      _renumberWorkoutGroups(day);
+    });
+  }
+
+  void _removeExercise(_WorkoutDayDraft day, int index) {
+    setState(() {
+      day.exercises.removeAt(index);
+      _renumberWorkoutGroups(day);
+    });
+  }
+
+  void _renumberWorkoutGroups(_WorkoutDayDraft day) {
+    final nextOrders = <String, int>{};
+    for (final exercise in day.exercises) {
+      final key = exercise.groupKey;
+      if (key == null) continue;
+      final next = (nextOrders[key] ?? 0) + 1;
+      nextOrders[key] = next;
+      exercise.groupOrder = next;
+    }
   }
 
   int? _activeGymId(Map<String, dynamic> selectedMember) {
@@ -7643,6 +7895,24 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         );
         return null;
       }
+      final groupedCounts = <String, int>{};
+      for (final exercise in draft.exercises) {
+        final key = exercise.groupKey;
+        if (key != null) groupedCounts[key] = (groupedCounts[key] ?? 0) + 1;
+      }
+      final invalidGroup = groupedCounts.entries
+          .where((entry) => entry.value < 2)
+          .firstOrNull;
+      if (invalidGroup != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Group ${invalidGroup.key} on $day needs at least two exercises.',
+            ),
+          ),
+        );
+        return null;
+      }
       payloadDays.add({
         'day_number': _dayNumbers[day],
         'label': draft.label,
@@ -7664,6 +7934,22 @@ class __WorkoutPageState extends State<_WorkoutPage> {
             'is_per_side': exercise.isPerSide,
             'is_bodyweight': exercise.isBodyweight,
             'rest_seconds': exercise.restSeconds,
+            'group_key': exercise.groupKey,
+            'group_type': exercise.groupType,
+            'group_order': exercise.groupOrder,
+            'group_rounds': exercise.groupRounds,
+            'transition_seconds': exercise.transitionSeconds,
+            'rest_after': exercise.groupKey == null ? 'exercise' : 'group',
+            'progression_policy': exercise.progressionPolicy,
+            'progression_config': exercise.progressionPolicy == 'off'
+                ? null
+                : {
+                    'load_increment_kg': exercise.progressionIncrementKg ?? 2.5,
+                    if (exercise.progressionPolicy == 'double_progression')
+                      'min_reps': exercise.progressionMinReps ?? 8,
+                    if (exercise.progressionPolicy == 'double_progression')
+                      'max_reps': exercise.progressionMaxReps ?? 12,
+                  },
             'notes': exercise.notes.isEmpty ? null : exercise.notes,
           };
         }).toList(),
@@ -7697,6 +7983,14 @@ class __WorkoutPageState extends State<_WorkoutPage> {
             'is_per_side': exercise['is_per_side'] == true,
             'is_bodyweight': exercise['is_bodyweight'] == true,
             'rest_seconds': (exercise['rest_seconds'] as num?)?.toInt(),
+            'group_key': exercise['group_key'],
+            'group_type': exercise['group_type'],
+            'group_order': exercise['group_order'],
+            'group_rounds': exercise['group_rounds'],
+            'transition_seconds': exercise['transition_seconds'],
+            'rest_after': exercise['rest_after'],
+            'progression_policy': exercise['progression_policy'] ?? 'off',
+            'progression_config': exercise['progression_config'],
             'notes': exercise['notes'],
           };
         }).toList(),
@@ -8052,6 +8346,153 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     }
   }
 
+  Future<void> _loadProgressionRecommendations() async {
+    if (_loadingProgressions) return;
+    setState(() => _loadingProgressions = true);
+    try {
+      final response = await widget.repository
+          .fetchWorkoutProgressionRecommendations(status: 'pending');
+      if (!mounted) return;
+      setState(() {
+        _progressionRecommendations = apiPageItems(response);
+      });
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load progressions: $exception')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingProgressions = false);
+    }
+  }
+
+  Future<void> _reviewProgression(
+    Map<String, dynamic> recommendation,
+    String decision, {
+    Map<String, dynamic>? prescription,
+    String? notes,
+  }) async {
+    final id = _intValue(recommendation['id']);
+    if (id == null) return;
+    try {
+      await widget.repository.reviewWorkoutProgression(id, {
+        'decision': decision,
+        if (prescription != null) 'prescription': prescription,
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            decision == 'reject'
+                ? 'Progression rejected.'
+                : 'Progression applied to the member plan.',
+          ),
+        ),
+      );
+      await _loadProgressionRecommendations();
+      await widget.onRefresh();
+    } catch (exception) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+    }
+  }
+
+  Future<void> _openProgressionReview(
+    Map<String, dynamic> recommendation,
+  ) async {
+    final prescription = _map(recommendation['recommended_prescription']);
+    final setsController = TextEditingController(
+      text: prescription['sets']?.toString() ?? '',
+    );
+    final repsController = TextEditingController(
+      text: prescription['reps']?.toString() ?? '',
+    );
+    final weightController = TextEditingController(
+      text: prescription['target_weight']?.toString() ?? '',
+    );
+    final notesController = TextEditingController();
+    try {
+      final decision = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Review progression'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  recommendation['explanation']?.toString() ?? '',
+                  style: Theme.of(dialogContext).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: setsController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Sets'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: repsController,
+                  decoration: const InputDecoration(labelText: 'Reps'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: weightController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Target weight kg',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: notesController,
+                  decoration: const InputDecoration(labelText: 'Review notes'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, 'reject'),
+              child: const Text('Reject'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, 'override'),
+              child: const Text('Apply edits'),
+            ),
+          ],
+        ),
+      );
+      if (decision == null) return;
+      await _reviewProgression(
+        recommendation,
+        decision,
+        prescription: decision == 'override'
+            ? {
+                if (int.tryParse(setsController.text.trim()) != null)
+                  'sets': int.parse(setsController.text.trim()),
+                if (repsController.text.trim().isNotEmpty)
+                  'reps': repsController.text.trim(),
+                if (double.tryParse(weightController.text.trim()) != null)
+                  'target_weight': double.parse(weightController.text.trim()),
+              }
+            : null,
+        notes: notesController.text,
+      );
+    } finally {
+      setsController.dispose();
+      repsController.dispose();
+      weightController.dispose();
+      notesController.dispose();
+    }
+  }
+
   Future<void> _saveLibraryWorkout() async {
     if (_planNameController.text.trim().isEmpty) {
       _planNameController.text = 'Custom workout';
@@ -8174,6 +8615,15 @@ class _WorkoutExerciseDraft {
     required this.restSeconds,
     required this.isPerSide,
     required this.isBodyweight,
+    required this.groupKey,
+    required this.groupType,
+    required this.groupOrder,
+    required this.groupRounds,
+    required this.transitionSeconds,
+    required this.progressionPolicy,
+    required this.progressionMinReps,
+    required this.progressionMaxReps,
+    required this.progressionIncrementKg,
     required this.notes,
   });
 
@@ -8191,6 +8641,15 @@ class _WorkoutExerciseDraft {
   final int restSeconds;
   final bool isPerSide;
   final bool isBodyweight;
+  final String? groupKey;
+  final String? groupType;
+  int? groupOrder;
+  final int? groupRounds;
+  final int? transitionSeconds;
+  final String progressionPolicy;
+  final int? progressionMinReps;
+  final int? progressionMaxReps;
+  final double? progressionIncrementKg;
   final String notes;
 }
 

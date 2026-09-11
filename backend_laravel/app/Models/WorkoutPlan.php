@@ -28,6 +28,9 @@ class WorkoutPlan extends Model
         'duration_weeks',
         'estimated_session_minutes',
         'equipment_profile',
+        'progression_policy',
+        'progression_config',
+        'progression_version',
         'weekly_schedule',
         'notes',
         'status',
@@ -40,6 +43,7 @@ class WorkoutPlan extends Model
     {
         return [
             'weekly_schedule' => 'array',
+            'progression_config' => 'array',
             'is_member_editable' => 'boolean',
             'assigned_at' => 'datetime',
             'starts_on' => 'date',
@@ -98,5 +102,10 @@ class WorkoutPlan extends Model
     public function sessions(): HasMany
     {
         return $this->hasMany(WorkoutSession::class);
+    }
+
+    public function progressionRecommendations(): HasMany
+    {
+        return $this->hasMany(WorkoutProgressionRecommendation::class);
     }
 }

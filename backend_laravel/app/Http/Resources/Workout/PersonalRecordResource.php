@@ -17,6 +17,11 @@ class PersonalRecordResource extends JsonResource
             'best_weight' => (float) $this->best_weight,
             'best_reps' => $this->best_reps,
             'best_volume' => (float) $this->best_volume,
+            'best_estimated_one_rep_max' => $this->best_estimated_one_rep_max !== null ? (float) $this->best_estimated_one_rep_max : null,
+            'estimated_one_rep_max_weight' => $this->estimated_one_rep_max_weight !== null ? (float) $this->estimated_one_rep_max_weight : null,
+            'estimated_one_rep_max_reps' => $this->estimated_one_rep_max_reps,
+            'estimated_one_rep_max_formula' => $this->estimated_one_rep_max_formula,
+            'estimated_one_rep_max_achieved_at' => $this->estimated_one_rep_max_achieved_at?->toIso8601String(),
             'achieved_at' => $this->achieved_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

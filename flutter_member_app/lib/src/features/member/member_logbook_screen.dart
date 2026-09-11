@@ -739,7 +739,7 @@ class _LogbookRecordRow extends StatelessWidget {
       gradient: const [Color(0xFFDBEAFE), Color(0xFF93C5FD)],
       title: _exerciseName(record),
       subtitle:
-          '${_formatKg(_asDouble(record['best_weight']))} • ${record['best_reps'] ?? 0} reps • ${_formatKg(_asDouble(record['best_volume']))} volume',
+          '${_formatKg(_asDouble(record['best_weight']))} • ${record['best_reps'] ?? 0} reps • ${_formatKg(_asDouble(record['best_volume']))} volume${record['best_estimated_one_rep_max'] == null ? '' : ' • e1RM ${_formatKg(_asDouble(record['best_estimated_one_rep_max']))}'}',
       badge: 'PR',
       onTap: onTap,
     );
@@ -1407,7 +1407,7 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
                           title: widget.exerciseName,
                           subtitle: _record == null
                               ? 'No PR recorded yet for this exercise.'
-                              : 'Best ${_formatKg(_asDouble(_record!['best_weight']))} • ${_record!['best_reps'] ?? 0} reps',
+                              : 'Best ${_formatKg(_asDouble(_record!['best_weight']))} • ${_record!['best_reps'] ?? 0} reps${_record!['best_estimated_one_rep_max'] == null ? '' : ' • e1RM ${_formatKg(_asDouble(_record!['best_estimated_one_rep_max']))}'}',
                           badge: _record == null ? 'Tracking' : 'PR',
                           icon: Icons.emoji_events_rounded,
                         ),

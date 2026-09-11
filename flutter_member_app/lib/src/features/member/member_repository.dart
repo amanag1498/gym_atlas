@@ -517,6 +517,16 @@ class MemberRepository {
     '/member/workout-sessions/$sessionId/complete',
     data: payload,
   );
+  Future<Map<String, dynamic>> fetchWorkoutProgressionRecommendations({
+    String? status,
+    int perPage = 50,
+  }) => _client.get(
+    '/member/workout-progression-recommendations',
+    queryParameters: {
+      if (status != null) 'status': status,
+      'per_page': perPage,
+    },
+  );
   Future<Map<String, dynamic>> addWeightLog(Map<String, dynamic> payload) =>
       _client.post('/member/progress/weight-logs', data: payload);
   Future<Map<String, dynamic>> addBodyMeasurement(

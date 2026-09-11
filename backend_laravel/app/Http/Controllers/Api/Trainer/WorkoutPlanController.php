@@ -3,16 +3,20 @@
 namespace App\Http\Controllers\Api\Trainer;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Workout\ReviewWorkoutProgressionRequest;
 use App\Http\Requests\Workout\StoreWorkoutPlanRequest;
 use App\Http\Requests\Workout\UpdateWorkoutPlanRequest;
 use App\Http\Resources\Workout\WorkoutPlanResource;
+use App\Http\Resources\Workout\WorkoutProgressionRecommendationResource;
 use App\Models\User;
 use App\Models\WorkoutPlan;
+use App\Models\WorkoutProgressionRecommendation;
 use App\Services\Audit\AuditLogService;
 use App\Services\Trainer\IndependentCoachingAccessService;
 use App\Services\Trainer\TrainerScopeService;
 use App\Services\Workout\WorkoutAccessService;
 use App\Services\Workout\WorkoutPlanService;
+use App\Services\Workout\WorkoutProgressionService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -24,6 +28,7 @@ class WorkoutPlanController extends Controller
         private readonly AuditLogService $auditLogService,
         private readonly TrainerScopeService $trainerScopeService,
         private readonly IndependentCoachingAccessService $independentCoachingAccessService,
+        private readonly WorkoutProgressionService $workoutProgressionService,
     ) {}
 
     public function index(Request $request)
@@ -155,5 +160,45 @@ class WorkoutPlanController extends Controller
         $workoutPlan->delete();
 
         return $this->success(null, 'Workout plan deleted successfully.');
+    }
+
+    public function progressionRecommendations(Request $request)
+    {
+        $paginator = WorkoutProgressionRecommendation::query()
+            ->with(['member', 'exercise', 'plan'])
+            ->where('trainer_id', $request->user()->id)
+            ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
+            ->when($request->filled('member_id'), fn ($query) => $query->where('member_id', $request->integer('member_id')))
+            ->latest('id')
+            ->paginate((int) $request->integer('per_page', 15));
+
+        return $this->paginated(
+            $paginator,
+            WorkoutProgressionRecommendationResource::collection($paginator->getCollection()),
+            'Progression recommendations fetched successfully.',
+        );
+    }
+
+    public function reviewProgression(
+        ReviewWorkoutProgressionRequest $request,
+        WorkoutProgressionRecommendation $workoutProgressionRecommendation,
+    ) {
+        if ((int) $workoutProgressionRecommendation->trainer_id !== (int) $request->user()->id) {
+            throw ValidationException::withMessages(['recommendation' => ['You do not have access to this recommendation.']]);
+        }
+        $this->workoutAccessService->assertPlanAccess($request->user(), $workoutProgressionRecommendation->plan);
+        $data = $request->validated();
+        $recommendation = $this->workoutProgressionService->review(
+            $request->user(),
+            $workoutProgressionRecommendation,
+            $data['decision'],
+            $data['prescription'] ?? null,
+            $data['notes'] ?? null,
+        );
+
+        return $this->success(
+            WorkoutProgressionRecommendationResource::make($recommendation),
+            'Progression recommendation reviewed successfully.',
+        );
     }
 }

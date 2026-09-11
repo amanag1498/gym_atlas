@@ -32,6 +32,7 @@ class WorkoutSessionResource extends JsonResource
             'runtime_state' => $this->runtime_state,
             'exercises' => $this->whenLoaded('exercises', fn () => $this->exercises->map(fn ($exercise) => [
                 'id' => $exercise->id,
+                'workout_plan_exercise_id' => $exercise->workout_plan_exercise_id,
                 'exercise_id' => $exercise->exercise_id,
                 'exercise' => ExerciseResource::make($exercise->exercise),
                 'sort_order' => $exercise->sort_order,
@@ -50,6 +51,15 @@ class WorkoutSessionResource extends JsonResource
                 'performed_status' => $exercise->performed_status,
                 'substituted_for_session_exercise_id' => $exercise->substituted_for_session_exercise_id,
                 'rest_timer_seconds' => $exercise->rest_timer_seconds,
+                'group_key' => $exercise->group_key,
+                'group_type' => $exercise->group_type,
+                'group_order' => $exercise->group_order,
+                'group_rounds' => $exercise->group_rounds,
+                'transition_seconds' => $exercise->transition_seconds,
+                'rest_after' => $exercise->rest_after,
+                'progression_policy' => $exercise->progression_policy ?? 'off',
+                'progression_config' => $exercise->progression_config,
+                'progression_version' => $exercise->progression_version ?? 1,
                 'notes' => $exercise->notes,
                 'sets' => $exercise->sets->map(fn ($set) => [
                     'id' => $set->id,

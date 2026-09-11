@@ -16,11 +16,13 @@ use App\Http\Resources\Workout\ExerciseResource;
 use App\Http\Resources\Workout\PersonalRecordResource;
 use App\Http\Resources\Workout\WorkoutBookResource;
 use App\Http\Resources\Workout\WorkoutPlanResource;
+use App\Http\Resources\Workout\WorkoutProgressionRecommendationResource;
 use App\Http\Resources\Workout\WorkoutSessionResource;
 use App\Models\Exercise;
 use App\Models\PersonalRecord;
 use App\Models\WorkoutBook;
 use App\Models\WorkoutPlan;
+use App\Models\WorkoutProgressionRecommendation;
 use App\Models\WorkoutSession;
 use App\Models\WorkoutTemplate;
 use App\Services\Audit\AuditLogService;
@@ -528,5 +530,21 @@ class WorkoutController extends Controller
                 'total' => $records->total(),
             ],
         ]);
+    }
+
+    public function progressionRecommendations(Request $request)
+    {
+        $paginator = WorkoutProgressionRecommendation::query()
+            ->with(['exercise', 'plan'])
+            ->where('member_id', $request->user()->id)
+            ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
+            ->latest('id')
+            ->paginate((int) $request->integer('per_page', 15));
+
+        return $this->paginated(
+            $paginator,
+            WorkoutProgressionRecommendationResource::collection($paginator->getCollection()),
+            'Progression recommendations fetched successfully.',
+        );
     }
 }

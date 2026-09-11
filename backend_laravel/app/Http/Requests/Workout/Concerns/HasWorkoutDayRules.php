@@ -33,6 +33,17 @@ trait HasWorkoutDayRules
             $prefix.'.*.exercises.*.is_per_side' => ['nullable', 'boolean'],
             $prefix.'.*.exercises.*.is_bodyweight' => ['nullable', 'boolean'],
             $prefix.'.*.exercises.*.rest_seconds' => ['nullable', 'integer', 'min:0'],
+            $prefix.'.*.exercises.*.group_key' => ['nullable', 'string', 'max:40'],
+            $prefix.'.*.exercises.*.group_type' => ['nullable', Rule::in(['superset', 'circuit'])],
+            $prefix.'.*.exercises.*.group_order' => ['nullable', 'integer', 'min:1', 'max:50'],
+            $prefix.'.*.exercises.*.group_rounds' => ['nullable', 'integer', 'min:1', 'max:20'],
+            $prefix.'.*.exercises.*.transition_seconds' => ['nullable', 'integer', 'min:0', 'max:3600'],
+            $prefix.'.*.exercises.*.rest_after' => ['nullable', Rule::in(['exercise', 'group'])],
+            $prefix.'.*.exercises.*.progression_policy' => ['nullable', Rule::in(['off', 'linear_load', 'double_progression'])],
+            $prefix.'.*.exercises.*.progression_config' => ['nullable', 'array'],
+            $prefix.'.*.exercises.*.progression_config.load_increment_kg' => ['nullable', 'numeric', 'gt:0', 'max:100'],
+            $prefix.'.*.exercises.*.progression_config.min_reps' => ['nullable', 'integer', 'min:1', 'max:100'],
+            $prefix.'.*.exercises.*.progression_config.max_reps' => ['nullable', 'integer', 'min:1', 'max:100'],
             $prefix.'.*.exercises.*.notes' => ['nullable', 'string'],
         ];
     }

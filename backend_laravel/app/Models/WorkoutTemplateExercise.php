@@ -27,6 +27,15 @@ class WorkoutTemplateExercise extends Model
         'is_per_side',
         'is_bodyweight',
         'rest_seconds',
+        'group_key',
+        'group_type',
+        'group_order',
+        'group_rounds',
+        'transition_seconds',
+        'rest_after',
+        'progression_policy',
+        'progression_config',
+        'progression_version',
         'notes',
     ];
 
@@ -40,6 +49,7 @@ class WorkoutTemplateExercise extends Model
             'target_machine_level' => 'decimal:2',
             'is_per_side' => 'boolean',
             'is_bodyweight' => 'boolean',
+            'progression_config' => 'array',
         ];
     }
 

@@ -21,6 +21,9 @@ class WorkoutTemplate extends Model
         'difficulty',
         'program_type',
         'equipment_profile',
+        'progression_policy',
+        'progression_config',
+        'progression_version',
         'duration_weeks',
         'estimated_session_minutes',
         'weekly_schedule',
@@ -33,6 +36,7 @@ class WorkoutTemplate extends Model
     {
         return [
             'weekly_schedule' => 'array',
+            'progression_config' => 'array',
             'is_public_catalog' => 'boolean',
         ];
     }

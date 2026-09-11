@@ -20,6 +20,11 @@ class WorkoutPlanService
     public function createPlans(User $trainer, array $payload)
     {
         $this->assertExecutionModes($payload['days'] ?? []);
+        $this->assertCoachingConfiguration(
+            $payload['days'] ?? [],
+            $payload['progression_policy'] ?? 'off',
+            $payload['progression_config'] ?? [],
+        );
 
         return DB::transaction(function () use ($trainer, $payload) {
             $plans = collect();
@@ -42,6 +47,9 @@ class WorkoutPlanService
                     'duration_weeks' => $payload['duration_weeks'],
                     'estimated_session_minutes' => $payload['estimated_session_minutes'] ?? null,
                     'equipment_profile' => $payload['equipment_profile'] ?? null,
+                    'progression_policy' => $payload['progression_policy'] ?? 'off',
+                    'progression_config' => $payload['progression_config'] ?? null,
+                    'progression_version' => (int) ($payload['progression_version'] ?? 1),
                     'weekly_schedule' => $payload['weekly_schedule'] ?? null,
                     'notes' => $payload['notes'] ?? null,
                     'status' => $payload['status'] ?? 'active',
@@ -64,6 +72,11 @@ class WorkoutPlanService
     public function updatePlan(WorkoutPlan $plan, array $payload): WorkoutPlan
     {
         $this->assertExecutionModes($payload['days'] ?? []);
+        $this->assertCoachingConfiguration(
+            $payload['days'] ?? [],
+            $payload['progression_policy'] ?? $plan->progression_policy ?? 'off',
+            $payload['progression_config'] ?? $plan->progression_config ?? [],
+        );
 
         return DB::transaction(function () use ($plan, $payload) {
             $plan->update([
@@ -73,6 +86,8 @@ class WorkoutPlanService
                 'duration_weeks' => $payload['duration_weeks'],
                 'estimated_session_minutes' => $payload['estimated_session_minutes'] ?? $plan->estimated_session_minutes,
                 'equipment_profile' => $payload['equipment_profile'] ?? $plan->equipment_profile,
+                'progression_policy' => $payload['progression_policy'] ?? $plan->progression_policy,
+                'progression_config' => $payload['progression_config'] ?? $plan->progression_config,
                 'weekly_schedule' => $payload['weekly_schedule'] ?? null,
                 'notes' => $payload['notes'] ?? null,
                 'status' => $payload['status'] ?? $plan->status,
@@ -90,6 +105,11 @@ class WorkoutPlanService
     public function createTemplateFromPayload(User $trainer, array $payload): WorkoutTemplate
     {
         $this->assertExecutionModes($payload['days'] ?? []);
+        $this->assertCoachingConfiguration(
+            $payload['days'] ?? [],
+            $payload['progression_policy'] ?? 'off',
+            $payload['progression_config'] ?? [],
+        );
 
         return DB::transaction(function () use ($trainer, $payload) {
             $template = WorkoutTemplate::query()->create([
@@ -102,6 +122,9 @@ class WorkoutPlanService
                 'difficulty' => $payload['difficulty'] ?? null,
                 'program_type' => $payload['program_type'] ?? null,
                 'equipment_profile' => $payload['equipment_profile'] ?? null,
+                'progression_policy' => $payload['progression_policy'] ?? 'off',
+                'progression_config' => $payload['progression_config'] ?? null,
+                'progression_version' => (int) ($payload['progression_version'] ?? 1),
                 'duration_weeks' => $payload['duration_weeks'],
                 'estimated_session_minutes' => $payload['estimated_session_minutes'] ?? null,
                 'weekly_schedule' => $payload['weekly_schedule'] ?? null,
@@ -121,7 +144,7 @@ class WorkoutPlanService
                 foreach ($dayPayload['exercises'] ?? [] as $exercisePayload) {
                     $day->exercises()->create([
                         'exercise_id' => $exercisePayload['exercise_id'],
-                        ...$this->executionModePayload($exercisePayload),
+                        ...$this->executionModePayload($exercisePayload, $template),
                         'sort_order' => $exercisePayload['sort_order'] ?? 1,
                         'sets' => $exercisePayload['sets'],
                         'reps' => $exercisePayload['reps'] ?? null,
@@ -142,6 +165,11 @@ class WorkoutPlanService
     public function updateTemplate(WorkoutTemplate $template, array $payload): WorkoutTemplate
     {
         $this->assertExecutionModes($payload['days'] ?? []);
+        $this->assertCoachingConfiguration(
+            $payload['days'] ?? [],
+            $payload['progression_policy'] ?? $template->progression_policy ?? 'off',
+            $payload['progression_config'] ?? $template->progression_config ?? [],
+        );
 
         return DB::transaction(function () use ($template, $payload) {
             $template->update([
@@ -150,6 +178,8 @@ class WorkoutPlanService
                 'difficulty' => $payload['difficulty'] ?? null,
                 'program_type' => $payload['program_type'] ?? $template->program_type,
                 'equipment_profile' => $payload['equipment_profile'] ?? $template->equipment_profile,
+                'progression_policy' => $payload['progression_policy'] ?? $template->progression_policy,
+                'progression_config' => $payload['progression_config'] ?? $template->progression_config,
                 'duration_weeks' => $payload['duration_weeks'],
                 'estimated_session_minutes' => $payload['estimated_session_minutes'] ?? $template->estimated_session_minutes,
                 'weekly_schedule' => $payload['weekly_schedule'] ?? null,
@@ -170,7 +200,7 @@ class WorkoutPlanService
                 foreach ($dayPayload['exercises'] ?? [] as $exercisePayload) {
                     $day->exercises()->create([
                         'exercise_id' => $exercisePayload['exercise_id'],
-                        ...$this->executionModePayload($exercisePayload),
+                        ...$this->executionModePayload($exercisePayload, $template),
                         'sort_order' => $exercisePayload['sort_order'] ?? 1,
                         'sets' => $exercisePayload['sets'],
                         'reps' => $exercisePayload['reps'] ?? null,
@@ -198,6 +228,9 @@ class WorkoutPlanService
             'difficulty' => $payload['difficulty'] ?? $template->difficulty,
             'estimated_session_minutes' => $payload['estimated_session_minutes'] ?? $template->estimated_session_minutes,
             'equipment_profile' => $payload['equipment_profile'] ?? $template->equipment_profile,
+            'progression_policy' => $template->progression_policy,
+            'progression_config' => $template->progression_config,
+            'progression_version' => $template->progression_version,
             'duration_weeks' => $payload['duration_weeks'] ?? $template->duration_weeks,
             'weekly_schedule' => $payload['weekly_schedule'] ?? $template->weekly_schedule,
             'notes' => $payload['notes'] ?? $template->notes,
@@ -234,6 +267,11 @@ class WorkoutPlanService
     public function createMemberPlan(User $member, array $payload): WorkoutPlan
     {
         $this->assertExecutionModes($payload['days'] ?? []);
+        $this->assertCoachingConfiguration(
+            $payload['days'] ?? [],
+            $payload['progression_policy'] ?? 'off',
+            $payload['progression_config'] ?? [],
+        );
 
         return DB::transaction(function () use ($member, $payload) {
             $plan = WorkoutPlan::query()->create([
@@ -254,6 +292,9 @@ class WorkoutPlanService
                 'duration_weeks' => $payload['duration_weeks'],
                 'estimated_session_minutes' => $payload['estimated_session_minutes'] ?? null,
                 'equipment_profile' => $payload['equipment_profile'] ?? null,
+                'progression_policy' => $payload['progression_policy'] ?? 'off',
+                'progression_config' => $payload['progression_config'] ?? null,
+                'progression_version' => (int) ($payload['progression_version'] ?? 1),
                 'weekly_schedule' => $payload['weekly_schedule'] ?? null,
                 'notes' => $payload['notes'] ?? null,
                 'status' => $payload['status'] ?? 'active',
@@ -282,6 +323,9 @@ class WorkoutPlanService
             'duration_weeks' => $payload['duration_weeks'] ?? $template->duration_weeks,
             'estimated_session_minutes' => $payload['estimated_session_minutes'] ?? $template->estimated_session_minutes,
             'equipment_profile' => $payload['equipment_profile'] ?? $template->equipment_profile,
+            'progression_policy' => $template->progression_policy,
+            'progression_config' => $template->progression_config,
+            'progression_version' => $template->progression_version,
             'weekly_schedule' => $payload['weekly_schedule'] ?? $template->weekly_schedule,
             'notes' => $payload['notes'] ?? $template->notes,
             'status' => $payload['status'] ?? 'active',
@@ -320,6 +364,9 @@ class WorkoutPlanService
             'duration_weeks' => $plan->duration_weeks,
             'estimated_session_minutes' => $plan->estimated_session_minutes,
             'equipment_profile' => $plan->equipment_profile,
+            'progression_policy' => $plan->progression_policy,
+            'progression_config' => $plan->progression_config,
+            'progression_version' => $plan->progression_version,
             'weekly_schedule' => $plan->weekly_schedule,
             'notes' => $plan->notes,
             'status' => 'active',
@@ -360,7 +407,7 @@ class WorkoutPlanService
                 WorkoutPlanExercise::query()->create([
                     'workout_plan_day_id' => $day->id,
                     'exercise_id' => $exercisePayload['exercise_id'],
-                    ...$this->executionModePayload($exercisePayload),
+                    ...$this->executionModePayload($exercisePayload, $plan),
                     'sort_order' => $exercisePayload['sort_order'] ?? 1,
                     'sets' => $exercisePayload['sets'],
                     'reps' => $exercisePayload['reps'] ?? null,
@@ -373,7 +420,7 @@ class WorkoutPlanService
     }
 
     /** @param array<string, mixed> $payload */
-    private function executionModePayload(array $payload): array
+    private function executionModePayload(array $payload, WorkoutPlan|WorkoutTemplate|null $defaults = null): array
     {
         return [
             'tracking_mode' => $payload['tracking_mode'] ?? 'reps',
@@ -385,7 +432,75 @@ class WorkoutPlanService
             'target_machine_level' => $payload['target_machine_level'] ?? null,
             'is_per_side' => (bool) ($payload['is_per_side'] ?? false),
             'is_bodyweight' => (bool) ($payload['is_bodyweight'] ?? false),
+            'group_key' => $payload['group_key'] ?? null,
+            'group_type' => $payload['group_key'] ?? null ? ($payload['group_type'] ?? 'superset') : null,
+            'group_order' => $payload['group_key'] ?? null ? ($payload['group_order'] ?? null) : null,
+            'group_rounds' => $payload['group_key'] ?? null ? ($payload['group_rounds'] ?? 1) : null,
+            'transition_seconds' => $payload['group_key'] ?? null ? ($payload['transition_seconds'] ?? 0) : null,
+            'rest_after' => $payload['group_key'] ?? null ? ($payload['rest_after'] ?? 'group') : 'exercise',
+            'progression_policy' => $payload['progression_policy'] ?? $defaults?->progression_policy ?? 'off',
+            'progression_config' => $payload['progression_config'] ?? $defaults?->progression_config,
+            'progression_version' => (int) ($payload['progression_version'] ?? $defaults?->progression_version ?? 1),
         ];
+    }
+
+    /** @param array<int, array<string, mixed>> $days */
+    private function assertCoachingConfiguration(
+        array $days,
+        string $defaultProgressionPolicy = 'off',
+        array $defaultProgressionConfig = [],
+    ): void {
+        $errors = [];
+        foreach ($days as $dayIndex => $day) {
+            $groups = collect($day['exercises'] ?? [])->filter(fn (array $exercise) => ! empty($exercise['group_key']))->groupBy('group_key');
+            foreach ($groups as $groupKey => $exercises) {
+                if ($exercises->count() < 2) {
+                    $errors["days.{$dayIndex}.exercises"][] = "Group {$groupKey} must contain at least two exercises.";
+                }
+                if ($exercises->pluck('group_type')->filter()->unique()->count() > 1) {
+                    $errors["days.{$dayIndex}.exercises"][] = "Group {$groupKey} must use one group type.";
+                }
+                if ($exercises->pluck('group_rounds')->filter()->unique()->count() > 1) {
+                    $errors["days.{$dayIndex}.exercises"][] = "Group {$groupKey} must use one round count.";
+                }
+                $orders = $exercises->pluck('group_order')->filter()->map(fn ($order) => (int) $order);
+                if ($orders->count() !== $orders->unique()->count()) {
+                    $errors["days.{$dayIndex}.exercises"][] = "Group {$groupKey} must use unique group order values.";
+                }
+                $positions = collect($day['exercises'] ?? [])->keys()->filter(
+                    fn ($position): bool => (($day['exercises'][$position]['group_key'] ?? null) === $groupKey),
+                )->values();
+                if ($positions->isNotEmpty() && ((int) $positions->last() - (int) $positions->first() + 1) !== $positions->count()) {
+                    $errors["days.{$dayIndex}.exercises"][] = "Group {$groupKey} exercises must remain next to each other.";
+                }
+            }
+
+            foreach ($day['exercises'] ?? [] as $exerciseIndex => $exercise) {
+                $path = "days.{$dayIndex}.exercises.{$exerciseIndex}";
+                if (! empty($exercise['group_type']) && empty($exercise['group_key'])) {
+                    $errors["{$path}.group_key"][] = 'A grouped exercise requires a group key.';
+                }
+                if (! empty($exercise['group_key']) && empty($exercise['group_order'])) {
+                    $errors["{$path}.group_order"][] = 'A grouped exercise requires its order within the group.';
+                }
+                $policy = $exercise['progression_policy'] ?? $defaultProgressionPolicy;
+                if ($policy !== 'off' && ($exercise['tracking_mode'] ?? 'reps') !== 'reps') {
+                    $errors["{$path}.progression_policy"][] = 'Initial progression policies support repetition exercises only.';
+                }
+                if ($policy === 'double_progression') {
+                    $config = $exercise['progression_config'] ?? $defaultProgressionConfig;
+                    $min = (int) ($config['min_reps'] ?? 0);
+                    $max = (int) ($config['max_reps'] ?? 0);
+                    if ($min < 1 || $max < $min) {
+                        $errors["{$path}.progression_config"][] = 'Double progression requires a valid minimum and maximum repetition range.';
+                    }
+                }
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
     }
 
     /** @param array<int, array<string, mixed>> $days */

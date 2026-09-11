@@ -1119,6 +1119,18 @@ persisted on-device. Existing rep/load payloads continue to default to `reps`.
 
 Exit criteria: prescriptions are explainable, versioned, and derived from server-trusted completed history.
 
+Delivered scope includes structural superset/circuit fields copied from
+templates into assigned plans and immutable session snapshots; ordered group
+labels, rounds, transitions, and group-boundary rest behavior in the Trainer
+and Member apps; `linear_load` and `double_progression` policies with versioned
+decision inputs and explanations; Trainer approve, edit/override, and reject
+actions; automatic application for member-owned plans; and stale/pending
+recommendation safeguards. Eligible weighted repetition sets use Epley v1
+(`weight * (1 + reps / 30)`) through 12 repetitions, retain their contributing
+weight/repetition/date metadata, and remain separate from best-weight records.
+RIR/RPE remains optional per set, preserves its original scale, and is not used
+as an automatic progression input in this phase.
+
 ### Phase 5 — Analytics and adherence
 
 - Weight-goal chart integration.

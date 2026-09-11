@@ -18,6 +18,7 @@ class SaveWorkoutSessionProgressRequest extends FormRequest
             'exercises' => ['required', 'array'],
             'exercises.*.id' => ['required', 'integer', 'exists:workout_session_exercises,id'],
             'exercises.*.notes' => ['nullable', 'string'],
+            'exercises.*.performed_status' => ['nullable', Rule::in(['planned', 'skipped'])],
             'exercises.*.sets' => ['present', 'array'],
             'exercises.*.sets.*.set_number' => ['required', 'integer', 'min:1'],
             'exercises.*.sets.*.reps' => ['nullable', 'integer', 'min:0'],

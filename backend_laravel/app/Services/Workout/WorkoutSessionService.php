@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\WeightLog;
 use App\Models\WorkoutPlan;
 use App\Models\WorkoutPlanDay;
+use App\Models\WorkoutProgressionRecommendation;
 use App\Models\WorkoutSession;
 use App\Models\WorkoutSessionExercise;
 use App\Services\Member\MemberAppService;
@@ -19,6 +20,7 @@ class WorkoutSessionService
     public function __construct(
         private readonly MemberAppService $memberAppService,
         private readonly WorkoutAccessService $workoutAccessService,
+        private readonly WorkoutProgressionService $workoutProgressionService,
     ) {}
 
     /**
@@ -157,6 +159,15 @@ class WorkoutSessionService
                             'is_per_side' => $planExercise->is_per_side,
                             'is_bodyweight' => $planExercise->is_bodyweight,
                             'rest_timer_seconds' => $planExercise->rest_seconds,
+                            'group_key' => $planExercise->group_key,
+                            'group_type' => $planExercise->group_type,
+                            'group_order' => $planExercise->group_order,
+                            'group_rounds' => $planExercise->group_rounds,
+                            'transition_seconds' => $planExercise->transition_seconds,
+                            'rest_after' => $planExercise->rest_after,
+                            'progression_policy' => $planExercise->progression_policy,
+                            'progression_config' => $planExercise->progression_config,
+                            'progression_version' => $planExercise->progression_version,
                             'notes' => $planExercise->notes,
                         ]);
                     }
@@ -214,7 +225,10 @@ class WorkoutSessionService
 
             foreach ($payload['exercises'] as $exercisePayload) {
                 $sessionExercise = $lockedSession->exercises()->findOrFail($exercisePayload['id']);
-                $sessionExercise->update(['notes' => $exercisePayload['notes'] ?? $sessionExercise->notes]);
+                $sessionExercise->update([
+                    'notes' => $exercisePayload['notes'] ?? $sessionExercise->notes,
+                    'performed_status' => $exercisePayload['performed_status'] ?? $sessionExercise->performed_status,
+                ]);
                 $sessionExercise->sets()->delete();
                 foreach ($exercisePayload['sets'] as $setPayload) {
                     $sessionExercise->sets()->create($this->setPayload($setPayload));
@@ -283,7 +297,7 @@ class WorkoutSessionService
                 }
             }
 
-            $session->load('exercises.exercise', 'exercises.sets');
+            $session->load('plan', 'exercises.exercise', 'exercises.sets');
 
             $volume = $session->exercises
                 ->where('tracking_mode', 'reps')
@@ -312,6 +326,15 @@ class WorkoutSessionService
                 $bestWeight = (float) $completedSets->max('weight');
                 $bestReps = (int) $completedSets->max('reps');
                 $bestVolume = (float) $completedSets->sum(fn ($set) => ((float) $set->weight) * (int) $set->reps);
+                $eligibleEstimatedSets = $exercise->is_bodyweight
+                    ? collect()
+                    : $completedSets->filter(fn ($set): bool => (float) $set->weight > 0 && (int) $set->reps >= 1 && (int) $set->reps <= WorkoutProgressionService::ESTIMATED_ONE_REP_MAX_MAX_REPS);
+                $bestEstimatedSet = $eligibleEstimatedSets
+                    ->sortByDesc(fn ($set): float => $this->estimatedOneRepMax((float) $set->weight, (int) $set->reps))
+                    ->first();
+                $bestEstimatedOneRepMax = $bestEstimatedSet !== null
+                    ? $this->estimatedOneRepMax((float) $bestEstimatedSet->weight, (int) $bestEstimatedSet->reps)
+                    : null;
 
                 $record = PersonalRecord::query()->firstOrNew([
                     'member_id' => $session->member_id,
@@ -328,7 +351,10 @@ class WorkoutSessionService
                 $isNewBest = ! $record->exists
                     || $bestWeight > (float) $record->best_weight
                     || $bestReps > (int) $record->best_reps
-                    || $bestVolume > (float) $record->best_volume;
+                    || $bestVolume > (float) $record->best_volume
+                    || ($bestEstimatedOneRepMax !== null && $bestEstimatedOneRepMax > (float) ($record->best_estimated_one_rep_max ?? 0));
+                $isNewEstimatedBest = $bestEstimatedOneRepMax !== null
+                    && $bestEstimatedOneRepMax > (float) ($record->best_estimated_one_rep_max ?? 0);
                 $record->fill([
                     'gym_id' => $session->gym_id,
                     'branch_id' => $session->branch_id,
@@ -336,6 +362,11 @@ class WorkoutSessionService
                     'best_weight' => max((float) $record->best_weight, $bestWeight),
                     'best_reps' => max((int) $record->best_reps, $bestReps),
                     'best_volume' => max((float) $record->best_volume, $bestVolume),
+                    'best_estimated_one_rep_max' => $isNewEstimatedBest ? $bestEstimatedOneRepMax : $record->best_estimated_one_rep_max,
+                    'estimated_one_rep_max_weight' => $isNewEstimatedBest ? (float) $bestEstimatedSet->weight : $record->estimated_one_rep_max_weight,
+                    'estimated_one_rep_max_reps' => $isNewEstimatedBest ? (int) $bestEstimatedSet->reps : $record->estimated_one_rep_max_reps,
+                    'estimated_one_rep_max_formula' => $isNewEstimatedBest ? 'epley_v1' : $record->estimated_one_rep_max_formula,
+                    'estimated_one_rep_max_achieved_at' => $isNewEstimatedBest ? now() : $record->estimated_one_rep_max_achieved_at,
                     'achieved_at' => $isNewBest ? now() : $record->achieved_at,
                 ]);
                 $record->save();
@@ -344,8 +375,14 @@ class WorkoutSessionService
                 }
             }
 
+            $progressionRecommendations = $this->workoutProgressionService->generateForCompletedSession($session);
+
             $session->update([
-                'completion_summary' => $this->completionSummary($session, $newPersonalRecordExerciseIds),
+                'completion_summary' => $this->completionSummary(
+                    $session,
+                    $newPersonalRecordExerciseIds,
+                    $progressionRecommendations,
+                ),
                 'runtime_state' => null,
             ]);
 
@@ -366,6 +403,15 @@ class WorkoutSessionService
             'target_machine_level' => $payload['target_machine_level'] ?? null,
             'is_per_side' => (bool) ($payload['is_per_side'] ?? false),
             'is_bodyweight' => (bool) ($payload['is_bodyweight'] ?? false),
+            'group_key' => $payload['group_key'] ?? null,
+            'group_type' => $payload['group_type'] ?? null,
+            'group_order' => $payload['group_order'] ?? null,
+            'group_rounds' => $payload['group_rounds'] ?? null,
+            'transition_seconds' => $payload['transition_seconds'] ?? null,
+            'rest_after' => $payload['rest_after'] ?? 'exercise',
+            'progression_policy' => $payload['progression_policy'] ?? 'off',
+            'progression_config' => $payload['progression_config'] ?? null,
+            'progression_version' => (int) ($payload['progression_version'] ?? 1),
         ];
     }
 
@@ -392,8 +438,11 @@ class WorkoutSessionService
         ];
     }
 
-    /** @param array<int, int> $newPersonalRecordExerciseIds */
-    private function completionSummary(WorkoutSession $session, array $newPersonalRecordExerciseIds): array
+    /**
+     * @param  array<int, int>  $newPersonalRecordExerciseIds
+     * @param  array<int, WorkoutProgressionRecommendation>  $progressionRecommendations
+     */
+    private function completionSummary(WorkoutSession $session, array $newPersonalRecordExerciseIds, array $progressionRecommendations = []): array
     {
         $exerciseSummaries = $session->exercises->map(function (WorkoutSessionExercise $exercise): array {
             $completedSets = $exercise->sets->where('is_completed', true);
@@ -424,6 +473,12 @@ class WorkoutSessionService
                     'volume' => $exercise->tracking_mode === 'reps'
                         ? round((float) $completedSets->sum(fn ($set) => ((float) $set->weight) * (int) $set->reps), 2)
                         : null,
+                    'best_estimated_one_rep_max' => $exercise->tracking_mode === 'reps' && ! $exercise->is_bodyweight
+                        ? $completedSets
+                            ->filter(fn ($set): bool => (float) $set->weight > 0 && (int) $set->reps >= 1 && (int) $set->reps <= WorkoutProgressionService::ESTIMATED_ONE_REP_MAX_MAX_REPS)
+                            ->map(fn ($set): float => $this->estimatedOneRepMax((float) $set->weight, (int) $set->reps))
+                            ->max()
+                        : null,
                 ],
             ];
         })->values();
@@ -436,7 +491,23 @@ class WorkoutSessionService
             'substituted_exercises' => $session->exercises->where('performed_status', 'substituted')->count(),
             'total_compatible_volume' => (float) $session->total_volume,
             'new_personal_record_exercise_ids' => array_values(array_unique($newPersonalRecordExerciseIds)),
+            'progression_recommendation_ids' => collect($progressionRecommendations)->pluck('id')->map(fn ($id) => (int) $id)->all(),
+            'progression_recommendations' => collect($progressionRecommendations)->map(fn ($recommendation): array => [
+                'id' => $recommendation->id,
+                'exercise_id' => $recommendation->exercise_id,
+                'action' => $recommendation->action,
+                'status' => $recommendation->status,
+                'policy' => $recommendation->policy,
+                'algorithm_version' => $recommendation->algorithm_version,
+                'recommended_prescription' => $recommendation->recommended_prescription,
+                'explanation' => $recommendation->explanation,
+            ])->values()->all(),
             'exercises' => $exerciseSummaries->all(),
         ];
+    }
+
+    private function estimatedOneRepMax(float $weight, int $reps): float
+    {
+        return round($weight * (1 + ($reps / 30)), 2);
     }
 }

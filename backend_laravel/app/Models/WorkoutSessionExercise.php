@@ -31,6 +31,15 @@ class WorkoutSessionExercise extends Model
         'performed_status',
         'substituted_for_session_exercise_id',
         'rest_timer_seconds',
+        'group_key',
+        'group_type',
+        'group_order',
+        'group_rounds',
+        'transition_seconds',
+        'rest_after',
+        'progression_policy',
+        'progression_config',
+        'progression_version',
         'notes',
     ];
 
@@ -44,6 +53,7 @@ class WorkoutSessionExercise extends Model
             'target_machine_level' => 'decimal:2',
             'is_per_side' => 'boolean',
             'is_bodyweight' => 'boolean',
+            'progression_config' => 'array',
         ];
     }
 

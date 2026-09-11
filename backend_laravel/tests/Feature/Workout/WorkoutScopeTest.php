@@ -10,10 +10,12 @@ use App\Models\MemberProfile;
 use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Models\WorkoutPlan;
+use App\Models\WorkoutProgressionRecommendation;
 use App\Models\WorkoutSession;
 use App\Services\Workout\WorkoutPlanService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class WorkoutScopeTest extends TestCase
@@ -553,6 +555,329 @@ class WorkoutScopeTest extends TestCase
             ->getJson('/api/member/workout-sessions/active')
             ->assertOk()
             ->assertJsonPath('data', null);
+    }
+
+    public function test_grouped_plan_progression_and_estimated_one_rep_max_round_trip_end_to_end(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch] = $this->makeGymContext();
+        $trainer = $this->makeTrainer($gym, $branch);
+        $member = $this->makeMember($gym, $branch, $trainer->id);
+        [$benchPress, $latPulldown] = $this->makePlanExercises($gym, $branch, $trainer);
+
+        $plan = app(WorkoutPlanService::class)->createPlans($trainer, [
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_ids' => [$member->id],
+            'name' => 'Progressive Superset',
+            'duration_weeks' => 4,
+            'days' => [[
+                'day_number' => 1,
+                'exercises' => [[
+                    'exercise_id' => $benchPress->id,
+                    'sort_order' => 1,
+                    'sets' => 3,
+                    'reps' => '8-10',
+                    'target_weight' => 100,
+                    'group_key' => 'A',
+                    'group_type' => 'superset',
+                    'group_order' => 1,
+                    'group_rounds' => 3,
+                    'transition_seconds' => 15,
+                    'rest_after' => 'group',
+                    'progression_policy' => 'double_progression',
+                    'progression_config' => [
+                        'min_reps' => 8,
+                        'max_reps' => 10,
+                        'load_increment_kg' => 2.5,
+                    ],
+                ], [
+                    'exercise_id' => $latPulldown->id,
+                    'sort_order' => 2,
+                    'sets' => 3,
+                    'reps' => '10',
+                    'target_weight' => 60,
+                    'group_key' => 'A',
+                    'group_type' => 'superset',
+                    'group_order' => 2,
+                    'group_rounds' => 3,
+                    'transition_seconds' => 15,
+                    'rest_after' => 'group',
+                ]],
+            ]],
+        ])->firstOrFail();
+
+        $started = $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/workout-sessions/start', [
+                'workout_plan_id' => $plan->id,
+                'workout_plan_day_id' => $plan->days->first()->id,
+                'session_date' => now()->toDateString(),
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.exercises.0.group_key', 'A')
+            ->assertJsonPath('data.exercises.0.group_type', 'superset')
+            ->assertJsonPath('data.exercises.1.group_order', 2)
+            ->assertJsonPath('data.exercises.0.progression_policy', 'double_progression');
+
+        $sessionExercises = $started->json('data.exercises');
+        $this->actingAs($member, 'sanctum')
+            ->putJson('/api/member/workout-sessions/'.$started->json('data.id').'/progress', [
+                'exercises' => [[
+                    'id' => $sessionExercises[0]['id'],
+                    'performed_status' => 'skipped',
+                    'sets' => [],
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.exercises.0.performed_status', 'skipped');
+        $this->actingAs($member, 'sanctum')
+            ->getJson('/api/member/workout-sessions/active')
+            ->assertOk()
+            ->assertJsonPath('data.exercises.0.performed_status', 'skipped');
+
+        $sets = fn (float $weight): array => collect(range(1, 3))->map(fn (int $setNumber): array => [
+            'set_number' => $setNumber,
+            'reps' => 10,
+            'weight' => $weight,
+            'effort_scale' => $setNumber === 1 ? 'rir' : 'rpe',
+            'effort_value' => $setNumber === 1 ? 0 : 8,
+            'is_completed' => true,
+        ])->all();
+
+        $completed = $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/workout-sessions/'.$started->json('data.id').'/complete', [
+                'exercises' => [[
+                    'id' => $sessionExercises[0]['id'],
+                    'exercise_id' => $benchPress->id,
+                    'tracking_mode' => 'reps',
+                    'sets' => $sets(100),
+                ], [
+                    'id' => $sessionExercises[1]['id'],
+                    'exercise_id' => $latPulldown->id,
+                    'tracking_mode' => 'reps',
+                    'sets' => $sets(60),
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.exercises.0.sets.0.effort_scale', 'rir')
+            ->assertJsonPath('data.exercises.0.sets.0.effort_value', 0)
+            ->assertJsonPath('data.completion_summary.exercises.0.performed.best_estimated_one_rep_max', 133.33);
+
+        $recommendationId = $completed->json('data.completion_summary.progression_recommendation_ids.0');
+        $this->assertNotNull($recommendationId);
+        $this->assertDatabaseHas('workout_progression_recommendations', [
+            'id' => $recommendationId,
+            'trainer_id' => $trainer->id,
+            'action' => 'increase',
+            'status' => 'pending',
+            'algorithm_version' => 1,
+        ]);
+        $this->assertDatabaseHas('personal_records', [
+            'member_id' => $member->id,
+            'exercise_id' => $benchPress->id,
+            'best_estimated_one_rep_max' => 133.33,
+            'estimated_one_rep_max_formula' => 'epley_v1',
+        ]);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->getJson('/api/trainer/workout-progression-recommendations?status=pending')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $recommendationId)
+            ->assertJsonPath('data.0.recommended_prescription.target_weight', 102.5);
+
+        $otherTrainer = $this->makeTrainer($gym, $branch, 'progression-other@example.com');
+        $this->actingAs($otherTrainer, 'sanctum')
+            ->postJson("/api/trainer/workout-progression-recommendations/{$recommendationId}/review", [
+                'decision' => 'approve',
+            ])
+            ->assertUnprocessable();
+
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson("/api/trainer/workout-progression-recommendations/{$recommendationId}/review", [
+                'decision' => 'approve',
+                'notes' => 'Form remained consistent.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
+
+        $this->assertDatabaseHas('workout_plan_exercises', [
+            'id' => $sessionExercises[0]['workout_plan_exercise_id'] ?? $plan->days->first()->exercises->first()->id,
+            'target_weight' => 102.5,
+        ]);
+
+        $secondPlanExercise = $plan->days->first()->exercises->last();
+        $manualRecommendation = WorkoutProgressionRecommendation::query()->create([
+            'member_id' => $member->id,
+            'trainer_id' => $trainer->id,
+            'workout_plan_id' => $plan->id,
+            'workout_plan_exercise_id' => $secondPlanExercise->id,
+            'exercise_id' => $latPulldown->id,
+            'source_workout_session_id' => $started->json('data.id'),
+            'policy' => 'linear_load',
+            'algorithm_version' => 1,
+            'action' => 'increase',
+            'status' => 'pending',
+            'current_prescription' => ['sets' => 3, 'reps' => '10', 'target_weight' => 60],
+            'recommended_prescription' => ['sets' => 3, 'reps' => '10', 'target_weight' => 62.5],
+            'decision_inputs' => ['source' => 'completed_workout_sets'],
+            'explanation' => 'Manual review fixture.',
+        ]);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson("/api/trainer/workout-progression-recommendations/{$manualRecommendation->id}/review", [
+                'decision' => 'override',
+                'prescription' => ['sets' => 4, 'reps' => '8', 'target_weight' => 65],
+                'notes' => 'Use a larger but reviewed change.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'overridden')
+            ->assertJsonPath('data.recommended_prescription.target_weight', 65);
+        $this->assertDatabaseHas('workout_plan_exercises', [
+            'id' => $secondPlanExercise->id,
+            'sets' => 4,
+            'reps' => '8',
+            'target_weight' => 65,
+        ]);
+    }
+
+    public function test_personal_progression_applies_automatically_and_high_rep_sets_do_not_create_e1rm(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch] = $this->makeGymContext();
+        $trainer = $this->makeTrainer($gym, $branch);
+        $member = $this->makeMember($gym, $branch, $trainer->id);
+        [$exercise] = $this->makePlanExercises($gym, $branch, $trainer);
+
+        $plan = app(WorkoutPlanService::class)->createMemberPlan($member, [
+            'name' => 'Personal progression',
+            'duration_weeks' => 2,
+            'days' => [[
+                'day_number' => 1,
+                'exercises' => [[
+                    'exercise_id' => $exercise->id,
+                    'sets' => 1,
+                    'reps' => '15',
+                    'target_weight' => 50,
+                    'progression_policy' => 'linear_load',
+                    'progression_config' => ['load_increment_kg' => 2.5],
+                ]],
+            ]],
+        ]);
+
+        $started = $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/workout-sessions/start', [
+                'workout_plan_id' => $plan->id,
+                'workout_plan_day_id' => $plan->days->first()->id,
+                'session_date' => now()->toDateString(),
+            ])
+            ->assertCreated();
+
+        $completed = $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/workout-sessions/'.$started->json('data.id').'/complete', [
+                'exercises' => [[
+                    'id' => $started->json('data.exercises.0.id'),
+                    'exercise_id' => $exercise->id,
+                    'tracking_mode' => 'reps',
+                    'sets' => [[
+                        'set_number' => 1,
+                        'reps' => 15,
+                        'weight' => 50,
+                        'is_completed' => true,
+                    ]],
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.completion_summary.progression_recommendations.0.status', 'applied')
+            ->assertJsonPath('data.completion_summary.progression_recommendations.0.algorithm_version', 1)
+            ->assertJsonPath('data.completion_summary.exercises.0.performed.best_estimated_one_rep_max', null);
+
+        $this->assertDatabaseHas('workout_plan_exercises', [
+            'id' => $plan->days->first()->exercises->first()->id,
+            'target_weight' => 52.5,
+        ]);
+        $this->assertDatabaseHas('personal_records', [
+            'member_id' => $member->id,
+            'exercise_id' => $exercise->id,
+            'best_estimated_one_rep_max' => null,
+        ]);
+    }
+
+    public function test_single_exercise_group_is_rejected(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch] = $this->makeGymContext();
+        $trainer = $this->makeTrainer($gym, $branch);
+        $member = $this->makeMember($gym, $branch, $trainer->id);
+        [$exercise] = $this->makePlanExercises($gym, $branch, $trainer);
+
+        $this->expectException(ValidationException::class);
+        app(WorkoutPlanService::class)->createMemberPlan($member, [
+            'name' => 'Invalid singleton group',
+            'duration_weeks' => 1,
+            'days' => [[
+                'day_number' => 1,
+                'exercises' => [[
+                    'exercise_id' => $exercise->id,
+                    'sets' => 3,
+                    'group_key' => 'A',
+                    'group_type' => 'superset',
+                    'group_order' => 1,
+                ]],
+            ]],
+        ]);
+    }
+
+    public function test_group_structure_persists_through_template_assignment_and_plan_duplication(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch] = $this->makeGymContext();
+        $trainer = $this->makeTrainer($gym, $branch);
+        $member = $this->makeMember($gym, $branch, $trainer->id);
+        [$firstExercise, $secondExercise] = $this->makePlanExercises($gym, $branch, $trainer);
+        $service = app(WorkoutPlanService::class);
+        $template = $service->createTemplateFromPayload($trainer, [
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'name' => 'Circuit template',
+            'duration_weeks' => 3,
+            'progression_policy' => 'linear_load',
+            'progression_config' => ['load_increment_kg' => 1.25],
+            'days' => [[
+                'day_number' => 1,
+                'exercises' => collect([$firstExercise, $secondExercise])->values()->map(
+                    fn (Exercise $exercise, int $index): array => [
+                        'exercise_id' => $exercise->id,
+                        'sort_order' => $index + 1,
+                        'sets' => 4,
+                        'reps' => '12',
+                        'group_key' => 'C1',
+                        'group_type' => 'circuit',
+                        'group_order' => $index + 1,
+                        'group_rounds' => 4,
+                        'transition_seconds' => 20,
+                        'rest_after' => 'group',
+                    ],
+                )->all(),
+            ]],
+        ]);
+
+        $assigned = $service->assignTemplateToMembers($trainer, $template, [
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_ids' => [$member->id],
+        ])->firstOrFail();
+        $copy = $service->duplicatePlanForMember($member, $assigned, 'Circuit copy');
+
+        foreach ([$template, $assigned, $copy] as $workout) {
+            $exercises = $workout->days->first()->exercises;
+            $this->assertSame(['C1', 'C1'], $exercises->pluck('group_key')->all());
+            $this->assertSame(['circuit', 'circuit'], $exercises->pluck('group_type')->all());
+            $this->assertSame([1, 2], $exercises->pluck('group_order')->all());
+            $this->assertSame([4, 4], $exercises->pluck('group_rounds')->all());
+            $this->assertSame([20, 20], $exercises->pluck('transition_seconds')->all());
+            $this->assertSame(['linear_load', 'linear_load'], $exercises->pluck('progression_policy')->all());
+            $this->assertSame([1.25, 1.25], $exercises->map(fn ($exercise) => (float) $exercise->progression_config['load_increment_kg'])->all());
+        }
     }
 
     /**

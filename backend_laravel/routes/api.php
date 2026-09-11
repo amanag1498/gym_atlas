@@ -779,6 +779,10 @@ Route::prefix('trainer')
             ->middleware('permission:workout_plan.manage');
         Route::delete('workout-plans/{workoutPlan}', [TrainerWorkoutPlanController::class, 'destroy'])
             ->middleware('permission:workout_plan.manage');
+        Route::get('workout-progression-recommendations', [TrainerWorkoutPlanController::class, 'progressionRecommendations'])
+            ->middleware('permission:workout_plan.view|workout_plan.manage');
+        Route::post('workout-progression-recommendations/{workoutProgressionRecommendation}/review', [TrainerWorkoutPlanController::class, 'reviewProgression'])
+            ->middleware('permission:workout_plan.manage');
         Route::get('diet-plans', [TrainerDietPlanController::class, 'index'])->middleware('permission:diet_plan.view|diet_plan.manage');
         Route::get('food-catalog', FoodCatalogController::class)->middleware('permission:diet_plan.view|diet_plan.manage');
         Route::post('diet-plans', [TrainerDietPlanController::class, 'store'])->middleware('permission:diet_plan.manage');
@@ -935,6 +939,8 @@ Route::prefix('member')
         Route::get('exercise-history/{exerciseId}', [MemberWorkoutController::class, 'exerciseHistory'])
             ->middleware('permission:workout_session.view|progress.view');
         Route::get('logbook-summary', [MemberWorkoutController::class, 'logbookSummary'])
+            ->middleware('permission:workout_session.view|progress.view');
+        Route::get('workout-progression-recommendations', [MemberWorkoutController::class, 'progressionRecommendations'])
             ->middleware('permission:workout_session.view|progress.view');
         Route::get('progress/summary', [MemberProgressController::class, 'summary'])
             ->middleware('permission:progress.view');

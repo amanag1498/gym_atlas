@@ -20,6 +20,11 @@ class PersonalRecord extends Model
         'best_weight',
         'best_reps',
         'best_volume',
+        'best_estimated_one_rep_max',
+        'estimated_one_rep_max_weight',
+        'estimated_one_rep_max_reps',
+        'estimated_one_rep_max_formula',
+        'estimated_one_rep_max_achieved_at',
         'achieved_at',
     ];
 
@@ -28,6 +33,9 @@ class PersonalRecord extends Model
         return [
             'best_weight' => 'decimal:2',
             'best_volume' => 'decimal:2',
+            'best_estimated_one_rep_max' => 'decimal:2',
+            'estimated_one_rep_max_weight' => 'decimal:2',
+            'estimated_one_rep_max_achieved_at' => 'datetime',
             'achieved_at' => 'datetime',
         ];
     }
