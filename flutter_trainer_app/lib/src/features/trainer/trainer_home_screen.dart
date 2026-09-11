@@ -5890,7 +5890,12 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   final _repsController = TextEditingController(text: '10');
   final _targetWeightController = TextEditingController();
   final _restController = TextEditingController(text: '60');
+  final _durationSecondsController = TextEditingController();
+  final _distanceMetersController = TextEditingController();
+  final _speedKphController = TextEditingController();
+  final _paceSecondsController = TextEditingController();
   final _exerciseNotesController = TextEditingController();
+  String _trackingMode = 'reps';
   final _newExerciseNameController = TextEditingController();
   final _newExerciseBodyPartController = TextEditingController(text: 'chest');
   final _newExerciseMuscleController = TextEditingController();
@@ -5992,6 +5997,10 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     _repsController.dispose();
     _targetWeightController.dispose();
     _restController.dispose();
+    _durationSecondsController.dispose();
+    _distanceMetersController.dispose();
+    _speedKphController.dispose();
+    _paceSecondsController.dispose();
     _exerciseNotesController.dispose();
     _newExerciseNameController.dispose();
     _newExerciseBodyPartController.dispose();
@@ -6591,8 +6600,27 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                                 ),
                               );
                             }).toList(),
-                            onChanged: (value) =>
-                                setState(() => _selectedExerciseId = value),
+                            onChanged: (value) => setState(() {
+                              _selectedExerciseId = value;
+                              final selected = _catalogExercises.firstWhere(
+                                (item) =>
+                                    (item['id'] as num?)?.toInt() == value,
+                                orElse: () => const <String, dynamic>{},
+                              );
+                              final suggested =
+                                  selected['default_tracking_mode']
+                                      ?.toString() ??
+                                  'reps';
+                              _trackingMode =
+                                  const {
+                                    'reps',
+                                    'timed',
+                                    'cardio',
+                                    'distance',
+                                  }.contains(suggested)
+                                  ? suggested
+                                  : 'reps';
+                            }),
                             decoration: _workoutInputDecoration(
                               'Exercise picker',
                               icon: Icons.fitness_center_rounded,
@@ -6626,6 +6654,37 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                             ),
                           ),
                           const SizedBox(height: 14),
+                          DropdownButtonFormField<String>(
+                            key: ValueKey(
+                              'trainer-tracking-mode-$_trackingMode',
+                            ),
+                            initialValue: _trackingMode,
+                            decoration: _workoutInputDecoration(
+                              'Tracking mode',
+                              icon: Icons.track_changes_rounded,
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'reps',
+                                child: Text('Reps & load'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'timed',
+                                child: Text('Timed work'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'cardio',
+                                child: Text('Cardio'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'distance',
+                                child: Text('Distance'),
+                              ),
+                            ],
+                            onChanged: (value) =>
+                                setState(() => _trackingMode = value ?? 'reps'),
+                          ),
+                          const SizedBox(height: 14),
                           _WorkoutFieldGroup(
                             children: [
                               TextFormField(
@@ -6654,6 +6713,65 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                             ],
                           ),
                           const SizedBox(height: 14),
+                          if (_trackingMode != 'reps') ...[
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              children: [
+                                SizedBox(
+                                  width: 180,
+                                  child: TextFormField(
+                                    controller: _durationSecondsController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: _workoutInputDecoration(
+                                      'Target duration sec',
+                                    ),
+                                  ),
+                                ),
+                                if (_trackingMode == 'cardio' ||
+                                    _trackingMode == 'distance')
+                                  SizedBox(
+                                    width: 180,
+                                    child: TextFormField(
+                                      controller: _distanceMetersController,
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                            decimal: true,
+                                          ),
+                                      decoration: _workoutInputDecoration(
+                                        'Target distance m',
+                                      ),
+                                    ),
+                                  ),
+                                if (_trackingMode == 'cardio') ...[
+                                  SizedBox(
+                                    width: 180,
+                                    child: TextFormField(
+                                      controller: _speedKphController,
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                            decimal: true,
+                                          ),
+                                      decoration: _workoutInputDecoration(
+                                        'Target speed km/h',
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: 180,
+                                    child: TextFormField(
+                                      controller: _paceSecondsController,
+                                      keyboardType: TextInputType.number,
+                                      decoration: _workoutInputDecoration(
+                                        'Target pace sec/km',
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                          ],
                           _WorkoutFieldGroup(
                             children: [
                               TextFormField(
@@ -6704,7 +6822,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                               child: _TrainerWorkoutTile(
                                 title: entry.value.exerciseName,
                                 subtitle:
-                                    '${entry.value.sets} sets • ${entry.value.reps.isEmpty ? 'reps open' : entry.value.reps} • ${entry.value.restSeconds} sec rest',
+                                    '${entry.value.sets} sets • ${entry.value.trackingMode} • ${entry.value.restSeconds} sec rest',
                                 badge: entry.value.bodyPartLabel,
                                 icon: Icons.fitness_center_rounded,
                                 actionLabel: 'Remove',
@@ -7031,6 +7149,11 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       _repsController.text = '10';
       _targetWeightController.clear();
       _restController.text = '60';
+      _durationSecondsController.clear();
+      _distanceMetersController.clear();
+      _speedKphController.clear();
+      _paceSecondsController.clear();
+      _trackingMode = 'reps';
       _exerciseNotesController.clear();
     });
   }
@@ -7059,11 +7182,24 @@ class __WorkoutPageState extends State<_WorkoutPage> {
           exerciseName: selectedExercise['name']?.toString() ?? 'Exercise',
           bodyPartLabel: _exerciseBodyPartLabel(selectedExercise),
           sets: sets,
+          trackingMode: _trackingMode,
           reps: _repsController.text.trim(),
+          plannedDurationSeconds: int.tryParse(
+            _durationSecondsController.text.trim(),
+          ),
+          plannedDistanceMeters: double.tryParse(
+            _distanceMetersController.text.trim(),
+          ),
+          plannedSpeedKph: double.tryParse(_speedKphController.text.trim()),
+          plannedPaceSecondsPerKm: int.tryParse(
+            _paceSecondsController.text.trim(),
+          ),
           targetWeight: _targetWeightController.text.trim().isEmpty
               ? null
               : double.tryParse(_targetWeightController.text.trim()),
           restSeconds: rest,
+          isPerSide: selectedExercise['is_per_side'] == true,
+          isBodyweight: selectedExercise['is_bodyweight'] == true,
           notes: _exerciseNotesController.text.trim(),
         ),
       );
@@ -7518,8 +7654,15 @@ class __WorkoutPageState extends State<_WorkoutPage> {
             'exercise_id': exercise.exerciseId,
             'sort_order': entry.key + 1,
             'sets': exercise.sets,
+            'tracking_mode': exercise.trackingMode,
             'reps': exercise.reps.isEmpty ? null : exercise.reps,
+            'planned_duration_seconds': exercise.plannedDurationSeconds,
+            'planned_distance_meters': exercise.plannedDistanceMeters,
+            'planned_speed_kph': exercise.plannedSpeedKph,
+            'planned_pace_seconds_per_km': exercise.plannedPaceSecondsPerKm,
             'target_weight': exercise.targetWeight,
+            'is_per_side': exercise.isPerSide,
+            'is_bodyweight': exercise.isBodyweight,
             'rest_seconds': exercise.restSeconds,
             'notes': exercise.notes.isEmpty ? null : exercise.notes,
           };
@@ -7543,8 +7686,16 @@ class __WorkoutPageState extends State<_WorkoutPage> {
             'sort_order':
                 (exercise['sort_order'] as num?)?.toInt() ?? entry.key + 1,
             'sets': (exercise['sets'] as num?)?.toInt() ?? 1,
+            'tracking_mode': exercise['tracking_mode'] ?? 'reps',
             'reps': exercise['reps'],
+            'planned_duration_seconds': exercise['planned_duration_seconds'],
+            'planned_distance_meters': exercise['planned_distance_meters'],
+            'planned_speed_kph': exercise['planned_speed_kph'],
+            'planned_pace_seconds_per_km':
+                exercise['planned_pace_seconds_per_km'],
             'target_weight': exercise['target_weight'],
+            'is_per_side': exercise['is_per_side'] == true,
+            'is_bodyweight': exercise['is_bodyweight'] == true,
             'rest_seconds': (exercise['rest_seconds'] as num?)?.toInt(),
             'notes': exercise['notes'],
           };
@@ -8013,9 +8164,16 @@ class _WorkoutExerciseDraft {
     required this.exerciseName,
     required this.bodyPartLabel,
     required this.sets,
+    required this.trackingMode,
     required this.reps,
+    required this.plannedDurationSeconds,
+    required this.plannedDistanceMeters,
+    required this.plannedSpeedKph,
+    required this.plannedPaceSecondsPerKm,
     required this.targetWeight,
     required this.restSeconds,
+    required this.isPerSide,
+    required this.isBodyweight,
     required this.notes,
   });
 
@@ -8023,9 +8181,16 @@ class _WorkoutExerciseDraft {
   final String exerciseName;
   final String bodyPartLabel;
   final int sets;
+  final String trackingMode;
   final String reps;
+  final int? plannedDurationSeconds;
+  final double? plannedDistanceMeters;
+  final double? plannedSpeedKph;
+  final int? plannedPaceSecondsPerKm;
   final double? targetWeight;
   final int restSeconds;
+  final bool isPerSide;
+  final bool isBodyweight;
   final String notes;
 }
 

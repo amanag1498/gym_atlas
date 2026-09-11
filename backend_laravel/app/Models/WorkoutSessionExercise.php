@@ -15,10 +15,21 @@ class WorkoutSessionExercise extends Model
         'workout_session_id',
         'workout_plan_exercise_id',
         'exercise_id',
+        'tracking_mode',
         'sort_order',
         'planned_sets',
         'planned_reps',
+        'planned_duration_seconds',
+        'planned_distance_meters',
+        'planned_speed_kph',
+        'planned_pace_seconds_per_km',
         'target_weight',
+        'target_resistance',
+        'target_machine_level',
+        'is_per_side',
+        'is_bodyweight',
+        'performed_status',
+        'substituted_for_session_exercise_id',
         'rest_timer_seconds',
         'notes',
     ];
@@ -27,6 +38,12 @@ class WorkoutSessionExercise extends Model
     {
         return [
             'target_weight' => 'decimal:2',
+            'planned_distance_meters' => 'decimal:2',
+            'planned_speed_kph' => 'decimal:2',
+            'target_resistance' => 'decimal:2',
+            'target_machine_level' => 'decimal:2',
+            'is_per_side' => 'boolean',
+            'is_bodyweight' => 'boolean',
         ];
     }
 

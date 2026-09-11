@@ -9,6 +9,7 @@ use App\Models\WorkoutPlanExercise;
 use App\Models\WorkoutTemplate;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class WorkoutPlanService
 {
@@ -18,6 +19,8 @@ class WorkoutPlanService
      */
     public function createPlans(User $trainer, array $payload)
     {
+        $this->assertExecutionModes($payload['days'] ?? []);
+
         return DB::transaction(function () use ($trainer, $payload) {
             $plans = collect();
 
@@ -60,6 +63,8 @@ class WorkoutPlanService
      */
     public function updatePlan(WorkoutPlan $plan, array $payload): WorkoutPlan
     {
+        $this->assertExecutionModes($payload['days'] ?? []);
+
         return DB::transaction(function () use ($plan, $payload) {
             $plan->update([
                 'name' => $payload['name'],
@@ -84,6 +89,8 @@ class WorkoutPlanService
 
     public function createTemplateFromPayload(User $trainer, array $payload): WorkoutTemplate
     {
+        $this->assertExecutionModes($payload['days'] ?? []);
+
         return DB::transaction(function () use ($trainer, $payload) {
             $template = WorkoutTemplate::query()->create([
                 'gym_id' => $payload['gym_id'] ?? null,
@@ -114,6 +121,7 @@ class WorkoutPlanService
                 foreach ($dayPayload['exercises'] ?? [] as $exercisePayload) {
                     $day->exercises()->create([
                         'exercise_id' => $exercisePayload['exercise_id'],
+                        ...$this->executionModePayload($exercisePayload),
                         'sort_order' => $exercisePayload['sort_order'] ?? 1,
                         'sets' => $exercisePayload['sets'],
                         'reps' => $exercisePayload['reps'] ?? null,
@@ -133,6 +141,8 @@ class WorkoutPlanService
      */
     public function updateTemplate(WorkoutTemplate $template, array $payload): WorkoutTemplate
     {
+        $this->assertExecutionModes($payload['days'] ?? []);
+
         return DB::transaction(function () use ($template, $payload) {
             $template->update([
                 'name' => $payload['name'],
@@ -160,6 +170,7 @@ class WorkoutPlanService
                 foreach ($dayPayload['exercises'] ?? [] as $exercisePayload) {
                     $day->exercises()->create([
                         'exercise_id' => $exercisePayload['exercise_id'],
+                        ...$this->executionModePayload($exercisePayload),
                         'sort_order' => $exercisePayload['sort_order'] ?? 1,
                         'sets' => $exercisePayload['sets'],
                         'reps' => $exercisePayload['reps'] ?? null,
@@ -203,6 +214,7 @@ class WorkoutPlanService
                 'notes' => $day->notes,
                 'exercises' => $day->exercises->map(fn ($exercise) => [
                     'exercise_id' => $exercise->exercise_id,
+                    ...$this->executionModePayload($exercise->toArray()),
                     'sort_order' => $exercise->sort_order,
                     'sets' => $exercise->sets,
                     'reps' => $exercise->reps,
@@ -221,6 +233,8 @@ class WorkoutPlanService
      */
     public function createMemberPlan(User $member, array $payload): WorkoutPlan
     {
+        $this->assertExecutionModes($payload['days'] ?? []);
+
         return DB::transaction(function () use ($member, $payload) {
             $plan = WorkoutPlan::query()->create([
                 // Member-created and public-catalog plans belong to the member,
@@ -280,6 +294,7 @@ class WorkoutPlanService
                 'notes' => $day->notes,
                 'exercises' => $day->exercises->map(fn ($exercise) => [
                     'exercise_id' => $exercise->exercise_id,
+                    ...$this->executionModePayload($exercise->toArray()),
                     'sort_order' => $exercise->sort_order,
                     'sets' => $exercise->sets,
                     'reps' => $exercise->reps,
@@ -315,6 +330,7 @@ class WorkoutPlanService
                 'notes' => $day->notes,
                 'exercises' => $day->exercises->map(fn ($exercise) => [
                     'exercise_id' => $exercise->exercise_id,
+                    ...$this->executionModePayload($exercise->toArray()),
                     'sort_order' => $exercise->sort_order,
                     'sets' => $exercise->sets,
                     'reps' => $exercise->reps,
@@ -344,6 +360,7 @@ class WorkoutPlanService
                 WorkoutPlanExercise::query()->create([
                     'workout_plan_day_id' => $day->id,
                     'exercise_id' => $exercisePayload['exercise_id'],
+                    ...$this->executionModePayload($exercisePayload),
                     'sort_order' => $exercisePayload['sort_order'] ?? 1,
                     'sets' => $exercisePayload['sets'],
                     'reps' => $exercisePayload['reps'] ?? null,
@@ -352,6 +369,51 @@ class WorkoutPlanService
                     'notes' => $exercisePayload['notes'] ?? null,
                 ]);
             }
+        }
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function executionModePayload(array $payload): array
+    {
+        return [
+            'tracking_mode' => $payload['tracking_mode'] ?? 'reps',
+            'planned_duration_seconds' => $payload['planned_duration_seconds'] ?? null,
+            'planned_distance_meters' => $payload['planned_distance_meters'] ?? null,
+            'planned_speed_kph' => $payload['planned_speed_kph'] ?? null,
+            'planned_pace_seconds_per_km' => $payload['planned_pace_seconds_per_km'] ?? null,
+            'target_resistance' => $payload['target_resistance'] ?? null,
+            'target_machine_level' => $payload['target_machine_level'] ?? null,
+            'is_per_side' => (bool) ($payload['is_per_side'] ?? false),
+            'is_bodyweight' => (bool) ($payload['is_bodyweight'] ?? false),
+        ];
+    }
+
+    /** @param array<int, array<string, mixed>> $days */
+    private function assertExecutionModes(array $days): void
+    {
+        $errors = [];
+        foreach ($days as $dayIndex => $day) {
+            foreach ($day['exercises'] ?? [] as $exerciseIndex => $exercise) {
+                $mode = $exercise['tracking_mode'] ?? 'reps';
+                $path = "days.{$dayIndex}.exercises.{$exerciseIndex}";
+                if ($mode === 'timed' && (int) ($exercise['planned_duration_seconds'] ?? 0) < 1) {
+                    $errors["{$path}.planned_duration_seconds"][] = 'A timed exercise requires a planned duration.';
+                }
+                if ($mode === 'distance' && (float) ($exercise['planned_distance_meters'] ?? 0) <= 0) {
+                    $errors["{$path}.planned_distance_meters"][] = 'A distance exercise requires a planned distance.';
+                }
+                if (
+                    $mode === 'cardio'
+                    && (int) ($exercise['planned_duration_seconds'] ?? 0) < 1
+                    && (float) ($exercise['planned_distance_meters'] ?? 0) <= 0
+                ) {
+                    $errors["{$path}.planned_duration_seconds"][] = 'A cardio exercise requires a planned duration or distance.';
+                }
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
         }
     }
 }

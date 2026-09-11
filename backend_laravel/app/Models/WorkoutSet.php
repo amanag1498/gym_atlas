@@ -14,17 +14,29 @@ class WorkoutSet extends Model
         'workout_session_exercise_id',
         'set_number',
         'reps',
+        'duration_seconds',
+        'distance_meters',
+        'speed_kph',
+        'pace_seconds_per_km',
         'weight',
         'rest_seconds',
+        'effort_scale',
+        'effort_value',
+        'side',
         'notes',
         'is_completed',
+        'completed_at',
     ];
 
     protected function casts(): array
     {
         return [
             'weight' => 'decimal:2',
+            'distance_meters' => 'decimal:2',
+            'speed_kph' => 'decimal:2',
+            'effort_value' => 'decimal:1',
             'is_completed' => 'boolean',
+            'completed_at' => 'datetime',
         ];
     }
 

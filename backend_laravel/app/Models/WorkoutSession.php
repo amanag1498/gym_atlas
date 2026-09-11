@@ -27,7 +27,11 @@ class WorkoutSession extends Model
         'started_at',
         'completed_at',
         'notes',
+        'pre_workout_weight_kg',
         'total_volume',
+        'completion_summary',
+        'runtime_state',
+        'last_activity_at',
     ];
 
     protected function casts(): array
@@ -37,6 +41,10 @@ class WorkoutSession extends Model
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
             'total_volume' => 'decimal:2',
+            'pre_workout_weight_kg' => 'decimal:2',
+            'completion_summary' => 'array',
+            'runtime_state' => 'array',
+            'last_activity_at' => 'datetime',
         ];
     }
 

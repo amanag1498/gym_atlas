@@ -494,6 +494,15 @@ class MemberRepository {
       _client.delete('/member/workout-plans/$workoutPlanId');
   Future<Map<String, dynamic>> fetchWorkoutSession(int sessionId) =>
       _client.get('/member/workout-sessions/$sessionId');
+  Future<Map<String, dynamic>> fetchActiveWorkoutSession() =>
+      _client.get('/member/workout-sessions/active');
+  Future<Map<String, dynamic>> saveWorkoutProgress(
+    int sessionId,
+    Map<String, dynamic> payload,
+  ) => _client.put(
+    '/member/workout-sessions/$sessionId/progress',
+    data: payload,
+  );
   Future<Map<String, dynamic>> addWorkoutExercise(
     int sessionId,
     Map<String, dynamic> payload,

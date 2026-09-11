@@ -1083,6 +1083,9 @@ Exit criteria: exercises remain useful with `preview_media = null`, and older ap
 
 ### Phase 3 — Workout execution modes
 
+Implementation status (2026-09-01): **implemented in the repository; requires the
+Laravel migration and updated Member/Trainer app builds to activate in production.**
+
 - Plan/template tracking modes.
 - Completed-set mode fields.
 - Member logging UI per mode.
@@ -1093,6 +1096,17 @@ Exit criteria: exercises remain useful with `preview_media = null`, and older ap
 - Planned-versus-performed completion summary.
 
 Exit criteria: legacy rep/weight workouts remain unchanged and each new mode round-trips accurately through Laravel and Flutter.
+
+Delivered scope includes `reps`, `timed`, `cardio`, and `distance`
+prescriptions; mode-specific completed-set actuals; per-side logging; optional
+pre-workout weight with an explicit progress-history choice; a dedicated active
+session recovery endpoint; transaction-locked duplicate-start protection; rest
+timer adjust/skip with sound and vibration controls; a separate work timer;
+active-workout wake lock; and a server-generated planned-versus-performed
+completion summary. In-progress set edits and timer runtime are debounced to the
+server and restored after process eviction; rest completion also schedules a
+local Android/iOS alert, while sound, vibration, and wake-lock preferences are
+persisted on-device. Existing rep/load payloads continue to default to `reps`.
 
 ### Phase 4 — Supersets and coaching progression
 

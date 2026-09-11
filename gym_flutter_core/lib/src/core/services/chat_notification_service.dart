@@ -2,12 +2,19 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
 
 typedef ChatNotificationTap = void Function(Map<String, dynamic> data);
 
 class ChatNotificationService {
-  ChatNotificationService({FlutterLocalNotificationsPlugin? plugin})
+  factory ChatNotificationService({FlutterLocalNotificationsPlugin? plugin}) =>
+      plugin == null ? _shared : ChatNotificationService._(plugin);
+
+  ChatNotificationService._([FlutterLocalNotificationsPlugin? plugin])
     : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+
+  static final ChatNotificationService _shared = ChatNotificationService._();
 
   static const _channel = AndroidNotificationChannel(
     'chat_messages',
@@ -15,27 +22,42 @@ class ChatNotificationService {
     description: 'Messages from your trainer or member',
     importance: Importance.high,
   );
+  static const _workoutTimerChannel = AndroidNotificationChannel(
+    'workout_timers',
+    'Workout timers',
+    description: 'Rest and work timer completion alerts',
+    importance: Importance.high,
+  );
+  static const workoutTimerNotificationId = 882401;
 
   final FlutterLocalNotificationsPlugin _plugin;
   ChatNotificationTap? _onTap;
 
   Future<void> initialize(ChatNotificationTap onTap) async {
     _onTap = onTap;
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+    if (kIsWeb ||
+        !const {
+          TargetPlatform.android,
+          TargetPlatform.iOS,
+        }.contains(defaultTargetPlatform)) {
       return;
     }
 
     await _plugin.initialize(
       const InitializationSettings(
         android: AndroidInitializationSettings('ic_stat_chat'),
+        iOS: DarwinInitializationSettings(),
       ),
       onDidReceiveNotificationResponse: _handleResponse,
     );
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.createNotificationChannel(_channel);
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      await android?.createNotificationChannel(_channel);
+      await android?.createNotificationChannel(_workoutTimerChannel);
+    }
 
     final launchDetails = await _plugin.getNotificationAppLaunchDetails();
     final response = launchDetails?.notificationResponse;
@@ -73,6 +95,51 @@ class ChatNotificationService {
       payload: jsonEncode(data),
     );
   }
+
+  Future<void> scheduleWorkoutTimer({
+    required DateTime endsAt,
+    required String exerciseName,
+    required bool playSound,
+    required bool enableVibration,
+  }) async {
+    if (kIsWeb ||
+        !const {
+          TargetPlatform.android,
+          TargetPlatform.iOS,
+        }.contains(defaultTargetPlatform) ||
+        endsAt.isBefore(DateTime.now())) {
+      return;
+    }
+    tz_data.initializeTimeZones();
+    await _plugin.cancel(workoutTimerNotificationId);
+    await _plugin.zonedSchedule(
+      workoutTimerNotificationId,
+      'Rest complete',
+      'Ready for your next $exerciseName set.',
+      tz.TZDateTime.from(endsAt.toUtc(), tz.UTC),
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'workout_timers',
+          'Workout timers',
+          channelDescription: 'Rest and work timer completion alerts',
+          importance: Importance.high,
+          priority: Priority.high,
+          playSound: playSound,
+          enableVibration: enableVibration,
+          category: AndroidNotificationCategory.alarm,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentSound: playSound,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      payload: jsonEncode({'type': 'workout_timer'}),
+    );
+  }
+
+  Future<void> cancelWorkoutTimer() =>
+      _plugin.cancel(workoutTimerNotificationId);
 
   void _handleResponse(NotificationResponse response) {
     final payload = response.payload;

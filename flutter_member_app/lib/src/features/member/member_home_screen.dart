@@ -2,9 +2,14 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:gym_flutter_core/gym_flutter_core.dart'
+    show ChatNotificationService;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -5364,7 +5369,12 @@ class _WorkoutPage extends StatefulWidget {
   State<_WorkoutPage> createState() => __WorkoutPageState();
 }
 
-class __WorkoutPageState extends State<_WorkoutPage> {
+class __WorkoutPageState extends State<_WorkoutPage>
+    with WidgetsBindingObserver {
+  static const _timerPreferenceStorage = FlutterSecureStorage();
+  static const _soundPreferenceKey = 'workout_timer_sound_enabled';
+  static const _vibrationPreferenceKey = 'workout_timer_vibration_enabled';
+  static const _wakePreferenceKey = 'workout_keep_screen_awake';
   final _planIdController = TextEditingController();
   final Map<int, List<Map<String, dynamic>>> _exerciseHistoryCache =
       <int, List<Map<String, dynamic>>>{};
@@ -5384,12 +5394,24 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   int _restRemainingSeconds = 0;
   int _restTotalSeconds = 0;
   Timer? _restTimer;
+  DateTime? _restEndsAt;
+  bool _restSoundEnabled = true;
+  bool _restVibrationEnabled = true;
+  bool _keepScreenAwake = true;
+  Timer? _workTimer;
+  Timer? _draftSaveTimer;
+  DateTime? _workStartedAt;
+  int? _workExerciseIndex;
+  int? _workSetIndex;
+  int _workElapsedSeconds = 0;
   List<Map<String, dynamic>> _customExerciseLibrary = const [];
   int? _selectedRelationshipId;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_loadTimerPreferences());
     _workoutHistory = widget.history
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
@@ -5430,8 +5452,64 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   @override
   void dispose() {
     _restTimer?.cancel();
+    _workTimer?.cancel();
+    _draftSaveTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    WakelockPlus.disable();
     _planIdController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshRestTimerFromClock();
+      _refreshWorkTimerFromClock();
+      _syncWakeLock();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      _draftSaveTimer?.cancel();
+      unawaited(_saveWorkoutDraft());
+    }
+  }
+
+  void _syncWakeLock() {
+    if (_keepScreenAwake && _activeSessionId != null) {
+      WakelockPlus.enable();
+    } else {
+      WakelockPlus.disable();
+    }
+  }
+
+  Future<void> _loadTimerPreferences() async {
+    List<String?> values;
+    try {
+      values = await Future.wait([
+        _timerPreferenceStorage.read(key: _soundPreferenceKey),
+        _timerPreferenceStorage.read(key: _vibrationPreferenceKey),
+        _timerPreferenceStorage.read(key: _wakePreferenceKey),
+      ]);
+    } catch (exception) {
+      debugPrint('[workout] timer preferences unavailable: $exception');
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _restSoundEnabled = values[0] != 'false';
+      _restVibrationEnabled = values[1] != 'false';
+      _keepScreenAwake = values[2] != 'false';
+    });
+    _syncWakeLock();
+  }
+
+  void _saveTimerPreference(String key, bool value) {
+    unawaited(
+      _timerPreferenceStorage
+          .write(key: key, value: value.toString())
+          .catchError((Object exception) {
+            debugPrint('[workout] timer preference save skipped: $exception');
+          }),
+    );
   }
 
   @override
@@ -5455,12 +5533,12 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       0,
       (sum, exercise) => sum + _exerciseVolume(exercise),
     );
-    final completedExercises = _sessionExercises
-        .where(
-          (exercise) =>
-              ((exercise['sets'] as List<dynamic>? ?? const []).isNotEmpty),
-        )
-        .length;
+    final completedExercises = _sessionExercises.where((exercise) {
+      final mode = exercise['tracking_mode']?.toString() ?? 'reps';
+      return (exercise['sets'] as List<dynamic>? ?? const []).any(
+        (item) => _setHasActual(mode, Map<String, dynamic>.from(item as Map)),
+      );
+    }).length;
 
     final selectedPlanDays = selectedPlan['days'] is List
         ? (selectedPlan['days'] as List).length
@@ -5590,7 +5668,18 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                         : 'Exercise',
                     remainingSeconds: _restRemainingSeconds,
                     totalSeconds: _restTotalSeconds,
+                    onSubtract: () => _adjustRest(-15),
+                    onAdd: () => _adjustRest(15),
+                    onSkip: _skipRest,
                   ),
+                ),
+                const SizedBox(height: 18),
+              ],
+              if (_workExerciseIndex != null) ...[
+                _WorkTimerOverlay(
+                  elapsedSeconds: _workElapsedSeconds,
+                  onFinish: _finishWorkTimer,
+                  onCancel: _cancelWorkTimer,
                 ),
                 const SizedBox(height: 18),
               ],
@@ -5614,11 +5703,50 @@ class __WorkoutPageState extends State<_WorkoutPage> {
               ),
               const SizedBox(height: 12),
               if (_activeSessionId != null)
-                _ActiveWorkoutMiniBar(
-                  duration: activeDuration ?? Duration.zero,
-                  exerciseCount: _sessionExercises.length,
-                  totalVolume: totalVolume,
-                  dayLabel: _activePlanDayLabel,
+                Column(
+                  children: [
+                    _ActiveWorkoutMiniBar(
+                      duration: activeDuration ?? Duration.zero,
+                      exerciseCount: _sessionExercises.length,
+                      totalVolume: totalVolume,
+                      dayLabel: _activePlanDayLabel,
+                    ),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Keep screen awake'),
+                      subtitle: const Text('Only while this workout is active'),
+                      value: _keepScreenAwake,
+                      onChanged: (value) {
+                        setState(() => _keepScreenAwake = value);
+                        _saveTimerPreference(_wakePreferenceKey, value);
+                        _syncWakeLock();
+                      },
+                    ),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        FilterChip(
+                          label: const Text('Timer sound'),
+                          selected: _restSoundEnabled,
+                          onSelected: (value) {
+                            setState(() => _restSoundEnabled = value);
+                            _saveTimerPreference(_soundPreferenceKey, value);
+                          },
+                        ),
+                        FilterChip(
+                          label: const Text('Timer vibration'),
+                          selected: _restVibrationEnabled,
+                          onSelected: (value) {
+                            setState(() => _restVibrationEnabled = value);
+                            _saveTimerPreference(
+                              _vibrationPreferenceKey,
+                              value,
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
                 )
               else if (visiblePlans.isEmpty)
                 _FitLifeEmptyPanel(
@@ -5740,6 +5868,15 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                             _deleteSet(entry.key, setIndex),
                         onStartRest: (seconds) =>
                             _startRest(entry.key, seconds),
+                        runningWorkSetIndex: _workExerciseIndex == entry.key
+                            ? _workSetIndex
+                            : null,
+                        workElapsedSeconds: _workExerciseIndex == entry.key
+                            ? _workElapsedSeconds
+                            : 0,
+                        onStartWork: (setIndex) =>
+                            _startWorkTimer(entry.key, setIndex),
+                        onFinishWork: _finishWorkTimer,
                       ),
                     ),
                   ),
@@ -5850,6 +5987,11 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       }
     }
 
+    final preWorkout = await _askPreWorkoutWeight();
+    if (preWorkout == null) {
+      return;
+    }
+
     setState(() => _startingWorkout = true);
 
     try {
@@ -5859,13 +6001,14 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         );
         return;
       }
-      final response = await widget.repository.startWorkout(
-        workoutStartPayload(
+      final response = await widget.repository.startWorkout({
+        ...workoutStartPayload(
           workoutPlanId: selectedPlanId,
           workoutPlanDayId: (selectedDay?['id'] as num?)?.toInt(),
           sessionDate: DateTime.now().toIso8601String().split('T').first,
         ),
-      );
+        ...preWorkout,
+      });
       final data = Map<String, dynamic>.from(
         response['data'] as Map? ?? const {},
       );
@@ -5892,6 +6035,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         _restRemainingSeconds = 0;
         _restTotalSeconds = 0;
       });
+      _syncWakeLock();
       messenger.showSnackBar(
         const SnackBar(content: Text('Workout session started.')),
       );
@@ -5919,6 +6063,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
 
     final messenger = ScaffoldMessenger.of(context);
     final endingWithoutExercises = _sessionExercises.isEmpty;
+    _draftSaveTimer?.cancel();
     setState(() => _completingWorkout = true);
 
     try {
@@ -5931,7 +6076,12 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       final data = Map<String, dynamic>.from(
         response['data'] as Map? ?? const {},
       );
-      final records = data['personal_records'] as List<dynamic>? ?? const [];
+      final summary = Map<String, dynamic>.from(
+        data['completion_summary'] as Map? ?? const {},
+      );
+      final newRecordIds =
+          summary['new_personal_record_exercise_ids'] as List<dynamic>? ??
+          const [];
 
       if (!mounted) {
         return;
@@ -5948,12 +6098,18 @@ class __WorkoutPageState extends State<_WorkoutPage> {
           ),
         ];
         _sessionExercises = const [];
-        _showPrAchievement = records.isNotEmpty;
+        _showPrAchievement = newRecordIds.isNotEmpty;
         _restExerciseIndex = null;
         _restRemainingSeconds = 0;
         _restTotalSeconds = 0;
       });
-      await _showCompletionCelebration(context, records.isNotEmpty);
+      _cancelWorkTimer();
+      _cancelRestNotification();
+      _syncWakeLock();
+      await _showCompletionCelebration(context, newRecordIds.isNotEmpty);
+      if (mounted && summary.isNotEmpty) {
+        await _showWorkoutSummary(summary);
+      }
       messenger.showSnackBar(
         SnackBar(
           content: Text(
@@ -5980,26 +6136,38 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         .map((item) => Map<String, dynamic>.from(item as Map))
         .toList();
     return items.map((exercise) {
-      final sets = (exercise['sets'] as List<dynamic>? ?? const [])
-          .map((set) => Map<String, dynamic>.from(set as Map))
-          .toList();
+      final mode = exercise['tracking_mode']?.toString() ?? 'reps';
+      final sets = (exercise['sets'] as List<dynamic>? ?? const []).map((set) {
+        final normalized = Map<String, dynamic>.from(set as Map);
+        if (exercise['is_per_side'] == true && normalized['side'] == null) {
+          normalized['side'] = 'both';
+        }
+        return normalized;
+      }).toList();
       final plannedSets = (exercise['planned_sets'] as num?)?.toInt() ?? 0;
       if (sets.isEmpty && plannedSets > 0) {
         for (var index = 0; index < plannedSets; index++) {
           sets.add({
             'set_number': index + 1,
             'reps': 0,
+            'duration_seconds': 0,
+            'distance_meters': 0,
+            'speed_kph': 0,
+            'pace_seconds_per_km': 0,
             'weight': (exercise['target_weight'] as num?)?.toDouble() ?? 0,
             'rest_seconds':
                 (exercise['rest_timer_seconds'] as num?)?.toInt() ?? 60,
             'notes': null,
-            'is_completed': true,
+            'side': exercise['is_per_side'] == true ? 'both' : null,
+            'is_completed': false,
           });
         }
       }
 
       return {
         ...exercise,
+        'tracking_mode': mode,
+        'performed_status': exercise['performed_status'] ?? 'planned',
         'exercise': Map<String, dynamic>.from(
           exercise['exercise'] as Map? ?? const {},
         ),
@@ -6011,48 +6179,122 @@ class __WorkoutPageState extends State<_WorkoutPage> {
 
   List<Map<String, dynamic>> _buildCompletionPayload() {
     return _sessionExercises.map((exercise) {
+      final mode = exercise['tracking_mode']?.toString() ?? 'reps';
       final sets = (exercise['sets'] as List<dynamic>? ?? const [])
           .map((set) => Map<String, dynamic>.from(set as Map))
-          .where(
-            (set) =>
-                ((set['reps'] as num?)?.toInt() ?? 0) > 0 ||
-                ((set['weight'] as num?)?.toDouble() ?? 0) > 0,
-          )
+          .where((set) => _setHasActual(mode, set))
           .toList();
-
-      if (sets.isEmpty) {
-        sets.add({
-          'set_number': 1,
-          'reps': 0,
-          'weight': 0,
-          'rest_seconds':
-              (exercise['rest_timer_seconds'] as num?)?.toInt() ?? 60,
-          'notes': null,
-          'is_completed': true,
-        });
-      }
 
       return {
         'id': exercise['id'],
         'exercise_id': exercise['exercise_id'],
         'sort_order': exercise['sort_order'],
         'planned_sets': exercise['planned_sets'],
+        'tracking_mode': mode,
         'planned_reps': exercise['planned_reps']?.toString(),
+        'planned_duration_seconds': exercise['planned_duration_seconds'],
+        'planned_distance_meters': exercise['planned_distance_meters'],
+        'planned_speed_kph': exercise['planned_speed_kph'],
+        'planned_pace_seconds_per_km': exercise['planned_pace_seconds_per_km'],
         'target_weight': exercise['target_weight'],
+        'target_resistance': exercise['target_resistance'],
+        'target_machine_level': exercise['target_machine_level'],
+        'is_per_side': exercise['is_per_side'] == true,
+        'is_bodyweight': exercise['is_bodyweight'] == true,
+        'performed_status': sets.isEmpty ? 'skipped' : 'completed',
         'rest_timer_seconds': exercise['rest_timer_seconds'],
         'notes': exercise['notes']?.toString(),
         'sets': sets.map((set) {
           return {
             'set_number': (set['set_number'] as num?)?.toInt() ?? 1,
             'reps': (set['reps'] as num?)?.toInt() ?? 0,
+            'duration_seconds': (set['duration_seconds'] as num?)?.toInt(),
+            'distance_meters': (set['distance_meters'] as num?)?.toDouble(),
+            'speed_kph': (set['speed_kph'] as num?)?.toDouble(),
+            'pace_seconds_per_km':
+                ((set['pace_seconds_per_km'] as num?)?.toInt() ?? 0) > 0
+                ? (set['pace_seconds_per_km'] as num).toInt()
+                : null,
             'weight': (set['weight'] as num?)?.toDouble() ?? 0,
             'rest_seconds': (set['rest_seconds'] as num?)?.toInt() ?? 0,
             'notes': set['notes']?.toString(),
-            'is_completed': set['is_completed'] != false,
+            'effort_scale': set['effort_scale']?.toString(),
+            'effort_value': (set['effort_value'] as num?)?.toDouble(),
+            'side': set['side']?.toString(),
+            'is_completed': true,
           };
         }).toList(),
       };
     }).toList();
+  }
+
+  bool _setHasActual(String mode, Map<String, dynamic> set) {
+    return switch (mode) {
+      'timed' => ((set['duration_seconds'] as num?)?.toInt() ?? 0) > 0,
+      'cardio' =>
+        ((set['duration_seconds'] as num?)?.toInt() ?? 0) > 0 ||
+            ((set['distance_meters'] as num?)?.toDouble() ?? 0) > 0,
+      'distance' => ((set['distance_meters'] as num?)?.toDouble() ?? 0) > 0,
+      _ => ((set['reps'] as num?)?.toInt() ?? 0) > 0,
+    };
+  }
+
+  void _scheduleDraftSave() {
+    if (_activeSessionId == null) return;
+    _draftSaveTimer?.cancel();
+    _draftSaveTimer = Timer(
+      const Duration(milliseconds: 800),
+      () => unawaited(_saveWorkoutDraft()),
+    );
+  }
+
+  Future<void> _saveWorkoutDraft() async {
+    final sessionId = _activeSessionId;
+    if (sessionId == null) return;
+    try {
+      await widget.repository.saveWorkoutProgress(sessionId, {
+        'exercises': _sessionExercises.map((exercise) {
+          final mode = exercise['tracking_mode']?.toString() ?? 'reps';
+          final sets = (exercise['sets'] as List<dynamic>? ?? const [])
+              .map((item) => Map<String, dynamic>.from(item as Map))
+              .toList();
+          return {
+            'id': exercise['id'],
+            'notes': exercise['notes']?.toString(),
+            'sets': sets.map((set) {
+              final pace = (set['pace_seconds_per_km'] as num?)?.toInt() ?? 0;
+              return {
+                'set_number': (set['set_number'] as num?)?.toInt() ?? 1,
+                'reps': (set['reps'] as num?)?.toInt() ?? 0,
+                'duration_seconds':
+                    (set['duration_seconds'] as num?)?.toInt() ?? 0,
+                'distance_meters':
+                    (set['distance_meters'] as num?)?.toDouble() ?? 0,
+                'speed_kph': (set['speed_kph'] as num?)?.toDouble() ?? 0,
+                'pace_seconds_per_km': pace > 0 ? pace : null,
+                'weight': (set['weight'] as num?)?.toDouble() ?? 0,
+                'rest_seconds': (set['rest_seconds'] as num?)?.toInt() ?? 0,
+                'effort_scale': set['effort_scale']?.toString(),
+                'effort_value': (set['effort_value'] as num?)?.toDouble(),
+                'side': set['side']?.toString(),
+                'notes': set['notes']?.toString(),
+                'is_completed': _setHasActual(mode, set),
+              };
+            }).toList(),
+          };
+        }).toList(),
+        'runtime_state': {
+          'rest_exercise_index': _restExerciseIndex,
+          'rest_ends_at': _restEndsAt?.toUtc().toIso8601String(),
+          'rest_total_seconds': _restTotalSeconds,
+          'work_exercise_index': _workExerciseIndex,
+          'work_set_index': _workSetIndex,
+          'work_started_at': _workStartedAt?.toUtc().toIso8601String(),
+        },
+      });
+    } catch (exception) {
+      debugPrint('[workout] draft autosave skipped: $exception');
+    }
   }
 
   Future<void> _loadExerciseHistory(Map<String, dynamic> exercise) async {
@@ -6122,14 +6364,19 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       sets.add({
         'set_number': sets.length + 1,
         'reps': 0,
+        'duration_seconds': 0,
+        'distance_meters': 0,
+        'speed_kph': 0,
+        'pace_seconds_per_km': 0,
         'weight': sets.isEmpty ? 0 : sets.last['weight'],
         'rest_seconds': (exercise['rest_timer_seconds'] as num?)?.toInt() ?? 60,
         'notes': null,
-        'is_completed': true,
+        'is_completed': false,
       });
       exercise['sets'] = sets;
       _sessionExercises = _replaceExercise(exerciseIndex, exercise);
     });
+    _scheduleDraftSave();
   }
 
   void _duplicateLastSet(int exerciseIndex) {
@@ -6149,6 +6396,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       exercise['sets'] = sets;
       _sessionExercises = _replaceExercise(exerciseIndex, exercise);
     });
+    _scheduleDraftSave();
   }
 
   void _deleteSet(int exerciseIndex, int setIndex) {
@@ -6169,6 +6417,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       exercise['sets'] = sets;
       _sessionExercises = _replaceExercise(exerciseIndex, exercise);
     });
+    _scheduleDraftSave();
   }
 
   void _updateExerciseNotes(int exerciseIndex, String value) {
@@ -6179,6 +6428,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       exercise['notes'] = value;
       _sessionExercises = _replaceExercise(exerciseIndex, exercise);
     });
+    _scheduleDraftSave();
   }
 
   void _updateSet(int exerciseIndex, int setIndex, String field, String value) {
@@ -6192,9 +6442,14 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       final set = Map<String, dynamic>.from(sets[setIndex]);
       switch (field) {
         case 'weight':
+        case 'distance_meters':
+        case 'speed_kph':
+        case 'effort_value':
           set[field] = double.tryParse(value) ?? 0;
           break;
         case 'reps':
+        case 'duration_seconds':
+        case 'pace_seconds_per_km':
         case 'rest_seconds':
           set[field] = int.tryParse(value) ?? 0;
           break;
@@ -6205,6 +6460,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       exercise['sets'] = sets;
       _sessionExercises = _replaceExercise(exerciseIndex, exercise);
     });
+    _scheduleDraftSave();
   }
 
   List<Map<String, dynamic>> _replaceExercise(
@@ -6217,30 +6473,151 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   }
 
   void _startRest(int exerciseIndex, int seconds) {
+    _cancelWorkTimer();
     _restTimer?.cancel();
+    final duration = seconds <= 0 ? 45 : seconds;
     setState(() {
       _restExerciseIndex = exerciseIndex;
-      _restRemainingSeconds = seconds <= 0 ? 45 : seconds;
-      _restTotalSeconds = seconds <= 0 ? 45 : seconds;
+      _restRemainingSeconds = duration;
+      _restTotalSeconds = duration;
+      _restEndsAt = DateTime.now().add(Duration(seconds: duration));
     });
     _restTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
       }
-      if (_restRemainingSeconds <= 1) {
-        timer.cancel();
-        setState(() {
-          _restRemainingSeconds = 0;
-          _restExerciseIndex = null;
-          _restTotalSeconds = 0;
-        });
-        return;
-      }
-      setState(() {
-        _restRemainingSeconds -= 1;
-      });
+      _refreshRestTimerFromClock();
     });
+    _scheduleRestNotification();
+    _scheduleDraftSave();
+  }
+
+  void _scheduleRestNotification() {
+    final endsAt = _restEndsAt;
+    final exerciseIndex = _restExerciseIndex;
+    if (endsAt == null || exerciseIndex == null) return;
+    final exercise = exerciseIndex < _sessionExercises.length
+        ? Map<String, dynamic>.from(
+            _sessionExercises[exerciseIndex]['exercise'] as Map? ?? const {},
+          )
+        : const <String, dynamic>{};
+    unawaited(
+      ChatNotificationService()
+          .scheduleWorkoutTimer(
+            endsAt: endsAt,
+            exerciseName: exercise['name']?.toString() ?? 'exercise',
+            playSound: _restSoundEnabled,
+            enableVibration: _restVibrationEnabled,
+          )
+          .catchError((Object exception) {
+            debugPrint('[workout] background timer alert skipped: $exception');
+          }),
+    );
+  }
+
+  void _cancelRestNotification() {
+    unawaited(
+      ChatNotificationService().cancelWorkoutTimer().catchError((
+        Object exception,
+      ) {
+        debugPrint('[workout] timer alert cancellation skipped: $exception');
+      }),
+    );
+  }
+
+  void _refreshRestTimerFromClock() {
+    final endsAt = _restEndsAt;
+    if (endsAt == null || !mounted) return;
+    final remaining = endsAt.difference(DateTime.now()).inSeconds;
+    if (remaining <= 0) {
+      _restTimer?.cancel();
+      setState(() {
+        _restRemainingSeconds = 0;
+        _restExerciseIndex = null;
+        _restTotalSeconds = 0;
+        _restEndsAt = null;
+      });
+      if (_restSoundEnabled) SystemSound.play(SystemSoundType.alert);
+      if (_restVibrationEnabled) HapticFeedback.heavyImpact();
+      _cancelRestNotification();
+      _scheduleDraftSave();
+      return;
+    }
+    setState(() => _restRemainingSeconds = remaining);
+  }
+
+  void _adjustRest(int seconds) {
+    final endsAt = _restEndsAt;
+    if (endsAt == null) return;
+    final adjusted = endsAt.add(Duration(seconds: seconds));
+    _restEndsAt = adjusted.isAfter(DateTime.now())
+        ? adjusted
+        : DateTime.now().add(const Duration(seconds: 1));
+    _restTotalSeconds = math.max(1, _restTotalSeconds + seconds);
+    _refreshRestTimerFromClock();
+    _scheduleRestNotification();
+    _scheduleDraftSave();
+  }
+
+  void _skipRest() {
+    _restTimer?.cancel();
+    setState(() {
+      _restExerciseIndex = null;
+      _restRemainingSeconds = 0;
+      _restTotalSeconds = 0;
+      _restEndsAt = null;
+    });
+    _cancelRestNotification();
+    _scheduleDraftSave();
+  }
+
+  void _startWorkTimer(int exerciseIndex, int setIndex) {
+    _skipRest();
+    _workTimer?.cancel();
+    setState(() {
+      _workExerciseIndex = exerciseIndex;
+      _workSetIndex = setIndex;
+      _workStartedAt = DateTime.now();
+      _workElapsedSeconds = 0;
+    });
+    _workTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _refreshWorkTimerFromClock();
+    });
+    _scheduleDraftSave();
+  }
+
+  void _refreshWorkTimerFromClock() {
+    final startedAt = _workStartedAt;
+    if (startedAt == null || !mounted) return;
+    setState(() {
+      _workElapsedSeconds = math.max(
+        0,
+        DateTime.now().difference(startedAt).inSeconds,
+      );
+    });
+  }
+
+  void _finishWorkTimer() {
+    final exerciseIndex = _workExerciseIndex;
+    final setIndex = _workSetIndex;
+    final elapsed = math.max(1, _workElapsedSeconds);
+    if (exerciseIndex != null && setIndex != null) {
+      _updateSet(exerciseIndex, setIndex, 'duration_seconds', '$elapsed');
+    }
+    _cancelWorkTimer();
+  }
+
+  void _cancelWorkTimer() {
+    _workTimer?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _workExerciseIndex = null;
+      _workSetIndex = null;
+      _workStartedAt = null;
+      _workElapsedSeconds = 0;
+    });
+    _scheduleDraftSave();
   }
 
   double _exerciseVolume(Map<String, dynamic> exercise) {
@@ -6360,7 +6737,11 @@ class __WorkoutPageState extends State<_WorkoutPage> {
               'exercise_id': (exercise['id'] as num?)?.toInt(),
               'exercise': exercise,
               'sets': 3,
+              'tracking_mode':
+                  exercise['default_tracking_mode']?.toString() ?? 'reps',
               'reps': '10',
+              'is_per_side': exercise['is_per_side'] == true,
+              'is_bodyweight': exercise['is_bodyweight'] == true,
               'target_weight': 0,
               'rest_seconds': 60,
               'notes': null,
@@ -6407,6 +6788,29 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   Future<void> _restoreActiveSessionIfAny({
     bool forceReloadHistory = false,
   }) async {
+    try {
+      final response = await widget.repository.fetchActiveWorkoutSession();
+      final rawData = response['data'];
+      if (rawData is Map) {
+        final data = Map<String, dynamic>.from(rawData);
+        if (!mounted) return;
+        setState(() {
+          _activeSessionId = (data['id'] as num?)?.toInt();
+          _activeStartedAt =
+              DateTime.tryParse(data['started_at']?.toString() ?? '') ??
+              DateTime.now();
+          _activePlanDayLabel = _sessionDayLabel(data);
+          _sessionExercises = _normalizeSessionExercises(data['exercises']);
+        });
+        _restoreRuntimeState(data);
+        _syncWakeLock();
+        return;
+      }
+      if (!forceReloadHistory) return;
+    } catch (_) {
+      // Fall back to history while backend and app releases overlap.
+    }
+
     List<Map<String, dynamic>> sourceHistory = _workoutHistory;
 
     if (forceReloadHistory) {
@@ -6450,8 +6854,60 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         _activePlanDayLabel = _sessionDayLabel(data);
         _sessionExercises = _normalizeSessionExercises(data['exercises']);
       });
+      _restoreRuntimeState(data);
+      _syncWakeLock();
     } catch (_) {
       // Ignore stale references and let the user start fresh.
+    }
+  }
+
+  void _restoreRuntimeState(Map<String, dynamic> session) {
+    final runtime = Map<String, dynamic>.from(
+      session['runtime_state'] as Map? ?? const {},
+    );
+    final endsAt = DateTime.tryParse(runtime['rest_ends_at']?.toString() ?? '');
+    final exerciseIndex = (runtime['rest_exercise_index'] as num?)?.toInt();
+    if (endsAt != null &&
+        exerciseIndex != null &&
+        endsAt.isAfter(DateTime.now())) {
+      _restTimer?.cancel();
+      setState(() {
+        _restExerciseIndex = exerciseIndex;
+        _restEndsAt = endsAt;
+        _restTotalSeconds =
+            (runtime['rest_total_seconds'] as num?)?.toInt() ??
+            endsAt.difference(DateTime.now()).inSeconds;
+        _restRemainingSeconds = endsAt.difference(DateTime.now()).inSeconds;
+      });
+      _restTimer = Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => _refreshRestTimerFromClock(),
+      );
+      _scheduleRestNotification();
+    }
+
+    final workStartedAt = DateTime.tryParse(
+      runtime['work_started_at']?.toString() ?? '',
+    );
+    final workExerciseIndex = (runtime['work_exercise_index'] as num?)?.toInt();
+    final workSetIndex = (runtime['work_set_index'] as num?)?.toInt();
+    if (workStartedAt != null &&
+        workExerciseIndex != null &&
+        workSetIndex != null) {
+      _workTimer?.cancel();
+      setState(() {
+        _workStartedAt = workStartedAt;
+        _workExerciseIndex = workExerciseIndex;
+        _workSetIndex = workSetIndex;
+        _workElapsedSeconds = math.max(
+          0,
+          DateTime.now().difference(workStartedAt).inSeconds,
+        );
+      });
+      _workTimer = Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => _refreshWorkTimerFromClock(),
+      );
     }
   }
 
@@ -6493,24 +6949,6 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       return aName.compareTo(bName);
     });
     return values;
-  }
-
-  List<Map<String, dynamic>> _seedSetsFromPlan(Map<String, dynamic> exercise) {
-    final count = (exercise['sets'] as num?)?.toInt() ?? 3;
-    final reps = int.tryParse(exercise['reps']?.toString() ?? '') ?? 0;
-    final weight = (exercise['target_weight'] as num?)?.toDouble() ?? 0;
-    final rest = (exercise['rest_seconds'] as num?)?.toInt() ?? 60;
-
-    return List<Map<String, dynamic>>.generate(count, (index) {
-      return {
-        'set_number': index + 1,
-        'reps': reps,
-        'weight': weight,
-        'rest_seconds': rest,
-        'notes': null,
-        'is_completed': true,
-      };
-    });
   }
 
   Future<void> _openAddExerciseSheet() async {
@@ -6588,11 +7026,19 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         'exercise_id': (selected['exercise_id'] as num?)?.toInt(),
         'sort_order': _sessionExercises.length + 1,
         'planned_sets': (selected['sets'] as num?)?.toInt() ?? 3,
+        'tracking_mode': selected['tracking_mode']?.toString() ?? 'reps',
         'planned_reps': selected['reps']?.toString() ?? '10',
+        'planned_duration_seconds': selected['planned_duration_seconds'],
+        'planned_distance_meters': selected['planned_distance_meters'],
+        'planned_speed_kph': selected['planned_speed_kph'],
+        'planned_pace_seconds_per_km': selected['planned_pace_seconds_per_km'],
         'target_weight': (selected['target_weight'] as num?)?.toDouble() ?? 0,
+        'target_resistance': selected['target_resistance'],
+        'target_machine_level': selected['target_machine_level'],
+        'is_per_side': selected['is_per_side'] == true,
+        'is_bodyweight': selected['is_bodyweight'] == true,
         'rest_timer_seconds': (selected['rest_seconds'] as num?)?.toInt() ?? 60,
         'notes': selected['notes']?.toString(),
-        'sets': _seedSetsFromPlan(selected),
       });
       final data = Map<String, dynamic>.from(
         response['data'] as Map? ?? const {},
@@ -6629,6 +7075,165 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         ),
       ),
     );
+  }
+
+  Future<Map<String, dynamic>?> _askPreWorkoutWeight() async {
+    final controller = TextEditingController();
+    var saveToProgress = false;
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Pre-workout check-in'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Weight in kg (optional)',
+                  hintText: 'Skip if you do not want to log it',
+                ),
+              ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: saveToProgress,
+                title: const Text('Save to progress history'),
+                onChanged: (value) =>
+                    setDialogState(() => saveToProgress = value == true),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, const {}),
+              child: const Text('Skip'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final weight = double.tryParse(controller.text.trim());
+                if (weight == null || weight < 20 || weight > 500) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Enter a weight from 20–500 kg.'),
+                    ),
+                  );
+                  return;
+                }
+                Navigator.pop(dialogContext, {
+                  'pre_workout_weight_kg': weight,
+                  'save_pre_workout_weight': saveToProgress,
+                });
+              },
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _showWorkoutSummary(Map<String, dynamic> summary) {
+    final duration =
+        (summary['session_duration_seconds'] as num?)?.toInt() ?? 0;
+    final planned = (summary['planned_exercises'] as num?)?.toInt() ?? 0;
+    final completed = (summary['completed_exercises'] as num?)?.toInt() ?? 0;
+    final skipped = (summary['skipped_exercises'] as num?)?.toInt() ?? 0;
+    final exercises = (summary['exercises'] as List<dynamic>? ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Workout summary'),
+        content: SizedBox(
+          width: 480,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Completed $completed of $planned planned exercises'),
+                const SizedBox(height: 8),
+                Text('Skipped: $skipped'),
+                const SizedBox(height: 8),
+                Text('Duration: ${duration ~/ 60}m ${duration % 60}s'),
+                const SizedBox(height: 8),
+                Text(
+                  'Compatible volume: ${((summary['total_compatible_volume'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)} kg',
+                ),
+                if (exercises.isNotEmpty) ...[
+                  const Divider(height: 28),
+                  ...exercises.map((exercise) {
+                    final mode =
+                        exercise['tracking_mode']?.toString() ?? 'reps';
+                    final plannedMetrics = Map<String, dynamic>.from(
+                      exercise['planned'] as Map? ?? const {},
+                    );
+                    final performedMetrics = Map<String, dynamic>.from(
+                      exercise['performed'] as Map? ?? const {},
+                    );
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            exercise['exercise_name']?.toString() ?? 'Exercise',
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Planned: ${_summaryMetric(mode, plannedMetrics, planned: true)}',
+                          ),
+                          Text(
+                            'Performed: ${_summaryMetric(mode, performedMetrics, planned: false)}',
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _summaryMetric(
+    String mode,
+    Map<String, dynamic> values, {
+    required bool planned,
+  }) {
+    if (mode == 'timed') {
+      return '${(values['duration_seconds'] as num?)?.toInt() ?? 0}s';
+    }
+    if (mode == 'cardio' || mode == 'distance') {
+      final distance = (values['distance_meters'] as num?)?.toDouble() ?? 0;
+      final duration = (values['duration_seconds'] as num?)?.toInt() ?? 0;
+      return '${distance.toStringAsFixed(0)}m • ${duration}s';
+    }
+    if (planned) {
+      return '${values['reps'] ?? 'open'} reps • ${values['load'] ?? 0} kg';
+    }
+    return '${(values['reps'] as num?)?.toInt() ?? 0} reps • max ${values['max_load'] ?? 0} kg';
   }
 
   Future<void> _showCompletionCelebration(BuildContext context, bool hasPr) {
@@ -7754,6 +8359,10 @@ class _WorkoutExerciseCard extends StatefulWidget {
     required this.onUpdateSet,
     required this.onDeleteSet,
     required this.onStartRest,
+    required this.runningWorkSetIndex,
+    required this.workElapsedSeconds,
+    required this.onStartWork,
+    required this.onFinishWork,
   });
 
   final Map<String, dynamic> exercise;
@@ -7769,6 +8378,10 @@ class _WorkoutExerciseCard extends StatefulWidget {
   final void Function(int setIndex, String field, String value) onUpdateSet;
   final ValueChanged<int> onDeleteSet;
   final ValueChanged<int> onStartRest;
+  final int? runningWorkSetIndex;
+  final int workElapsedSeconds;
+  final ValueChanged<int> onStartWork;
+  final VoidCallback onFinishWork;
 
   @override
   State<_WorkoutExerciseCard> createState() => _WorkoutExerciseCardState();
@@ -7811,14 +8424,18 @@ class _WorkoutExerciseCardState extends State<_WorkoutExerciseCard> {
     final sets = (widget.exercise['sets'] as List<dynamic>? ?? const [])
         .map((item) => Map<String, dynamic>.from(item as Map))
         .toList();
+    final trackingMode = widget.exercise['tracking_mode']?.toString() ?? 'reps';
     final previousBest = widget.previousBest;
-    final completedSetCount = sets
-        .where(
-          (set) =>
-              ((set['reps'] as num?)?.toInt() ?? 0) > 0 ||
-              ((set['weight'] as num?)?.toDouble() ?? 0) > 0,
-        )
-        .length;
+    final completedSetCount = sets.where((set) {
+      if (trackingMode == 'timed') {
+        return ((set['duration_seconds'] as num?)?.toInt() ?? 0) > 0;
+      }
+      if (trackingMode == 'cardio' || trackingMode == 'distance') {
+        return ((set['distance_meters'] as num?)?.toDouble() ?? 0) > 0 ||
+            ((set['duration_seconds'] as num?)?.toInt() ?? 0) > 0;
+      }
+      return ((set['reps'] as num?)?.toInt() ?? 0) > 0;
+    }).length;
     final plannedSets =
         (widget.exercise['planned_sets'] as num?)?.toInt() ?? sets.length;
     final plannedReps = widget.exercise['planned_reps']?.toString();
@@ -7925,7 +8542,8 @@ class _WorkoutExerciseCardState extends State<_WorkoutExerciseCard> {
             children: [
               _WorkoutMetaChip(
                 icon: Icons.track_changes_rounded,
-                label: '$completedSetCount of $plannedSets sets',
+                label:
+                    '${_trackingModeLabel(trackingMode)} • $completedSetCount of $plannedSets sets',
               ),
               if (plannedReps != null && plannedReps.isNotEmpty)
                 _WorkoutMetaChip(
@@ -7970,6 +8588,8 @@ class _WorkoutExerciseCardState extends State<_WorkoutExerciseCard> {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: _WorkoutSetRow(
                       set: entry.value,
+                      trackingMode: trackingMode,
+                      isPerSide: widget.exercise['is_per_side'] == true,
                       onChanged: (field, value) =>
                           widget.onUpdateSet(entry.key, field, value),
                       onDelete: () => widget.onDeleteSet(entry.key),
@@ -7979,6 +8599,13 @@ class _WorkoutExerciseCardState extends State<_WorkoutExerciseCard> {
                                 ?.toInt() ??
                             45,
                       ),
+                      workTimerRunning: widget.runningWorkSetIndex == entry.key,
+                      workElapsedSeconds:
+                          widget.runningWorkSetIndex == entry.key
+                          ? widget.workElapsedSeconds
+                          : 0,
+                      onStartWork: () => widget.onStartWork(entry.key),
+                      onFinishWork: widget.onFinishWork,
                     ),
                   ),
                 ),
@@ -8075,6 +8702,13 @@ class _WorkoutExerciseCardState extends State<_WorkoutExerciseCard> {
     final reps = (record['best_reps'] as num?)?.toInt() ?? 0;
     return '${weight.toStringAsFixed(0)}kg x $reps';
   }
+
+  String _trackingModeLabel(String mode) => switch (mode) {
+    'timed' => 'Timed',
+    'cardio' => 'Cardio',
+    'distance' => 'Distance',
+    _ => 'Reps & load',
+  };
 }
 
 class _WorkoutMetaChip extends StatelessWidget {
@@ -8113,15 +8747,27 @@ class _WorkoutMetaChip extends StatelessWidget {
 class _WorkoutSetRow extends StatelessWidget {
   const _WorkoutSetRow({
     required this.set,
+    required this.trackingMode,
+    required this.isPerSide,
     required this.onChanged,
     required this.onDelete,
     required this.onStartRest,
+    required this.workTimerRunning,
+    required this.workElapsedSeconds,
+    required this.onStartWork,
+    required this.onFinishWork,
   });
 
   final Map<String, dynamic> set;
+  final String trackingMode;
+  final bool isPerSide;
   final void Function(String field, String value) onChanged;
   final VoidCallback onDelete;
   final VoidCallback onStartRest;
+  final bool workTimerRunning;
+  final int workElapsedSeconds;
+  final VoidCallback onStartWork;
+  final VoidCallback onFinishWork;
 
   @override
   Widget build(BuildContext context) {
@@ -8134,188 +8780,156 @@ class _WorkoutSetRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.stroke.withValues(alpha: 0.92)),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 520;
-          return Column(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              if (compact) ...[
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                    children: [
-                      _WorkoutSetIndex(number: setNumber),
-                      const SizedBox(width: 10),
-                      _WorkoutInlineBadge(label: '$restSeconds sec rest'),
-                    ],
-                  ),
+              _WorkoutSetIndex(number: setNumber),
+              const SizedBox(width: 10),
+              _WorkoutInlineBadge(label: '$restSeconds sec rest'),
+              const Spacer(),
+              IconButton(
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline_rounded),
+                color: AppColors.error,
+                tooltip: 'Delete set',
+              ),
+            ],
+          ),
+          if (isPerSide) ...[
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              key: ValueKey('set-$setNumber-side-${set['side']}'),
+              initialValue:
+                  const {
+                    'left',
+                    'right',
+                    'both',
+                    'alternating',
+                  }.contains(set['side']?.toString())
+                  ? set['side']?.toString()
+                  : 'both',
+              decoration: const InputDecoration(labelText: 'Side'),
+              items: const [
+                DropdownMenuItem(value: 'both', child: Text('Both sides')),
+                DropdownMenuItem(value: 'left', child: Text('Left')),
+                DropdownMenuItem(value: 'right', child: Text('Right')),
+                DropdownMenuItem(
+                  value: 'alternating',
+                  child: Text('Alternating'),
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        initialValue:
-                            ((set['weight'] as num?)?.toDouble() ?? 0) == 0
-                            ? ''
-                            : ((set['weight'] as num?)?.toDouble() ?? 0)
-                                  .toStringAsFixed(0),
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: const InputDecoration(labelText: 'kg'),
-                        onChanged: (value) => onChanged('weight', value),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextFormField(
-                        initialValue: ((set['reps'] as num?)?.toInt() ?? 0) == 0
-                            ? ''
-                            : '${(set['reps'] as num?)?.toInt() ?? 0}',
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'reps'),
-                        onChanged: (value) => onChanged('reps', value),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  initialValue: '$restSeconds',
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Rest'),
+              ],
+              onChanged: (value) => onChanged('side', value ?? 'both'),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Wrap(spacing: 10, runSpacing: 10, children: _metricFields()),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _WorkoutNumberField(
+                  label: 'Rest sec',
+                  value: restSeconds,
                   onChanged: (value) => onChanged('rest_seconds', value),
                 ),
-                const SizedBox(height: 10),
-                TextFormField(
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextFormField(
                   initialValue: set['notes']?.toString() ?? '',
                   decoration: const InputDecoration(labelText: 'Set notes'),
                   onChanged: (value) => onChanged('notes', value),
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: onStartRest,
-                        icon: const Icon(Icons.timer_outlined),
-                        label: const Text('Rest'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.primaryBright,
-                          side: const BorderSide(color: AppColors.strokeStrong),
-                          backgroundColor: AppColors.surface,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    IconButton(
-                      onPressed: onDelete,
-                      icon: const Icon(Icons.delete_outline_rounded),
-                      color: AppColors.error,
-                      tooltip: 'Delete set',
-                    ),
-                  ],
-                ),
-              ] else ...[
-                Row(
-                  children: [
-                    SizedBox(
-                      width: 106,
-                      child: Row(
-                        children: [
-                          _WorkoutSetIndex(number: setNumber),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _WorkoutInlineBadge(
-                              label: '$restSeconds sec',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: TextFormField(
-                        initialValue:
-                            ((set['weight'] as num?)?.toDouble() ?? 0) == 0
-                            ? ''
-                            : ((set['weight'] as num?)?.toDouble() ?? 0)
-                                  .toStringAsFixed(0),
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: const InputDecoration(labelText: 'kg'),
-                        onChanged: (value) => onChanged('weight', value),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextFormField(
-                        initialValue: ((set['reps'] as num?)?.toInt() ?? 0) == 0
-                            ? ''
-                            : '${(set['reps'] as num?)?.toInt() ?? 0}',
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'reps'),
-                        onChanged: (value) => onChanged('reps', value),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        initialValue: '$restSeconds',
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Rest'),
-                        onChanged: (value) => onChanged('rest_seconds', value),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextFormField(
-                        initialValue: set['notes']?.toString() ?? '',
-                        decoration: const InputDecoration(
-                          labelText: 'Set notes',
-                        ),
-                        onChanged: (value) => onChanged('notes', value),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      width: 108,
-                      child: OutlinedButton.icon(
-                        onPressed: onStartRest,
-                        icon: const Icon(Icons.timer_outlined),
-                        label: const Text('Rest'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.primaryBright,
-                          side: const BorderSide(color: AppColors.strokeStrong),
-                          backgroundColor: AppColors.surface,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      onPressed: onDelete,
-                      icon: const Icon(Icons.delete_outline_rounded),
-                      color: AppColors.error,
-                      tooltip: 'Delete set',
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ],
-          );
-        },
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: onStartRest,
+                icon: const Icon(Icons.timer_outlined),
+                label: const Text('Start rest'),
+              ),
+              if (trackingMode == 'timed' || trackingMode == 'cardio')
+                FilledButton.icon(
+                  onPressed: workTimerRunning ? onFinishWork : onStartWork,
+                  icon: Icon(
+                    workTimerRunning
+                        ? Icons.stop_circle_outlined
+                        : Icons.play_arrow_rounded,
+                  ),
+                  label: Text(
+                    workTimerRunning
+                        ? 'Finish ${workElapsedSeconds}s'
+                        : 'Start work timer',
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
+    );
+  }
+
+  List<Widget> _metricFields() {
+    Widget field(String key, String label) => SizedBox(
+      width: 132,
+      child: _WorkoutNumberField(
+        label: label,
+        value: set[key] as num?,
+        decimal:
+            key == 'weight' || key == 'distance_meters' || key == 'speed_kph',
+        onChanged: (value) => onChanged(key, value),
+      ),
+    );
+
+    return switch (trackingMode) {
+      'timed' => [
+        field('duration_seconds', 'Duration sec'),
+        field('weight', 'Load kg'),
+      ],
+      'cardio' => [
+        field('duration_seconds', 'Duration sec'),
+        field('distance_meters', 'Distance m'),
+        field('speed_kph', 'Speed km/h'),
+        field('pace_seconds_per_km', 'Pace sec/km'),
+      ],
+      'distance' => [
+        field('distance_meters', 'Distance m'),
+        field('duration_seconds', 'Duration sec'),
+        field('weight', 'Load kg'),
+      ],
+      _ => [field('weight', 'Load kg'), field('reps', 'Reps')],
+    };
+  }
+}
+
+class _WorkoutNumberField extends StatelessWidget {
+  const _WorkoutNumberField({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.decimal = false,
+  });
+
+  final String label;
+  final num? value;
+  final ValueChanged<String> onChanged;
+  final bool decimal;
+
+  @override
+  Widget build(BuildContext context) {
+    final numericValue = value ?? 0;
+    return TextFormField(
+      initialValue: numericValue == 0 ? '' : numericValue.toString(),
+      keyboardType: TextInputType.numberWithOptions(decimal: decimal),
+      decoration: InputDecoration(labelText: label),
+      onChanged: onChanged,
     );
   }
 }
@@ -8382,11 +8996,17 @@ class _RestTimerOverlay extends StatelessWidget {
     required this.exerciseName,
     required this.remainingSeconds,
     required this.totalSeconds,
+    required this.onSubtract,
+    required this.onAdd,
+    required this.onSkip,
   });
 
   final String exerciseName;
   final int remainingSeconds;
   final int totalSeconds;
+  final VoidCallback onSubtract;
+  final VoidCallback onAdd;
+  final VoidCallback onSkip;
 
   @override
   Widget build(BuildContext context) {
@@ -8431,6 +9051,47 @@ class _RestTimerOverlay extends StatelessWidget {
               fontWeight: FontWeight.w900,
             ),
           ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            children: [
+              OutlinedButton(onPressed: onSubtract, child: const Text('-15s')),
+              OutlinedButton(onPressed: onAdd, child: const Text('+15s')),
+              TextButton(onPressed: onSkip, child: const Text('Skip')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkTimerOverlay extends StatelessWidget {
+  const _WorkTimerOverlay({
+    required this.elapsedSeconds,
+    required this.onFinish,
+    required this.onCancel,
+  });
+
+  final int elapsedSeconds;
+  final VoidCallback onFinish;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    return PremiumCard(
+      child: Row(
+        children: [
+          const Icon(Icons.av_timer_rounded, color: AppColors.primaryBright),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Work timer • ${elapsedSeconds}s',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          TextButton(onPressed: onCancel, child: const Text('Cancel')),
+          FilledButton(onPressed: onFinish, child: const Text('Finish')),
         ],
       ),
     );

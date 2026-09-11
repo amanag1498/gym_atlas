@@ -23,7 +23,8 @@ class StartWorkoutSessionRequest extends FormRequest
             ],
             'session_date' => ['required', 'date'],
             'notes' => ['nullable', 'string'],
-            'allow_duplicate_active_session' => ['nullable', 'boolean'],
+            'pre_workout_weight_kg' => ['nullable', 'numeric', 'between:20,500'],
+            'save_pre_workout_weight' => ['nullable', 'boolean'],
         ];
     }
 }

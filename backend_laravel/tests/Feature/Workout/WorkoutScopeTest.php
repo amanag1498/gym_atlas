@@ -336,6 +336,225 @@ class WorkoutScopeTest extends TestCase
             ->assertJsonPath('data.capabilities.workout_day_selection', true);
     }
 
+    public function test_mode_aware_plan_round_trips_through_session_and_completion_summary(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch] = $this->makeGymContext();
+        $trainer = $this->makeTrainer($gym, $branch);
+        $member = $this->makeMember($gym, $branch, $trainer->id);
+        [$exercise] = $this->makePlanExercises($gym, $branch, $trainer);
+
+        $plan = app(WorkoutPlanService::class)->createMemberPlan($member, [
+            'name' => 'Timed conditioning',
+            'duration_weeks' => 2,
+            'days' => [[
+                'day_number' => 1,
+                'exercises' => [[
+                    'exercise_id' => $exercise->id,
+                    'sets' => 2,
+                    'tracking_mode' => 'timed',
+                    'planned_duration_seconds' => 45,
+                    'target_weight' => 12.5,
+                    'target_resistance' => 4,
+                    'is_per_side' => true,
+                    'rest_seconds' => 30,
+                ]],
+            ]],
+        ]);
+
+        $started = $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/workout-sessions/start', [
+                'workout_plan_id' => $plan->id,
+                'workout_plan_day_id' => $plan->days->first()->id,
+                'session_date' => now()->toDateString(),
+                'pre_workout_weight_kg' => 72.4,
+                'save_pre_workout_weight' => true,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.exercises.0.tracking_mode', 'timed')
+            ->assertJsonPath('data.exercises.0.planned_duration_seconds', 45)
+            ->assertJsonPath('data.exercises.0.is_per_side', true)
+            ->assertJsonPath('data.pre_workout_weight_kg', 72.4);
+
+        $sessionId = $started->json('data.id');
+        $sessionExerciseId = $started->json('data.exercises.0.id');
+
+        $restEndsAt = now()->addMinute()->toIso8601String();
+        $this->actingAs($member, 'sanctum')
+            ->putJson("/api/member/workout-sessions/{$sessionId}/progress", [
+                'exercises' => [[
+                    'id' => $sessionExerciseId,
+                    'notes' => 'Autosaved draft',
+                    'sets' => [[
+                        'set_number' => 1,
+                        'duration_seconds' => 31,
+                        'weight' => 12.5,
+                        'is_completed' => true,
+                    ]],
+                ]],
+                'runtime_state' => [
+                    'rest_exercise_index' => 0,
+                    'rest_ends_at' => $restEndsAt,
+                    'rest_total_seconds' => 60,
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.exercises.0.sets.0.duration_seconds', 31);
+
+        $this->actingAs($member, 'sanctum')
+            ->getJson('/api/member/workout-sessions/active')
+            ->assertOk()
+            ->assertJsonPath('data.id', $sessionId)
+            ->assertJsonPath('data.exercises.0.tracking_mode', 'timed')
+            ->assertJsonPath('data.exercises.0.sets.0.duration_seconds', 31)
+            ->assertJsonPath('data.runtime_state.rest_exercise_index', 0);
+
+        $this->actingAs($member, 'sanctum')
+            ->postJson("/api/member/workout-sessions/{$sessionId}/complete", [
+                'exercises' => [[
+                    'id' => $sessionExerciseId,
+                    'exercise_id' => $exercise->id,
+                    'tracking_mode' => 'timed',
+                    'performed_status' => 'completed',
+                    'sets' => [[
+                        'set_number' => 1,
+                        'duration_seconds' => 47,
+                        'weight' => 12.5,
+                        'effort_scale' => 'rpe',
+                        'effort_value' => 8,
+                        'side' => 'both',
+                        'is_completed' => true,
+                    ]],
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.exercises.0.sets.0.duration_seconds', 47)
+            ->assertJsonPath('data.exercises.0.sets.0.effort_scale', 'rpe')
+            ->assertJsonPath('data.completion_summary.completed_exercises', 1)
+            ->assertJsonPath('data.completion_summary.exercises.0.performed.duration_seconds', 47);
+
+        $this->assertDatabaseHas('weight_logs', [
+            'member_id' => $member->id,
+            'weight_kg' => 72.4,
+        ]);
+    }
+
+    public function test_completed_timed_and_distance_sets_require_mode_specific_actuals(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch] = $this->makeGymContext();
+        $trainer = $this->makeTrainer($gym, $branch);
+        $member = $this->makeMember($gym, $branch, $trainer->id);
+        [$exercise] = $this->makePlanExercises($gym, $branch, $trainer);
+
+        $sessionId = $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/workout-sessions/start', [
+                'session_date' => now()->toDateString(),
+            ])
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->actingAs($member, 'sanctum')
+            ->postJson("/api/member/workout-sessions/{$sessionId}/complete", [
+                'exercises' => [[
+                    'exercise_id' => $exercise->id,
+                    'tracking_mode' => 'timed',
+                    'sets' => [['set_number' => 1, 'is_completed' => true]],
+                ]],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('exercises.0.sets.0.duration_seconds');
+    }
+
+    public function test_cardio_and_distance_actuals_round_trip_without_creating_rep_volume(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch] = $this->makeGymContext();
+        $trainer = $this->makeTrainer($gym, $branch);
+        $member = $this->makeMember($gym, $branch, $trainer->id);
+        [$cardioExercise, $distanceExercise] = $this->makePlanExercises($gym, $branch, $trainer);
+
+        $plan = app(WorkoutPlanService::class)->createMemberPlan($member, [
+            'name' => 'Conditioning modes',
+            'duration_weeks' => 2,
+            'days' => [[
+                'day_number' => 1,
+                'exercises' => [[
+                    'exercise_id' => $cardioExercise->id,
+                    'sets' => 1,
+                    'tracking_mode' => 'cardio',
+                    'planned_duration_seconds' => 600,
+                    'planned_speed_kph' => 9.5,
+                ], [
+                    'exercise_id' => $distanceExercise->id,
+                    'sets' => 1,
+                    'tracking_mode' => 'distance',
+                    'planned_distance_meters' => 1000,
+                ]],
+            ]],
+        ]);
+
+        $started = $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/workout-sessions/start', [
+                'workout_plan_id' => $plan->id,
+                'workout_plan_day_id' => $plan->days->first()->id,
+                'session_date' => now()->toDateString(),
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.exercises.0.tracking_mode', 'cardio')
+            ->assertJsonPath('data.exercises.1.tracking_mode', 'distance');
+
+        $sessionId = $started->json('data.id');
+        $sessionExercises = $started->json('data.exercises');
+
+        $this->actingAs($member, 'sanctum')
+            ->postJson("/api/member/workout-sessions/{$sessionId}/complete", [
+                'exercises' => [[
+                    'id' => $sessionExercises[0]['id'],
+                    'exercise_id' => $cardioExercise->id,
+                    'tracking_mode' => 'cardio',
+                    'sets' => [[
+                        'set_number' => 1,
+                        'duration_seconds' => 615,
+                        'distance_meters' => 1500,
+                        'speed_kph' => 9.8,
+                    ]],
+                ], [
+                    'id' => $sessionExercises[1]['id'],
+                    'exercise_id' => $distanceExercise->id,
+                    'tracking_mode' => 'distance',
+                    'sets' => [[
+                        'set_number' => 1,
+                        'duration_seconds' => 280,
+                        'distance_meters' => 1000,
+                        'pace_seconds_per_km' => 280,
+                    ]],
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.total_volume', 0)
+            ->assertJsonPath('data.completion_summary.exercises.0.performed.distance_meters', 1500)
+            ->assertJsonPath('data.completion_summary.exercises.1.performed.best_pace_seconds_per_km', 280);
+    }
+
+    public function test_active_session_endpoint_does_not_expose_another_members_session(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch] = $this->makeGymContext();
+        $trainer = $this->makeTrainer($gym, $branch);
+        $member = $this->makeMember($gym, $branch, $trainer->id);
+        $otherMember = $this->makeMember($gym, $branch, $trainer->id);
+
+        $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/workout-sessions/start', ['session_date' => now()->toDateString()])
+            ->assertCreated();
+
+        $this->actingAs($otherMember, 'sanctum')
+            ->getJson('/api/member/workout-sessions/active')
+            ->assertOk()
+            ->assertJsonPath('data', null);
+    }
+
     /**
      * @return array{0: Exercise, 1: Exercise}
      */

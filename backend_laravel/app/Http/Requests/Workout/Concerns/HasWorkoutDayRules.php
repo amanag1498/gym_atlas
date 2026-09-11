@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\Workout\Concerns;
 
+use Illuminate\Validation\Rule;
+
 trait HasWorkoutDayRules
 {
     /**
@@ -19,8 +21,17 @@ trait HasWorkoutDayRules
             $prefix.'.*.exercises.*.exercise_id' => ['required', 'integer', 'exists:exercises,id'],
             $prefix.'.*.exercises.*.sort_order' => ['nullable', 'integer', 'min:1'],
             $prefix.'.*.exercises.*.sets' => ['required', 'integer', 'min:1'],
+            $prefix.'.*.exercises.*.tracking_mode' => ['nullable', Rule::in(['reps', 'timed', 'cardio', 'distance'])],
             $prefix.'.*.exercises.*.reps' => ['nullable', 'string', 'max:100'],
+            $prefix.'.*.exercises.*.planned_duration_seconds' => ['nullable', 'integer', 'min:1', 'max:86400'],
+            $prefix.'.*.exercises.*.planned_distance_meters' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
+            $prefix.'.*.exercises.*.planned_speed_kph' => ['nullable', 'numeric', 'min:0', 'max:200'],
+            $prefix.'.*.exercises.*.planned_pace_seconds_per_km' => ['nullable', 'integer', 'min:1', 'max:86400'],
             $prefix.'.*.exercises.*.target_weight' => ['nullable', 'numeric', 'min:0'],
+            $prefix.'.*.exercises.*.target_resistance' => ['nullable', 'numeric', 'min:0'],
+            $prefix.'.*.exercises.*.target_machine_level' => ['nullable', 'numeric', 'min:0'],
+            $prefix.'.*.exercises.*.is_per_side' => ['nullable', 'boolean'],
+            $prefix.'.*.exercises.*.is_bodyweight' => ['nullable', 'boolean'],
             $prefix.'.*.exercises.*.rest_seconds' => ['nullable', 'integer', 'min:0'],
             $prefix.'.*.exercises.*.notes' => ['nullable', 'string'],
         ];

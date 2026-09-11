@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Api\Member;
 
+use App\Enums\WorkoutSessionStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Workout\AddWorkoutExerciseRequest;
 use App\Http\Requests\Workout\AdoptWorkoutBookPlanRequest;
 use App\Http\Requests\Workout\CompleteWorkoutSessionRequest;
 use App\Http\Requests\Workout\DuplicateMemberWorkoutPlanRequest;
+use App\Http\Requests\Workout\SaveWorkoutSessionProgressRequest;
 use App\Http\Requests\Workout\StartWorkoutSessionRequest;
 use App\Http\Requests\Workout\StoreMemberWorkoutPlanRequest;
 use App\Http\Requests\Workout\UpdateMemberWorkoutPlanRequest;
@@ -404,6 +406,30 @@ class WorkoutController extends Controller
         $this->workoutAccessService->assertSessionReadAccess($request->user(), $workoutSession);
 
         return $this->success(WorkoutSessionResource::make($workoutSession->load('exercises.exercise', 'exercises.sets')));
+    }
+
+    public function saveProgress(SaveWorkoutSessionProgressRequest $request, WorkoutSession $workoutSession)
+    {
+        $this->workoutAccessService->assertSessionAccess($request->user(), $workoutSession);
+        $session = $this->workoutSessionService->saveProgress($workoutSession, $request->validated());
+
+        return $this->success(WorkoutSessionResource::make($session), 'Workout progress saved successfully.');
+    }
+
+    public function activeSession(Request $request)
+    {
+        $session = WorkoutSession::query()
+            ->with('exercises.exercise', 'exercises.sets')
+            ->where('member_id', $request->user()->id)
+            ->where('status', WorkoutSessionStatus::Active->value)
+            ->latest('started_at')
+            ->latest('id')
+            ->first();
+
+        return $this->success(
+            $session ? WorkoutSessionResource::make($session) : null,
+            $session ? 'Active workout session fetched successfully.' : 'No active workout session found.',
+        );
     }
 
     public function complete(CompleteWorkoutSessionRequest $request, WorkoutSession $workoutSession)

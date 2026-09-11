@@ -94,7 +94,12 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   final _repsController = TextEditingController(text: '10');
   final _targetWeightController = TextEditingController();
   final _restController = TextEditingController(text: '60');
+  final _durationSecondsController = TextEditingController();
+  final _distanceMetersController = TextEditingController();
+  final _speedKphController = TextEditingController();
+  final _paceSecondsController = TextEditingController();
   final _exerciseNotesController = TextEditingController();
+  String _trackingMode = 'reps';
   String _difficulty = 'intermediate';
   final List<_PlanDayDraft> _dayDrafts = <_PlanDayDraft>[];
   int _selectedBuilderDayIndex = 0;
@@ -134,6 +139,10 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     _repsController.dispose();
     _targetWeightController.dispose();
     _restController.dispose();
+    _durationSecondsController.dispose();
+    _distanceMetersController.dispose();
+    _speedKphController.dispose();
+    _paceSecondsController.dispose();
     _exerciseNotesController.dispose();
     for (final day in _dayDrafts) {
       day.dispose();
@@ -750,6 +759,14 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     draft.repPreset = _repPresetFor(draft.repsController.text);
     draft.targetWeightController.text = _targetWeightController.text.trim();
     draft.restController.text = _restController.text.trim();
+    draft.trackingMode = _trackingMode;
+    draft.durationSecondsController.text = _durationSecondsController.text
+        .trim();
+    draft.distanceMetersController.text = _distanceMetersController.text.trim();
+    draft.speedKphController.text = _speedKphController.text.trim();
+    draft.paceSecondsController.text = _paceSecondsController.text.trim();
+    draft.isPerSide = selectedExercise['is_per_side'] == true;
+    draft.isBodyweight = selectedExercise['is_bodyweight'] == true;
     draft.notesController.text = _exerciseNotesController.text.trim();
 
     setState(() {
@@ -1203,8 +1220,22 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                       ),
                     );
                   }).toList(),
-                  onChanged: (value) =>
-                      setState(() => _selectedBuilderExerciseId = value),
+                  onChanged: (value) => setState(() {
+                    _selectedBuilderExerciseId = value;
+                    final selected = _exerciseById(value);
+                    final suggested =
+                        selected?['default_tracking_mode']?.toString() ??
+                        'reps';
+                    _trackingMode =
+                        const {
+                          'reps',
+                          'timed',
+                          'cardio',
+                          'distance',
+                        }.contains(suggested)
+                        ? suggested
+                        : 'reps';
+                  }),
                   decoration: _memberWorkoutInputDecoration(
                     'Exercise picker',
                     icon: Icons.fitness_center_rounded,
@@ -1212,6 +1243,26 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                 ),
                 const SizedBox(height: 12),
                 _buildExerciseMetaPanel(context, selectedExercise),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  key: ValueKey('member-tracking-mode-$_trackingMode'),
+                  initialValue: _trackingMode,
+                  decoration: _memberWorkoutInputDecoration(
+                    'Tracking mode',
+                    icon: Icons.track_changes_rounded,
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'reps', child: Text('Reps & load')),
+                    DropdownMenuItem(value: 'timed', child: Text('Timed work')),
+                    DropdownMenuItem(value: 'cardio', child: Text('Cardio')),
+                    DropdownMenuItem(
+                      value: 'distance',
+                      child: Text('Distance'),
+                    ),
+                  ],
+                  onChanged: (value) =>
+                      setState(() => _trackingMode = value ?? 'reps'),
+                ),
                 const SizedBox(height: 12),
                 LayoutBuilder(
                   builder: (context, constraints) {
@@ -1255,6 +1306,63 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                   },
                 ),
                 const SizedBox(height: 12),
+                if (_trackingMode != 'reps') ...[
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      SizedBox(
+                        width: 180,
+                        child: TextField(
+                          controller: _durationSecondsController,
+                          keyboardType: TextInputType.number,
+                          decoration: _memberWorkoutInputDecoration(
+                            'Target duration sec',
+                          ),
+                        ),
+                      ),
+                      if (_trackingMode == 'cardio' ||
+                          _trackingMode == 'distance')
+                        SizedBox(
+                          width: 180,
+                          child: TextField(
+                            controller: _distanceMetersController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: _memberWorkoutInputDecoration(
+                              'Target distance m',
+                            ),
+                          ),
+                        ),
+                      if (_trackingMode == 'cardio') ...[
+                        SizedBox(
+                          width: 180,
+                          child: TextField(
+                            controller: _speedKphController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: _memberWorkoutInputDecoration(
+                              'Target speed km/h',
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 180,
+                          child: TextField(
+                            controller: _paceSecondsController,
+                            keyboardType: TextInputType.number,
+                            decoration: _memberWorkoutInputDecoration(
+                              'Target pace sec/km',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final compact = constraints.maxWidth < 680;
@@ -1701,6 +1809,18 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
           exerciseDraft.repsController.text,
         );
         exerciseDraft.restController.text = '${exercise['rest_seconds'] ?? 60}';
+        exerciseDraft.trackingMode =
+            exercise['tracking_mode']?.toString() ?? 'reps';
+        exerciseDraft.durationSecondsController.text =
+            exercise['planned_duration_seconds']?.toString() ?? '';
+        exerciseDraft.distanceMetersController.text =
+            exercise['planned_distance_meters']?.toString() ?? '';
+        exerciseDraft.speedKphController.text =
+            exercise['planned_speed_kph']?.toString() ?? '';
+        exerciseDraft.paceSecondsController.text =
+            exercise['planned_pace_seconds_per_km']?.toString() ?? '';
+        exerciseDraft.isPerSide = exercise['is_per_side'] == true;
+        exerciseDraft.isBodyweight = exercise['is_bodyweight'] == true;
         exerciseDraft.targetWeightController.text =
             exercise['target_weight']?.toString() ?? '';
         exerciseDraft.notesController.text =
@@ -1789,8 +1909,15 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
               'exercise_id': item.exerciseId,
               'sort_order': exerciseEntry.key + 1,
               'sets': item.sets,
+              'tracking_mode': item.trackingMode,
               'reps': item.reps,
+              'planned_duration_seconds': item.durationSeconds,
+              'planned_distance_meters': item.distanceMeters,
+              'planned_speed_kph': item.speedKph,
+              'planned_pace_seconds_per_km': item.paceSeconds,
               'target_weight': item.targetWeight,
+              'is_per_side': item.isPerSide,
+              'is_bodyweight': item.isBodyweight,
               'rest_seconds': item.restSeconds,
               'notes': item.notes,
             };
@@ -1848,6 +1975,11 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     _repsController.text = '10';
     _targetWeightController.clear();
     _restController.text = '60';
+    _durationSecondsController.clear();
+    _distanceMetersController.clear();
+    _speedKphController.clear();
+    _paceSecondsController.clear();
+    _trackingMode = 'reps';
     _exerciseNotesController.clear();
     _difficulty = 'intermediate';
     for (final day in _dayDrafts) {
@@ -3892,6 +4024,9 @@ class _PlanExerciseDraft {
   int? exerciseId;
   String? bodyPart;
   String repPreset = '8-12';
+  String trackingMode = 'reps';
+  bool isPerSide = false;
+  bool isBodyweight = false;
   final TextEditingController setsController = TextEditingController(text: '3');
   final TextEditingController repsController = TextEditingController(
     text: '8-12',
@@ -3900,12 +4035,24 @@ class _PlanExerciseDraft {
   final TextEditingController restController = TextEditingController(
     text: '60',
   );
+  final TextEditingController durationSecondsController =
+      TextEditingController();
+  final TextEditingController distanceMetersController =
+      TextEditingController();
+  final TextEditingController speedKphController = TextEditingController();
+  final TextEditingController paceSecondsController = TextEditingController();
   final TextEditingController notesController = TextEditingController();
 
   int get sets => int.tryParse(setsController.text.trim()) ?? 3;
   String get reps =>
       repsController.text.trim().isEmpty ? '10' : repsController.text.trim();
   int get restSeconds => int.tryParse(restController.text.trim()) ?? 60;
+  int? get durationSeconds =>
+      int.tryParse(durationSecondsController.text.trim());
+  double? get distanceMeters =>
+      double.tryParse(distanceMetersController.text.trim());
+  double? get speedKph => double.tryParse(speedKphController.text.trim());
+  int? get paceSeconds => int.tryParse(paceSecondsController.text.trim());
   double? get targetWeight => targetWeightController.text.trim().isEmpty
       ? null
       : double.tryParse(targetWeightController.text.trim());
@@ -3917,6 +4064,10 @@ class _PlanExerciseDraft {
     repsController.dispose();
     targetWeightController.dispose();
     restController.dispose();
+    durationSecondsController.dispose();
+    distanceMetersController.dispose();
+    speedKphController.dispose();
+    paceSecondsController.dispose();
     notesController.dispose();
   }
 }
