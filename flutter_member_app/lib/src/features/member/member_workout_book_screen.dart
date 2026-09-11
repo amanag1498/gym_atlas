@@ -94,6 +94,8 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   final _planProgressionIncrementController = TextEditingController(
     text: '2.5',
   );
+  final _planDeloadAfterController = TextEditingController(text: '3');
+  final _planDeloadPercentController = TextEditingController(text: '10');
   final _exerciseSearchController = TextEditingController();
   Timer? _exerciseSearchDebounce;
   final _setsController = TextEditingController(text: '4');
@@ -142,6 +144,8 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     _planProgressionMinRepsController.dispose();
     _planProgressionMaxRepsController.dispose();
     _planProgressionIncrementController.dispose();
+    _planDeloadAfterController.dispose();
+    _planDeloadPercentController.dispose();
     _exerciseSearchController.dispose();
     _exerciseSearchDebounce?.cancel();
     _setsController.dispose();
@@ -1073,6 +1077,28 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                         ),
                       ),
                     ),
+                    SizedBox(
+                      width: 180,
+                      child: TextField(
+                        controller: _planDeloadAfterController,
+                        keyboardType: TextInputType.number,
+                        decoration: _memberWorkoutInputDecoration(
+                          'Deload after misses',
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 180,
+                      child: TextField(
+                        controller: _planDeloadPercentController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: _memberWorkoutInputDecoration(
+                          'Deload percent',
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -1850,6 +1876,10 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
         progressionConfig['max_reps']?.toString() ?? '12';
     _planProgressionIncrementController.text =
         progressionConfig['load_increment_kg']?.toString() ?? '2.5';
+    _planDeloadAfterController.text =
+        progressionConfig['deload_after_misses']?.toString() ?? '3';
+    _planDeloadPercentController.text =
+        progressionConfig['deload_percent']?.toString() ?? '10';
     final difficulty = plan['difficulty']?.toString() ?? 'intermediate';
     _difficulty =
         const <String>{
@@ -1985,6 +2015,11 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                     _planProgressionIncrementController.text.trim(),
                   ) ??
                   2.5,
+              'deload_after_misses':
+                  int.tryParse(_planDeloadAfterController.text.trim()) ?? 3,
+              'deload_percent':
+                  double.tryParse(_planDeloadPercentController.text.trim()) ??
+                  10,
               if (_planProgressionPolicy == 'double_progression')
                 'min_reps':
                     int.tryParse(
@@ -2083,6 +2118,8 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     _planProgressionMinRepsController.text = '8';
     _planProgressionMaxRepsController.text = '12';
     _planProgressionIncrementController.text = '2.5';
+    _planDeloadAfterController.text = '3';
+    _planDeloadPercentController.text = '10';
     _exerciseSearchController.clear();
     _setsController.text = '4';
     _repsController.text = '10';

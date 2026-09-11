@@ -15,7 +15,7 @@ class ReviewWorkoutProgressionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'decision' => ['required', Rule::in(['approve', 'override', 'reject'])],
+            'decision' => ['required', Rule::in(['approve', 'override', 'reject', 'disable'])],
             'prescription' => ['required_if:decision,override', 'nullable', 'array'],
             'prescription.sets' => ['nullable', 'integer', 'min:1', 'max:100'],
             'prescription.reps' => ['nullable', 'string', 'max:100'],

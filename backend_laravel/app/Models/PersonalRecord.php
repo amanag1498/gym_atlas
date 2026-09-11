@@ -24,6 +24,7 @@ class PersonalRecord extends Model
         'estimated_one_rep_max_weight',
         'estimated_one_rep_max_reps',
         'estimated_one_rep_max_formula',
+        'estimated_one_rep_max_workout_set_id',
         'estimated_one_rep_max_achieved_at',
         'achieved_at',
     ];
@@ -87,5 +88,10 @@ class PersonalRecord extends Model
     public function workoutSession(): BelongsTo
     {
         return $this->belongsTo(WorkoutSession::class);
+    }
+
+    public function estimatedOneRepMaxWorkoutSet(): BelongsTo
+    {
+        return $this->belongsTo(WorkoutSet::class, 'estimated_one_rep_max_workout_set_id');
     }
 }

@@ -729,6 +729,10 @@ Route::prefix('trainer')
             ->middleware('permission:workout_plan.view|workout_plan.manage');
         Route::get('independent-members/{relationship}/workout-logbook', [IndependentMemberCoachingController::class, 'workoutLogbook'])
             ->middleware('permission:workout_session.view|progress.view');
+        Route::get('independent-members/{relationship}/workout-analytics', [IndependentMemberCoachingController::class, 'workoutAnalytics'])
+            ->middleware('permission:workout_session.view|progress.view');
+        Route::post('independent-members/{relationship}/workout-schedule-overrides', [IndependentMemberCoachingController::class, 'storeWorkoutScheduleOverride'])
+            ->middleware('permission:workout_plan.manage');
         Route::get('assigned-members/{member}', [TrainerAssignedMemberController::class, 'show'])
             ->middleware('permission:trainer.view|member.view');
         Route::get('assigned-members/{member}/attendance', [TrainerAssignedMemberController::class, 'attendance'])
@@ -753,6 +757,10 @@ Route::prefix('trainer')
             ->middleware('permission:workout_plan.view|workout_plan.manage');
         Route::get('assigned-members/{member}/workout-logbook', [TrainerAssignedMemberController::class, 'workoutLogbook'])
             ->middleware('permission:workout_session.view|progress.view');
+        Route::get('assigned-members/{member}/workout-analytics', [TrainerAssignedMemberController::class, 'workoutAnalytics'])
+            ->middleware('permission:workout_session.view|progress.view');
+        Route::post('assigned-members/{member}/workout-schedule-overrides', [TrainerAssignedMemberController::class, 'storeWorkoutScheduleOverride'])
+            ->middleware('permission:workout_plan.manage');
         Route::get('exercises', [TrainerExerciseController::class, 'index'])
             ->middleware('permission:exercise.view|exercise.manage');
         Route::get('exercises/{exercise}', [TrainerExerciseController::class, 'show'])
@@ -944,6 +952,18 @@ Route::prefix('member')
             ->middleware('permission:workout_session.view|progress.view');
         Route::get('progress/summary', [MemberProgressController::class, 'summary'])
             ->middleware('permission:progress.view');
+        Route::get('progress/workout-analytics', [MemberProgressController::class, 'analytics'])
+            ->middleware('permission:progress.view');
+        Route::get('workout-calendar', [MemberProgressController::class, 'calendar'])
+            ->middleware('permission:workout_plan.view|workout_session.manage');
+        Route::get('workout-preferences', [MemberProgressController::class, 'workoutPreferences'])
+            ->middleware('permission:progress.view|progress.manage');
+        Route::put('workout-preferences', [MemberProgressController::class, 'updateWorkoutPreferences'])
+            ->middleware('permission:progress.manage');
+        Route::post('workout-schedule-overrides', [MemberProgressController::class, 'storeScheduleOverride'])
+            ->middleware('permission:workout_plan.manage|workout_session.manage');
+        Route::delete('workout-schedule-overrides/{workoutScheduleOverride}', [MemberProgressController::class, 'cancelScheduleOverride'])
+            ->middleware('permission:workout_plan.manage|workout_session.manage');
         Route::post('steps/sync', [MemberStepController::class, 'sync'])
             ->middleware('permission:progress.manage');
         Route::get('steps/today', [MemberStepController::class, 'today'])

@@ -9,6 +9,7 @@ use App\Models\WeightLog;
 use App\Models\WorkoutPlan;
 use App\Models\WorkoutPlanDay;
 use App\Models\WorkoutProgressionRecommendation;
+use App\Models\WorkoutScheduleOverride;
 use App\Models\WorkoutSession;
 use App\Models\WorkoutSessionExercise;
 use App\Services\Member\MemberAppService;
@@ -78,6 +79,19 @@ class WorkoutSessionService
                 }
             }
 
+            $scheduleOverride = null;
+            if (isset($payload['workout_schedule_override_id'])) {
+                $scheduleOverride = WorkoutScheduleOverride::query()->whereKey($payload['workout_schedule_override_id'])
+                    ->where('member_id', $member->id)->where('status', 'active')->lockForUpdate()->firstOrFail();
+                if ($plan === null || (int) $scheduleOverride->workout_plan_id !== (int) $plan->id
+                    || (int) $scheduleOverride->workout_plan_day_id !== (int) ($selectedDay?->id)) {
+                    throw ValidationException::withMessages(['workout_schedule_override_id' => ['The schedule override does not match the selected plan day.']]);
+                }
+                if ($scheduleOverride->override_type === 'rest' || $scheduleOverride->replacement_date?->toDateString() !== $payload['session_date']) {
+                    throw ValidationException::withMessages(['session_date' => ['Start this workout on its active rescheduled date.']]);
+                }
+            }
+
             if ($plan !== null && $plan->gym_id === null) {
                 $gymId = null;
                 $branchId = null;
@@ -110,6 +124,7 @@ class WorkoutSessionService
                 'trainer_id' => $plan?->trainer_id,
                 'workout_plan_id' => $plan?->id,
                 'workout_plan_day_id' => $selectedDay?->id,
+                'workout_schedule_override_id' => $scheduleOverride?->id,
                 'plan_day_number' => $selectedDay?->day_number,
                 'plan_day_label' => $selectedDay?->label,
                 'day_selection_mode' => $plan === null
@@ -142,6 +157,9 @@ class WorkoutSessionService
                 $sessionDays = $selectedDay !== null ? collect([$selectedDay]) : $plan->days;
                 foreach ($sessionDays as $day) {
                     foreach ($day->exercises as $planExercise) {
+                        $latestProgression = $planExercise->progressionRecommendations()
+                            ->whereIn('status', ['applied', 'approved', 'overridden'])
+                            ->latest('id')->first();
                         $session->exercises()->create([
                             'workout_plan_exercise_id' => $planExercise->id,
                             'exercise_id' => $planExercise->exercise_id,
@@ -168,6 +186,8 @@ class WorkoutSessionService
                             'progression_policy' => $planExercise->progression_policy,
                             'progression_config' => $planExercise->progression_config,
                             'progression_version' => $planExercise->progression_version,
+                            'progression_recommendation_id' => $latestProgression?->id,
+                            'progression_explanation' => $latestProgression?->explanation,
                             'notes' => $planExercise->notes,
                         ]);
                     }
@@ -366,6 +386,7 @@ class WorkoutSessionService
                     'estimated_one_rep_max_weight' => $isNewEstimatedBest ? (float) $bestEstimatedSet->weight : $record->estimated_one_rep_max_weight,
                     'estimated_one_rep_max_reps' => $isNewEstimatedBest ? (int) $bestEstimatedSet->reps : $record->estimated_one_rep_max_reps,
                     'estimated_one_rep_max_formula' => $isNewEstimatedBest ? 'epley_v1' : $record->estimated_one_rep_max_formula,
+                    'estimated_one_rep_max_workout_set_id' => $isNewEstimatedBest ? $bestEstimatedSet->id : $record->estimated_one_rep_max_workout_set_id,
                     'estimated_one_rep_max_achieved_at' => $isNewEstimatedBest ? now() : $record->estimated_one_rep_max_achieved_at,
                     'achieved_at' => $isNewBest ? now() : $record->achieved_at,
                 ]);
@@ -500,6 +521,7 @@ class WorkoutSessionService
                 'policy' => $recommendation->policy,
                 'algorithm_version' => $recommendation->algorithm_version,
                 'recommended_prescription' => $recommendation->recommended_prescription,
+                'decision_inputs' => $recommendation->decision_inputs,
                 'explanation' => $recommendation->explanation,
             ])->values()->all(),
             'exercises' => $exerciseSummaries->all(),

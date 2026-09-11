@@ -12,6 +12,7 @@ void main() {
             subtitle: 'Recent check-ins',
             unit: ' kg',
             accentColor: Colors.blue,
+            goalValue: 78,
             points: [
               MetricChartPoint(label: '1 Aug', value: 82),
               MetricChartPoint(label: '8 Aug', value: 80.5),
@@ -24,6 +25,7 @@ void main() {
     expect(find.text('Weight trend'), findsOneWidget);
     expect(find.text('80.5 kg'), findsOneWidget);
     expect(find.text('-1.5 kg'), findsOneWidget);
+    expect(find.text('Goal: 78 kg'), findsOneWidget);
     expect(find.text('1 Aug'), findsOneWidget);
     expect(find.text('8 Aug'), findsOneWidget);
     expect(find.byType(CustomPaint), findsWidgets);

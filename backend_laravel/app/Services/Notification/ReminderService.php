@@ -8,7 +8,9 @@ use App\Enums\ReminderType;
 use App\Models\AttendanceLog;
 use App\Models\MemberMembership;
 use App\Models\MemberProfile;
+use App\Models\MemberWorkoutPreference;
 use App\Models\ScheduledReminder;
+use App\Models\WorkoutPlan;
 use App\Services\Members\GymMemberAccessService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -119,15 +121,18 @@ class ReminderService
         }
     }
 
-    public function runDueReminders(?string $type = null, ?int $gymId = null, ?int $branchId = null): Collection
+    public function runDueReminders(string|array|null $type = null, ?int $gymId = null, ?int $branchId = null): Collection
     {
-        $this->scheduleAttendanceInactivityReminders($gymId, $branchId);
+        if ($type === null || $type === ReminderType::AttendanceInactivity->value) {
+            $this->scheduleAttendanceInactivityReminders($gymId, $branchId);
+        }
 
         $query = ScheduledReminder::query()
             ->with(['user', 'gym:id,name', 'branch:id,name', 'membership.membershipPlan:id,name'])
             ->where('status', 'pending')
             ->where('scheduled_for', '<=', now())
-            ->when($type, fn (Builder $builder) => $builder->where('type', $type))
+            ->when(is_string($type), fn (Builder $builder) => $builder->where('type', $type))
+            ->when(is_array($type), fn (Builder $builder) => $builder->whereIn('type', $type))
             ->when($gymId, fn (Builder $builder) => $builder->where('gym_id', $gymId))
             ->when($branchId, fn (Builder $builder) => $builder->where('branch_id', $branchId));
 
@@ -145,6 +150,8 @@ class ReminderService
                 ReminderType::PaymentDue->value => NotificationType::PaymentDue->value,
                 ReminderType::CustomDue->value => NotificationType::CustomDue->value,
                 ReminderType::AttendanceInactivity->value => NotificationType::AttendanceInactivity->value,
+                ReminderType::MissedWorkoutFollowUp->value => NotificationType::MissedWorkoutAlert->value,
+                ReminderType::WorkoutStreak->value => NotificationType::WorkoutStreak->value,
                 default => NotificationType::WorkoutReminder->value,
             };
 
@@ -231,7 +238,35 @@ class ReminderService
 
     private function isStillDeliverable(ScheduledReminder $reminder): bool
     {
-        if (! $reminder->user || ! $reminder->gym_id) {
+        if (! $reminder->user) {
+            return false;
+        }
+
+        if (in_array($reminder->type, [
+            ReminderType::WorkoutReminder->value,
+            ReminderType::MissedWorkoutFollowUp->value,
+            ReminderType::WorkoutStreak->value,
+        ], true)) {
+            $preference = MemberWorkoutPreference::query()->where('member_id', $reminder->user_id)->first();
+            $enabled = match ($reminder->type) {
+                ReminderType::WorkoutReminder->value => $preference?->scheduled_workout_reminder_enabled,
+                ReminderType::MissedWorkoutFollowUp->value => $preference?->missed_workout_follow_up_enabled,
+                ReminderType::WorkoutStreak->value => $preference?->streak_encouragement_enabled,
+            };
+            if (! $enabled) {
+                return false;
+            }
+            $planId = $reminder->payload['workout_plan_id'] ?? null;
+            if ($planId !== null) {
+                return WorkoutPlan::query()->whereKey($planId)
+                    ->where('member_id', $reminder->user_id)
+                    ->where('status', 'active')->exists();
+            }
+
+            return true;
+        }
+
+        if (! $reminder->gym_id) {
             return false;
         }
 

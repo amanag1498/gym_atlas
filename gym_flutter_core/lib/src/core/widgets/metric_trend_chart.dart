@@ -18,6 +18,8 @@ class MetricTrendChart extends StatelessWidget {
     this.subtitle,
     this.unit = '',
     this.emptyMessage = 'Add at least two entries to see a trend.',
+    this.goalValue,
+    this.goalLabel = 'Goal',
   });
 
   final String title;
@@ -26,6 +28,8 @@ class MetricTrendChart extends StatelessWidget {
   final Color accentColor;
   final String unit;
   final String emptyMessage;
+  final double? goalValue;
+  final String goalLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -98,6 +102,7 @@ class MetricTrendChart extends StatelessWidget {
                 child: CustomPaint(
                   painter: _MetricTrendPainter(
                     values: values,
+                    goalValue: goalValue,
                     color: accentColor,
                     gridColor: Theme.of(
                       context,
@@ -106,6 +111,23 @@ class MetricTrendChart extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 10),
+              if (goalValue != null) ...[
+                Row(
+                  children: [
+                    Container(
+                      width: 18,
+                      height: 2,
+                      color: accentColor.withValues(alpha: 0.65),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '$goalLabel: ${_format(goalValue!)}$unit',
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children:
@@ -129,7 +151,7 @@ class MetricTrendChart extends StatelessWidget {
 
   String _semanticLabel() {
     if (points.isEmpty) return '$title. No trend data.';
-    return '$title. ${points.map((point) => '${point.label}: ${_format(point.value)}$unit').join(', ')}.';
+    return '$title. ${points.map((point) => '${point.label}: ${_format(point.value)}$unit').join(', ')}.${goalValue == null ? '' : ' $goalLabel: ${_format(goalValue!)}$unit.'}';
   }
 
   String _format(double value) => value == value.roundToDouble()
@@ -181,11 +203,13 @@ class _MetricTrendPainter extends CustomPainter {
     required this.values,
     required this.color,
     required this.gridColor,
+    this.goalValue,
   });
 
   final List<double> values;
   final Color color;
   final Color gridColor;
+  final double? goalValue;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -204,8 +228,9 @@ class _MetricTrendPainter extends CustomPainter {
       canvas.drawLine(Offset(chart.left, y), Offset(chart.right, y), gridPaint);
     }
 
-    final minimum = values.reduce(math.min);
-    final maximum = values.reduce(math.max);
+    final allValues = [...values, if (goalValue != null) goalValue!];
+    final minimum = allValues.reduce(math.min);
+    final maximum = allValues.reduce(math.max);
     final spread = maximum - minimum;
     final padding = spread == 0
         ? math.max(1.0, maximum.abs() * 0.05)
@@ -255,11 +280,23 @@ class _MetricTrendPainter extends CustomPainter {
     for (final point in points) {
       canvas.drawCircle(point, 3.5, pointPaint);
     }
+    if (goalValue != null) {
+      final goalY =
+          chart.bottom - chart.height * ((goalValue! - lower) / range);
+      canvas.drawLine(
+        Offset(chart.left, goalY),
+        Offset(chart.right, goalY),
+        Paint()
+          ..color = color.withValues(alpha: 0.65)
+          ..strokeWidth = 1.5,
+      );
+    }
   }
 
   @override
   bool shouldRepaint(covariant _MetricTrendPainter oldDelegate) =>
       oldDelegate.values != values ||
+      oldDelegate.goalValue != goalValue ||
       oldDelegate.color != color ||
       oldDelegate.gridColor != gridColor;
 }

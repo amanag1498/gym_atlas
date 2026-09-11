@@ -41,6 +41,8 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
   String? _lastSuccessMessage;
   Map<String, dynamic> _summary = const {};
   Map<String, dynamic> _todaySteps = const {};
+  Map<String, dynamic> _workoutAnalytics = const {};
+  Map<String, dynamic> _workoutPreferences = const {};
   List<Map<String, dynamic>> _stepSummary = const [];
   List<Map<String, dynamic>> _weightLogs = const [];
   List<Map<String, dynamic>> _bodyMeasurements = const [];
@@ -72,7 +74,7 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     _summary = widget.initialSummary;
     _load();
   }
@@ -125,6 +127,20 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
       _stepSummary = (results[5]['data'] as List<dynamic>? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map))
           .toList();
+      try {
+        final workoutResults = await Future.wait([
+          widget.repository.fetchWorkoutAnalytics(),
+          widget.repository.fetchWorkoutPreferences(),
+        ]);
+        _workoutAnalytics = Map<String, dynamic>.from(
+          workoutResults[0]['data'] as Map? ?? const {},
+        );
+        _workoutPreferences = Map<String, dynamic>.from(
+          workoutResults[1]['data'] as Map? ?? const {},
+        );
+      } catch (_) {
+        // Preserve existing progress during a rolling backend/app deployment.
+      }
     } catch (exception) {
       _error = exception.toString();
     }
@@ -183,6 +199,229 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _editWorkoutPreferences() async {
+    final target = TextEditingController(
+      text: _workoutPreferences['target_weight_kg']?.toString() ?? '',
+    );
+    final minutes = TextEditingController(
+      text: _workoutPreferences['reminder_minutes_before']?.toString() ?? '60',
+    );
+    final workoutTimeValue =
+        _workoutPreferences['default_workout_time']?.toString() ?? '18:00';
+    final workoutTime = TextEditingController(
+      text: workoutTimeValue.length >= 5
+          ? workoutTimeValue.substring(0, 5)
+          : '18:00',
+    );
+    final quietStartValue =
+        _workoutPreferences['quiet_hours_start']?.toString() ?? '';
+    final quietEndValue =
+        _workoutPreferences['quiet_hours_end']?.toString() ?? '';
+    final quietStart = TextEditingController(
+      text: quietStartValue.length >= 5 ? quietStartValue.substring(0, 5) : '',
+    );
+    final quietEnd = TextEditingController(
+      text: quietEndValue.length >= 5 ? quietEndValue.substring(0, 5) : '',
+    );
+    final timezone = TextEditingController(
+      text: _workoutPreferences['timezone']?.toString() ?? 'Asia/Kolkata',
+    );
+    var showGoal = _workoutPreferences['show_weight_goal'] != false;
+    var reminderEnabled =
+        _workoutPreferences['scheduled_workout_reminder_enabled'] == true;
+    var missedFollowUp =
+        _workoutPreferences['missed_workout_follow_up_enabled'] == true;
+    var streakEncouragement =
+        _workoutPreferences['streak_encouragement_enabled'] == true;
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Workout progress settings'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: target,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Target weight (kg)',
+                    helperText: 'Leave blank to clear the goal.',
+                  ),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Show goal on chart'),
+                  value: showGoal,
+                  onChanged: (value) => setDialogState(() => showGoal = value),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Scheduled workout reminders'),
+                  value: reminderEnabled,
+                  onChanged: (value) =>
+                      setDialogState(() => reminderEnabled = value),
+                ),
+                if (reminderEnabled)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: workoutTime,
+                          decoration: const InputDecoration(
+                            labelText: 'Workout time HH:mm',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: minutes,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Minutes before',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Missed-workout follow-up'),
+                  value: missedFollowUp,
+                  onChanged: (value) =>
+                      setDialogState(() => missedFollowUp = value),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Consistency encouragement'),
+                  value: streakEncouragement,
+                  onChanged: (value) =>
+                      setDialogState(() => streakEncouragement = value),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: quietStart,
+                        decoration: const InputDecoration(
+                          labelText: 'Quiet from HH:mm',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: quietEnd,
+                        decoration: const InputDecoration(
+                          labelText: 'Quiet until HH:mm',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                TextField(
+                  controller: timezone,
+                  decoration: const InputDecoration(
+                    labelText: 'Timezone',
+                    helperText:
+                        'Use an IANA timezone, for example Asia/Kolkata.',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (save != true || !mounted) return;
+    await widget.repository.updateWorkoutPreferences({
+      'target_weight_kg': target.text.trim().isEmpty
+          ? null
+          : double.tryParse(target.text.trim()),
+      'show_weight_goal': showGoal,
+      'scheduled_workout_reminder_enabled': reminderEnabled,
+      'reminder_minutes_before': int.tryParse(minutes.text.trim()) ?? 60,
+      'default_workout_time': workoutTime.text.trim(),
+      'missed_workout_follow_up_enabled': missedFollowUp,
+      'streak_encouragement_enabled': streakEncouragement,
+      'quiet_hours_start': quietStart.text.trim().isEmpty
+          ? null
+          : quietStart.text.trim(),
+      'quiet_hours_end': quietEnd.text.trim().isEmpty
+          ? null
+          : quietEnd.text.trim(),
+      'timezone': timezone.text.trim(),
+    });
+    target.dispose();
+    minutes.dispose();
+    workoutTime.dispose();
+    quietStart.dispose();
+    quietEnd.dispose();
+    timezone.dispose();
+    await _afterSave('Workout progress settings updated.');
+  }
+
+  Future<void> _overrideWorkout(Map<String, dynamic> item) async {
+    final original = DateTime.tryParse(item['original_date']?.toString() ?? '');
+    if (original == null) return;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.event_repeat_rounded),
+              title: const Text('Move to another date'),
+              onTap: () => Navigator.pop(context, 'reschedule'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.hotel_rounded),
+              title: const Text('Make this a rest day'),
+              onTap: () => Navigator.pop(context, 'rest'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    DateTime? replacement;
+    if (choice == 'reschedule') {
+      replacement = await showDatePicker(
+        context: context,
+        initialDate: original.add(const Duration(days: 1)),
+        firstDate: original.subtract(const Duration(days: 30)),
+        lastDate: original.add(const Duration(days: 90)),
+      );
+      if (replacement == null) return;
+    }
+    await widget.repository.saveWorkoutScheduleOverride({
+      'workout_plan_id': item['workout_plan_id'],
+      'workout_plan_day_id': item['workout_plan_day_id'],
+      'original_date': DateFormat('yyyy-MM-dd').format(original),
+      'replacement_date': replacement == null
+          ? null
+          : DateFormat('yyyy-MM-dd').format(replacement),
+      'override_type': choice,
+    });
+    await _afterSave(
+      choice == 'rest' ? 'Rest day saved.' : 'Workout rescheduled.',
+    );
   }
 
   Future<void> _showPhotoSourceSheet() async {
@@ -486,6 +725,11 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
                         photos: _photos,
                         todaySteps: _todaySteps,
                         stepSummary: _stepSummary,
+                      ),
+                      _WorkoutAnalyticsTab(
+                        analytics: _workoutAnalytics,
+                        onEditPreferences: _editWorkoutPreferences,
+                        onOverrideWorkout: _overrideWorkout,
                       ),
                       _StepHistoryTab(
                         todaySteps: _todaySteps,
@@ -880,6 +1124,7 @@ class _StrengthTabSlider extends StatefulWidget {
 class _StrengthTabSliderState extends State<_StrengthTabSlider> {
   static const _items = [
     (label: 'Overview', icon: Icons.dashboard_customize_rounded),
+    (label: 'Training', icon: Icons.insights_rounded),
     (label: 'Steps', icon: Icons.directions_walk_rounded),
     (label: 'Weight', icon: Icons.monitor_weight_rounded),
     (label: 'Measure', icon: Icons.straighten_rounded),
@@ -1177,6 +1422,199 @@ class _ProgressOverviewTab extends StatelessWidget {
                 ),
               ),
             ),
+      ],
+    );
+  }
+}
+
+class _WorkoutAnalyticsTab extends StatelessWidget {
+  const _WorkoutAnalyticsTab({
+    required this.analytics,
+    required this.onEditPreferences,
+    required this.onOverrideWorkout,
+  });
+
+  final Map<String, dynamic> analytics;
+  final VoidCallback onEditPreferences;
+  final Future<void> Function(Map<String, dynamic>) onOverrideWorkout;
+
+  @override
+  Widget build(BuildContext context) {
+    final weight = Map<String, dynamic>.from(
+      analytics['weight'] as Map? ?? const {},
+    );
+    final adherence = Map<String, dynamic>.from(
+      analytics['adherence'] as Map? ?? const {},
+    );
+    final effort = Map<String, dynamic>.from(
+      analytics['effort'] as Map? ?? const {},
+    );
+    final coverage = Map<String, dynamic>.from(
+      analytics['muscle_coverage'] as Map? ?? const {},
+    );
+    final calendar = (analytics['calendar'] as List? ?? const [])
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+    final heatmap = (analytics['heatmap'] as List? ?? const [])
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+    final muscles = (coverage['items'] as List? ?? const [])
+        .whereType<Map>()
+        .take(10);
+    final e1rm = (analytics['estimated_one_rep_max'] as List? ?? const [])
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+    final weightPoints = (weight['points'] as List? ?? const [])
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+    final upcoming = calendar
+        .where((row) => ['planned', 'rescheduled'].contains(row['status']))
+        .take(8)
+        .toList();
+    final goal = double.tryParse(weight['target_weight_kg']?.toString() ?? '');
+
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _StrengthSectionTitle(
+                title: 'Training analytics',
+                action: '${adherence['percentage'] ?? '--'}% adherence',
+              ),
+            ),
+            IconButton(
+              onPressed: onEditPreferences,
+              tooltip: 'Goals and reminders',
+              icon: const Icon(Icons.tune_rounded),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        MetricTrendChart(
+          title: 'Weight toward your goal',
+          subtitle: weight['direction'] == 'toward_goal'
+              ? 'Your recent change moved toward the target.'
+              : 'Trend is shown without health judgments.',
+          points: _metricPoints(weightPoints, 'date', 'weight_kg'),
+          accentColor: const Color(0xFF92A3FD),
+          unit: ' kg',
+          goalValue: goal,
+        ),
+        const SizedBox(height: 14),
+        _StrengthInsightPanel(
+          title: 'Activity and adherence',
+          subtitle:
+              '${adherence['completed_count'] ?? 0} completed • ${adherence['missed_count'] ?? 0} missed • rest days excluded',
+          icon: Icons.calendar_view_month_rounded,
+          child: heatmap.isEmpty
+              ? const _StrengthMiniEmpty(
+                  icon: Icons.calendar_today_rounded,
+                  text: 'Scheduled activity will appear here.',
+                )
+              : Wrap(
+                  spacing: 5,
+                  runSpacing: 5,
+                  children: heatmap.take(42).map((day) {
+                    final intensity = (day['intensity'] as num?)?.toInt() ?? 0;
+                    return Tooltip(
+                      message:
+                          '${day['date']} • ${day['status']} • ${day['training_minutes']} min',
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: intensity == 0
+                              ? AppColors.surfaceSoft
+                              : AppColors.primary.withValues(
+                                  alpha: 0.25 + intensity * 0.16,
+                                ),
+                          borderRadius: BorderRadius.circular(7),
+                          border: Border.all(color: AppColors.stroke),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ),
+        const SizedBox(height: 14),
+        _StrengthInsightPanel(
+          title: 'Muscle coverage',
+          subtitle:
+              'Primary sets count 1.0 and secondary muscles count ${coverage['secondary_weight'] ?? 0.5}.',
+          icon: Icons.accessibility_new_rounded,
+          child: muscles.isEmpty
+              ? const _StrengthMiniEmpty(
+                  icon: Icons.fitness_center_rounded,
+                  text: 'Complete workouts to build muscle coverage.',
+                )
+              : Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: muscles
+                      .map(
+                        (row) => Chip(
+                          label: Text(
+                            '${row['muscle']} · ${row['weighted_sets']}',
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+        ),
+        const SizedBox(height: 14),
+        _StrengthInsightPanel(
+          title: 'Effort data',
+          subtitle:
+              '${effort['rated_set_count'] ?? 0} of ${effort['eligible_set_count'] ?? 0} completed sets rated (${effort['rated_coverage_percentage'] ?? 0}%).',
+          icon: Icons.speed_rounded,
+          child: Text(
+            effort['average_rpe_equivalent'] == null
+                ? 'Add optional RIR or RPE ratings during workouts.'
+                : 'Average comparable effort: ${effort['average_rpe_equivalent']} RPE-equivalent. Unrated sets are excluded.',
+          ),
+        ),
+        const SizedBox(height: 14),
+        MetricTrendChart(
+          title: 'Estimated 1RM trend',
+          subtitle: 'Epley v1; eligible weighted sets up to 12 reps only.',
+          points: _metricPoints(e1rm, 'date', 'value_kg'),
+          accentColor: const Color(0xFFC58BF2),
+          unit: ' kg',
+        ),
+        const SizedBox(height: 18),
+        _StrengthSectionTitle(
+          title: 'Upcoming workouts',
+          action: '${upcoming.length} shown',
+        ),
+        const SizedBox(height: 10),
+        if (upcoming.isEmpty)
+          const _StrengthMiniEmpty(
+            icon: Icons.event_available_rounded,
+            text: 'No upcoming recurring workouts in this range.',
+          )
+        else
+          ...upcoming.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _StrengthTimelineRow(
+                title:
+                    item['day_label']?.toString() ??
+                    item['plan_name']?.toString() ??
+                    'Workout',
+                subtitle: '${_formatDate(item['date'])} • ${item['plan_name']}',
+                badge: item['is_rescheduled'] == true ? 'Moved' : 'Planned',
+                icon: Icons.event_repeat_rounded,
+                color: AppColors.primary,
+                onTap: () => onOverrideWorkout(item),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -2056,6 +2494,7 @@ class _StrengthTimelineRow extends StatelessWidget {
     required this.icon,
     required this.color,
     this.detail,
+    this.onTap,
   });
 
   final String title;
@@ -2064,11 +2503,12 @@ class _StrengthTimelineRow extends StatelessWidget {
   final IconData icon;
   final Color color;
   final String? detail;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final cleanDetail = detail?.trim() ?? '';
-    return PremiumCard(
+    final card = PremiumCard(
       glowColor: color,
       padding: const EdgeInsets.all(14),
       child: Row(
@@ -2126,6 +2566,13 @@ class _StrengthTimelineRow extends StatelessWidget {
         ],
       ),
     );
+    return onTap == null
+        ? card
+        : InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(24),
+            child: card,
+          );
   }
 }
 

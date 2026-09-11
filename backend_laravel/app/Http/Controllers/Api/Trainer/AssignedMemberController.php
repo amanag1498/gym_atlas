@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Trainer;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Workout\StoreWorkoutScheduleOverrideRequest;
 use App\Http\Resources\Attendance\AttendanceLogResource;
 use App\Http\Resources\Trainer\TrainerAssignedMemberResource;
 use App\Http\Resources\Workout\BodyMeasurementResource;
@@ -16,13 +17,20 @@ use App\Models\WorkoutPlan;
 use App\Models\WorkoutSession;
 use App\Services\Member\EngagementScoreService;
 use App\Services\Trainer\TrainerScopeService;
+use App\Services\Workout\WorkoutAnalyticsService;
+use App\Services\Workout\WorkoutScheduleService;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class AssignedMemberController extends Controller
 {
     public function __construct(
         private readonly TrainerScopeService $trainerScopeService,
         private readonly EngagementScoreService $engagementScoreService,
+        private readonly WorkoutAnalyticsService $workoutAnalyticsService,
+        private readonly WorkoutScheduleService $workoutScheduleService,
     ) {}
 
     public function index(Request $request)
@@ -163,5 +171,48 @@ class AssignedMemberController extends Controller
                 ],
             ],
         ]);
+    }
+
+    public function workoutAnalytics(Request $request, User $member)
+    {
+        $trainerProfile = $this->trainerScopeService->resolveTrainerProfile($request);
+        $this->trainerScopeService->resolveAssignedMember($trainerProfile, $member);
+        [$from, $to, $timezone] = $this->analyticsRange($request);
+        $scope = fn (Builder $query): Builder => $query
+            ->where('gym_id', $trainerProfile->gym_id)
+            ->when($trainerProfile->branch_id, fn (Builder $builder) => $builder->where('branch_id', $trainerProfile->branch_id));
+
+        $weightScope = fn ($query) => $query
+            ->where('gym_id', $trainerProfile->gym_id)
+            ->when($trainerProfile->branch_id, fn ($builder) => $builder->where('branch_id', $trainerProfile->branch_id));
+
+        return $this->success($this->workoutAnalyticsService->summary($member, $from, $to, $timezone, $scope, $weightScope));
+    }
+
+    public function storeWorkoutScheduleOverride(StoreWorkoutScheduleOverrideRequest $request, User $member)
+    {
+        $trainerProfile = $this->trainerScopeService->resolveTrainerProfile($request);
+        $this->trainerScopeService->resolveAssignedMember($trainerProfile, $member);
+        $plan = WorkoutPlan::query()->with('days')
+            ->whereKey($request->integer('workout_plan_id'))->where('member_id', $member->id)
+            ->where('trainer_id', $trainerProfile->user_id)->where('gym_id', $trainerProfile->gym_id)
+            ->when($trainerProfile->branch_id, fn ($query) => $query->where('branch_id', $trainerProfile->branch_id))
+            ->firstOrFail();
+
+        return $this->success($this->workoutScheduleService->saveOverride($request->user(), $member, $plan, $request->validated()), 'Member workout schedule updated.');
+    }
+
+    /** @return array{CarbonImmutable, CarbonImmutable, string} */
+    private function analyticsRange(Request $request): array
+    {
+        $values = validator($request->query(), ['from' => ['nullable', 'date'], 'to' => ['nullable', 'date'], 'timezone' => ['nullable', 'timezone']])->validate();
+        $timezone = $values['timezone'] ?? 'Asia/Kolkata';
+        $to = isset($values['to']) ? CarbonImmutable::parse($values['to'], $timezone)->startOfDay() : CarbonImmutable::now($timezone)->startOfDay();
+        $from = isset($values['from']) ? CarbonImmutable::parse($values['from'], $timezone)->startOfDay() : $to->subDays(89);
+        if ($from->gt($to) || $from->diffInDays($to) > 366) {
+            throw ValidationException::withMessages(['from' => ['Choose a valid range of at most 367 days.']]);
+        }
+
+        return [$from, $to, $timezone];
     }
 }

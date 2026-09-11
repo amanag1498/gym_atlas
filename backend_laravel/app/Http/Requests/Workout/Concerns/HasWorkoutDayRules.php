@@ -44,6 +44,8 @@ trait HasWorkoutDayRules
             $prefix.'.*.exercises.*.progression_config.load_increment_kg' => ['nullable', 'numeric', 'gt:0', 'max:100'],
             $prefix.'.*.exercises.*.progression_config.min_reps' => ['nullable', 'integer', 'min:1', 'max:100'],
             $prefix.'.*.exercises.*.progression_config.max_reps' => ['nullable', 'integer', 'min:1', 'max:100'],
+            $prefix.'.*.exercises.*.progression_config.deload_after_misses' => ['nullable', 'integer', 'min:0', 'max:20'],
+            $prefix.'.*.exercises.*.progression_config.deload_percent' => ['nullable', 'numeric', 'gt:0', 'max:50'],
             $prefix.'.*.exercises.*.notes' => ['nullable', 'string'],
         ];
     }

@@ -40,6 +40,7 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
   String? _error;
   Map<String, dynamic> _detail = const {};
   Map<String, dynamic> _progress = const {};
+  Map<String, dynamic> _workoutAnalytics = const {};
   List<Map<String, dynamic>> _attendance = const [];
   List<Map<String, dynamic>> _plans = const [];
   List<Map<String, dynamic>> _dietPlans = const [];
@@ -182,6 +183,16 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
         _dietPage = dietPage;
         _loading = false;
       });
+      try {
+        final analytics = await widget.repository.fetchMemberWorkoutAnalytics(
+          memberId,
+        );
+        if (mounted) {
+          setState(() => _workoutAnalytics = _map(analytics['data']));
+        }
+      } catch (_) {
+        // Preserve existing coaching screens during a rolling deployment.
+      }
     } catch (exception) {
       setState(() {
         _loading = false;
@@ -310,6 +321,19 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
         _dietPage = ApiPagination.fromResponse(responses[4]);
         _loading = false;
       });
+      if (accessActive &&
+          permissions.contains('workouts') &&
+          permissions.contains('progress')) {
+        try {
+          final analytics = await widget.repository
+              .fetchIndependentMemberWorkoutAnalytics(relationshipId);
+          if (mounted) {
+            setState(() => _workoutAnalytics = _map(analytics['data']));
+          }
+        } catch (_) {
+          // Preserve other shared coaching areas during a rolling deployment.
+        }
+      }
     } catch (exception) {
       if (!mounted) return;
       setState(() {
@@ -460,6 +484,67 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
     } finally {
       if (mounted) setState(() => _loadingMore = false);
     }
+  }
+
+  Future<void> _overrideScheduledWorkout(Map<String, dynamic> item) async {
+    final original = DateTime.tryParse(item['original_date']?.toString() ?? '');
+    final memberId = _intValue(widget.assignment['member_id']);
+    if (original == null || memberId == null) return;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.event_repeat_rounded),
+              title: const Text('Reschedule workout'),
+              onTap: () => Navigator.pop(context, 'reschedule'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.hotel_rounded),
+              title: const Text('Set rest day'),
+              onTap: () => Navigator.pop(context, 'rest'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (action == null || !mounted) return;
+    DateTime? replacement;
+    if (action == 'reschedule') {
+      replacement = await showDatePicker(
+        context: context,
+        initialDate: original.add(const Duration(days: 1)),
+        firstDate: original.subtract(const Duration(days: 30)),
+        lastDate: original.add(const Duration(days: 90)),
+      );
+      if (replacement == null) return;
+    }
+    final payload = <String, dynamic>{
+      'workout_plan_id': item['workout_plan_id'],
+      'workout_plan_day_id': item['workout_plan_day_id'],
+      'original_date': DateFormat('yyyy-MM-dd').format(original),
+      'replacement_date': replacement == null
+          ? null
+          : DateFormat('yyyy-MM-dd').format(replacement),
+      'override_type': action,
+    };
+    if (_isIndependent) {
+      await widget.repository.saveIndependentMemberWorkoutScheduleOverride(
+        _relationshipId!,
+        payload,
+      );
+    } else {
+      await widget.repository.saveMemberWorkoutScheduleOverride(
+        memberId,
+        payload,
+      );
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Member workout schedule updated.')),
+    );
+    await _load();
   }
 
   Future<void> _loadMoreIndependent() async {
@@ -757,6 +842,10 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
                           child: _can('progress')
                               ? _ProgressTab(
                                   progress: _progress,
+                                  workoutAnalytics: _workoutAnalytics,
+                                  onOverrideWorkout: _can('workouts')
+                                      ? _overrideScheduledWorkout
+                                      : null,
                                   photos: photos,
                                   weightLogs: weightLogs,
                                   bodyMeasurements: bodyMeasurements,
@@ -1832,18 +1921,34 @@ class _DietPlansTab extends StatelessWidget {
 class _ProgressTab extends StatelessWidget {
   const _ProgressTab({
     required this.progress,
+    required this.workoutAnalytics,
+    this.onOverrideWorkout,
     required this.photos,
     required this.weightLogs,
     required this.bodyMeasurements,
   });
 
   final Map<String, dynamic> progress;
+  final Map<String, dynamic> workoutAnalytics;
+  final Future<void> Function(Map<String, dynamic>)? onOverrideWorkout;
   final List<Map<String, dynamic>> photos;
   final List<Map<String, dynamic>> weightLogs;
   final List<Map<String, dynamic>> bodyMeasurements;
 
   @override
   Widget build(BuildContext context) {
+    final adherence = _map(workoutAnalytics['adherence']);
+    final effort = _map(workoutAnalytics['effort']);
+    final muscleCoverage = _map(workoutAnalytics['muscle_coverage']);
+    final weight = _map(workoutAnalytics['weight']);
+    final signals = _mapList(workoutAnalytics['coaching_signals']);
+    final muscleItems = _mapList(muscleCoverage['items']);
+    final calendar = _mapList(workoutAnalytics['calendar']);
+    final upcoming = calendar
+        .where((item) => ['planned', 'rescheduled'].contains(item['status']))
+        .take(6)
+        .toList();
+    final goal = double.tryParse(weight['target_weight_kg']?.toString() ?? '');
     return Column(
       children: [
         MetricTrendChart(
@@ -1852,8 +1957,90 @@ class _ProgressTab extends StatelessWidget {
           points: _trainerMetricPoints(weightLogs, 'log_date', 'weight_kg'),
           accentColor: AppColors.accentNeon,
           unit: ' kg',
+          goalValue: goal,
           emptyMessage:
               'Two member weight logs are needed before a trend appears.',
+        ),
+        const SizedBox(height: 14),
+        PremiumCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Coaching signals',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${adherence['percentage'] ?? '--'}% adherence • ${effort['rated_coverage_percentage'] ?? 0}% effort-data coverage',
+              ),
+              const SizedBox(height: 12),
+              if (signals.isEmpty)
+                const Text('No attention signals in the selected period.')
+              else
+                ...signals.map(
+                  (signal) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(
+                      Icons.insights_rounded,
+                      color: AppColors.accentNeon,
+                    ),
+                    title: Text(
+                      signal['message']?.toString() ?? 'Review recent training',
+                    ),
+                    subtitle: const Text(
+                      'Coaching information only; not a medical assessment.',
+                    ),
+                  ),
+                ),
+              if (muscleItems.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Muscle coverage',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: muscleItems
+                      .take(10)
+                      .map(
+                        (item) => Chip(
+                          label: Text(
+                            '${item['muscle']} · ${item['weighted_sets']}',
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+              if (upcoming.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Text(
+                  'Upcoming schedule',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                ...upcoming.map(
+                  (item) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.calendar_today_rounded),
+                    title: Text(item['day_label']?.toString() ?? 'Workout'),
+                    subtitle: Text(
+                      '${_prettyDate(item['date'])} • ${item['plan_name']}',
+                    ),
+                    trailing: onOverrideWorkout == null
+                        ? null
+                        : IconButton(
+                            tooltip: 'Reschedule or set rest day',
+                            icon: const Icon(Icons.edit_calendar_rounded),
+                            onPressed: () => onOverrideWorkout!(item),
+                          ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
         const SizedBox(height: 14),
         MetricTrendChart(

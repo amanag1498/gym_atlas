@@ -7,12 +7,15 @@ use App\Models\Branch;
 use App\Models\Exercise;
 use App\Models\Gym;
 use App\Models\MemberProfile;
+use App\Models\ScheduledReminder;
 use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Models\WorkoutPlan;
 use App\Models\WorkoutProgressionRecommendation;
 use App\Models\WorkoutSession;
+use App\Services\Notification\ReminderService;
 use App\Services\Workout\WorkoutPlanService;
+use Carbon\CarbonImmutable;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
@@ -825,6 +828,184 @@ class WorkoutScopeTest extends TestCase
                 ]],
             ]],
         ]);
+    }
+
+    public function test_phase_five_member_analytics_rescheduling_goal_reminders_and_trainer_scope_work_end_to_end(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-09-16 10:00:00', 'Asia/Kolkata'));
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch] = $this->makeGymContext();
+        $trainer = $this->makeTrainer($gym, $branch);
+        $member = $this->makeMember($gym, $branch, $trainer->id);
+        [$exercise, $pullExercise] = $this->makePlanExercises($gym, $branch, $trainer);
+        $pullExercise->update(['target_muscle' => 'chest', 'secondary_muscles' => ['triceps']]);
+        $plan = app(WorkoutPlanService::class)->createPlans($trainer, [
+            'gym_id' => $gym->id, 'branch_id' => $branch->id, 'member_ids' => [$member->id],
+            'name' => 'Phase Five Plan', 'duration_weeks' => 4,
+            'starts_on' => '2026-09-01', 'ends_on' => '2026-09-30',
+            'days' => [
+                ['day_number' => 1, 'label' => 'Push', 'exercises' => [['exercise_id' => $exercise->id, 'sets' => 2]]],
+                ['day_number' => 2, 'label' => 'Pull', 'exercises' => [['exercise_id' => $pullExercise->id, 'sets' => 2]]],
+            ],
+        ])->firstOrFail();
+        $tuesday = $plan->days->firstWhere('day_number', 2);
+
+        $this->actingAs($member, 'sanctum')->putJson('/api/member/workout-preferences', [
+            'target_weight_kg' => 75,
+            'show_weight_goal' => true,
+            'timezone' => 'Asia/Kolkata',
+            'scheduled_workout_reminder_enabled' => true,
+            'reminder_minutes_before' => 90,
+            'missed_workout_follow_up_enabled' => true,
+        ])->assertOk()->assertJsonPath('data.target_weight_kg', '75.00');
+
+        $overrideId = $this->actingAs($member, 'sanctum')->postJson('/api/member/workout-schedule-overrides', [
+            'workout_plan_id' => $plan->id,
+            'workout_plan_day_id' => $tuesday->id,
+            'original_date' => '2026-09-15',
+            'replacement_date' => '2026-09-16',
+            'override_type' => 'reschedule',
+            'timezone' => 'Asia/Kolkata',
+        ])->assertOk()->assertJsonPath('data.original_date', '2026-09-15')->json('data.id');
+
+        $calendar = $this->actingAs($member, 'sanctum')->getJson('/api/member/workout-calendar?from=2026-09-14&to=2026-09-16&timezone=Asia%2FKolkata')
+            ->assertOk()->assertJsonCount(2, 'data.items');
+        $this->assertSame(1, collect($calendar->json('data.items'))->where('date', '2026-09-16')->count());
+
+        $started = $this->actingAs($member, 'sanctum')->postJson('/api/member/workout-sessions/start', [
+            'workout_plan_id' => $plan->id,
+            'workout_plan_day_id' => $tuesday->id,
+            'workout_schedule_override_id' => $overrideId,
+            'session_date' => '2026-09-16',
+        ])->assertCreated()->assertJsonPath('data.workout_schedule_override_id', $overrideId);
+
+        $sessionExercise = $started->json('data.exercises.0');
+        $completed = $this->actingAs($member, 'sanctum')->postJson('/api/member/workout-sessions/'.$started->json('data.id').'/complete', [
+            'exercises' => [[
+                'id' => $sessionExercise['id'], 'exercise_id' => $exercise->id, 'tracking_mode' => 'reps',
+                'sets' => [
+                    ['set_number' => 1, 'reps' => 8, 'weight' => 60, 'effort_scale' => 'rir', 'effort_value' => 0, 'is_completed' => true],
+                    ['set_number' => 2, 'reps' => 8, 'weight' => 60, 'is_completed' => true],
+                ],
+            ]],
+        ])->assertOk();
+        $sourceSetId = $completed->json('data.exercises.0.sets.0.id');
+        $this->assertDatabaseHas('personal_records', [
+            'member_id' => $member->id,
+            'estimated_one_rep_max_workout_set_id' => $sourceSetId,
+        ]);
+
+        $analytics = $this->actingAs($member, 'sanctum')->getJson('/api/member/progress/workout-analytics?from=2026-09-14&to=2026-09-16&timezone=Asia%2FKolkata')
+            ->assertOk()
+            ->assertJsonPath('data.range.timezone', 'Asia/Kolkata')
+            ->assertJsonPath('data.weight.target_weight_kg', 75)
+            ->assertJsonPath('data.adherence.scheduled_count', 2)
+            ->assertJsonPath('data.adherence.completed_count', 1)
+            ->assertJsonPath('data.adherence.percentage', 50)
+            ->assertJsonPath('data.effort.eligible_set_count', 2)
+            ->assertJsonPath('data.effort.rated_set_count', 1)
+            ->assertJsonPath('data.effort.rated_coverage_percentage', 50)
+            ->assertJsonPath('data.muscle_coverage.items.0.muscle', 'chest')
+            ->assertJsonPath('data.muscle_coverage.items.0.weighted_sets', 2);
+        $this->assertSame($sourceSetId, $analytics->json('data.estimated_one_rep_max.0.workout_set_id'));
+        $this->assertDatabaseHas('scheduled_reminders', ['user_id' => $member->id, 'type' => 'workout_reminder']);
+        $workoutReminder = ScheduledReminder::query()
+            ->where('user_id', $member->id)
+            ->where('type', 'workout_reminder')
+            ->where('status', 'pending')
+            ->orderBy('scheduled_for')
+            ->firstOrFail();
+        $this->assertSame('16:30', $workoutReminder->scheduled_for->format('H:i'));
+        $this->assertSame('/home?section=progress', $workoutReminder->payload['deep_link']);
+        $this->assertDatabaseHas('scheduled_reminders', ['user_id' => $member->id, 'type' => 'missed_workout_follow_up']);
+        app(ReminderService::class)->runDueReminders('missed_workout_follow_up');
+        $this->assertDatabaseHas('notifications', ['user_id' => $member->id, 'type' => 'missed_workout_alert']);
+
+        $this->actingAs($trainer, 'sanctum')->getJson('/api/trainer/assigned-members/'.$member->id.'/workout-analytics?from=2026-09-14&to=2026-09-16')
+            ->assertOk()->assertJsonPath('data.adherence.completed_count', 1);
+        $this->actingAs($trainer, 'sanctum')->postJson('/api/trainer/assigned-members/'.$member->id.'/workout-schedule-overrides', [
+            'workout_plan_id' => $plan->id, 'workout_plan_day_id' => $plan->days->first()->id,
+            'original_date' => '2026-09-21', 'replacement_date' => '2026-09-23', 'override_type' => 'reschedule',
+        ])->assertOk();
+        $this->assertDatabaseHas('workout_schedule_overrides', [
+            'member_id' => $member->id, 'original_date' => '2026-09-21', 'created_by_user_id' => $trainer->id,
+        ]);
+        $otherTrainer = $this->makeTrainer($gym, $branch, 'analytics-other@example.com');
+        $this->actingAs($otherTrainer, 'sanctum')->getJson('/api/trainer/assigned-members/'.$member->id.'/workout-analytics')
+            ->assertUnprocessable();
+        CarbonImmutable::setTestNow();
+    }
+
+    public function test_phase_four_deload_is_deterministic_and_trainer_can_disable_future_progression(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch] = $this->makeGymContext();
+        $trainer = $this->makeTrainer($gym, $branch);
+        $member = $this->makeMember($gym, $branch, $trainer->id);
+        [$exercise] = $this->makePlanExercises($gym, $branch, $trainer);
+        $plan = app(WorkoutPlanService::class)->createPlans($trainer, [
+            'gym_id' => $gym->id, 'branch_id' => $branch->id, 'member_ids' => [$member->id],
+            'name' => 'Deload policy', 'duration_weeks' => 4,
+            'days' => [[
+                'day_number' => 1,
+                'exercises' => [[
+                    'exercise_id' => $exercise->id, 'sets' => 1, 'reps' => '10', 'target_weight' => 100,
+                    'progression_policy' => 'linear_load',
+                    'progression_config' => ['load_increment_kg' => 2.5, 'deload_after_misses' => 2, 'deload_percent' => 10],
+                ]],
+            ]],
+        ])->firstOrFail();
+        $day = $plan->days->first();
+
+        $completeMiss = function (string $date) use ($member, $plan, $day, $exercise) {
+            $started = $this->actingAs($member, 'sanctum')->postJson('/api/member/workout-sessions/start', [
+                'workout_plan_id' => $plan->id, 'workout_plan_day_id' => $day->id, 'session_date' => $date,
+            ])->assertCreated();
+
+            return $this->actingAs($member, 'sanctum')->postJson('/api/member/workout-sessions/'.$started->json('data.id').'/complete', [
+                'exercises' => [[
+                    'id' => $started->json('data.exercises.0.id'), 'exercise_id' => $exercise->id, 'tracking_mode' => 'reps',
+                    'sets' => [['set_number' => 1, 'reps' => 6, 'weight' => 100, 'is_completed' => true]],
+                ]],
+            ])->assertOk();
+        };
+
+        $completeMiss('2026-09-08')->assertJsonPath('data.completion_summary.progression_recommendations.0.action', 'hold');
+        $second = $completeMiss('2026-09-15')
+            ->assertJsonPath('data.completion_summary.progression_recommendations.0.action', 'deload')
+            ->assertJsonPath('data.completion_summary.progression_recommendations.0.recommended_prescription.target_weight', 90)
+            ->assertJsonPath('data.completion_summary.progression_recommendations.0.decision_inputs.consecutive_misses', 2);
+        $recommendationId = $second->json('data.completion_summary.progression_recommendation_ids.0');
+
+        $this->actingAs($trainer, 'sanctum')->postJson('/api/trainer/workout-progression-recommendations/'.$recommendationId.'/review', [
+            'decision' => 'disable', 'notes' => 'Switch to manual coaching.',
+        ])->assertOk()->assertJsonPath('data.status', 'disabled');
+        $this->assertDatabaseHas('workout_plan_exercises', [
+            'id' => $day->exercises->first()->id, 'progression_policy' => 'off', 'progression_version' => 2,
+        ]);
+    }
+
+    public function test_workout_calendar_uses_requested_timezone_at_utc_india_day_boundary(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-09-15 00:30:00', 'Asia/Kolkata'));
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch] = $this->makeGymContext();
+        $trainer = $this->makeTrainer($gym, $branch);
+        $member = $this->makeMember($gym, $branch, $trainer->id);
+        [$exercise] = $this->makePlanExercises($gym, $branch, $trainer);
+        app(WorkoutPlanService::class)->createPlans($trainer, [
+            'gym_id' => $gym->id, 'branch_id' => $branch->id, 'member_ids' => [$member->id],
+            'name' => 'Timezone plan', 'duration_weeks' => 2, 'starts_on' => '2026-09-01', 'ends_on' => '2026-09-30',
+            'days' => [['day_number' => 1, 'label' => 'Monday', 'exercises' => [['exercise_id' => $exercise->id, 'sets' => 1]]]],
+        ]);
+
+        $this->actingAs($member, 'sanctum')
+            ->getJson('/api/member/workout-calendar?from=2026-09-14&to=2026-09-14&timezone=UTC')
+            ->assertOk()->assertJsonPath('data.range.timezone', 'UTC')->assertJsonPath('data.items.0.status', 'planned');
+        $this->actingAs($member, 'sanctum')
+            ->getJson('/api/member/workout-calendar?from=2026-09-14&to=2026-09-14&timezone=Asia%2FKolkata')
+            ->assertOk()->assertJsonPath('data.range.timezone', 'Asia/Kolkata')->assertJsonPath('data.items.0.status', 'missed');
+        CarbonImmutable::setTestNow();
     }
 
     public function test_group_structure_persists_through_template_assignment_and_plan_duplication(): void

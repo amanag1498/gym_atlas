@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Trainer;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Trainer\StoreTrainerMemberNoteRequest;
+use App\Http\Requests\Workout\StoreWorkoutScheduleOverrideRequest;
 use App\Http\Resources\IndependentTrainerMemberRelationshipResource;
 use App\Http\Resources\Trainer\TrainerMemberNoteResource;
 use App\Http\Resources\Workout\BodyMeasurementResource;
@@ -19,13 +20,20 @@ use App\Models\WorkoutPlan;
 use App\Models\WorkoutSession;
 use App\Services\Audit\AuditLogService;
 use App\Services\Trainer\IndependentCoachingAccessService;
+use App\Services\Workout\WorkoutAnalyticsService;
+use App\Services\Workout\WorkoutScheduleService;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class IndependentMemberCoachingController extends Controller
 {
     public function __construct(
         private readonly IndependentCoachingAccessService $accessService,
         private readonly AuditLogService $auditLogService,
+        private readonly WorkoutAnalyticsService $workoutAnalyticsService,
+        private readonly WorkoutScheduleService $workoutScheduleService,
     ) {}
 
     public function show(Request $request, IndependentTrainerMemberRelationship $relationship)
@@ -119,6 +127,43 @@ class IndependentMemberCoachingController extends Controller
             WorkoutSessionResource::collection($paginator->getCollection()),
             'Independent member workout logbook fetched successfully.',
         );
+    }
+
+    public function workoutAnalytics(Request $request, IndependentTrainerMemberRelationship $relationship)
+    {
+        $relationship = $this->relationship($request, $relationship, 'workouts');
+        $this->relationship($request, $relationship, 'progress');
+        $values = $request->validate(['from' => ['nullable', 'date'], 'to' => ['nullable', 'date'], 'timezone' => ['nullable', 'timezone']]);
+        $timezone = $values['timezone'] ?? 'Asia/Kolkata';
+        $to = $request->filled('to') ? CarbonImmutable::parse($request->string('to'), $timezone)->startOfDay() : CarbonImmutable::now($timezone)->startOfDay();
+        $from = $request->filled('from') ? CarbonImmutable::parse($request->string('from'), $timezone)->startOfDay() : $to->subDays(89);
+        if ($from->gt($to) || $from->diffInDays($to) > 366) {
+            throw ValidationException::withMessages(['from' => ['Choose a valid range of at most 367 days.']]);
+        }
+        $scope = function (Builder $query) use ($relationship): Builder {
+            if ($query->getModel() instanceof WorkoutPlan) {
+                return $query->where('independent_trainer_member_relationship_id', $relationship->id);
+            }
+
+            return $query->whereHas('plan', fn (Builder $plan) => $plan->where('independent_trainer_member_relationship_id', $relationship->id));
+        };
+
+        $weightScope = fn ($query) => $query->whereNull('gym_id')->whereNull('branch_id');
+
+        return $this->success($this->workoutAnalyticsService->summary($relationship->member, $from, $to, $timezone, $scope, $weightScope));
+    }
+
+    public function storeWorkoutScheduleOverride(StoreWorkoutScheduleOverrideRequest $request, IndependentTrainerMemberRelationship $relationship)
+    {
+        $relationship = $this->relationship($request, $relationship, 'workouts');
+        $plan = WorkoutPlan::query()->with('days')
+            ->whereKey($request->integer('workout_plan_id'))
+            ->where('member_id', $relationship->member_user_id)
+            ->where('trainer_id', $request->user()->id)
+            ->where('independent_trainer_member_relationship_id', $relationship->id)
+            ->firstOrFail();
+
+        return $this->success($this->workoutScheduleService->saveOverride($request->user(), $relationship->member, $plan, $request->validated()), 'Member workout schedule updated.');
     }
 
     public function notes(Request $request, IndependentTrainerMemberRelationship $relationship)

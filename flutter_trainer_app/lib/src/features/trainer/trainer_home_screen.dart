@@ -5904,6 +5904,8 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   final _progressionMinRepsController = TextEditingController(text: '8');
   final _progressionMaxRepsController = TextEditingController(text: '12');
   final _progressionIncrementController = TextEditingController(text: '2.5');
+  final _progressionDeloadAfterController = TextEditingController(text: '3');
+  final _progressionDeloadPercentController = TextEditingController(text: '10');
   final _newExerciseNameController = TextEditingController();
   final _newExerciseBodyPartController = TextEditingController(text: 'chest');
   final _newExerciseMuscleController = TextEditingController();
@@ -6019,6 +6021,8 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     _progressionMinRepsController.dispose();
     _progressionMaxRepsController.dispose();
     _progressionIncrementController.dispose();
+    _progressionDeloadAfterController.dispose();
+    _progressionDeloadPercentController.dispose();
     _newExerciseNameController.dispose();
     _newExerciseBodyPartController.dispose();
     _newExerciseMuscleController.dispose();
@@ -6830,6 +6834,24 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                                     'Load increase kg',
                                   ),
                                 ),
+                                TextFormField(
+                                  controller: _progressionDeloadAfterController,
+                                  keyboardType: TextInputType.number,
+                                  decoration: _workoutInputDecoration(
+                                    'Deload after misses',
+                                  ),
+                                ),
+                                TextFormField(
+                                  controller:
+                                      _progressionDeloadPercentController,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  decoration: _workoutInputDecoration(
+                                    'Deload percent',
+                                  ),
+                                ),
                               ],
                             ),
                           ],
@@ -6956,14 +6978,23 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                                         entry.key,
                                         entry.key == 0 ? 1 : -1,
                                       ),
-                                secondaryActionLabel: 'Remove',
-                                onSecondaryAction: () => _removeExercise(
+                                secondaryActionLabel:
+                                    entry.value.groupKey == null
+                                    ? 'Remove'
+                                    : 'Group / Remove',
+                                onSecondaryAction: () => _editOrRemoveExercise(
                                   selectedDayDraft,
                                   entry.key,
                                 ),
                               ),
                             ),
                           ),
+                        if (selectedDayDraft.exercises.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          _TrainerCoveragePreview(
+                            exercises: selectedDayDraft.exercises,
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -7138,7 +7169,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     return _TrainerWorkoutSection(
       title: 'Progression review',
       subtitle:
-          'Approve, edit, or reject changes calculated from completed member sets.',
+          'Approve, edit, reject, or disable changes calculated from completed member sets.',
       icon: Icons.trending_up_rounded,
       child: _loadingProgressions
           ? const LoadingStateView(
@@ -7384,6 +7415,12 @@ class __WorkoutPageState extends State<_WorkoutPage> {
           exerciseId: exerciseId,
           exerciseName: selectedExercise['name']?.toString() ?? 'Exercise',
           bodyPartLabel: _exerciseBodyPartLabel(selectedExercise),
+          targetMuscle:
+              selectedExercise['target_muscle']?.toString().trim() ?? '',
+          secondaryMuscles:
+              (selectedExercise['secondary_muscles'] as List? ?? const [])
+                  .map((value) => value.toString())
+                  .toList(),
           sets: sets,
           trackingMode: _trackingMode,
           reps: _repsController.text.trim(),
@@ -7424,6 +7461,12 @@ class __WorkoutPageState extends State<_WorkoutPage> {
           progressionIncrementKg: double.tryParse(
             _progressionIncrementController.text.trim(),
           ),
+          progressionDeloadAfterMisses: int.tryParse(
+            _progressionDeloadAfterController.text.trim(),
+          ),
+          progressionDeloadPercent: double.tryParse(
+            _progressionDeloadPercentController.text.trim(),
+          ),
           notes: _exerciseNotesController.text.trim(),
         ),
       );
@@ -7446,6 +7489,51 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     setState(() {
       day.exercises.removeAt(index);
       _renumberWorkoutGroups(day);
+    });
+  }
+
+  Future<void> _editOrRemoveExercise(_WorkoutDayDraft day, int index) async {
+    final exercise = day.exercises[index];
+    if (exercise.groupKey == null) {
+      _removeExercise(day, index);
+      return;
+    }
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.link_off_rounded),
+              title: Text('Ungroup ${exercise.groupKey}'),
+              subtitle: const Text(
+                'Keeps every exercise and removes the structural group.',
+              ),
+              onTap: () => Navigator.pop(context, 'ungroup'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded),
+              title: const Text('Remove exercise'),
+              onTap: () => Navigator.pop(context, 'remove'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'remove') {
+      _removeExercise(day, index);
+      return;
+    }
+    final key = exercise.groupKey;
+    setState(() {
+      for (final item in day.exercises.where((item) => item.groupKey == key)) {
+        item.groupKey = null;
+        item.groupType = null;
+        item.groupOrder = null;
+        item.groupRounds = null;
+        item.transitionSeconds = null;
+      }
     });
   }
 
@@ -7945,6 +8033,9 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                 ? null
                 : {
                     'load_increment_kg': exercise.progressionIncrementKg ?? 2.5,
+                    'deload_after_misses':
+                        exercise.progressionDeloadAfterMisses ?? 3,
+                    'deload_percent': exercise.progressionDeloadPercent ?? 10,
                     if (exercise.progressionPolicy == 'double_progression')
                       'min_reps': exercise.progressionMinReps ?? 8,
                     if (exercise.progressionPolicy == 'double_progression')
@@ -8387,6 +8478,8 @@ class __WorkoutPageState extends State<_WorkoutPage> {
           content: Text(
             decision == 'reject'
                 ? 'Progression rejected.'
+                : decision == 'disable'
+                ? 'Automatic progression disabled for this exercise.'
                 : 'Progression applied to the member plan.',
           ),
         ),
@@ -8458,6 +8551,10 @@ class __WorkoutPageState extends State<_WorkoutPage> {
             ),
           ),
           actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, 'disable'),
+              child: const Text('Disable automation'),
+            ),
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, 'reject'),
               child: const Text('Reject'),
@@ -8604,6 +8701,8 @@ class _WorkoutExerciseDraft {
     required this.exerciseId,
     required this.exerciseName,
     required this.bodyPartLabel,
+    required this.targetMuscle,
+    required this.secondaryMuscles,
     required this.sets,
     required this.trackingMode,
     required this.reps,
@@ -8624,12 +8723,16 @@ class _WorkoutExerciseDraft {
     required this.progressionMinReps,
     required this.progressionMaxReps,
     required this.progressionIncrementKg,
+    required this.progressionDeloadAfterMisses,
+    required this.progressionDeloadPercent,
     required this.notes,
   });
 
   final int exerciseId;
   final String exerciseName;
   final String bodyPartLabel;
+  final String targetMuscle;
+  final List<String> secondaryMuscles;
   final int sets;
   final String trackingMode;
   final String reps;
@@ -8641,15 +8744,17 @@ class _WorkoutExerciseDraft {
   final int restSeconds;
   final bool isPerSide;
   final bool isBodyweight;
-  final String? groupKey;
-  final String? groupType;
+  String? groupKey;
+  String? groupType;
   int? groupOrder;
-  final int? groupRounds;
-  final int? transitionSeconds;
+  int? groupRounds;
+  int? transitionSeconds;
   final String progressionPolicy;
   final int? progressionMinReps;
   final int? progressionMaxReps;
   final double? progressionIncrementKg;
+  final int? progressionDeloadAfterMisses;
+  final double? progressionDeloadPercent;
   final String notes;
 }
 
@@ -9031,6 +9136,83 @@ class _TrainerWorkoutSection extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           child,
+        ],
+      ),
+    );
+  }
+}
+
+class _TrainerCoveragePreview extends StatelessWidget {
+  const _TrainerCoveragePreview({required this.exercises});
+
+  final List<_WorkoutExerciseDraft> exercises;
+
+  @override
+  Widget build(BuildContext context) {
+    final scores = <String, double>{};
+    for (final exercise in exercises) {
+      final primary = exercise.targetMuscle.isEmpty
+          ? (exercise.bodyPartLabel.isEmpty
+                ? 'other/unmapped'
+                : exercise.bodyPartLabel.toLowerCase())
+          : exercise.targetMuscle.toLowerCase();
+      scores[primary] = (scores[primary] ?? 0) + exercise.sets;
+      for (final secondary in exercise.secondaryMuscles) {
+        final key = secondary.trim().isEmpty
+            ? 'other/unmapped'
+            : secondary.trim().toLowerCase();
+        scores[key] = (scores[key] ?? 0) + exercise.sets * 0.5;
+      }
+    }
+    final entries = scores.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final underrepresented = entries
+        .where((entry) => entry.value < 2)
+        .map((entry) => entry.key)
+        .toList();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _TrainerWorkoutColor.field,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.stroke),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Day muscle coverage',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Primary sets count 1.0; secondary muscles count 0.5. Coaching information only.',
+            style: TextStyle(fontSize: 11, color: _TrainerWorkoutColor.gray),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: entries
+                .map(
+                  (entry) => _WorkoutTinyPill(
+                    label: '${entry.key} · ${entry.value.toStringAsFixed(1)}',
+                    icon: Icons.accessibility_new_rounded,
+                  ),
+                )
+                .toList(),
+          ),
+          if (underrepresented.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Low-volume in this day: ${underrepresented.join(', ')}',
+              style: const TextStyle(
+                fontSize: 11,
+                color: _TrainerWorkoutColor.gray,
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -242,6 +242,35 @@ class MemberRepository {
   );
   Future<Map<String, dynamic>> fetchProgressSummary() async =>
       _client.get('/member/progress/summary');
+  Future<Map<String, dynamic>> fetchWorkoutAnalytics({
+    String? from,
+    String? to,
+    String? timezone,
+  }) => _client.get(
+    '/member/progress/workout-analytics',
+    queryParameters: {
+      if (from != null) 'from': from,
+      if (to != null) 'to': to,
+      if (timezone != null) 'timezone': timezone,
+    },
+  );
+  Future<Map<String, dynamic>> fetchWorkoutCalendar({
+    String? from,
+    String? to,
+  }) => _client.get(
+    '/member/workout-calendar',
+    queryParameters: {if (from != null) 'from': from, if (to != null) 'to': to},
+  );
+  Future<Map<String, dynamic>> fetchWorkoutPreferences() =>
+      _client.get('/member/workout-preferences');
+  Future<Map<String, dynamic>> updateWorkoutPreferences(
+    Map<String, dynamic> payload,
+  ) => _client.put('/member/workout-preferences', data: payload);
+  Future<Map<String, dynamic>> saveWorkoutScheduleOverride(
+    Map<String, dynamic> payload,
+  ) => _client.post('/member/workout-schedule-overrides', data: payload);
+  Future<Map<String, dynamic>> cancelWorkoutScheduleOverride(int id) =>
+      _client.delete('/member/workout-schedule-overrides/$id');
   Future<Map<String, dynamic>> syncDailySteps(Map<String, dynamic> payload) =>
       _client.post('/member/steps/sync', data: payload);
   Future<Map<String, dynamic>> fetchTodaySteps() async =>

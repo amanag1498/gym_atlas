@@ -9,6 +9,8 @@ enum ReminderType: string
     case CustomDue = 'custom_due';
     case AttendanceInactivity = 'attendance_inactivity';
     case WorkoutReminder = 'workout_reminder';
+    case MissedWorkoutFollowUp = 'missed_workout_follow_up';
+    case WorkoutStreak = 'workout_streak';
 
     public static function values(): array
     {

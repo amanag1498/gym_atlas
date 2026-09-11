@@ -8715,6 +8715,18 @@ class _WorkoutExerciseCardState extends State<_WorkoutExerciseCard> {
                 ),
             ],
           ),
+          if ((widget.exercise['progression_explanation']?.toString().trim() ??
+                  '')
+              .isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              widget.exercise['progression_explanation'].toString(),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),

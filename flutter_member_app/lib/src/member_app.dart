@@ -48,6 +48,8 @@ class _MemberAppState extends State<MemberApp> {
   bool _openingPendingEvent = false;
   bool _pendingTrialRequestsOpen = false;
   bool _openingPendingTrialRequests = false;
+  String? _pendingHomeSection;
+  bool _openingPendingHomeSection = false;
 
   @override
   void initState() {
@@ -82,9 +84,13 @@ class _MemberAppState extends State<MemberApp> {
           pageBuilder: (context, state) => _buildPage(
             state,
             MemberHomeScreen(
-              initialIndex: state.uri.queryParameters['section'] == 'chat'
-                  ? 3
-                  : 0,
+              initialIndex: switch (state.uri.queryParameters['section']) {
+                'workout' => 1,
+                'progress' => 2,
+                'chat' => 3,
+                'gyms' => 4,
+                _ => 0,
+              },
               chatLaunchVersion:
                   int.tryParse(
                     state.uri.queryParameters['launch']?.toString() ?? '',
@@ -137,6 +143,7 @@ class _MemberAppState extends State<MemberApp> {
     sessionController.addListener(_openPendingChatIfReady);
     sessionController.addListener(_openPendingEventIfReady);
     sessionController.addListener(_openPendingTrialRequestsIfReady);
+    sessionController.addListener(_openPendingHomeSectionIfReady);
     _chatNotificationService.initialize(_handleNotificationData).catchError((
       Object exception,
     ) {
@@ -205,6 +212,16 @@ class _MemberAppState extends State<MemberApp> {
       _pendingTrialRequestsOpen = true;
       unawaited(_openPendingTrialRequestsIfReady());
       return;
+    }
+    final deepLink = data['deep_link']?.toString();
+    if (deepLink != null && deepLink.startsWith('/home?section=')) {
+      final uri = Uri.tryParse(deepLink);
+      final section = uri?.queryParameters['section'];
+      if (const {'workout', 'progress', 'gyms'}.contains(section)) {
+        _pendingHomeSection = section;
+        unawaited(_openPendingHomeSectionIfReady());
+        return;
+      }
     }
     if (data['type'] != 'chat_message') {
       return;
@@ -288,6 +305,26 @@ class _MemberAppState extends State<MemberApp> {
     }
   }
 
+  Future<void> _openPendingHomeSectionIfReady() async {
+    final section = _pendingHomeSection;
+    if (section == null ||
+        _openingPendingHomeSection ||
+        sessionController.initializing ||
+        !sessionController.isAuthenticated) {
+      return;
+    }
+    _openingPendingHomeSection = true;
+    _pendingHomeSection = null;
+    try {
+      router.go('/home?section=$section');
+    } finally {
+      _openingPendingHomeSection = false;
+      if (_pendingHomeSection != null) {
+        unawaited(_openPendingHomeSectionIfReady());
+      }
+    }
+  }
+
   @override
   void dispose() {
     _foregroundNotificationSubscription?.cancel();
@@ -295,6 +332,7 @@ class _MemberAppState extends State<MemberApp> {
     sessionController.removeListener(_openPendingChatIfReady);
     sessionController.removeListener(_openPendingEventIfReady);
     sessionController.removeListener(_openPendingTrialRequestsIfReady);
+    sessionController.removeListener(_openPendingHomeSectionIfReady);
     router.dispose();
     sessionController.dispose();
     super.dispose();

@@ -15,6 +15,7 @@ use App\Models\PersonalRecord;
 use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Models\WorkoutPlan;
+use App\Models\WorkoutPlanDay;
 use App\Models\WorkoutSession;
 use App\Models\WorkoutTemplate;
 use Database\Seeders\PermissionSeeder;
@@ -188,6 +189,40 @@ class IndependentCoachingPlanIntegrationTest extends TestCase
             'gym_id' => $gym->id,
             'assigned_trainer_user_id' => $gymTrainer->id,
         ]);
+    }
+
+    public function test_independent_workout_analytics_requires_both_workout_and_progress_sharing_and_never_merges_gym_scope(): void
+    {
+        [$member, $gymTrainer, $independentTrainer, $gym, $branch, $relationship] = $this->coexistingPair();
+        $monday = now('Asia/Kolkata')->next('Monday')->startOfDay();
+        $followingMonday = $monday->copy()->addWeek();
+        $independentPlan = WorkoutPlan::query()->create($this->workoutPayload([
+            'gym_id' => null, 'branch_id' => null, 'member_id' => $member->id,
+            'trainer_id' => $independentTrainer->id, 'created_by_user_id' => $independentTrainer->id,
+            'independent_trainer_member_relationship_id' => $relationship->id,
+            'name' => 'Independent analytics plan', 'starts_on' => $monday, 'ends_on' => $followingMonday,
+        ]));
+        WorkoutPlanDay::query()->create(['workout_plan_id' => $independentPlan->id, 'day_number' => 1, 'label' => 'Independent Monday']);
+        $gymPlan = WorkoutPlan::query()->create($this->workoutPayload([
+            'gym_id' => $gym->id, 'branch_id' => $branch->id, 'member_id' => $member->id,
+            'trainer_id' => $gymTrainer->id, 'created_by_user_id' => $gymTrainer->id,
+            'name' => 'Gym-only analytics plan', 'starts_on' => $monday, 'ends_on' => $followingMonday,
+        ]));
+        WorkoutPlanDay::query()->create(['workout_plan_id' => $gymPlan->id, 'day_number' => 1, 'label' => 'Gym Monday']);
+
+        $this->actingAs($independentTrainer, 'sanctum')
+            ->getJson('/api/trainer/independent-members/'.$relationship->id.'/workout-analytics?from='.$monday->toDateString().'&to='.$monday->toDateString())
+            ->assertOk()->assertJsonCount(1, 'data.calendar')
+            ->assertJsonPath('data.calendar.0.workout_plan_id', $independentPlan->id);
+
+        $relationship->update(['sharing_permissions' => ['profile', 'workouts']]);
+        $this->actingAs($independentTrainer, 'sanctum')
+            ->getJson('/api/trainer/independent-members/'.$relationship->id.'/workout-analytics')
+            ->assertUnprocessable();
+        $relationship->update(['sharing_permissions' => ['profile', 'workouts', 'progress'], 'status' => 'revoked']);
+        $this->actingAs($independentTrainer, 'sanctum')
+            ->getJson('/api/trainer/independent-members/'.$relationship->id.'/workout-analytics')
+            ->assertUnprocessable();
     }
 
     public function test_verified_independent_trainer_assigns_workout_and_diet_through_existing_plan_apis(): void

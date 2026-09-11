@@ -257,6 +257,16 @@ class User extends Authenticatable
         return $this->hasMany(ScheduledReminder::class);
     }
 
+    public function workoutPreference(): HasOne
+    {
+        return $this->hasOne(MemberWorkoutPreference::class, 'member_id');
+    }
+
+    public function workoutScheduleOverrides(): HasMany
+    {
+        return $this->hasMany(WorkoutScheduleOverride::class, 'member_id');
+    }
+
     public function trialRequests(): HasMany
     {
         return $this->hasMany(TrialRequest::class, 'member_id');

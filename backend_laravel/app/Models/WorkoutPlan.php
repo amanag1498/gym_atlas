@@ -108,4 +108,9 @@ class WorkoutPlan extends Model
     {
         return $this->hasMany(WorkoutProgressionRecommendation::class);
     }
+
+    public function scheduleOverrides(): HasMany
+    {
+        return $this->hasMany(WorkoutScheduleOverride::class);
+    }
 }

@@ -15,6 +15,7 @@ enum NotificationType: string
     case AttendanceInactivity = 'attendance_inactivity';
     case WorkoutReminder = 'workout_reminder';
     case MissedWorkoutAlert = 'missed_workout_alert';
+    case WorkoutStreak = 'workout_streak';
     case WorkoutCompleted = 'workout_completed';
     case TrainerMessage = 'trainer_message';
     case TrialBooking = 'trial_booking';

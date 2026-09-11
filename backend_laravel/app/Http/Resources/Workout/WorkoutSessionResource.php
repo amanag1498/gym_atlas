@@ -17,6 +17,7 @@ class WorkoutSessionResource extends JsonResource
             'trainer_id' => $this->trainer_id,
             'workout_plan_id' => $this->workout_plan_id,
             'workout_plan_day_id' => $this->workout_plan_day_id,
+            'workout_schedule_override_id' => $this->workout_schedule_override_id,
             'plan_day_number' => $this->plan_day_number,
             'plan_day_label' => $this->plan_day_label,
             'day_selection_mode' => $this->day_selection_mode,
@@ -60,6 +61,8 @@ class WorkoutSessionResource extends JsonResource
                 'progression_policy' => $exercise->progression_policy ?? 'off',
                 'progression_config' => $exercise->progression_config,
                 'progression_version' => $exercise->progression_version ?? 1,
+                'progression_recommendation_id' => $exercise->progression_recommendation_id,
+                'progression_explanation' => $exercise->progression_explanation,
                 'notes' => $exercise->notes,
                 'sets' => $exercise->sets->map(fn ($set) => [
                     'id' => $set->id,

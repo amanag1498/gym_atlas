@@ -1131,7 +1131,19 @@ weight/repetition/date metadata, and remain separate from best-weight records.
 RIR/RPE remains optional per set, preserves its original scale, and is not used
 as an automatic progression input in this phase.
 
+Gap closure (2026-09-11) adds deterministic configurable deloads after repeated
+misses, an explicit Trainer action that disables automation for an exercise,
+prescription-version increments whenever an approved target is applied, the
+exact contributing workout-set ID for estimated 1RM records, current
+recommendation explanations in immutable session snapshots, and a Trainer
+ungroup action that preserves the exercises. These complete the previously
+open auditability and coaching-control cases without changing legacy plans.
+
 ### Phase 5 — Analytics and adherence
+
+Implementation status (2026-09-11): **implemented in the repository; requires
+the Laravel migration and updated Member/Trainer app builds to activate in
+production.**
 
 - Weight-goal chart integration.
 - Muscle coverage.
@@ -1142,6 +1154,21 @@ as an automatic progression input in this phase.
 - Trainer coaching signals.
 
 Exit criteria: date, timezone, plan lifecycle, rescheduling, and coaching-scope cases have focused regression coverage.
+
+Delivered scope includes a nullable member-owned weight goal with a visible
+goal line and direction-aware trend; completed-set muscle coverage using a
+documented primary `1.0` and secondary `0.5` weight with an explicit
+`other/unmapped` bucket; RIR/RPE analytics that always report rated-set counts
+and coverage; eligible Epley-v1 trend points tied to their source set; weekly
+calendar states; one-date reschedule/rest overrides that retain plan-day and
+coaching ownership; reschedule-aware adherence and duration heatmaps; and
+member-level Trainer coaching signals. Member reminder preferences reuse the
+existing scheduled-reminder, notification-preference, outbox, FCM, and deep-link
+pipeline for scheduled workouts, optional missed-workout follow-ups, optional
+consistency encouragement, lead time, workout time, timezone, and quiet hours.
+Member and Trainer apps expose these contracts with rolling-deployment
+fallbacks, and authorized Trainers can reschedule gym or independently coached
+plans without changing their recurring weekly schedule.
 
 ### Phase 6 — Portability
 

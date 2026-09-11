@@ -21,6 +21,7 @@ class StartWorkoutSessionRequest extends FormRequest
                 'integer',
                 Rule::exists('workout_plan_days', 'id'),
             ],
+            'workout_schedule_override_id' => ['nullable', 'integer', 'exists:workout_schedule_overrides,id'],
             'session_date' => ['required', 'date'],
             'notes' => ['nullable', 'string'],
             'pre_workout_weight_kg' => ['nullable', 'numeric', 'between:20,500'],

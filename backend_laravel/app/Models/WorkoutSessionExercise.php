@@ -40,6 +40,8 @@ class WorkoutSessionExercise extends Model
         'progression_policy',
         'progression_config',
         'progression_version',
+        'progression_recommendation_id',
+        'progression_explanation',
         'notes',
     ];
 
@@ -75,5 +77,10 @@ class WorkoutSessionExercise extends Model
     public function sets(): HasMany
     {
         return $this->hasMany(WorkoutSet::class)->orderBy('set_number');
+    }
+
+    public function progressionRecommendation(): BelongsTo
+    {
+        return $this->belongsTo(WorkoutProgressionRecommendation::class, 'progression_recommendation_id');
     }
 }

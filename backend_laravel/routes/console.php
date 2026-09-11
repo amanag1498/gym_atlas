@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\ReminderType;
 use App\Services\Events\EventService;
 use App\Services\Notification\ReminderService;
 use Illuminate\Foundation\Inspiring;
@@ -46,6 +47,14 @@ Schedule::command('biometric:dispatch-ebioserver')
 Schedule::call(fn () => app(ReminderService::class)->runDueReminders())
     ->dailyAt('09:00')
     ->name('membership-and-attendance-email-reminders')
+    ->withoutOverlapping();
+Schedule::call(fn () => app(ReminderService::class)->runDueReminders([
+    ReminderType::WorkoutReminder->value,
+    ReminderType::MissedWorkoutFollowUp->value,
+    ReminderType::WorkoutStreak->value,
+]))
+    ->everyMinute()
+    ->name('workout-reminders')
     ->withoutOverlapping();
 Schedule::call(fn () => app(EventService::class)->runDueReminders())
     ->everyMinute()

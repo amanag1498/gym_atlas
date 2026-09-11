@@ -149,6 +149,18 @@ class TrainerRepository {
     '/trainer/independent-members/$relationshipId/workout-logbook',
     queryParameters: {'page': page},
   );
+  Future<Map<String, dynamic>> fetchIndependentMemberWorkoutAnalytics(
+    int relationshipId,
+  ) => _client.get(
+    '/trainer/independent-members/$relationshipId/workout-analytics',
+  );
+  Future<Map<String, dynamic>> saveIndependentMemberWorkoutScheduleOverride(
+    int relationshipId,
+    Map<String, dynamic> payload,
+  ) => _client.post(
+    '/trainer/independent-members/$relationshipId/workout-schedule-overrides',
+    data: payload,
+  );
   Future<Map<String, dynamic>> respondToGymInvitation(
     int invitationId,
     String decision,
@@ -286,6 +298,15 @@ class TrainerRepository {
       'records_page': recordsPage,
       'per_page': 15,
     },
+  );
+  Future<Map<String, dynamic>> fetchMemberWorkoutAnalytics(int memberId) =>
+      _getMemberPath(memberId, '/workout-analytics');
+  Future<Map<String, dynamic>> saveMemberWorkoutScheduleOverride(
+    int memberId,
+    Map<String, dynamic> payload,
+  ) => _client.post(
+    '/trainer/assigned-members/$memberId/workout-schedule-overrides',
+    data: payload,
   );
   Future<Map<String, dynamic>> fetchExercises({
     int page = 1,

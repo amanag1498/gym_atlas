@@ -58,6 +58,23 @@ class WorkoutProgressionService
                 return $locked->fresh(['member', 'exercise', 'plan']);
             }
 
+            if ($decision === 'disable') {
+                $planExercise = $locked->planExercise()->lockForUpdate()->firstOrFail();
+                $planExercise->update([
+                    'progression_policy' => 'off',
+                    'progression_config' => null,
+                    'progression_version' => (int) $planExercise->progression_version + 1,
+                ]);
+                $locked->update([
+                    'status' => 'disabled',
+                    'reviewed_by_user_id' => $trainer->id,
+                    'reviewed_at' => now(),
+                    'review_notes' => $notes,
+                ]);
+
+                return $locked->fresh(['member', 'exercise', 'plan']);
+            }
+
             $prescription = $decision === 'override'
                 ? array_merge($locked->recommended_prescription, $overridePrescription ?? [])
                 : $locked->recommended_prescription;
@@ -107,10 +124,29 @@ class WorkoutProgressionService
             ->where('workout_plan_exercise_id', $exercise->workout_plan_exercise_id)
             ->where('status', 'pending')
             ->exists();
+        $history = WorkoutProgressionRecommendation::query()
+            ->where('workout_plan_exercise_id', $exercise->workout_plan_exercise_id)
+            ->latest('id')->limit(20)->get();
+        $priorMisses = 0;
+        foreach ($history as $priorRecommendation) {
+            if (in_array($priorRecommendation->action, ['increase', 'deload'], true)
+                || ($priorRecommendation->decision_inputs['targets_met'] ?? null) === true) {
+                break;
+            }
+            if ($priorRecommendation->action === 'hold'
+                && ($priorRecommendation->decision_inputs['targets_met'] ?? null) === false) {
+                $priorMisses++;
+            }
+        }
+        $consecutiveMisses = $allTargetsMet ? 0 : $priorMisses + 1;
+        $deloadAfterMisses = (int) ($config['deload_after_misses'] ?? 0);
+        $shouldDeload = ! $allTargetsMet && ! $hasPendingRecommendation
+            && $deloadAfterMisses > 0 && $consecutiveMisses >= $deloadAfterMisses
+            && (float) ($exercise->target_weight ?? 0) > 0;
         $canIncrease = $allTargetsMet
             && ! $hasPendingRecommendation
             && (float) ($exercise->target_weight ?? 0) > 0;
-        $action = $canIncrease ? 'increase' : 'hold';
+        $action = $shouldDeload ? 'deload' : ($canIncrease ? 'increase' : 'hold');
 
         if ($canIncrease) {
             $recommended['target_weight'] = round((float) $exercise->target_weight + $increment, 2);
@@ -121,12 +157,19 @@ class WorkoutProgressionService
             }
         }
 
+        if ($shouldDeload) {
+            $deloadPercent = (float) ($config['deload_percent'] ?? 10);
+            $recommended['target_weight'] = round((float) $exercise->target_weight * (1 - $deloadPercent / 100), 2);
+        }
+
         $explanation = $hasPendingRecommendation
             ? 'Keep the current prescription until the trainer reviews the earlier progression recommendation.'
+            : ($shouldDeload
+            ? sprintf('Reduce load by %.1f%% after %d consecutive completed sessions missed the configured target.', (float) ($config['deload_percent'] ?? 10), $consecutiveMisses)
             : ($canIncrease
             ? sprintf('All %d planned sets reached at least %d reps. Increase load by %.2f kg.', $plannedSets, $requiredReps, $increment)
-            : sprintf('Keep the current prescription because %d of %d planned sets reached at least %d reps at the planned load.', $completedSets->filter(fn ($set) => (int) $set->reps >= $requiredReps && (float) $set->weight >= (float) ($exercise->target_weight ?? 0))->count(), $plannedSets, $requiredReps));
-        $requiresReview = $canIncrease && $session->trainer_id !== null;
+            : sprintf('Keep the current prescription because %d of %d planned sets reached at least %d reps at the planned load.', $completedSets->filter(fn ($set) => (int) $set->reps >= $requiredReps && (float) $set->weight >= (float) ($exercise->target_weight ?? 0))->count(), $plannedSets, $requiredReps)));
+        $requiresReview = ($canIncrease || $shouldDeload) && $session->trainer_id !== null;
 
         $recommendation = WorkoutProgressionRecommendation::query()->updateOrCreate([
             'workout_plan_exercise_id' => $exercise->workout_plan_exercise_id,
@@ -148,11 +191,14 @@ class WorkoutProgressionService
                 'required_reps_per_set' => $requiredReps,
                 'completed_reps' => $completedSets->pluck('reps')->map(fn ($reps) => (int) $reps)->values()->all(),
                 'source' => 'completed_workout_sets',
+                'targets_met' => $allTargetsMet,
+                'consecutive_misses' => $consecutiveMisses,
+                'deload_after_misses' => $deloadAfterMisses,
             ],
             'explanation' => $explanation,
         ]);
 
-        if ($canIncrease && ! $requiresReview) {
+        if (($canIncrease || $shouldDeload) && ! $requiresReview) {
             $this->applyPrescription($recommendation->planExercise, $recommended);
         }
 
@@ -168,6 +214,7 @@ class WorkoutProgressionService
             'target_weight' => array_key_exists('target_weight', $prescription)
                 ? $prescription['target_weight']
                 : $exercise->target_weight,
+            'progression_version' => (int) $exercise->progression_version + 1,
         ]);
     }
 
