@@ -117,6 +117,22 @@ class MemberRepository {
   );
   Future<Map<String, dynamic>> fetchWorkoutPlan(int workoutPlanId) async =>
       _client.get('/member/workout-plans/$workoutPlanId');
+  Future<Map<String, dynamic>> createWorkoutPlanShare(
+    int workoutPlanId,
+    Map<String, dynamic> payload,
+  ) => _client.post(
+    '/member/workout-plans/$workoutPlanId/shares',
+    data: payload,
+  );
+  Future<Map<String, dynamic>> fetchWorkoutPlanShare(String token) =>
+      _client.get('/member/workout-plan-shares/${Uri.encodeComponent(token)}');
+  Future<Map<String, dynamic>> adoptWorkoutPlanShare(
+    String token, {
+    String? name,
+  }) => _client.post(
+    '/member/workout-plan-shares/${Uri.encodeComponent(token)}/adopt',
+    data: {if (name != null && name.trim().isNotEmpty) 'name': name.trim()},
+  );
   Future<Map<String, dynamic>> fetchDietPlans({
     int? relationshipId,
     int page = 1,
@@ -223,6 +239,13 @@ class MemberRepository {
     '/member/workout-history',
     queryParameters: {'page': page, 'per_page': perPage},
   );
+  Future<Map<String, dynamic>> previewWorkoutHistoryImport(
+    Map<String, dynamic> payload,
+  ) => _client.post('/member/workout-history/imports/preview', data: payload);
+  Future<Map<String, dynamic>> confirmWorkoutHistoryImport(int batchId) =>
+      _client.post('/member/workout-history/imports/$batchId/confirm');
+  Future<Map<String, dynamic>> exportWorkoutData() =>
+      _client.get('/member/workout-data/export');
   Future<Map<String, dynamic>> fetchExerciseHistory(
     int exerciseId, {
     int page = 1,

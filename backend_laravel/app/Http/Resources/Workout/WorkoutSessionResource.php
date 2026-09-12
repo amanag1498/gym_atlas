@@ -18,6 +18,8 @@ class WorkoutSessionResource extends JsonResource
             'workout_plan_id' => $this->workout_plan_id,
             'workout_plan_day_id' => $this->workout_plan_day_id,
             'workout_schedule_override_id' => $this->workout_schedule_override_id,
+            'source_import_batch_id' => $this->source_import_batch_id,
+            'source_external_id' => $this->source_external_id,
             'plan_day_number' => $this->plan_day_number,
             'plan_day_label' => $this->plan_day_label,
             'day_selection_mode' => $this->day_selection_mode,

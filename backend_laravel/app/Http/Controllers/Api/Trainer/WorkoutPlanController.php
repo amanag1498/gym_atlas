@@ -10,12 +10,15 @@ use App\Http\Resources\Workout\WorkoutPlanResource;
 use App\Http\Resources\Workout\WorkoutProgressionRecommendationResource;
 use App\Models\User;
 use App\Models\WorkoutPlan;
+use App\Models\WorkoutPlanShare;
 use App\Models\WorkoutProgressionRecommendation;
 use App\Services\Audit\AuditLogService;
 use App\Services\Trainer\IndependentCoachingAccessService;
 use App\Services\Trainer\TrainerScopeService;
 use App\Services\Workout\WorkoutAccessService;
+use App\Services\Workout\WorkoutPlanPdfService;
 use App\Services\Workout\WorkoutPlanService;
+use App\Services\Workout\WorkoutPortabilityService;
 use App\Services\Workout\WorkoutProgressionService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -29,6 +32,8 @@ class WorkoutPlanController extends Controller
         private readonly TrainerScopeService $trainerScopeService,
         private readonly IndependentCoachingAccessService $independentCoachingAccessService,
         private readonly WorkoutProgressionService $workoutProgressionService,
+        private readonly WorkoutPlanPdfService $pdfService,
+        private readonly WorkoutPortabilityService $portabilityService,
     ) {}
 
     public function index(Request $request)
@@ -120,6 +125,50 @@ class WorkoutPlanController extends Controller
         $this->workoutAccessService->assertPlanAccess($request->user(), $workoutPlan);
 
         return $this->success(WorkoutPlanResource::make($workoutPlan->load(['member', 'trainer', 'template.days.exercises.exercise', 'days.exercises.exercise'])));
+    }
+
+    public function pdf(Request $request, WorkoutPlan $workoutPlan)
+    {
+        $this->workoutAccessService->assertPlanAccess($request->user(), $workoutPlan);
+        $pdf = $this->pdfService->generate($workoutPlan);
+
+        return response($pdf['content'], 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$pdf['filename'].'"',
+        ]);
+    }
+
+    public function share(Request $request, WorkoutPlan $workoutPlan)
+    {
+        $this->workoutAccessService->assertPlanAccess($request->user(), $workoutPlan);
+        $validated = $request->validate([
+            'recipient_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'recipient_email' => ['nullable', 'email', 'max:255'],
+            'expires_in_days' => ['nullable', 'integer', 'min:1', 'max:90'],
+            'expires_at' => ['nullable', 'date', 'after:now'],
+        ]);
+        $created = $this->portabilityService->createShare($request->user(), $workoutPlan, $validated);
+
+        return $this->success([
+            'id' => $created['share']->id,
+            'token' => $created['token'],
+            'expires_at' => $created['share']->expires_at?->toIso8601String(),
+        ], 'Workout plan share created successfully.', 201);
+    }
+
+    public function revokeShare(Request $request, WorkoutPlanShare $share)
+    {
+        abort_unless((int) $share->shared_by_user_id === (int) $request->user()->id, 404);
+        $share->update([
+            'status' => 'revoked',
+            'revoked_at' => now(),
+        ]);
+
+        return $this->success([
+            'id' => $share->id,
+            'status' => $share->status,
+            'revoked_at' => $share->revoked_at?->toIso8601String(),
+        ], 'Workout plan share revoked successfully.');
     }
 
     public function update(UpdateWorkoutPlanRequest $request, WorkoutPlan $workoutPlan)

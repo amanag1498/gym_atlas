@@ -19,6 +19,8 @@ class WorkoutSession extends Model
         'workout_plan_id',
         'workout_plan_day_id',
         'workout_schedule_override_id',
+        'source_import_batch_id',
+        'source_external_id',
         'plan_day_number',
         'plan_day_label',
         'day_selection_mode',
@@ -82,6 +84,11 @@ class WorkoutSession extends Model
     public function scheduleOverride(): BelongsTo
     {
         return $this->belongsTo(WorkoutScheduleOverride::class, 'workout_schedule_override_id');
+    }
+
+    public function sourceImportBatch(): BelongsTo
+    {
+        return $this->belongsTo(WorkoutHistoryImportBatch::class, 'source_import_batch_id');
     }
 
     public function starter(): BelongsTo

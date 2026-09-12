@@ -1172,12 +1172,28 @@ plans without changing their recurring weekly schedule.
 
 ### Phase 6 — Portability
 
+Implementation status (2026-09-12): **implemented in the repository; requires
+the Laravel migration and updated Member/Trainer app builds to activate in
+production.**
+
 - Plan PDF.
 - Internal plan sharing.
 - External history-import preview and confirmation.
 - Member data export.
 
 Exit criteria: repeated imports are idempotent and sharing never overwrites recipient data.
+
+Delivered scope includes server-generated workout-plan PDFs; authenticated
+plan-share tokens with immutable snapshots, expiration, recipient checks, and
+member adoption into a new personal plan; source attribution on adopted shared
+plans; staged CSV workout-history import with preview, conservative exercise
+matching, unmatched/invalid row reporting, confirmation, and idempotent session
+creation; body-weight import rows from health-style exports; and a
+member-owned JSON export with schema version, plan/session/set relationships,
+exercise source identifiers, timezone, weight logs, and body measurements while
+excluding billing, memberships, staff notes, audit logs, and private gym data.
+Member and Trainer apps expose the new contracts through compact portability
+actions.
 
 ### Phase 7 — Licensed media activation
 

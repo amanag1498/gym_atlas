@@ -356,6 +356,10 @@ class TrainerRepository {
       _client.get('/trainer/workout-templates/$templateId');
   Future<Map<String, dynamic>> fetchWorkoutPlans({int page = 1}) async =>
       _client.get('/trainer/workout-plans', queryParameters: {'page': page});
+  Future<Map<String, dynamic>> createWorkoutPlanShare(
+    int planId,
+    Map<String, dynamic> payload,
+  ) => _client.post('/trainer/workout-plans/$planId/shares', data: payload);
   Future<Map<String, dynamic>> fetchDietPlans({
     int? memberId,
     int? independentRelationshipId,

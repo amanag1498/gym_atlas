@@ -47,6 +47,7 @@ use App\Http\Controllers\Api\Member\ProgressController as MemberProgressControll
 use App\Http\Controllers\Api\Member\TrialRequestController;
 use App\Http\Controllers\Api\Member\WhatsAppConsentController;
 use App\Http\Controllers\Api\Member\WorkoutController as MemberWorkoutController;
+use App\Http\Controllers\Api\Member\WorkoutPortabilityController as MemberWorkoutPortabilityController;
 use App\Http\Controllers\Api\PlatformAdmin\AnnouncementController as PlatformAnnouncementController;
 use App\Http\Controllers\Api\PlatformAdmin\AuditLogController as PlatformAuditLogController;
 use App\Http\Controllers\Api\PlatformAdmin\CatalogController;
@@ -783,6 +784,12 @@ Route::prefix('trainer')
             ->middleware('permission:workout_plan.manage');
         Route::get('workout-plans/{workoutPlan}', [TrainerWorkoutPlanController::class, 'show'])
             ->middleware('permission:workout_plan.view|workout_plan.manage');
+        Route::get('workout-plans/{workoutPlan}/pdf', [TrainerWorkoutPlanController::class, 'pdf'])
+            ->middleware('permission:workout_plan.view|workout_plan.manage');
+        Route::post('workout-plans/{workoutPlan}/shares', [TrainerWorkoutPlanController::class, 'share'])
+            ->middleware('permission:workout_plan.manage');
+        Route::delete('workout-plan-shares/{share}', [TrainerWorkoutPlanController::class, 'revokeShare'])
+            ->middleware('permission:workout_plan.manage');
         Route::put('workout-plans/{workoutPlan}', [TrainerWorkoutPlanController::class, 'update'])
             ->middleware('permission:workout_plan.manage');
         Route::delete('workout-plans/{workoutPlan}', [TrainerWorkoutPlanController::class, 'destroy'])
@@ -902,6 +909,10 @@ Route::prefix('member')
             ->middleware('permission:workout_plan.manage|workout_session.manage');
         Route::get('workout-plans/{workoutPlan}', [MemberWorkoutController::class, 'showPlan'])
             ->middleware('permission:workout_plan.view');
+        Route::get('workout-plans/{workoutPlan}/pdf', [MemberWorkoutPortabilityController::class, 'planPdf'])
+            ->middleware('permission:workout_plan.view');
+        Route::post('workout-plans/{workoutPlan}/shares', [MemberWorkoutPortabilityController::class, 'createShare'])
+            ->middleware('permission:workout_plan.view|workout_plan.manage');
         Route::put('workout-plans/{workoutPlan}', [MemberWorkoutController::class, 'updatePlan'])
             ->middleware('permission:workout_plan.manage|workout_session.manage');
         Route::delete('workout-plans/{workoutPlan}', [MemberWorkoutController::class, 'destroyPlan'])
@@ -930,6 +941,18 @@ Route::prefix('member')
             ->middleware('permission:workout_plan.manage|workout_session.manage');
         Route::post('workout-plans/{workoutPlan}/duplicate', [MemberWorkoutController::class, 'duplicatePlan'])
             ->middleware('permission:workout_plan.manage|workout_session.manage');
+        Route::get('workout-plan-shares/{token}', [MemberWorkoutPortabilityController::class, 'showShare'])
+            ->middleware('permission:workout_plan.view');
+        Route::post('workout-plan-shares/{token}/adopt', [MemberWorkoutPortabilityController::class, 'adoptShare'])
+            ->middleware('permission:workout_plan.manage|workout_session.manage');
+        Route::delete('workout-plan-shares/{share}', [MemberWorkoutPortabilityController::class, 'revokeShare'])
+            ->middleware('permission:workout_plan.manage|workout_session.manage');
+        Route::post('workout-history/imports/preview', [MemberWorkoutPortabilityController::class, 'previewImport'])
+            ->middleware('permission:workout_session.manage');
+        Route::post('workout-history/imports/{batch}/confirm', [MemberWorkoutPortabilityController::class, 'confirmImport'])
+            ->middleware('permission:workout_session.manage');
+        Route::get('workout-data/export', [MemberWorkoutPortabilityController::class, 'exportData'])
+            ->middleware('permission:workout_session.view|progress.view');
         Route::post('workout-sessions/start', [MemberWorkoutController::class, 'start'])
             ->middleware('permission:workout_session.manage');
         Route::get('workout-sessions/active', [MemberWorkoutController::class, 'activeSession'])

@@ -19,6 +19,9 @@ class WorkoutPlan extends Model
         'independent_trainer_member_relationship_id',
         'created_by_user_id',
         'source_workout_book_id',
+        'source_shared_workout_plan_id',
+        'source_shared_by_user_id',
+        'shared_adopted_at',
         'plan_origin',
         'is_member_editable',
         'workout_template_id',
@@ -46,6 +49,7 @@ class WorkoutPlan extends Model
             'progression_config' => 'array',
             'is_member_editable' => 'boolean',
             'assigned_at' => 'datetime',
+            'shared_adopted_at' => 'datetime',
             'starts_on' => 'date',
             'ends_on' => 'date',
         ];
@@ -92,6 +96,16 @@ class WorkoutPlan extends Model
     public function sourceWorkoutBook(): BelongsTo
     {
         return $this->belongsTo(WorkoutBook::class, 'source_workout_book_id');
+    }
+
+    public function sourceSharedPlan(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'source_shared_workout_plan_id');
+    }
+
+    public function sourceSharedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'source_shared_by_user_id');
     }
 
     public function days(): HasMany

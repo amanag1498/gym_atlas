@@ -1,6 +1,7 @@
-import 'dart:typed_data';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:gym_flutter_core/metric_trend_chart.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -424,6 +425,267 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
     );
   }
 
+  Future<void> _exportWorkoutData() async {
+    try {
+      final export = await widget.repository.exportWorkoutData();
+      await Clipboard.setData(
+        ClipboardData(text: const JsonEncoder.withIndent('  ').convert(export)),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Workout export copied as JSON.')),
+      );
+    } catch (exception) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+    }
+  }
+
+  Future<void> _shareWorkoutPlan() async {
+    try {
+      final response = await widget.repository.fetchWorkoutPlans(perPage: 100);
+      final plans = apiPageItems(response);
+      if (!mounted) return;
+      if (plans.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Create or adopt a workout plan first.'),
+          ),
+        );
+        return;
+      }
+      final selected = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Share workout plan'),
+          content: SizedBox(
+            width: 420,
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: plans.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final plan = plans[index];
+
+                return ListTile(
+                  leading: const Icon(Icons.fitness_center_rounded),
+                  title: Text(plan['name']?.toString() ?? 'Workout plan'),
+                  subtitle: Text(
+                    '${plan['total_workout_days'] ?? ((plan['days'] as List?)?.length ?? 0)} day(s)',
+                  ),
+                  onTap: () => Navigator.pop(dialogContext, plan),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      );
+      final planId = (selected?['id'] as num?)?.toInt();
+      if (planId == null) return;
+      final share = await widget.repository.createWorkoutPlanShare(planId, {
+        'expires_in_days': 14,
+      });
+      final data = Map<String, dynamic>.from(share['data'] as Map? ?? const {});
+      final token = data['token']?.toString() ?? '';
+      await Clipboard.setData(ClipboardData(text: token));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Workout share token copied.')),
+      );
+    } catch (exception) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+    }
+  }
+
+  Future<void> _importWorkoutHistory() async {
+    final csvController = TextEditingController();
+    var previewing = false;
+    try {
+      final imported = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Import workout history'),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Paste CSV with Date, Exercise, Set, Reps, Weight, and Unit columns.',
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: csvController,
+                    minLines: 7,
+                    maxLines: 10,
+                    decoration: const InputDecoration(
+                      labelText: 'CSV history',
+                      alignLabelWithHint: true,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: previewing
+                    ? null
+                    : () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: previewing
+                    ? null
+                    : () async {
+                        if (csvController.text.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Paste CSV history first.'),
+                            ),
+                          );
+                          return;
+                        }
+                        setDialogState(() => previewing = true);
+                        try {
+                          final preview = await widget.repository
+                              .previewWorkoutHistoryImport({
+                                'source_format': 'generic_csv',
+                                'timezone':
+                                    _workoutPreferences['timezone']
+                                        ?.toString() ??
+                                    'Asia/Kolkata',
+                                'csv_text': csvController.text,
+                              });
+                          final batch = Map<String, dynamic>.from(
+                            preview['data'] as Map? ?? const {},
+                          );
+                          final summary = Map<String, dynamic>.from(
+                            batch['summary'] as Map? ?? const {},
+                          );
+                          if (!context.mounted) return;
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (confirmContext) => AlertDialog(
+                              title: const Text('Confirm import'),
+                              content: Text(
+                                '${summary['matched'] ?? 0} matched, '
+                                '${summary['unmatched'] ?? 0} unmatched, '
+                                '${summary['invalid'] ?? 0} invalid rows.',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(confirmContext, false),
+                                  child: const Text('Cancel'),
+                                ),
+                                FilledButton(
+                                  onPressed: () =>
+                                      Navigator.pop(confirmContext, true),
+                                  child: const Text('Import matched'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirm == true) {
+                            await widget.repository.confirmWorkoutHistoryImport(
+                              (batch['id'] as num).toInt(),
+                            );
+                            if (context.mounted) {
+                              Navigator.pop(dialogContext, true);
+                            }
+                          } else if (context.mounted) {
+                            Navigator.pop(dialogContext, false);
+                          }
+                        } catch (exception) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(exception.toString())),
+                            );
+                            setDialogState(() => previewing = false);
+                          }
+                        }
+                      },
+                child: Text(previewing ? 'Previewing...' : 'Preview CSV'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (imported == true) {
+        await _afterSave('Workout history imported.');
+      }
+    } finally {
+      csvController.dispose();
+    }
+  }
+
+  Future<void> _adoptSharedWorkoutPlan() async {
+    final tokenController = TextEditingController();
+    final nameController = TextEditingController();
+    try {
+      final adopt = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Adopt shared plan'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: tokenController,
+                decoration: const InputDecoration(labelText: 'Share token'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'New plan name',
+                  helperText: 'Leave blank to keep the shared name.',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Adopt'),
+            ),
+          ],
+        ),
+      );
+      final token = tokenController.text.trim();
+      if (adopt != true || token.isEmpty) return;
+      await widget.repository.adoptWorkoutPlanShare(
+        token,
+        name: nameController.text.trim(),
+      );
+      await _afterSave('Shared workout plan added.');
+    } catch (exception) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+    } finally {
+      tokenController.dispose();
+      nameController.dispose();
+    }
+  }
+
   Future<void> _showPhotoSourceSheet() async {
     if (_savingPhoto) {
       return;
@@ -730,6 +992,10 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
                         analytics: _workoutAnalytics,
                         onEditPreferences: _editWorkoutPreferences,
                         onOverrideWorkout: _overrideWorkout,
+                        onExportData: _exportWorkoutData,
+                        onSharePlan: _shareWorkoutPlan,
+                        onImportHistory: _importWorkoutHistory,
+                        onAdoptSharedPlan: _adoptSharedWorkoutPlan,
                       ),
                       _StepHistoryTab(
                         todaySteps: _todaySteps,
@@ -1432,11 +1698,19 @@ class _WorkoutAnalyticsTab extends StatelessWidget {
     required this.analytics,
     required this.onEditPreferences,
     required this.onOverrideWorkout,
+    required this.onExportData,
+    required this.onSharePlan,
+    required this.onImportHistory,
+    required this.onAdoptSharedPlan,
   });
 
   final Map<String, dynamic> analytics;
   final VoidCallback onEditPreferences;
   final Future<void> Function(Map<String, dynamic>) onOverrideWorkout;
+  final VoidCallback onExportData;
+  final VoidCallback onSharePlan;
+  final VoidCallback onImportHistory;
+  final VoidCallback onAdoptSharedPlan;
 
   @override
   Widget build(BuildContext context) {
@@ -1496,6 +1770,38 @@ class _WorkoutAnalyticsTab extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
+        _StrengthInsightPanel(
+          title: 'Data portability',
+          subtitle: 'Export your data, import history, or adopt a shared plan.',
+          icon: Icons.import_export_rounded,
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: onExportData,
+                icon: const Icon(Icons.content_copy_rounded),
+                label: const Text('Copy export'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onSharePlan,
+                icon: const Icon(Icons.ios_share_rounded),
+                label: const Text('Share plan'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onImportHistory,
+                icon: const Icon(Icons.upload_file_rounded),
+                label: const Text('Import CSV'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onAdoptSharedPlan,
+                icon: const Icon(Icons.link_rounded),
+                label: const Text('Adopt share'),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
         MetricTrendChart(
           title: 'Weight toward your goal',
           subtitle: weight['direction'] == 'toward_goal'

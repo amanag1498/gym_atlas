@@ -203,6 +203,18 @@ class WorkoutAccessService
                 ]);
             }
 
+            $session->loadMissing('plan', 'member');
+            if ($session->plan?->independent_trainer_member_relationship_id !== null) {
+                $this->independentCoachingAccessService->resolveActiveRelationship(
+                    $actor,
+                    $session->member,
+                    (int) $session->plan->independent_trainer_member_relationship_id,
+                    'workouts',
+                );
+
+                return;
+            }
+
             $this->assertTrainerCanAccessMember($actor, $session->member);
 
             return;

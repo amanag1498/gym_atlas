@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:gym_flutter_core/workout_plan_summary_view.dart';
 import 'package:provider/provider.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
@@ -8223,6 +8224,40 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                 }
               }
 
+              Future<void> sharePlan() async {
+                final planId = (plan['id'] as num?)?.toInt();
+                if (planId == null) {
+                  return;
+                }
+                setSheetState(() => saving = true);
+                try {
+                  final response = await widget.repository
+                      .createWorkoutPlanShare(planId, {'expires_in_days': 14});
+                  final data = Map<String, dynamic>.from(
+                    response['data'] as Map? ?? const {},
+                  );
+                  final token = data['token']?.toString() ?? '';
+                  await Clipboard.setData(ClipboardData(text: token));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Share token copied for this workout.'),
+                      ),
+                    );
+                  }
+                } catch (exception) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(exception.toString())),
+                    );
+                  }
+                } finally {
+                  if (context.mounted) {
+                    setSheetState(() => saving = false);
+                  }
+                }
+              }
+
               return Padding(
                 padding: EdgeInsets.only(
                   left: 14,
@@ -8360,6 +8395,12 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                               ),
                             );
                           }),
+                          const SizedBox(height: 10),
+                          OutlinedButton.icon(
+                            onPressed: saving ? null : sharePlan,
+                            icon: const Icon(Icons.ios_share_rounded),
+                            label: const Text('Copy plan share token'),
+                          ),
                           const SizedBox(height: 10),
                           GradientButton(
                             label: saving
