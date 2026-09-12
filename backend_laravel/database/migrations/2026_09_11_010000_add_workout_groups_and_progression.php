@@ -57,9 +57,13 @@ return new class extends Migration
             $table->foreignId('member_id')->constrained('users')->cascadeOnDelete();
             $table->foreignId('trainer_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('workout_plan_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('workout_plan_exercise_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('workout_plan_exercise_id')->nullable()
+                ->constrained('workout_plan_exercises', 'id', 'wpr_plan_exercise_fk')
+                ->nullOnDelete();
             $table->foreignId('exercise_id')->constrained()->restrictOnDelete();
-            $table->foreignId('source_workout_session_id')->constrained('workout_sessions')->cascadeOnDelete();
+            $table->foreignId('source_workout_session_id')
+                ->constrained('workout_sessions', 'id', 'wpr_source_session_fk')
+                ->cascadeOnDelete();
             $table->string('policy', 40);
             $table->unsignedSmallInteger('algorithm_version')->default(1);
             $table->string('action', 20);

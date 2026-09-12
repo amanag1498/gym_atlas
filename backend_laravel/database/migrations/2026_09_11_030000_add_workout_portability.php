@@ -51,7 +51,9 @@ return new class extends Migration
 
         Schema::create('workout_history_import_rows', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('workout_history_import_batch_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('workout_history_import_batch_id')
+                ->constrained('workout_history_import_batches', 'id', 'workout_import_rows_batch_fk')
+                ->cascadeOnDelete();
             $table->unsignedInteger('row_number');
             $table->string('row_hash', 64);
             $table->string('status', 24);

@@ -34,7 +34,9 @@ return new class extends Migration
             $table->foreignId('gym_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('branch_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('independent_trainer_member_relationship_id')
-                ->nullable()->constrained()->nullOnDelete();
+                ->nullable()
+                ->constrained('independent_trainer_member_relationships', 'id', 'workout_override_independent_rel_fk')
+                ->nullOnDelete();
             $table->date('original_date');
             $table->date('replacement_date')->nullable();
             $table->string('override_type', 20)->default('reschedule');
