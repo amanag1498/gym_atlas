@@ -560,7 +560,10 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
 
   Future<void> _openSettingsScreen() async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => const TrainerSettingsScreen()),
+      MaterialPageRoute(
+        builder: (_) =>
+            TrainerSettingsScreen(onEditProfile: _openProfileEditSheet),
+      ),
     );
     if (mounted) {
       await _load();

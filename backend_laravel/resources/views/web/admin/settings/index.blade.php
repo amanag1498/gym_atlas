@@ -73,6 +73,25 @@
                         <span><input type="hidden" name="transactional_email_enabled" value="0"><input type="checkbox" name="transactional_email_enabled" value="1" class="mt-1 h-5 w-5 rounded border-slate-300 text-teal-600" @checked(old('transactional_email_enabled', $settings['transactional_email_enabled'] ?? true))></span>
                     </label>
 
+                    <label class="md:col-span-2 xl:col-span-6 panel-card-muted flex items-start justify-between gap-4 px-4 py-4">
+                        <span><span class="block font-semibold text-slate-950">Enable hidden demo app login</span><span class="mt-1 block text-sm text-slate-500">Allows the configured reviewer accounts to sign in from the triple-tap Atlas logo flow in the Member and Trainer apps.</span></span>
+                        <span><input type="hidden" name="demo_login_enabled" value="0"><input type="checkbox" name="demo_login_enabled" value="1" class="mt-1 h-5 w-5 rounded border-slate-300 text-teal-600" @checked(old('demo_login_enabled', $settings['demo_login_enabled'] ?? false))></span>
+                    </label>
+
+                    <div class="xl:col-span-3">
+                        <label class="panel-label" for="demo_member_login_email">Member App Demo Email</label>
+                        <input id="demo_member_login_email" name="demo_member_login_email" value="{{ old('demo_member_login_email', $settings['demo_member_login_email'] ?? '') }}" class="panel-input" placeholder="reviewer-member@example.com">
+                        <p class="mt-2 text-xs text-slate-500">Must match an existing active member-role user.</p>
+                        @error('demo_member_login_email') <div class="mt-2 text-sm text-rose-600">{{ $message }}</div> @enderror
+                    </div>
+
+                    <div class="xl:col-span-3">
+                        <label class="panel-label" for="demo_trainer_login_email">Trainer App Demo Email</label>
+                        <input id="demo_trainer_login_email" name="demo_trainer_login_email" value="{{ old('demo_trainer_login_email', $settings['demo_trainer_login_email'] ?? '') }}" class="panel-input" placeholder="reviewer-trainer@example.com">
+                        <p class="mt-2 text-xs text-slate-500">Must match an existing active trainer-role user.</p>
+                        @error('demo_trainer_login_email') <div class="mt-2 text-sm text-rose-600">{{ $message }}</div> @enderror
+                    </div>
+
                     <div class="md:col-span-2 xl:col-span-2">
                         <label class="panel-label" for="promoted_listing_price">Promoted Listing Price</label>
                         <input id="promoted_listing_price" name="promoted_listing_price" value="{{ old('promoted_listing_price', $settings['promoted_listing_price'] ?? '') }}" class="panel-input">

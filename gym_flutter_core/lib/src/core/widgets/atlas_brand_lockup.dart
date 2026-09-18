@@ -14,7 +14,6 @@ class AtlasBrandLockup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final audienceLabel = '${audience.toUpperCase()} APP';
 
     return Semantics(
       container: true,
@@ -45,26 +44,6 @@ class AtlasBrandLockup extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                   letterSpacing: 0.8,
                   height: 1,
-                ),
-              ),
-              const SizedBox(height: 7),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF465FFF).withValues(alpha: 0.09),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: const Color(0xFF465FFF).withValues(alpha: 0.16),
-                  ),
-                ),
-                child: Text(
-                  audienceLabel,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: const Color(0xFF3641F5),
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.4,
-                    height: 1,
-                  ),
                 ),
               ),
             ],

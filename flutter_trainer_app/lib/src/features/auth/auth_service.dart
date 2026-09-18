@@ -31,6 +31,39 @@ class TrainerAuthService {
     );
   }
 
+  Future<bool> fetchDemoLoginEnabled() async {
+    final response = await _client.get('/public/app-config');
+    final data = Map<String, dynamic>.from(
+      response['data'] as Map? ?? const {},
+    );
+    return data['demo_login_enabled'] == true;
+  }
+
+  Future<TrainerSession> signInWithDemoEmail({
+    required String email,
+    required String appType,
+  }) async {
+    final response = await _client.post(
+      '/public/auth/demo/login',
+      data: <String, dynamic>{
+        'email': email.trim(),
+        'device_name': 'flutter_trainer_app_demo',
+        'app_type': appType,
+      },
+    );
+
+    final data = Map<String, dynamic>.from(
+      response['data'] as Map? ?? const {},
+    );
+
+    return TrainerSession(
+      token: data['token']?.toString() ?? '',
+      user: TrainerUser.fromJson(
+        Map<String, dynamic>.from(data['user'] as Map? ?? const {}),
+      ),
+    );
+  }
+
   Future<TrainerUser> fetchMe() async {
     final response = await _client.get('/public/me');
     final data = Map<String, dynamic>.from(

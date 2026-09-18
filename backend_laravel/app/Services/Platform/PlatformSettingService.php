@@ -59,6 +59,9 @@ class PlatformSettingService
             'app_banners_placeholder' => null,
             'feature_flags_placeholder' => null,
             'transactional_email_enabled' => true,
+            'demo_login_enabled' => false,
+            'demo_member_login_email' => null,
+            'demo_trainer_login_email' => null,
         ];
     }
 }

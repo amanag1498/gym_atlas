@@ -2,7 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:gym_flutter_core/gym_flutter_core.dart' show AtlasBrandLockup;
+import 'package:gym_flutter_core/gym_flutter_core.dart'
+    show AtlasBrandLockup, DemoLogoTapTracker;
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -20,6 +21,7 @@ class TrainerLoginScreen extends StatefulWidget {
 class _TrainerLoginScreenState extends State<TrainerLoginScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  final DemoLogoTapTracker _demoLogoTapTracker = DemoLogoTapTracker();
 
   @override
   void initState() {
@@ -86,9 +88,13 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
                             RevealOnBuild(
                               delay: const Duration(milliseconds: 40),
                               offset: const Offset(0, 0.04),
-                              child: AtlasBrandLockup(
-                                audience: 'Trainer',
-                                markSize: logoSize,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: _handleBrandTap,
+                                child: AtlasBrandLockup(
+                                  audience: 'Trainer',
+                                  markSize: logoSize,
+                                ),
                               ),
                             ),
                             SizedBox(height: compact ? 28 : 40),
@@ -98,13 +104,13 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   Text(
-                                    'Your coaching,\nall in one place.',
+                                    'Your floor is\nready.',
                                     textAlign: TextAlign.center,
                                     style: theme.textTheme.displaySmall
                                         ?.copyWith(
                                           fontSize: headlineSize,
                                           height: 0.94,
-                                          letterSpacing: -1.2,
+                                          letterSpacing: 0,
                                           fontWeight: FontWeight.w700,
                                         ),
                                   ),
@@ -114,7 +120,7 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
                                       maxWidth: 340,
                                     ),
                                     child: Text(
-                                      'Members, workouts, follow-ups, and trainer tasks in one focused coach app.',
+                                      'See your members, build better sessions, and keep every follow-up close at hand.',
                                       textAlign: TextAlign.center,
                                       style: theme.textTheme.bodyLarge
                                           ?.copyWith(
@@ -135,6 +141,11 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
                                 compact: compact,
                                 busy: session.busy,
                                 error: session.error,
+                                title: 'Good to see you',
+                                subtitle:
+                                    'Sign in with the account connected to your coaching profile.',
+                                footer:
+                                    'Your clients, plans, and tasks will be waiting.',
                                 onPressed: session.busy
                                     ? null
                                     : () => context
@@ -145,19 +156,6 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
                                     : () => context
                                           .read<TrainerSessionController>()
                                           .loginWithApple(),
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-                            RevealOnBuild(
-                              delay: const Duration(milliseconds: 340),
-                              child: Center(
-                                child: Text(
-                                  'Trainers only',
-                                  textAlign: TextAlign.center,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    letterSpacing: 0.2,
-                                  ),
-                                ),
                               ),
                             ),
                           ],
@@ -173,6 +171,66 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
       ),
     );
   }
+
+  Future<void> _handleBrandTap() async {
+    if (!_demoLogoTapTracker.register()) {
+      return;
+    }
+
+    final session = context.read<TrainerSessionController>();
+    final enabled = await session.fetchDemoLoginEnabled();
+    if (!mounted || !enabled) {
+      return;
+    }
+
+    final email = await _showDemoLoginDialog(
+      context: context,
+      title: 'Reviewer sign-in',
+      helperText: 'Enter the Trainer App demo email configured in Atlas.',
+    );
+    if (!mounted || email == null || email.trim().isEmpty) {
+      return;
+    }
+
+    await context.read<TrainerSessionController>().loginWithDemoEmail(email);
+  }
+}
+
+Future<String?> _showDemoLoginDialog({
+  required BuildContext context,
+  required String title,
+  required String helperText,
+}) async {
+  final controller = TextEditingController();
+  final result = await showDialog<String>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(title),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        keyboardType: TextInputType.emailAddress,
+        textInputAction: TextInputAction.done,
+        decoration: InputDecoration(
+          labelText: 'Reviewer email',
+          helperText: helperText,
+        ),
+        onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+          child: const Text('Continue'),
+        ),
+      ],
+    ),
+  );
+  controller.dispose();
+  return result;
 }
 
 class _LoginPanel extends StatelessWidget {
@@ -180,6 +238,9 @@ class _LoginPanel extends StatelessWidget {
     required this.compact,
     required this.busy,
     required this.error,
+    required this.title,
+    required this.subtitle,
+    required this.footer,
     required this.onPressed,
     required this.onApplePressed,
   });
@@ -187,6 +248,9 @@ class _LoginPanel extends StatelessWidget {
   final bool compact;
   final bool busy;
   final String? error;
+  final String title;
+  final String subtitle;
+  final String footer;
   final VoidCallback? onPressed;
   final VoidCallback? onApplePressed;
 
@@ -248,19 +312,26 @@ class _LoginPanel extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Text(
-                    showApple
-                        ? 'Choose how to continue'
-                        : 'Continue with Google',
+                    title,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.headlineSmall?.copyWith(
                       fontSize: compact ? 22 : 24,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    subtitle,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                      height: 1.45,
                     ),
                   ),
                   if (error != null) ...[
                     const SizedBox(height: 16),
                     _LoginError(message: error!),
                   ],
-                  const SizedBox(height: 22),
+                  SizedBox(height: compact ? 18 : 22),
                   GradientButton(
                     expanded: true,
                     label: busy ? 'Signing in...' : 'Continue with Google',
@@ -305,12 +376,50 @@ class _LoginPanel extends StatelessWidget {
                       ),
                     ),
                   ],
+                  const SizedBox(height: 18),
+                  _LoginHintRow(icon: Icons.groups_2_outlined, label: footer),
+                  const SizedBox(height: 10),
+                  _LoginHintRow(
+                    icon: Icons.bolt_rounded,
+                    label: showApple
+                        ? 'Choose Google or Apple. Your coaching workspace stays the same.'
+                        : 'One tap, then you are back to coaching.',
+                  ),
                 ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _LoginHintRow extends StatelessWidget {
+  const _LoginHintRow({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: AppColors.primary),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+              height: 1.35,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

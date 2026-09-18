@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_flutter_core/gym_flutter_core.dart';
 
 void main() {
-  testWidgets('renders centered Atlas branding with app audience', (
+  testWidgets('renders centered Atlas branding without audience chip', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -19,7 +19,7 @@ void main() {
     expect(find.byType(AtlasBrandMark), findsOneWidget);
     expect(find.text('GYM'), findsOneWidget);
     expect(find.text('ATLAS'), findsOneWidget);
-    expect(find.text('MEMBER APP'), findsOneWidget);
+    expect(find.text('MEMBER APP'), findsNothing);
     expect(
       find.byWidgetPredicate(
         (widget) =>

@@ -11,11 +11,18 @@ import '../../core/config.dart';
 import '../auth/session_controller.dart';
 
 class TrainerSettingsScreen extends StatelessWidget {
-  const TrainerSettingsScreen({super.key});
+  const TrainerSettingsScreen({super.key, required this.onEditProfile});
+
+  final Future<void> Function() onEditProfile;
 
   @override
   Widget build(BuildContext context) {
     final session = context.watch<TrainerSessionController>();
+    final user = session.user;
+    final name = user?.name.trim().isNotEmpty == true ? user!.name : 'Trainer';
+    final email = user?.email.trim().isNotEmpty == true
+        ? user!.email
+        : 'trainer account';
     final baseUri = Uri.tryParse(TrainerConfig.apiBaseUrl);
     final webBase = baseUri == null
         ? null
@@ -42,11 +49,49 @@ class TrainerSettingsScreen extends StatelessWidget {
             children: [
               const _SettingsTopBar(
                 title: 'Settings',
-                subtitle: 'Help, legal information, and account controls.',
+                subtitle:
+                    'Profile, help, legal information, and account controls.',
               ),
               const SizedBox(height: AppSpacing.md),
               _RevealSettings(
-                delay: const Duration(milliseconds: 70),
+                child: _ProfileHeader(
+                  name: name,
+                  email: email,
+                  isActive: user?.isActive == true,
+                  onEdit: onEditProfile,
+                ),
+              ),
+              const SizedBox(height: 15),
+              _RevealSettings(
+                delay: const Duration(milliseconds: 50),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: _TitleSubtitleCell(
+                        title: 'Trainer',
+                        subtitle: 'Account',
+                      ),
+                    ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: _TitleSubtitleCell(
+                        title: user?.isActive == true ? 'Active' : 'Limited',
+                        subtitle: 'Session',
+                      ),
+                    ),
+                    const SizedBox(width: 15),
+                    const Expanded(
+                      child: _TitleSubtitleCell(
+                        title: 'Synced',
+                        subtitle: 'Cloud',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 25),
+              _RevealSettings(
+                delay: const Duration(milliseconds: 90),
                 child: _SettingsGroup(
                   title: 'Support and legal',
                   children: [
@@ -101,7 +146,7 @@ class TrainerSettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               _RevealSettings(
-                delay: const Duration(milliseconds: 110),
+                delay: const Duration(milliseconds: 130),
                 child: _SessionCard(
                   onLogout: () => _confirmLogout(context, session),
                 ),
@@ -235,6 +280,139 @@ class _SquareButton extends StatelessWidget {
           ),
           child: Icon(icon, color: AppColors.textPrimary, size: 20),
         ),
+      ),
+    );
+  }
+}
+
+class _ProfileHeader extends StatelessWidget {
+  const _ProfileHeader({
+    required this.name,
+    required this.email,
+    required this.isActive,
+    required this.onEdit,
+  });
+
+  final String name;
+  final String email;
+  final bool isActive;
+  final Future<void> Function() onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final initials = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .take(2)
+        .map((part) => part[0].toUpperCase())
+        .join();
+
+    return PremiumCard(
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceSoft,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.stroke),
+            ),
+            child: Text(
+              initials.isEmpty ? 'T' : initials,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: AppColors.primaryBright,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isActive ? 'Trainer account active' : email,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          InkWell(
+            onTap: onEdit,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceSoft,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.stroke),
+              ),
+              child: Text(
+                'Edit',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TitleSubtitleCell extends StatelessWidget {
+  const _TitleSubtitleCell({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return PremiumCard(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+      child: Column(
+        children: [
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

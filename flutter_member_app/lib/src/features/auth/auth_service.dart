@@ -56,6 +56,32 @@ class AuthService {
     return AuthSessionModel.fromJson(data);
   }
 
+  Future<bool> fetchDemoLoginEnabled() async {
+    final response = await _client.get('/public/app-config');
+    final data = Map<String, dynamic>.from(
+      response['data'] as Map? ?? const {},
+    );
+    return data['demo_login_enabled'] == true;
+  }
+
+  Future<AuthSessionModel> signInWithDemoEmail({
+    required String email,
+    required String appType,
+  }) async {
+    final response = await _client.post(
+      '/public/auth/demo/login',
+      data: <String, dynamic>{
+        'email': email.trim(),
+        'device_name': 'flutter_member_app_demo',
+        'app_type': appType,
+      },
+    );
+    final data = Map<String, dynamic>.from(
+      response['data'] as Map? ?? const {},
+    );
+    return AuthSessionModel.fromJson(data);
+  }
+
   String _maskToken(String token) {
     if (token.length <= 16) {
       return token;

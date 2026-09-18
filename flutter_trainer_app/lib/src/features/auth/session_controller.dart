@@ -150,6 +150,41 @@ class TrainerSessionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> fetchDemoLoginEnabled() async {
+    try {
+      return await _authService.fetchDemoLoginEnabled();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> loginWithDemoEmail(String email) async {
+    if (busy) {
+      return;
+    }
+
+    busy = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      final session = await _authService.signInWithDemoEmail(
+        email: email,
+        appType: 'trainer',
+      );
+      await _completeAuthSession(session);
+    } on DioException catch (exception) {
+      await _clearLocalState(notify: false);
+      error = _mapAuthError(exception);
+    } catch (exception) {
+      await _clearLocalState(notify: false);
+      error = exception.toString().replaceFirst('Exception: ', '');
+    }
+
+    busy = false;
+    notifyListeners();
+  }
+
   Future<void> _completeFirebaseLogin(
     firebase.UserCredential firebaseUserCredential,
   ) async {
@@ -162,6 +197,10 @@ class TrainerSessionController extends ChangeNotifier {
       idToken: idToken,
       appType: 'trainer',
     );
+    await _completeAuthSession(session);
+  }
+
+  Future<void> _completeAuthSession(TrainerSession session) async {
     if (session.token.isEmpty) {
       throw Exception('Authentication token missing from server response.');
     }

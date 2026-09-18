@@ -7,6 +7,7 @@ import '../../core/api_client.dart';
 import '../../core/fcm_token_service.dart';
 import '../../core/models.dart';
 import '../../core/secure_storage_service.dart';
+import 'auth_model.dart';
 import 'auth_service.dart';
 
 class MemberSessionController extends ChangeNotifier {
@@ -171,6 +172,41 @@ class MemberSessionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> fetchDemoLoginEnabled() async {
+    try {
+      return await _authService.fetchDemoLoginEnabled();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> loginWithDemoEmail(String email) async {
+    if (busy) {
+      return;
+    }
+
+    busy = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      final session = await _authService.signInWithDemoEmail(
+        email: email,
+        appType: 'member',
+      );
+      await _completeAuthSession(session);
+    } on DioException catch (exception) {
+      await _clearLocalState(notify: false);
+      error = _mapAuthError(exception);
+    } catch (exception) {
+      await _clearLocalState(notify: false);
+      error = exception.toString().replaceFirst('Exception: ', '');
+    }
+
+    busy = false;
+    notifyListeners();
+  }
+
   Future<void> _completeFirebaseLogin(
     firebase.UserCredential firebaseUserCredential,
   ) async {
@@ -183,6 +219,10 @@ class MemberSessionController extends ChangeNotifier {
       idToken: idToken,
       appType: 'member',
     );
+    await _completeAuthSession(session);
+  }
+
+  Future<void> _completeAuthSession(AuthSessionModel session) async {
     if (session.token.isEmpty) {
       throw Exception('Authentication token missing from server response.');
     }

@@ -70,7 +70,9 @@ use App\Http\Controllers\Api\PlatformAdmin\UserController as PlatformUserControl
 use App\Http\Controllers\Api\PlatformAdmin\WhatsAppConnectionController as PlatformWhatsAppConnectionController;
 use App\Http\Controllers\Api\PlatformAdmin\WhatsAppInboxController as PlatformWhatsAppInboxController;
 use App\Http\Controllers\Api\PlatformAdmin\WorkoutBookController as PlatformWorkoutBookController;
+use App\Http\Controllers\Api\Public\AppConfigController;
 use App\Http\Controllers\Api\Public\AuthController;
+use App\Http\Controllers\Api\Public\DemoAuthController;
 use App\Http\Controllers\Api\Public\DiscoveryController;
 use App\Http\Controllers\Api\Public\EventController as PublicEventController;
 use App\Http\Controllers\Api\Public\FcmTokenController;
@@ -113,9 +115,11 @@ Route::post('integrations/essl/ebioserver/{deviceUuid}/{webhookToken}', EbioServ
 
 Route::prefix('public')->group(function (): void {
     Route::get('health', [PublicContextController::class, 'health']);
+    Route::get('app-config', AppConfigController::class)->middleware('throttle:60,1');
     Route::get('events/{publicToken}', [PublicEventController::class, 'show'])->whereUuid('publicToken')->middleware('throttle:60,1');
     Route::post('auth/google/login', [AuthController::class, 'googleLogin']);
     Route::post('auth/firebase/login', [AuthController::class, 'firebaseLogin']);
+    Route::post('auth/demo/login', DemoAuthController::class)->middleware('throttle:5,1');
     Route::get('discovery/gyms', [DiscoveryController::class, 'index']);
     Route::get('discovery/gyms/nearby', [DiscoveryController::class, 'nearby'])->name('public.discovery.nearby');
     Route::get('discovery/cities/{city}/gyms', [DiscoveryController::class, 'cityGyms']);
