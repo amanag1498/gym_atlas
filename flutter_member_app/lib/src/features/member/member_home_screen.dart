@@ -1052,42 +1052,50 @@ class _GlassBottomNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(22),
-      child: SizedBox(
-        width: 58,
-        height: 56,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedScale(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              scale: active ? 1.08 : 1,
-              child: Icon(
-                icon,
-                color: active ? AppColors.primary : AppColors.textMuted,
-                size: 25,
-              ),
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 180);
+
+    return Semantics(
+      button: true,
+      selected: active,
+      label: label,
+      child: ExcludeSemantics(
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(22),
+          child: SizedBox(
+            width: 58,
+            height: 56,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedScale(
+                  duration: duration,
+                  curve: Curves.easeOutCubic,
+                  scale: active ? 1.06 : 1,
+                  child: Icon(
+                    icon,
+                    color: active ? AppColors.primary : AppColors.textMuted,
+                    size: 23,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: active ? AppColors.primary : AppColors.textMuted,
+                    fontWeight: active ? FontWeight.w900 : FontWeight.w700,
+                    fontSize: 10,
+                    height: 1.1,
+                  ),
+                ),
+              ],
             ),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              height: active ? 8 : 12,
-            ),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              width: active ? 5 : 0,
-              height: active ? 5 : 0,
-              decoration: BoxDecoration(
-                color: AppColors.primaryBright,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -1102,60 +1110,90 @@ class _MemberCenterAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 72,
-      height: 72,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(36),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(
-                  alpha: active ? 0.34 : 0.24,
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 220);
+
+    return Semantics(
+      button: true,
+      selected: active,
+      label: 'Gyms',
+      child: ExcludeSemantics(
+        child: SizedBox(
+          width: 72,
+          height: 88,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 64,
+                height: 64,
+                child: InkWell(
+                  onTap: onTap,
+                  borderRadius: BorderRadius.circular(32),
+                  child: AnimatedContainer(
+                    duration: duration,
+                    curve: Curves.easeOutCubic,
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(
+                            alpha: active ? 0.34 : 0.24,
+                          ),
+                          blurRadius: active ? 24 : 16,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [AppColors.primaryBright, AppColors.primary],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        shape: BoxShape.circle,
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black12,
+                            blurRadius: 2,
+                            offset: Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Icon(
+                            Icons.search_rounded,
+                            color: Colors.white.withValues(alpha: 0.16),
+                            size: 42,
+                          ),
+                          const Icon(
+                            Icons.travel_explore_rounded,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-                blurRadius: active ? 24 : 16,
-                offset: const Offset(0, 8),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Gyms',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: active ? AppColors.primary : AppColors.textMuted,
+                  fontWeight: active ? FontWeight.w900 : FontWeight.w700,
+                  fontSize: 10,
+                  height: 1.1,
+                ),
               ),
             ],
-          ),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.primaryBright, AppColors.primary],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              shape: BoxShape.circle,
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 2,
-                  offset: Offset(0, 1),
-                ),
-              ],
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Icon(
-                  Icons.search_rounded,
-                  color: Colors.white.withValues(alpha: 0.16),
-                  size: 42,
-                ),
-                const Icon(
-                  Icons.travel_explore_rounded,
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ],
-            ),
           ),
         ),
       ),
@@ -1774,15 +1812,6 @@ class _DashboardPage extends StatelessWidget {
             RevealOnBuild(
               delay: const Duration(milliseconds: 85),
               child: _DashboardSection(
-                eyebrow: 'Actions',
-                title: 'More shortcuts',
-                child: _DashboardActionCarousel(actions: dashboardActions),
-              ),
-            ),
-            const SizedBox(height: 16),
-            RevealOnBuild(
-              delay: const Duration(milliseconds: 95),
-              child: _DashboardSection(
                 eyebrow: 'Focus',
                 title: 'What deserves attention now',
                 child: _DashboardFocusBanner(data: focusBanner),
@@ -1790,7 +1819,7 @@ class _DashboardPage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             RevealOnBuild(
-              delay: const Duration(milliseconds: 105),
+              delay: const Duration(milliseconds: 95),
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final split = constraints.maxWidth >= 680;
@@ -1866,7 +1895,7 @@ class _DashboardPage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             RevealOnBuild(
-              delay: const Duration(milliseconds: 130),
+              delay: const Duration(milliseconds: 120),
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final split = constraints.maxWidth >= 680;
@@ -1922,10 +1951,21 @@ class _DashboardPage extends StatelessWidget {
                 },
               ),
             ),
+            const SizedBox(height: 16),
+            RevealOnBuild(
+              delay: const Duration(milliseconds: 140),
+              child: _DashboardSection(
+                eyebrow: 'Tools',
+                title: 'More ways to manage your fitness',
+                child: _DashboardActionCarousel(
+                  actions: dashboardActions.skip(3).toList(),
+                ),
+              ),
+            ),
             if (hasTrainer || hasGymMembership || isTrialUser) ...[
               const SizedBox(height: 16),
               RevealOnBuild(
-                delay: const Duration(milliseconds: 150),
+                delay: const Duration(milliseconds: 155),
                 child: _DashboardSection(
                   eyebrow: 'Support',
                   title: hasTrainer ? 'Coach connection' : 'Next unlock',
@@ -2558,16 +2598,22 @@ class _MemberGreetingHeader extends StatelessWidget {
           ),
           _HeaderAction(
             icon: Icons.notifications_none_rounded,
+            label: 'Notifications',
             count: unreadNotifications,
             onTap: onOpenNotifications,
           ),
           const SizedBox(width: 10),
           _HeaderAction(
             icon: Icons.restaurant_menu_rounded,
+            label: 'Diet plans',
             onTap: onOpenDietPlan,
           ),
           const SizedBox(width: 10),
-          _HeaderAction(icon: Icons.settings_rounded, onTap: onOpenSettings),
+          _HeaderAction(
+            icon: Icons.settings_rounded,
+            label: 'Settings',
+            onTap: onOpenSettings,
+          ),
         ],
       ),
     );
@@ -2577,65 +2623,80 @@ class _MemberGreetingHeader extends StatelessWidget {
 class _HeaderAction extends StatelessWidget {
   const _HeaderAction({
     required this.icon,
+    required this.label,
     required this.onTap,
     this.count = 0,
   });
 
   final IconData icon;
+  final String label;
   final VoidCallback onTap;
   final int count;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.92),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.shadow.withValues(alpha: 0.10),
-                  blurRadius: 14,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: AppColors.stroke.withValues(alpha: 0.5),
-              ),
-            ),
-            child: Icon(icon, color: AppColors.textPrimary, size: 21),
-          ),
-          if (count > 0)
-            Positioned(
-              top: -4,
-              right: -4,
-              child: Container(
-                constraints: const BoxConstraints(minWidth: 19, minHeight: 19),
-                padding: const EdgeInsets.symmetric(horizontal: 5),
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: Colors.white, width: 2),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  count > 9 ? '9+' : '$count',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    height: 1,
+    final semanticLabel = count > 0 ? '$label, $count unread' : label;
+    return Tooltip(
+      message: semanticLabel,
+      child: Semantics(
+        button: true,
+        label: semanticLabel,
+        child: ExcludeSemantics(
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(18),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.92),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.shadow.withValues(alpha: 0.10),
+                        blurRadius: 14,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: AppColors.stroke.withValues(alpha: 0.5),
+                    ),
                   ),
+                  child: Icon(icon, color: AppColors.textPrimary, size: 21),
                 ),
-              ),
+                if (count > 0)
+                  Positioned(
+                    top: -4,
+                    right: -4,
+                    child: Container(
+                      constraints: const BoxConstraints(
+                        minWidth: 19,
+                        minHeight: 19,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        count > 9 ? '9+' : '$count',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-        ],
+          ),
+        ),
       ),
     );
   }

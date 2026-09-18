@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 class RevealOnBuild extends StatefulWidget {
@@ -20,11 +22,21 @@ class RevealOnBuild extends StatefulWidget {
 
 class _RevealOnBuildState extends State<RevealOnBuild> {
   bool _visible = false;
+  bool _initialized = false;
+  Timer? _timer;
 
   @override
-  void initState() {
-    super.initState();
-    Future<void>.delayed(widget.delay, () {
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
+
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _visible = true;
+      return;
+    }
+
+    _timer = Timer(widget.delay, () {
       if (mounted) {
         setState(() => _visible = true);
       }
@@ -32,7 +44,17 @@ class _RevealOnBuildState extends State<RevealOnBuild> {
   }
 
   @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      return widget.child;
+    }
+
     return AnimatedSlide(
       duration: widget.duration,
       curve: Curves.easeOutCubic,
