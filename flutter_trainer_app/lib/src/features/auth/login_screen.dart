@@ -56,10 +56,10 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
               ? 24.0
               : 32.0;
           final headlineSize = width < 360
-              ? 28.0
+              ? 30.0
               : width < 430
-              ? 32.0
-              : 34.0;
+              ? 34.0
+              : 36.0;
           final logoSize = compact ? 56.0 : 64.0;
 
           return Stack(
@@ -97,14 +97,14 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
                                 ),
                               ),
                             ),
-                            SizedBox(height: compact ? 28 : 36),
+                            SizedBox(height: compact ? 26 : 34),
                             RevealOnBuild(
                               delay: const Duration(milliseconds: 120),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   Text(
-                                    'Sign in to continue',
+                                    'Welcome to Atlas Coach',
                                     textAlign: TextAlign.center,
                                     style: theme.textTheme.displaySmall
                                         ?.copyWith(
@@ -120,7 +120,7 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
                                       maxWidth: 280,
                                     ),
                                     child: Text(
-                                      'Use your coaching account to open Atlas.',
+                                      'Sign in with the Google account your gym uses.',
                                       textAlign: TextAlign.center,
                                       style: theme.textTheme.bodyLarge
                                           ?.copyWith(
@@ -132,7 +132,7 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
                                 ],
                               ),
                             ),
-                            SizedBox(height: compact ? 22 : 28),
+                            SizedBox(height: compact ? 32 : 44),
                             RevealOnBuild(
                               delay: const Duration(milliseconds: 260),
                               offset: const Offset(0, 0.06),
@@ -248,77 +248,56 @@ class _LoginPanel extends StatelessWidget {
     final theme = Theme.of(context);
     final showApple = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: Colors.white.withValues(alpha: 0.96),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.88)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.shadow.withValues(alpha: 0.10),
-            blurRadius: 24,
-            offset: const Offset(0, 16),
-          ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        if (error != null) ...[
+          _LoginError(message: error!),
+          SizedBox(height: compact ? 14 : 16),
         ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: Padding(
-          padding: EdgeInsets.all(compact ? 16 : 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
+        _GoogleSignInButton(
+          label: busy ? 'Signing in…' : 'Sign in with Google',
+          loading: busy,
+          onPressed: onPressed,
+        ),
+        if (showApple) ...[
+          const SizedBox(height: 12),
+          Row(
             children: [
-              if (error != null) ...[
-                _LoginError(message: error!),
-                SizedBox(height: compact ? 14 : 16),
-              ],
-              _GoogleSignInButton(
-                label: busy ? 'Signing in...' : 'Sign in with Google',
-                loading: busy,
-                onPressed: onPressed,
-              ),
-              if (showApple) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    const Expanded(child: Divider()),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        'or',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                    const Expanded(child: Divider()),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: onApplePressed,
-                    icon: const Icon(Icons.apple, size: 20),
-                    label: const Text('Sign in with Apple'),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
-                      backgroundColor: Colors.black,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: Colors.black54,
-                      disabledForegroundColor: Colors.white70,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
+              const Expanded(child: Divider()),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  'or',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
                   ),
                 ),
-              ],
+              ),
+              const Expanded(child: Divider()),
             ],
           ),
-        ),
-      ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onApplePressed,
+              icon: const Icon(Icons.apple, size: 20),
+              label: const Text('Sign in with Apple'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: Colors.black54,
+                disabledForegroundColor: Colors.white70,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -336,54 +315,37 @@ class _GoogleSignInButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final enabled = onPressed != null && !loading;
-
     return SizedBox(
       width: double.infinity,
       height: 54,
-      child: Material(
-        color: enabled ? Colors.white : const Color(0xFFF2F4F7),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(14),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
+      child: Semantics(
+        button: true,
+        label: 'Sign in with Google',
+        child: OutlinedButton.icon(
+          onPressed: loading ? null : onPressed,
+          icon: loading
+              ? SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    color: AppColors.primary,
+                  ),
+                )
+              : const _GoogleMark(),
+          label: Text(label),
+          style: OutlinedButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: AppColors.textPrimary,
+            disabledForegroundColor: AppColors.textSecondary,
+            minimumSize: const Size.fromHeight(54),
+            side: const BorderSide(color: Color(0xFFDADCE0)),
+            shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (loading)
-                    SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.4,
-                        color: AppColors.primary,
-                      ),
-                    )
-                  else
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const _GoogleMark(),
-                        const SizedBox(width: 12),
-                        Text(
-                          label,
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-            ),
+            textStyle: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
           ),
         ),
       ),
@@ -396,18 +358,50 @@ class _GoogleMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('G', style: TextStyle(color: Color(0xFF4285F4), fontSize: 20)),
-        Text('o', style: TextStyle(color: Color(0xFFDB4437), fontSize: 20)),
-        Text('o', style: TextStyle(color: Color(0xFFF4B400), fontSize: 20)),
-        Text('g', style: TextStyle(color: Color(0xFF4285F4), fontSize: 20)),
-        Text('l', style: TextStyle(color: Color(0xFF0F9D58), fontSize: 20)),
-        Text('e', style: TextStyle(color: Color(0xFFDB4437), fontSize: 20)),
-      ],
+    return CustomPaint(
+      size: const Size.square(20),
+      painter: _GoogleMarkPainter(),
     );
   }
+}
+
+class _GoogleMarkPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final strokeWidth = size.width * 0.16;
+    final rect = Offset.zero & size;
+    final inset = strokeWidth / 2;
+    final arcRect = rect.deflate(inset);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    paint.color = const Color(0xFF4285F4);
+    canvas.drawArc(arcRect, -0.05, 1.45, false, paint);
+    paint.color = const Color(0xFF34A853);
+    canvas.drawArc(arcRect, 1.40, 1.05, false, paint);
+    paint.color = const Color(0xFFFBBC05);
+    canvas.drawArc(arcRect, 2.45, 1.00, false, paint);
+    paint.color = const Color(0xFFEA4335);
+    canvas.drawArc(arcRect, 3.45, 1.35, false, paint);
+
+    final centerY = size.height / 2;
+    paint.color = const Color(0xFF4285F4);
+    canvas.drawLine(
+      Offset(size.width * 0.52, centerY),
+      Offset(size.width * 0.88, centerY),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(size.width * 0.88, centerY),
+      Offset(size.width * 0.88, size.height * 0.64),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _GoogleMarkPainter oldDelegate) => false;
 }
 
 class _LoginError extends StatelessWidget {
