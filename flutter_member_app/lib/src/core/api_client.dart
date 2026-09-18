@@ -16,28 +16,15 @@ class MemberApiClient {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          debugPrint(
-            '[dio][request] ${options.method} ${options.baseUrl}${options.path} '
-            'query=${options.queryParameters} data=${options.data}',
-          );
+          _logRequest(options);
           handler.next(options);
         },
         onResponse: (response, handler) {
-          debugPrint(
-            '[dio][response] ${response.statusCode} ${response.requestOptions.method} '
-            '${response.requestOptions.baseUrl}${response.requestOptions.path} '
-            'data=${response.data}',
-          );
+          _logResponse(response);
           handler.next(response);
         },
         onError: (error, handler) async {
-          debugPrint(
-            '[dio][error] status=${error.response?.statusCode} '
-            'type=${error.type} '
-            '${error.requestOptions.method} ${error.requestOptions.baseUrl}${error.requestOptions.path} '
-            'query=${error.requestOptions.queryParameters} data=${error.requestOptions.data} '
-            'response=${error.response?.data}',
-          );
+          _logError(error);
           if (error.response?.statusCode == 401) {
             await _onUnauthorized?.call();
           }
@@ -76,6 +63,51 @@ class MemberApiClient {
     }
 
     _dio.options.headers['X-Gym-Id'] = gymId.toString();
+  }
+
+  void _logRequest(RequestOptions options) {
+    if (!kDebugMode) return;
+    debugPrint(
+      '[dio][request] ${options.method} ${options.baseUrl}${options.path} '
+      'query=${_summarizePayload(options.queryParameters)} '
+      'body=${_summarizePayload(options.data)}',
+    );
+  }
+
+  void _logResponse(Response<dynamic> response) {
+    if (!kDebugMode) return;
+    debugPrint(
+      '[dio][response] ${response.statusCode} ${response.requestOptions.method} '
+      '${response.requestOptions.baseUrl}${response.requestOptions.path} '
+      'body=${_summarizePayload(response.data)}',
+    );
+  }
+
+  void _logError(DioException error) {
+    if (!kDebugMode) return;
+    debugPrint(
+      '[dio][error] status=${error.response?.statusCode} type=${error.type} '
+      '${error.requestOptions.method} '
+      '${error.requestOptions.baseUrl}${error.requestOptions.path} '
+      'query=${_summarizePayload(error.requestOptions.queryParameters)} '
+      'body=${_summarizePayload(error.requestOptions.data)} '
+      'response=${_summarizePayload(error.response?.data)}',
+    );
+  }
+
+  String _summarizePayload(dynamic value) {
+    if (value == null) return 'null';
+    if (value is FormData) {
+      return 'FormData(fields=${value.fields.length}, files=${value.files.length})';
+    }
+    if (value is Map) {
+      return 'Map(keys=${value.keys.map((key) => key.toString()).take(8).join(',')})';
+    }
+    if (value is Iterable) {
+      return '${value.runtimeType}(length=${value.length})';
+    }
+    final text = value.toString();
+    return text.length <= 120 ? text : '${text.substring(0, 120)}...';
   }
 
   Future<Map<String, dynamic>> get(
