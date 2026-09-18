@@ -1757,11 +1757,13 @@ class _DashboardPage extends StatelessWidget {
             const SizedBox(height: 16),
             RevealOnBuild(
               delay: const Duration(milliseconds: 55),
-              child: _UpcomingEventsShortcut(onTap: onOpenEvents),
+              child: _MemberNextActionDock(
+                actions: dashboardActions.take(3).toList(),
+              ),
             ),
             const SizedBox(height: 16),
             RevealOnBuild(
-              delay: const Duration(milliseconds: 65),
+              delay: const Duration(milliseconds: 70),
               child: _DashboardSection(
                 eyebrow: 'Snapshot',
                 title: 'Today at a glance',
@@ -1773,7 +1775,7 @@ class _DashboardPage extends StatelessWidget {
               delay: const Duration(milliseconds: 85),
               child: _DashboardSection(
                 eyebrow: 'Actions',
-                title: 'Featured shortcuts',
+                title: 'More shortcuts',
                 child: _DashboardActionCarousel(actions: dashboardActions),
               ),
             ),
@@ -2170,122 +2172,210 @@ class _DashboardSection extends StatelessWidget {
   }
 }
 
-class _UpcomingEventsShortcut extends StatelessWidget {
-  const _UpcomingEventsShortcut({required this.onTap});
+class _MemberNextActionDock extends StatelessWidget {
+  const _MemberNextActionDock({required this.actions});
 
-  final VoidCallback onTap;
+  final List<_DashboardActionData> actions;
 
   @override
   Widget build(BuildContext context) {
-    return PremiumCard(
-      onTap: onTap,
-      padding: EdgeInsets.zero,
-      glowColor: AppColors.accentPurple,
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppColors.accentPurple.withValues(alpha: 0.13),
-              AppColors.primary.withValues(alpha: 0.06),
-              AppColors.surface,
-            ],
-          ),
-        ),
-        child: Row(
+    final primary = actions.firstOrNull;
+    final secondary = actions.skip(1).take(2).toList();
+
+    if (primary == null) {
+      return const SizedBox.shrink();
+    }
+
+    final primaryCard = _MemberPriorityActionCard(
+      action: primary,
+      prominent: true,
+    );
+    final secondaryCards = [
+      for (final action in secondary) _MemberPriorityActionCard(action: action),
+    ];
+
+    return Column(
+      children: [
+        primaryCard,
+        const SizedBox(height: 10),
+        Row(
           children: [
-            Container(
-              width: 54,
-              height: 54,
-              decoration: BoxDecoration(
-                color: AppColors.accentPurple.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(19),
-                border: Border.all(
-                  color: AppColors.accentPurple.withValues(alpha: 0.2),
-                ),
-              ),
-              child: const Icon(
-                Icons.event_available_rounded,
-                color: AppColors.accentPurple,
-                size: 27,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'UPCOMING EVENTS',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppColors.accentPurple,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Classes, workshops & community',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'View schedule, reserve a spot, and manage bookings.',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(999),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.2),
-                    blurRadius: 12,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'View',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 12,
-                    ),
-                  ),
-                  SizedBox(width: 3),
-                  Icon(
-                    Icons.arrow_forward_rounded,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                ],
-              ),
-            ),
+            for (final entry in secondaryCards.asMap().entries) ...[
+              if (entry.key > 0) const SizedBox(width: 10),
+              Expanded(child: entry.value),
+            ],
           ],
         ),
+      ],
+    );
+  }
+}
+
+class _MemberPriorityActionCard extends StatelessWidget {
+  const _MemberPriorityActionCard({
+    required this.action,
+    this.prominent = false,
+  });
+
+  final _DashboardActionData action;
+  final bool prominent;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      button: true,
+      label: action.label,
+      child: InkWell(
+        onTap: action.onTap,
+        borderRadius: BorderRadius.circular(prominent ? 28 : 22),
+        child: Container(
+          constraints: BoxConstraints(minHeight: prominent ? 118 : 86),
+          padding: EdgeInsets.all(prominent ? 18 : 14),
+          decoration: BoxDecoration(
+            gradient: prominent
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [action.color, AppColors.primaryBright],
+                  )
+                : null,
+            color: prominent ? null : Colors.white.withValues(alpha: 0.94),
+            borderRadius: BorderRadius.circular(prominent ? 28 : 22),
+            border: Border.all(
+              color: prominent
+                  ? Colors.white.withValues(alpha: 0.30)
+                  : AppColors.stroke.withValues(alpha: 0.70),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: (prominent ? action.color : AppColors.shadow).withValues(
+                  alpha: prominent ? 0.22 : 0.08,
+                ),
+                blurRadius: prominent ? 24 : 14,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: prominent
+              ? Row(
+                  children: [
+                    _MemberPriorityIcon(
+                      icon: action.icon,
+                      color: Colors.white,
+                      prominent: true,
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            action.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            action.helper,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.86),
+                              fontWeight: FontWeight.w700,
+                              height: 1.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Icon(
+                      Icons.arrow_forward_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _MemberPriorityIcon(
+                          icon: action.icon,
+                          color: action.color,
+                        ),
+                        const Spacer(),
+                        Icon(
+                          Icons.arrow_outward_rounded,
+                          size: 18,
+                          color: action.color,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      action.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      action.helper,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
       ),
+    );
+  }
+}
+
+class _MemberPriorityIcon extends StatelessWidget {
+  const _MemberPriorityIcon({
+    required this.icon,
+    required this.color,
+    this.prominent = false,
+  });
+
+  final IconData icon;
+  final Color color;
+  final bool prominent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: prominent ? 54 : 38,
+      height: prominent ? 54 : 38,
+      decoration: BoxDecoration(
+        color: prominent
+            ? Colors.white.withValues(alpha: 0.18)
+            : color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(prominent ? 20 : 14),
+        border: Border.all(
+          color: prominent
+              ? Colors.white.withValues(alpha: 0.22)
+              : color.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Icon(icon, color: color, size: prominent ? 26 : 20),
     );
   }
 }

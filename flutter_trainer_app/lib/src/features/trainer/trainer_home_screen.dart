@@ -3910,6 +3910,45 @@ class _TrainerFitnessDashboard extends StatelessWidget {
             icon: Icons.groups_rounded,
             onTap: onOpenMembers,
           );
+    final priorityActions = <_TrainerPriorityActionData>[
+      pendingFollowUpsCount > 0
+          ? _TrainerPriorityActionData(
+              label: 'Open Tasks',
+              helper: '$pendingFollowUpsCount follow-ups waiting',
+              icon: Icons.assignment_late_outlined,
+              color: AppColors.accentPurple,
+              onTap: onOpenTasks,
+            )
+          : unreadChatsCount > 0
+          ? _TrainerPriorityActionData(
+              label: 'Open Chats',
+              helper: '$unreadChatsCount unread messages',
+              icon: Icons.chat_bubble_rounded,
+              color: AppColors.primary,
+              onTap: onOpenChat,
+            )
+          : _TrainerPriorityActionData(
+              label: 'View Members',
+              helper: '$assignedMembersCount assigned clients',
+              icon: Icons.groups_rounded,
+              color: AppColors.primary,
+              onTap: onOpenMembers,
+            ),
+      _TrainerPriorityActionData(
+        label: 'Workout Plan',
+        helper: 'Build or assign today',
+        icon: Icons.fitness_center_rounded,
+        color: AppColors.primaryBright,
+        onTap: onOpenWorkouts,
+      ),
+      _TrainerPriorityActionData(
+        label: 'Diet Plan',
+        helper: 'Create nutrition plan',
+        icon: Icons.restaurant_menu_rounded,
+        color: AppColors.accentPurple,
+        onTap: onOpenDiet,
+      ),
+    ];
 
     return RefreshIndicator(
       onRefresh: onRefresh,
@@ -3942,7 +3981,12 @@ class _TrainerFitnessDashboard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             RevealOnBuild(
-              delay: const Duration(milliseconds: 65),
+              delay: const Duration(milliseconds: 58),
+              child: _TrainerPriorityActionDock(actions: priorityActions),
+            ),
+            const SizedBox(height: 16),
+            RevealOnBuild(
+              delay: const Duration(milliseconds: 75),
               child: _DashboardSection(
                 eyebrow: 'Snapshot',
                 title: 'Today at a glance',
@@ -4951,6 +4995,223 @@ class _TrainerHeroProgressOrb extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _TrainerPriorityActionData {
+  const _TrainerPriorityActionData({
+    required this.label,
+    required this.helper,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final String helper;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+}
+
+class _TrainerPriorityActionDock extends StatelessWidget {
+  const _TrainerPriorityActionDock({required this.actions});
+
+  final List<_TrainerPriorityActionData> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = actions.firstOrNull;
+    final secondary = actions.skip(1).take(2).toList();
+
+    if (primary == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      children: [
+        _TrainerPriorityActionCard(action: primary, prominent: true),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            for (final entry in secondary.asMap().entries) ...[
+              if (entry.key > 0) const SizedBox(width: 10),
+              Expanded(child: _TrainerPriorityActionCard(action: entry.value)),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _TrainerPriorityActionCard extends StatelessWidget {
+  const _TrainerPriorityActionCard({
+    required this.action,
+    this.prominent = false,
+  });
+
+  final _TrainerPriorityActionData action;
+  final bool prominent;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Semantics(
+      button: true,
+      label: action.label,
+      child: InkWell(
+        onTap: action.onTap,
+        borderRadius: BorderRadius.circular(prominent ? 28 : 22),
+        child: Container(
+          constraints: BoxConstraints(minHeight: prominent ? 112 : 86),
+          padding: EdgeInsets.all(prominent ? 18 : 14),
+          decoration: BoxDecoration(
+            gradient: prominent
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [action.color, AppColors.primaryBright],
+                  )
+                : null,
+            color: prominent ? null : Colors.white.withValues(alpha: 0.94),
+            borderRadius: BorderRadius.circular(prominent ? 28 : 22),
+            border: Border.all(
+              color: prominent
+                  ? Colors.white.withValues(alpha: 0.30)
+                  : AppColors.stroke.withValues(alpha: 0.70),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: (prominent ? action.color : AppColors.shadow).withValues(
+                  alpha: prominent ? 0.22 : 0.08,
+                ),
+                blurRadius: prominent ? 24 : 14,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: prominent
+              ? Row(
+                  children: [
+                    _TrainerPriorityIcon(
+                      icon: action.icon,
+                      color: Colors.white,
+                      prominent: true,
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            action.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            action.helper,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.86),
+                              fontWeight: FontWeight.w700,
+                              height: 1.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Icon(
+                      Icons.arrow_forward_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _TrainerPriorityIcon(
+                          icon: action.icon,
+                          color: action.color,
+                        ),
+                        const Spacer(),
+                        Icon(
+                          Icons.arrow_outward_rounded,
+                          size: 18,
+                          color: action.color,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      action.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      action.helper,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrainerPriorityIcon extends StatelessWidget {
+  const _TrainerPriorityIcon({
+    required this.icon,
+    required this.color,
+    this.prominent = false,
+  });
+
+  final IconData icon;
+  final Color color;
+  final bool prominent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: prominent ? 54 : 38,
+      height: prominent ? 54 : 38,
+      decoration: BoxDecoration(
+        color: prominent
+            ? Colors.white.withValues(alpha: 0.18)
+            : color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(prominent ? 20 : 14),
+        border: Border.all(
+          color: prominent
+              ? Colors.white.withValues(alpha: 0.22)
+              : color.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Icon(icon, color: color, size: prominent ? 26 : 20),
     );
   }
 }
