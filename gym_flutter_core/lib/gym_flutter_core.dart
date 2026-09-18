@@ -5,6 +5,7 @@ export 'src/core/controllers/app_controllers.dart';
 export 'src/core/models/app_models.dart';
 export 'src/core/models/diet_plan_form_codec.dart';
 export 'src/core/auth/demo_logo_tap_tracker.dart';
+export 'src/core/auth/demo_login_dialog.dart';
 export 'src/core/network/api_client.dart';
 export 'src/core/network/api_exception.dart';
 export 'src/core/repositories/auth_repository.dart';

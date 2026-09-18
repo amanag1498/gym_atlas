@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:gym_flutter_core/gym_flutter_core.dart'
-    show AtlasBrandLockup, DemoLogoTapTracker;
+    show AtlasBrandLockup, DemoLogoTapTracker, showDemoLoginDialog;
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -178,7 +178,7 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
       return;
     }
 
-    final email = await _showDemoLoginDialog(
+    final email = await showDemoLoginDialog(
       context: context,
       title: 'Reviewer sign-in',
       helperText: 'Enter the Trainer App demo email configured in Atlas.',
@@ -189,43 +189,6 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
 
     await context.read<TrainerSessionController>().loginWithDemoEmail(email);
   }
-}
-
-Future<String?> _showDemoLoginDialog({
-  required BuildContext context,
-  required String title,
-  required String helperText,
-}) async {
-  final controller = TextEditingController();
-  final result = await showDialog<String>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text(title),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        keyboardType: TextInputType.emailAddress,
-        textInputAction: TextInputAction.done,
-        decoration: InputDecoration(
-          labelText: 'Reviewer email',
-          helperText: helperText,
-        ),
-        onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-          child: const Text('Continue'),
-        ),
-      ],
-    ),
-  );
-  controller.dispose();
-  return result;
 }
 
 class _LoginPanel extends StatelessWidget {
