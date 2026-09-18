@@ -820,6 +820,11 @@ class _MemberProfileEditScreenState extends State<_MemberProfileEditScreen> {
                   subtitle: _selectedGoalIds.isEmpty
                       ? 'Fitness profile'
                       : '${_selectedGoalIds.length} active goals',
+                  uploading: _uploadingPhoto,
+                  onChoosePhoto: _showPhotoSourceSheet,
+                  onRemovePhoto: _photoController.text.trim().isEmpty
+                      ? null
+                      : _removePhoto,
                 ),
               ),
               const SizedBox(height: 15),
@@ -873,15 +878,6 @@ class _MemberProfileEditScreenState extends State<_MemberProfileEditScreen> {
                       },
                       onChanged: (_) => setState(() {}),
                     ),
-                    _EditPhotoPickerField(
-                      imageUrl: _photoController.text.trim(),
-                      uploading: _uploadingPhoto,
-                      onChoosePhoto: _showPhotoSourceSheet,
-                      onRemovePhoto: _photoController.text.trim().isEmpty
-                          ? null
-                          : _removePhoto,
-                    ),
-                    const SizedBox(height: 2),
                     _EditOptionSelector(
                       label: 'Experience Level',
                       icon: Icons.trending_up_rounded,
@@ -1245,44 +1241,121 @@ class _EditProfileHeader extends StatelessWidget {
     required this.imageUrl,
     required this.name,
     required this.subtitle,
+    required this.uploading,
+    required this.onChoosePhoto,
+    required this.onRemovePhoto,
   });
 
   final String imageUrl;
   final String name;
   final String subtitle;
+  final bool uploading;
+  final VoidCallback onChoosePhoto;
+  final VoidCallback? onRemovePhoto;
 
   @override
   Widget build(BuildContext context) {
+    final hasPhoto = imageUrl.trim().isNotEmpty;
+
     return PremiumCard(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          _ProfileAvatar(imageUrl: imageUrl, name: name, size: 54),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w800,
+          Row(
+            children: <Widget>[
+              Stack(
+                clipBehavior: Clip.none,
+                children: <Widget>[
+                  _ProfileAvatar(imageUrl: imageUrl, name: name, size: 64),
+                  Positioned(
+                    right: -4,
+                    bottom: -4,
+                    child: InkWell(
+                      onTap: uploading ? null : onChoosePhoto,
+                      borderRadius: BorderRadius.circular(999),
+                      child: Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryBright,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: <BoxShadow>[
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.12),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: uploading
+                            ? const Padding(
+                                padding: EdgeInsets.all(7),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Icon(
+                                hasPhoto
+                                    ? Icons.edit_rounded
+                                    : Icons.add_a_photo_rounded,
+                                color: Colors.white,
+                                size: 16,
+                              ),
+                      ),
+                    ),
                   ),
+                ],
+              ),
+              const SizedBox(width: 15),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      uploading ? 'Uploading profile photo...' : subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 5),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              OutlinedButton.icon(
+                onPressed: uploading ? null : onChoosePhoto,
+                icon: Icon(
+                  hasPhoto ? Icons.sync_alt_rounded : Icons.add_a_photo_rounded,
                 ),
-              ],
-            ),
+                label: Text(hasPhoto ? 'Change photo' : 'Add photo'),
+              ),
+              if (onRemovePhoto != null)
+                OutlinedButton.icon(
+                  onPressed: uploading ? null : onRemovePhoto,
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  label: const Text('Remove'),
+                ),
+            ],
           ),
         ],
       ),
@@ -1519,129 +1592,6 @@ class _EditOptionSelector extends StatelessWidget {
             }).toList(),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _EditPhotoPickerField extends StatelessWidget {
-  const _EditPhotoPickerField({
-    required this.imageUrl,
-    required this.uploading,
-    required this.onChoosePhoto,
-    required this.onRemovePhoto,
-  });
-
-  final String imageUrl;
-  final bool uploading;
-  final VoidCallback onChoosePhoto;
-  final VoidCallback? onRemovePhoto;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasPhoto = imageUrl.trim().isNotEmpty;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceSoft,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.stroke),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                const Icon(
-                  Icons.photo_camera_back_outlined,
-                  color: AppColors.primaryBright,
-                  size: 18,
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  'Profile Photo',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (hasPhoto)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: SizedBox(
-                  width: 88,
-                  height: 88,
-                  child: Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: AppColors.surface,
-                      child: const Icon(
-                        Icons.person_outline_rounded,
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                  ),
-                ),
-              )
-            else
-              Container(
-                width: 88,
-                height: 88,
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.stroke),
-                ),
-                child: const Icon(
-                  Icons.person_outline_rounded,
-                  color: AppColors.textMuted,
-                  size: 28,
-                ),
-              ),
-            const SizedBox(height: 12),
-            Text(
-              uploading
-                  ? 'Uploading photo...'
-                  : hasPhoto
-                  ? 'Choose a new image or remove the current one.'
-                  : 'Add a clean profile image from your device.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: uploading ? null : onChoosePhoto,
-                    icon: Icon(
-                      hasPhoto
-                          ? Icons.sync_alt_rounded
-                          : Icons.add_a_photo_outlined,
-                    ),
-                    label: Text(hasPhoto ? 'Change Photo' : 'Choose Photo'),
-                  ),
-                ),
-                if (onRemovePhoto != null) ...<Widget>[
-                  const SizedBox(width: 10),
-                  OutlinedButton(
-                    onPressed: uploading ? null : onRemovePhoto,
-                    child: const Text('Remove'),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }

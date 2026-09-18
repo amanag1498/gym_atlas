@@ -10,6 +10,7 @@ use App\Models\Notification;
 use App\Models\NotificationPreference;
 use App\Models\User;
 use App\Services\Notification\NotificationService;
+use App\Services\WhatsApp\WhatsAppConsentService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -38,6 +39,36 @@ class NotificationPreferenceFeatureTest extends TestCase
             ->assertJsonMissing([
                 'notification_type' => NotificationType::GymApprovalAlert->value,
             ]);
+    }
+
+    public function test_member_notification_and_whatsapp_channels_default_to_enabled(): void
+    {
+        $this->seed(PermissionSeeder::class);
+
+        $user = User::factory()->create([
+            'active_role' => RoleName::Member->value,
+            'phone' => '9876543210',
+        ]);
+        $user->assignRole(RoleName::Member->value);
+
+        $preferences = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/public/notification-preferences')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertNotEmpty($preferences);
+        foreach ($preferences as $preference) {
+            $this->assertTrue($preference['is_enabled']);
+            $this->assertTrue($preference['channels']['in_app']);
+            $this->assertTrue($preference['channels']['whatsapp']);
+        }
+
+        $whatsApp = app(WhatsAppConsentService::class);
+        foreach (['utility', 'marketing'] as $purpose) {
+            $eligibility = $whatsApp->deliveryEligibility($user, null, $purpose);
+            $this->assertSame('+919876543210', $eligibility['phone']);
+            $this->assertNull($eligibility['exclusion_reason']);
+        }
     }
 
     public function test_global_preference_disables_non_critical_scoped_notifications(): void

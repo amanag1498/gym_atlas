@@ -560,9 +560,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
 
   Future<void> _openSettingsScreen() async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => TrainerSettingsScreen(repository: _repository),
-      ),
+      MaterialPageRoute(builder: (_) => const TrainerSettingsScreen()),
     );
     if (mounted) {
       await _load();
@@ -5884,6 +5882,9 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   final _durationController = TextEditingController(text: '4');
   final _notesController = TextEditingController();
   final _exerciseSearchController = TextEditingController();
+  final _exercisePickerTextController = TextEditingController();
+  final _exercisePickerMenuController = MenuController();
+  Timer? _exerciseSearchDebounce;
   final _dayLabelController = TextEditingController();
   final _focusController = TextEditingController();
   final _dayNotesController = TextEditingController();
@@ -5926,6 +5927,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   bool _loadingProgressions = false;
   List<Map<String, dynamic>> _progressionRecommendations = const [];
   List<Map<String, dynamic>> _catalogExercises = const [];
+  ApiPagination _catalogExercisePage = const ApiPagination.singlePage();
   int _workoutTabIndex = 1;
   String _selectedDayKey = 'Mon';
   final Set<String> _selectedWeekDays = <String>{'Mon', 'Wed', 'Fri'};
@@ -5939,6 +5941,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     'Sat': 6,
     'Sun': 7,
   };
+  static const int _loadMoreExercisePickerValue = -1;
   static const List<String> _bodyParts = <String>[
     'chest',
     'back',
@@ -5959,6 +5962,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   void initState() {
     super.initState();
     _catalogExercises = widget.exercises;
+    _exerciseSearchController.addListener(_scheduleExerciseSearch);
     _selectedAssignmentKey =
         _validAssignmentKey(widget.initialAssignmentKey) ??
         (widget.members.firstOrNull == null
@@ -5968,6 +5972,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         ?.toInt();
     _selectedExerciseId = (widget.exercises.firstOrNull?['id'] as num?)
         ?.toInt();
+    _syncExercisePickerText();
     for (final day in _selectedWeekDays) {
       _dayDrafts[day] = _WorkoutDayDraft(
         label: day,
@@ -5985,6 +5990,8 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     super.didUpdateWidget(oldWidget);
     if (!_recentExercisesOnly && widget.exercises != oldWidget.exercises) {
       _catalogExercises = widget.exercises;
+      _catalogExercisePage = const ApiPagination.singlePage();
+      _syncExercisePickerText();
     }
     if (widget.initialAssignmentKey != oldWidget.initialAssignmentKey) {
       final focusedAssignmentKey = _validAssignmentKey(
@@ -6003,7 +6010,9 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     _difficultyController.dispose();
     _durationController.dispose();
     _notesController.dispose();
+    _exerciseSearchDebounce?.cancel();
     _exerciseSearchController.dispose();
+    _exercisePickerTextController.dispose();
     _dayLabelController.dispose();
     _focusController.dispose();
     _dayNotesController.dispose();
@@ -6043,31 +6052,99 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     return exists ? assignmentKey : null;
   }
 
+  String _exercisePickerLabel(int? exerciseId) {
+    final exercise = _catalogExercises.firstWhere(
+      (item) => (item['id'] as num?)?.toInt() == exerciseId,
+      orElse: () => const <String, dynamic>{},
+    );
+    if (exercise.isEmpty) return '';
+    final bodyPart =
+        exercise['body_part_label']?.toString() ??
+        _bodyPartLabel(exercise['body_part']?.toString() ?? '');
+    return '${_exerciseDisplayName(exercise)} • $bodyPart';
+  }
+
+  void _syncExercisePickerText() {
+    final label = _exercisePickerLabel(_selectedExerciseId);
+    _exercisePickerTextController.value = TextEditingValue(
+      text: label,
+      selection: TextSelection.collapsed(offset: label.length),
+    );
+  }
+
   Future<void> _setRecentExercises(bool recent) async {
     if (_loadingExerciseCatalog) return;
-    if (!recent) {
+    if (!recent && _exerciseSearchController.text.trim().isEmpty) {
       setState(() {
         _recentExercisesOnly = false;
         _catalogExercises = widget.exercises;
+        _catalogExercisePage = const ApiPagination.singlePage();
         _selectedExerciseId = (_catalogExercises.firstOrNull?['id'] as num?)
             ?.toInt();
       });
+      _syncExercisePickerText();
       return;
     }
+    setState(() => _recentExercisesOnly = recent);
+    await _searchExercises();
+  }
+
+  void _scheduleExerciseSearch() {
+    _exerciseSearchDebounce?.cancel();
+    _exerciseSearchDebounce = Timer(
+      const Duration(milliseconds: 350),
+      _searchExercises,
+    );
+  }
+
+  Future<void> _searchExercises() async {
     setState(() => _loadingExerciseCatalog = true);
     try {
       final response = await widget.repository.fetchExercises(
-        recent: true,
-        perPage: 50,
+        search: _exerciseSearchController.text.trim(),
+        recent: _recentExercisesOnly,
+        perPage: 100,
         locale: WidgetsBinding.instance.platformDispatcher.locale.languageCode,
       );
       if (!mounted) return;
-      final recentExercises = apiPageItems(response);
+      final exercises = apiPageItems(response);
       setState(() {
-        _recentExercisesOnly = true;
-        _catalogExercises = recentExercises;
-        _selectedExerciseId = (recentExercises.firstOrNull?['id'] as num?)
-            ?.toInt();
+        _catalogExercises = exercises;
+        _catalogExercisePage = ApiPagination.fromResponse(response);
+        if (_selectedExerciseId == null && exercises.isNotEmpty) {
+          _selectedExerciseId = (exercises.first['id'] as num?)?.toInt();
+        }
+      });
+      _syncExercisePickerText();
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingExerciseCatalog = false);
+    }
+  }
+
+  Future<void> _loadMoreExercises() async {
+    if (_loadingExerciseCatalog || !_catalogExercisePage.hasMore) return;
+    setState(() => _loadingExerciseCatalog = true);
+    try {
+      final response = await widget.repository.fetchExercises(
+        page: _catalogExercisePage.nextPage,
+        search: _exerciseSearchController.text.trim(),
+        recent: _recentExercisesOnly,
+        perPage: 100,
+        locale: WidgetsBinding.instance.platformDispatcher.locale.languageCode,
+      );
+      if (!mounted) return;
+      setState(() {
+        _catalogExercises = mergeApiPageItems(
+          _catalogExercises,
+          apiPageItems(response),
+        );
+        _catalogExercisePage = ApiPagination.fromResponse(response);
       });
     } catch (exception) {
       if (mounted) {
@@ -6563,7 +6640,6 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                         else ...[
                           TextField(
                             controller: _exerciseSearchController,
-                            onChanged: (_) => setState(() {}),
                             decoration: _workoutInputDecoration(
                               'Search exercise',
                               icon: Icons.search_rounded,
@@ -6597,56 +6673,91 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                             ],
                           ),
                           const SizedBox(height: 14),
-                          DropdownButtonFormField<int>(
-                            key: ValueKey('exercise-$_selectedExerciseId'),
-                            initialValue:
-                                filteredExercises.any(
-                                  (exercise) =>
-                                      (exercise['id'] as num?)?.toInt() ==
-                                      _selectedExerciseId,
-                                )
-                                ? _selectedExerciseId
-                                : null,
-                            isExpanded: true,
-                            items: filteredExercises.take(40).map((exercise) {
-                              final bodyPart =
-                                  exercise['body_part_label']?.toString() ??
-                                  _bodyPartLabel(
-                                    exercise['body_part']?.toString() ?? '',
-                                  );
-                              return DropdownMenuItem<int>(
-                                value: (exercise['id'] as num?)?.toInt(),
-                                child: Text(
-                                  '${_exerciseDisplayName(exercise)} • $bodyPart',
-                                  overflow: TextOverflow.ellipsis,
+                          DropdownMenu<int>(
+                            controller: _exercisePickerTextController,
+                            menuController: _exercisePickerMenuController,
+                            initialSelection: _selectedExerciseId,
+                            expandedInsets: EdgeInsets.zero,
+                            selectOnly: true,
+                            requestFocusOnTap: false,
+                            enableFilter: false,
+                            enableSearch: false,
+                            closeBehavior: DropdownMenuCloseBehavior.none,
+                            dropdownMenuEntries: [
+                              ...filteredExercises
+                                  .where((exercise) => exercise['id'] is num)
+                                  .map((exercise) {
+                                    final bodyPart =
+                                        exercise['body_part_label']
+                                            ?.toString() ??
+                                        _bodyPartLabel(
+                                          exercise['body_part']?.toString() ??
+                                              '',
+                                        );
+                                    return DropdownMenuEntry<int>(
+                                      value: (exercise['id'] as num).toInt(),
+                                      label:
+                                          '${_exerciseDisplayName(exercise)} • $bodyPart',
+                                      labelWidget: Text(
+                                        '${_exerciseDisplayName(exercise)} • $bodyPart',
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    );
+                                  }),
+                              if (_catalogExercisePage.hasMore)
+                                DropdownMenuEntry<int>(
+                                  value: _loadMoreExercisePickerValue,
+                                  label: _loadingExerciseCatalog
+                                      ? 'Loading exercises...'
+                                      : 'Load more exercise results',
+                                  enabled: !_loadingExerciseCatalog,
+                                  leadingIcon: _loadingExerciseCatalog
+                                      ? const SizedBox.square(
+                                          dimension: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Icons.expand_more_rounded,
+                                          size: 20,
+                                        ),
                                 ),
-                              );
-                            }).toList(),
-                            onChanged: (value) => setState(() {
-                              _selectedExerciseId = value;
-                              final selected = _catalogExercises.firstWhere(
-                                (item) =>
-                                    (item['id'] as num?)?.toInt() == value,
-                                orElse: () => const <String, dynamic>{},
-                              );
-                              final suggested =
-                                  selected['default_tracking_mode']
-                                      ?.toString() ??
-                                  'reps';
-                              _trackingMode =
-                                  const {
-                                    'reps',
-                                    'timed',
-                                    'cardio',
-                                    'distance',
-                                  }.contains(suggested)
-                                  ? suggested
-                                  : 'reps';
-                            }),
-                            decoration: _workoutInputDecoration(
-                              'Exercise picker',
-                              icon: Icons.fitness_center_rounded,
-                            ),
+                            ],
+                            onSelected: (value) {
+                              if (value == _loadMoreExercisePickerValue) {
+                                _syncExercisePickerText();
+                                unawaited(_loadMoreExercises());
+                                return;
+                              }
+                              setState(() {
+                                _selectedExerciseId = value;
+                                final selected = _catalogExercises.firstWhere(
+                                  (item) =>
+                                      (item['id'] as num?)?.toInt() == value,
+                                  orElse: () => const <String, dynamic>{},
+                                );
+                                final suggested =
+                                    selected['default_tracking_mode']
+                                        ?.toString() ??
+                                    'reps';
+                                _trackingMode =
+                                    const {
+                                      'reps',
+                                      'timed',
+                                      'cardio',
+                                      'distance',
+                                    }.contains(suggested)
+                                    ? suggested
+                                    : 'reps';
+                              });
+                              _exercisePickerMenuController.close();
+                            },
+                            decorationBuilder: (context, controller) =>
+                                _workoutInputDecoration(
+                                  'Exercise picker',
+                                  icon: Icons.fitness_center_rounded,
+                                ),
                           ),
                           const SizedBox(height: 14),
                           _SelectedExerciseBodyPart(

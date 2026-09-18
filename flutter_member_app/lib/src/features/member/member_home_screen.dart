@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:gym_flutter_core/gym_flutter_core.dart'
     show ChatNotificationService;
 import 'package:intl/intl.dart';
@@ -427,12 +426,6 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
 
   Future<void> _openSettingsScreen() async {
     final session = context.read<MemberSessionController>();
-    final selectedGymId = (_contextData['selected_gym_id'] as num?)?.toInt();
-    final relationships =
-        (_contextData['gym_relationships'] as List? ?? const [])
-            .whereType<Map>()
-            .map((item) => Map<String, dynamic>.from(item))
-            .toList();
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (context) => MemberSettingsScreen(
@@ -443,8 +436,6 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
           onOpenMembership: _openMembershipScreen,
           onOpenAttendance: _openAttendanceScreen,
           onPreferencesChanged: _load,
-          selectedGymId: selectedGymId,
-          selectedGymName: _selectedGymName(relationships, selectedGymId),
         ),
       ),
     );
@@ -5371,10 +5362,6 @@ class _WorkoutPage extends StatefulWidget {
 
 class __WorkoutPageState extends State<_WorkoutPage>
     with WidgetsBindingObserver {
-  static const _timerPreferenceStorage = FlutterSecureStorage();
-  static const _soundPreferenceKey = 'workout_timer_sound_enabled';
-  static const _vibrationPreferenceKey = 'workout_timer_vibration_enabled';
-  static const _wakePreferenceKey = 'workout_keep_screen_awake';
   final _planIdController = TextEditingController();
   final Map<int, List<Map<String, dynamic>>> _exerciseHistoryCache =
       <int, List<Map<String, dynamic>>>{};
@@ -5395,9 +5382,6 @@ class __WorkoutPageState extends State<_WorkoutPage>
   int _restTotalSeconds = 0;
   Timer? _restTimer;
   DateTime? _restEndsAt;
-  bool _restSoundEnabled = true;
-  bool _restVibrationEnabled = true;
-  bool _keepScreenAwake = true;
   Timer? _workTimer;
   Timer? _draftSaveTimer;
   DateTime? _workStartedAt;
@@ -5411,7 +5395,6 @@ class __WorkoutPageState extends State<_WorkoutPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    unawaited(_loadTimerPreferences());
     _workoutHistory = widget.history
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
@@ -5474,42 +5457,11 @@ class __WorkoutPageState extends State<_WorkoutPage>
   }
 
   void _syncWakeLock() {
-    if (_keepScreenAwake && _activeSessionId != null) {
+    if (_activeSessionId != null) {
       WakelockPlus.enable();
     } else {
       WakelockPlus.disable();
     }
-  }
-
-  Future<void> _loadTimerPreferences() async {
-    List<String?> values;
-    try {
-      values = await Future.wait([
-        _timerPreferenceStorage.read(key: _soundPreferenceKey),
-        _timerPreferenceStorage.read(key: _vibrationPreferenceKey),
-        _timerPreferenceStorage.read(key: _wakePreferenceKey),
-      ]);
-    } catch (exception) {
-      debugPrint('[workout] timer preferences unavailable: $exception');
-      return;
-    }
-    if (!mounted) return;
-    setState(() {
-      _restSoundEnabled = values[0] != 'false';
-      _restVibrationEnabled = values[1] != 'false';
-      _keepScreenAwake = values[2] != 'false';
-    });
-    _syncWakeLock();
-  }
-
-  void _saveTimerPreference(String key, bool value) {
-    unawaited(
-      _timerPreferenceStorage
-          .write(key: key, value: value.toString())
-          .catchError((Object exception) {
-            debugPrint('[workout] timer preference save skipped: $exception');
-          }),
-    );
   }
 
   @override
@@ -5556,8 +5508,21 @@ class __WorkoutPageState extends State<_WorkoutPage>
         !_startingWorkout && _activeSessionId == null && !selectedPlanNeedsDays;
     final historyPreview = _workoutHistory.take(4).toList();
     final firstName = firstNameFromFullName(widget.userName);
+    const showLiveSessionHeroCard = bool.fromEnvironment(
+      'SHOW_LIVE_SESSION_HERO_CARD',
+    );
+    final restTimerVisible =
+        _restExerciseIndex != null && _restRemainingSeconds > 0;
+    final restExerciseName =
+        restTimerVisible && _sessionExercises.length > _restExerciseIndex!
+        ? (Map<String, dynamic>.from(
+                _sessionExercises[_restExerciseIndex!]['exercise'] as Map? ??
+                    const {},
+              )['name']?.toString() ??
+              'Exercise')
+        : 'Exercise';
 
-    return ListView(
+    final content = ListView(
       padding: EdgeInsets.zero,
       physics: const BouncingScrollPhysics(),
       children: [
@@ -5573,12 +5538,12 @@ class __WorkoutPageState extends State<_WorkoutPage>
             subtitle: 'Workout tracker ready for today\'s session.',
             actions: [
               MemberHeaderActionButton(
-                icon: Icons.menu_book_rounded,
-                onTap: widget.onOpenWorkoutBook,
-              ),
-              MemberHeaderActionButton(
                 icon: Icons.history_rounded,
                 onTap: _openLogbook,
+              ),
+              MemberHeaderActionButton(
+                icon: Icons.menu_book_rounded,
+                onTap: widget.onOpenWorkoutBook,
               ),
             ],
           ),
@@ -5641,40 +5606,21 @@ class __WorkoutPageState extends State<_WorkoutPage>
               ),
             ),
           ),
-        _FitLifeWorkoutHeader(
-          active: _activeSessionId != null,
-          planCount: visiblePlans.length,
-          exerciseCount: _sessionExercises.length,
-          totalVolume: totalVolume,
-          duration: activeDuration ?? Duration.zero,
-          onOpenBook: widget.onOpenWorkoutBook,
-          onOpenLogbook: _openLogbook,
-        ),
+        if (showLiveSessionHeroCard)
+          _FitLifeWorkoutHeader(
+            active: _activeSessionId != null,
+            planCount: visiblePlans.length,
+            exerciseCount: _sessionExercises.length,
+            totalVolume: totalVolume,
+            duration: activeDuration ?? Duration.zero,
+            onOpenBook: widget.onOpenWorkoutBook,
+            onOpenLogbook: _openLogbook,
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (_restExerciseIndex != null && _restRemainingSeconds > 0) ...[
-                RevealOnBuild(
-                  child: _RestTimerOverlay(
-                    exerciseName: _sessionExercises.length > _restExerciseIndex!
-                        ? (Map<String, dynamic>.from(
-                                _sessionExercises[_restExerciseIndex!]['exercise']
-                                        as Map? ??
-                                    const {},
-                              )['name']?.toString() ??
-                              'Exercise')
-                        : 'Exercise',
-                    remainingSeconds: _restRemainingSeconds,
-                    totalSeconds: _restTotalSeconds,
-                    onSubtract: () => _adjustRest(-15),
-                    onAdd: () => _adjustRest(15),
-                    onSkip: _skipRest,
-                  ),
-                ),
-                const SizedBox(height: 18),
-              ],
               if (_workExerciseIndex != null) ...[
                 _WorkTimerOverlay(
                   elapsedSeconds: _workElapsedSeconds,
@@ -5703,50 +5649,11 @@ class __WorkoutPageState extends State<_WorkoutPage>
               ),
               const SizedBox(height: 12),
               if (_activeSessionId != null)
-                Column(
-                  children: [
-                    _ActiveWorkoutMiniBar(
-                      duration: activeDuration ?? Duration.zero,
-                      exerciseCount: _sessionExercises.length,
-                      totalVolume: totalVolume,
-                      dayLabel: _activePlanDayLabel,
-                    ),
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Keep screen awake'),
-                      subtitle: const Text('Only while this workout is active'),
-                      value: _keepScreenAwake,
-                      onChanged: (value) {
-                        setState(() => _keepScreenAwake = value);
-                        _saveTimerPreference(_wakePreferenceKey, value);
-                        _syncWakeLock();
-                      },
-                    ),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        FilterChip(
-                          label: const Text('Timer sound'),
-                          selected: _restSoundEnabled,
-                          onSelected: (value) {
-                            setState(() => _restSoundEnabled = value);
-                            _saveTimerPreference(_soundPreferenceKey, value);
-                          },
-                        ),
-                        FilterChip(
-                          label: const Text('Timer vibration'),
-                          selected: _restVibrationEnabled,
-                          onSelected: (value) {
-                            setState(() => _restVibrationEnabled = value);
-                            _saveTimerPreference(
-                              _vibrationPreferenceKey,
-                              value,
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
+                _ActiveWorkoutMiniBar(
+                  duration: activeDuration ?? Duration.zero,
+                  exerciseCount: _sessionExercises.length,
+                  totalVolume: totalVolume,
+                  dayLabel: _activePlanDayLabel,
                 )
               else if (visiblePlans.isEmpty)
                 _FitLifeEmptyPanel(
@@ -5961,6 +5868,56 @@ class __WorkoutPageState extends State<_WorkoutPage>
                   ),
                 ),
             ],
+          ),
+        ),
+      ],
+    );
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        content,
+        Positioned.fill(
+          child: IgnorePointer(
+            ignoring: !restTimerVisible,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 280),
+              reverseDuration: const Duration(milliseconds: 220),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) =>
+                  FadeTransition(opacity: animation, child: child),
+              child: restTimerVisible
+                  ? GestureDetector(
+                      key: const ValueKey('rest-timer-dialog'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {},
+                      child: ColoredBox(
+                        color: Colors.black.withValues(alpha: 0.42),
+                        child: SafeArea(
+                          child: Center(
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.all(AppSpacing.lg),
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 440,
+                                ),
+                                child: _RestTimerOverlay(
+                                  exerciseName: restExerciseName,
+                                  remainingSeconds: _restRemainingSeconds,
+                                  totalSeconds: _restTotalSeconds,
+                                  onSubtract: () => _adjustRest(-15),
+                                  onAdd: () => _adjustRest(15),
+                                  onSkip: _skipRest,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(key: ValueKey('rest-timer-hidden')),
+            ),
           ),
         ),
       ],
@@ -6198,6 +6155,13 @@ class __WorkoutPageState extends State<_WorkoutPage>
   List<Map<String, dynamic>> _buildCompletionPayload() {
     return _sessionExercises.map((exercise) {
       final mode = exercise['tracking_mode']?.toString() ?? 'reps';
+      final exerciseId =
+          (exercise['exercise_id'] as num?)?.toInt() ??
+          (Map<String, dynamic>.from(
+                    exercise['exercise'] as Map? ?? const {},
+                  )['id']
+                  as num?)
+              ?.toInt();
       final sets = (exercise['sets'] as List<dynamic>? ?? const [])
           .map((set) => Map<String, dynamic>.from(set as Map))
           .where((set) => _setHasActual(mode, set))
@@ -6205,7 +6169,7 @@ class __WorkoutPageState extends State<_WorkoutPage>
 
       return {
         'id': exercise['id'],
-        'exercise_id': exercise['exercise_id'],
+        if (exerciseId != null) 'exercise_id': exerciseId,
         'sort_order': exercise['sort_order'],
         'planned_sets': exercise['planned_sets'],
         'tracking_mode': mode,
@@ -6237,10 +6201,20 @@ class __WorkoutPageState extends State<_WorkoutPage>
                 : null,
             'weight': (set['weight'] as num?)?.toDouble() ?? 0,
             'rest_seconds': (set['rest_seconds'] as num?)?.toInt() ?? 0,
-            'notes': set['notes']?.toString(),
-            'effort_scale': set['effort_scale']?.toString(),
-            'effort_value': (set['effort_value'] as num?)?.toDouble(),
-            'side': set['side']?.toString(),
+            if ((set['notes']?.toString().trim() ?? '').isNotEmpty)
+              'notes': set['notes']?.toString().trim(),
+            if (const {'rir', 'rpe'}.contains(set['effort_scale']))
+              'effort_scale': set['effort_scale']?.toString(),
+            if (const {'rir', 'rpe'}.contains(set['effort_scale']) &&
+                (set['effort_value'] as num?) != null)
+              'effort_value': (set['effort_value'] as num?)?.toDouble(),
+            if (const {
+              'left',
+              'right',
+              'both',
+              'alternating',
+            }.contains(set['side']))
+              'side': set['side']?.toString(),
             'is_completed': true,
           };
         }).toList(),
@@ -6556,6 +6530,7 @@ class __WorkoutPageState extends State<_WorkoutPage>
       return;
     }
     final duration = seconds;
+    HapticFeedback.selectionClick();
     setState(() {
       _restExerciseIndex = exerciseIndex;
       _restRemainingSeconds = duration;
@@ -6587,8 +6562,8 @@ class __WorkoutPageState extends State<_WorkoutPage>
           .scheduleWorkoutTimer(
             endsAt: endsAt,
             exerciseName: exercise['name']?.toString() ?? 'exercise',
-            playSound: _restSoundEnabled,
-            enableVibration: _restVibrationEnabled,
+            playSound: true,
+            enableVibration: true,
           )
           .catchError((Object exception) {
             debugPrint('[workout] background timer alert skipped: $exception');
@@ -6618,8 +6593,8 @@ class __WorkoutPageState extends State<_WorkoutPage>
         _restTotalSeconds = 0;
         _restEndsAt = null;
       });
-      if (_restSoundEnabled) SystemSound.play(SystemSoundType.alert);
-      if (_restVibrationEnabled) HapticFeedback.heavyImpact();
+      SystemSound.play(SystemSoundType.alert);
+      HapticFeedback.heavyImpact();
       _cancelRestNotification();
       _scheduleDraftSave();
       return;
@@ -8779,43 +8754,60 @@ class _WorkoutExerciseCardState extends State<_WorkoutExerciseCard> {
                     ),
                   ),
                 ),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    QuickActionButton(
-                      label: 'Add set',
-                      icon: Icons.add_rounded,
-                      onTap: widget.onAddSet,
-                    ),
-                    QuickActionButton(
-                      label: 'Duplicate last',
-                      icon: Icons.copy_rounded,
-                      onTap: widget.onDuplicateLastSet,
-                    ),
-                    QuickActionButton(
-                      label: _expandedHistory
-                          ? 'Hide history'
-                          : 'Recent history',
-                      icon: Icons.history_rounded,
-                      onTap: () {
-                        final nextValue = !_expandedHistory;
-                        setState(() => _expandedHistory = nextValue);
-                        if (nextValue) {
-                          widget.onLoadHistory();
-                        }
-                      },
-                    ),
-                    QuickActionButton(
-                      label: widget.exercise['performed_status'] == 'skipped'
-                          ? 'Skipped'
-                          : 'Skip exercise',
-                      icon: Icons.skip_next_rounded,
-                      onTap: widget.exercise['performed_status'] == 'skipped'
-                          ? null
-                          : widget.onSkipExercise,
-                    ),
-                  ],
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.backgroundAlt.withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppColors.stroke),
+                  ),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      _WorkoutCompactAction(
+                        label: 'Set',
+                        tooltip: 'Add set',
+                        icon: Icons.add_rounded,
+                        onTap: widget.onAddSet,
+                      ),
+                      _WorkoutCompactAction(
+                        label: 'Copy',
+                        tooltip: 'Duplicate last set',
+                        icon: Icons.copy_rounded,
+                        onTap: widget.onDuplicateLastSet,
+                      ),
+                      _WorkoutCompactAction(
+                        label: _expandedHistory ? 'Hide' : 'History',
+                        tooltip: _expandedHistory
+                            ? 'Hide recent history'
+                            : 'Show recent history',
+                        icon: Icons.history_rounded,
+                        selected: _expandedHistory,
+                        onTap: () {
+                          final nextValue = !_expandedHistory;
+                          setState(() => _expandedHistory = nextValue);
+                          if (nextValue) {
+                            widget.onLoadHistory();
+                          }
+                        },
+                      ),
+                      _WorkoutCompactAction(
+                        label: widget.exercise['performed_status'] == 'skipped'
+                            ? 'Skipped'
+                            : 'Skip',
+                        tooltip: 'Skip exercise',
+                        icon: Icons.skip_next_rounded,
+                        danger: true,
+                        onTap: widget.exercise['performed_status'] == 'skipped'
+                            ? null
+                            : widget.onSkipExercise,
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 14),
                 TextField(
@@ -8855,18 +8847,35 @@ class _WorkoutExerciseCardState extends State<_WorkoutExerciseCard> {
               )
             else
               ...widget.recentHistory
-                  .take(3)
+                  .take(2)
                   .map(
                     (session) => Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.surfaceSoft,
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: AppColors.stroke),
                       ),
-                      child: Text(
-                        '${session['session_date'] ?? 'Recent'} • Volume ${((session['total_volume'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)} kg',
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.history_rounded,
+                            size: 14,
+                            color: AppColors.textSecondary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${session['session_date'] ?? 'Recent'} • Volume ${((session['total_volume'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)} kg',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -8920,6 +8929,68 @@ class _WorkoutMetaChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _WorkoutCompactAction extends StatelessWidget {
+  const _WorkoutCompactAction({
+    required this.label,
+    required this.tooltip,
+    required this.icon,
+    required this.onTap,
+    this.selected = false,
+    this.danger = false,
+  });
+
+  final String label;
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool selected;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeColor = danger ? AppColors.error : AppColors.primaryBright;
+    final foreground = selected ? activeColor : AppColors.textSecondary;
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Opacity(
+          opacity: onTap == null ? 0.48 : 1,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+              color: selected
+                  ? activeColor.withValues(alpha: 0.10)
+                  : AppColors.surface,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: selected
+                    ? activeColor.withValues(alpha: 0.30)
+                    : AppColors.stroke,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 15, color: foreground),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: foreground,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -9066,26 +9137,27 @@ class _WorkoutSetRow extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Wrap(
-            spacing: 10,
-            runSpacing: 8,
+            spacing: 8,
+            runSpacing: 6,
             children: [
-              OutlinedButton.icon(
+              ActionChip(
                 onPressed: onStartRest,
-                icon: const Icon(Icons.timer_outlined),
-                label: const Text('Start rest'),
+                avatar: const Icon(Icons.timer_outlined, size: 16),
+                label: const Text('Rest'),
               ),
               if (trackingMode == 'timed' || trackingMode == 'cardio')
-                FilledButton.icon(
+                ActionChip(
                   onPressed: workTimerRunning ? onFinishWork : onStartWork,
-                  icon: Icon(
+                  avatar: Icon(
                     workTimerRunning
                         ? Icons.stop_circle_outlined
                         : Icons.play_arrow_rounded,
+                    size: 16,
                   ),
                   label: Text(
                     workTimerRunning
                         ? 'Finish ${workElapsedSeconds}s'
-                        : 'Start work timer',
+                        : 'Work timer',
                   ),
                 ),
             ],
@@ -9234,56 +9306,128 @@ class _RestTimerOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = totalSeconds <= 0 ? 1 : totalSeconds;
-    final progress = remainingSeconds / total;
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFF2E8), Color(0xFFFFFFFF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    final progress = (remainingSeconds / total).clamp(0.0, 1.0);
+    return TweenAnimationBuilder<double>(
+      key: ValueKey('rest-$totalSeconds'),
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutBack,
+      builder: (context, entrance, child) {
+        return Transform.scale(
+          scale: 0.96 + (0.04 * entrance),
+          child: Opacity(opacity: entrance.clamp(0.0, 1.0), child: child),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFFF2E8), Color(0xFFFFFFFF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(
+            color: const Color(0xFFF59E0B).withValues(alpha: 0.22),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFF59E0B).withValues(alpha: 0.18),
+              blurRadius: 22,
+              offset: const Offset(0, 12),
+            ),
+          ],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFF59E0B).withValues(alpha: 0.16),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Rest timer',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w900,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 1, end: progress),
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, _) {
+                return SizedBox.square(
+                  dimension: 72,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CircularProgressIndicator(
+                        value: value,
+                        strokeWidth: 8,
+                        backgroundColor: Colors.white,
+                        color: const Color(0xFFF59E0B),
+                        strokeCap: StrokeCap.round,
+                      ),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        child: Text(
+                          '$remainingSeconds',
+                          key: ValueKey(remainingSeconds),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
-          ),
-          const SizedBox(height: 6),
-          Text('Recover for $exerciseName'),
-          const SizedBox(height: 14),
-          LinearProgressIndicator(value: progress.clamp(0, 1)),
-          const SizedBox(height: 10),
-          Text(
-            '$remainingSeconds seconds remaining',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w900,
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Rest timer running',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Recover for $exerciseName',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 6,
+                      backgroundColor: Colors.white,
+                      color: const Color(0xFFF59E0B),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      OutlinedButton(
+                        onPressed: onSubtract,
+                        child: const Text('-15s'),
+                      ),
+                      OutlinedButton(
+                        onPressed: onAdd,
+                        child: const Text('+15s'),
+                      ),
+                      TextButton(onPressed: onSkip, child: const Text('Skip')),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            children: [
-              OutlinedButton(onPressed: onSubtract, child: const Text('-15s')),
-              OutlinedButton(onPressed: onAdd, child: const Text('+15s')),
-              TextButton(onPressed: onSkip, child: const Text('Skip')),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

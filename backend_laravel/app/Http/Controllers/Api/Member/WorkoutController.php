@@ -164,7 +164,8 @@ class WorkoutController extends Controller
         }
 
         ExerciseBookCatalog::applyBodyPartOrder($query);
-        $exercises = $query->paginate((int) $request->integer('per_page', 25));
+        $perPage = min(max((int) $request->integer('per_page', 25), 1), 100);
+        $exercises = $query->paginate($perPage);
 
         if ($request->boolean('grouped')) {
             return $this->paginated($exercises, [

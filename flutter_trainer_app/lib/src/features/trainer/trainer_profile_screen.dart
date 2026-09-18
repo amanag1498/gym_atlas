@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../../core/widgets/common_widgets.dart';
+import 'trainer_certification_builder.dart';
 import 'trainer_photo_picker.dart';
 import 'trainer_repository.dart';
 import 'trainer_verification_requirements.dart';
@@ -24,7 +25,11 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
   final TextEditingController _specializationController =
       TextEditingController();
   final TextEditingController _experienceController = TextEditingController();
-  final TextEditingController _certificationsController =
+  final TextEditingController _certificationNameController =
+      TextEditingController();
+  final TextEditingController _certificationIssuerController =
+      TextEditingController();
+  final TextEditingController _certificationYearController =
       TextEditingController();
   final TextEditingController _languagesController = TextEditingController();
   final TextEditingController _gymController = TextEditingController();
@@ -33,11 +38,14 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
   bool _loading = true;
   bool _saving = false;
   bool _uploadingPhoto = false;
+  bool _uploadingCertification = false;
   bool _submittingVerification = false;
   bool _editing = true;
   String? _error;
   Map<String, dynamic> _profile = const {};
   Map<String, dynamic> _trainerUser = const {};
+  final List<Map<String, dynamic>> _certifications = <Map<String, dynamic>>[];
+  Map<String, dynamic>? _pendingCertificationProof;
   Uint8List? _profilePhotoPreviewBytes;
 
   @override
@@ -53,7 +61,9 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
     _bioController.dispose();
     _specializationController.dispose();
     _experienceController.dispose();
-    _certificationsController.dispose();
+    _certificationNameController.dispose();
+    _certificationIssuerController.dispose();
+    _certificationYearController.dispose();
     _languagesController.dispose();
     _gymController.dispose();
     _branchController.dispose();
@@ -88,9 +98,13 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
       ).join(', ');
       _experienceController.text =
           profile['experience_years']?.toString() ?? '';
-      _certificationsController.text = _list(
-        profile['certifications'],
-      ).join(', ');
+      _certifications
+        ..clear()
+        ..addAll(_certificationMaps(profile['certifications']));
+      _certificationNameController.clear();
+      _certificationIssuerController.clear();
+      _certificationYearController.clear();
+      _pendingCertificationProof = null;
       _languagesController.text = _list(profile['languages']).join(', ');
       _gymController.text =
           _map(profile['assigned_gym'])['name']?.toString() ?? 'Not assigned';
@@ -258,6 +272,78 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
     }
   }
 
+  Future<void> _pickAndUploadCertification() async {
+    if (_uploadingCertification) return;
+
+    setState(() => _uploadingCertification = true);
+    try {
+      final picked = await TrainerPhotoPicker()
+          .pickCompressedCertificationImage();
+      if (picked == null) return;
+
+      final response = await widget.repository.uploadCertificationFile(
+        bytes: picked.bytes,
+        filename: picked.filename,
+      );
+      final data = _map(response['data']);
+      final fileUrl = data['certification_file_url']?.toString();
+      if (fileUrl == null || fileUrl.trim().isEmpty) {
+        throw Exception(
+          'Certificate uploaded but no storage reference was returned.',
+        );
+      }
+      if (!mounted) return;
+
+      setState(() {
+        _pendingCertificationProof = {
+          'file_url': fileUrl,
+          'file_name': data['file_name']?.toString() ?? picked.filename,
+          'mime_type': data['mime_type']?.toString(),
+          'file_size': data['file_size'],
+          'file_type':
+              data['file_type']?.toString() ??
+              _proofTypeFromName(picked.filename),
+        }..removeWhere((_, value) => value == null);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Certification proof uploaded.')),
+      );
+    } catch (exception) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+    } finally {
+      if (mounted) setState(() => _uploadingCertification = false);
+    }
+  }
+
+  void _addCertification() {
+    final name = _certificationNameController.text.trim();
+    final issuer = _certificationIssuerController.text.trim();
+    final year = int.tryParse(_certificationYearController.text.trim());
+
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter the certification name first.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _certifications.add({
+        'name': name,
+        if (issuer.isNotEmpty) 'issuer': issuer,
+        if (year != null) 'issued_year': year,
+        if (_pendingCertificationProof != null) ..._pendingCertificationProof!,
+      });
+      _certificationNameController.clear();
+      _certificationIssuerController.clear();
+      _certificationYearController.clear();
+      _pendingCertificationProof = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final completion =
@@ -272,11 +358,6 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
     final specialization = _profile['primary_specialization']
         ?.toString()
         .trim();
-    final canShowImage =
-        (_profilePhotoPreviewBytes != null ||
-        _photoController.text.trim().isNotEmpty ||
-        (_profile['profile_photo_url']?.toString().trim().isNotEmpty == true));
-
     return Scaffold(
       backgroundColor: _FitProfileColor.white,
       appBar: AppBar(
@@ -521,35 +602,6 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          if (canShowImage) ...[
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(24),
-                              child: AppNetworkImage(
-                                imageUrl: _photoController.text.trim(),
-                                memoryBytes: _profilePhotoPreviewBytes,
-                                height: 180,
-                                width: double.infinity,
-                                fallbackIcon: Icons.person_outline_rounded,
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-                          ],
-                          if (_editing) ...[
-                            GradientButton(
-                              label: _uploadingPhoto
-                                  ? 'Uploading photo...'
-                                  : 'Choose photo from gallery',
-                              icon: _uploadingPhoto
-                                  ? null
-                                  : Icons.photo_library_rounded,
-                              loading: _uploadingPhoto,
-                              expanded: true,
-                              onPressed: _uploadingPhoto
-                                  ? null
-                                  : _pickAndUploadPhoto,
-                            ),
-                            const SizedBox(height: 14),
-                          ],
                           TextFormField(
                             controller: _bioController,
                             readOnly: !_editing,
@@ -597,21 +649,27 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
                             },
                           ),
                           const SizedBox(height: 14),
-                          TextFormField(
-                            controller: _certificationsController,
-                            readOnly: !_editing,
-                            maxLines: 2,
-                            decoration: _fitInputDecoration(
-                              'Add or edit certifications',
-                              hint: 'ACE CPT, NASM, CPR',
-                              icon: Icons.workspace_premium_rounded,
+                          if (_editing)
+                            TrainerCertificationBuilder(
+                              certifications: _certifications,
+                              nameController: _certificationNameController,
+                              issuerController: _certificationIssuerController,
+                              yearController: _certificationYearController,
+                              pendingProof: _pendingCertificationProof,
+                              uploading: _uploadingCertification,
+                              onUpload: _uploadingCertification
+                                  ? null
+                                  : _pickAndUploadCertification,
+                              onAdd: _addCertification,
+                              onRemove: (index) => setState(
+                                () => _certifications.removeAt(index),
+                              ),
+                            )
+                          else
+                            _CertificationPreviewList(
+                              certifications: _certificationPayload(),
+                              editing: false,
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          _CertificationPreviewList(
-                            certifications: _certificationPayload(),
-                            editing: _editing,
-                          ),
                           const SizedBox(height: 14),
                           TextFormField(
                             controller: _languagesController,
@@ -650,15 +708,10 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
   }
 
   List<Map<String, dynamic>> _certificationPayload() {
-    final existing = <String, Map<String, dynamic>>{
-      for (final item in _certificationMaps(_profile['certifications']))
-        _certificationKey(item['name']?.toString() ?? ''): item,
-    };
-
-    return _splitList(_certificationsController.text).map((name) {
-      final existingItem = existing[_certificationKey(name)];
-      return {if (existingItem != null) ...existingItem, 'name': name};
-    }).toList();
+    return _certifications
+        .map((item) => Map<String, dynamic>.from(item))
+        .where((item) => (item['name']?.toString().trim() ?? '').isNotEmpty)
+        .toList();
   }
 
   static List<Map<String, dynamic>> _certificationMaps(dynamic value) {
@@ -687,8 +740,8 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
         .toList();
   }
 
-  static String _certificationKey(String value) {
-    return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
+  static String _proofTypeFromName(String filename) {
+    return filename.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image';
   }
 
   static String? _emptyToNull(String value) {

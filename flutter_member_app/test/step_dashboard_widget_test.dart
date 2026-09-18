@@ -34,6 +34,7 @@ void main() {
     expect(find.text('6.4 km'), findsOneWidget);
     expect(find.text('332'), findsOneWidget);
     expect(find.text('5 d'), findsOneWidget);
+    expect(find.textContaining('Last synced'), findsNothing);
   });
 
   testWidgets('renders permission CTA when access is denied', (tester) async {

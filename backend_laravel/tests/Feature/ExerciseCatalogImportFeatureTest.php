@@ -401,6 +401,69 @@ class ExerciseCatalogImportFeatureTest extends TestCase
         $this->assertSame(2, Exercise::query()->where('is_active', true)->count());
     }
 
+    public function test_member_trainer_and_admin_exercise_search_pages_through_large_catalog(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        for ($index = 1; $index <= 125; $index++) {
+            Exercise::query()->create([
+                'name' => sprintf('Catalog Search Exercise %03d', $index),
+                'body_part' => 'chest',
+                'muscle_group' => 'chest',
+                'target_muscle' => 'pectorals',
+                'equipment' => 'dumbbell',
+                'is_global' => true,
+                'status' => 'approved',
+                'review_status' => 'approved',
+                'is_active' => true,
+            ]);
+        }
+
+        $member = User::factory()->create([
+            'active_role' => RoleName::Member->value,
+            'is_active' => true,
+        ]);
+        $member->assignRole(RoleName::Member->value);
+
+        $this->actingAs($member, 'sanctum')
+            ->getJson('/api/member/workout-exercises?search=Catalog%20Search&per_page=100')
+            ->assertOk()
+            ->assertJsonCount(100, 'data')
+            ->assertJsonPath('meta.pagination.total', 125)
+            ->assertJsonPath('meta.pagination.per_page', 100)
+            ->assertJsonPath('meta.pagination.current_page', 1)
+            ->assertJsonPath('meta.pagination.last_page', 2);
+
+        $trainer = User::factory()->create([
+            'active_role' => RoleName::Trainer->value,
+            'is_active' => true,
+        ]);
+        $trainer->assignRole(RoleName::Trainer->value);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->getJson('/api/trainer/exercises?search=Catalog%20Search&per_page=100')
+            ->assertOk()
+            ->assertJsonCount(100, 'data')
+            ->assertJsonPath('meta.pagination.total', 125)
+            ->assertJsonPath('meta.pagination.per_page', 100)
+            ->assertJsonPath('meta.pagination.current_page', 1)
+            ->assertJsonPath('meta.pagination.last_page', 2);
+
+        $admin = User::factory()->create([
+            'active_role' => RoleName::PlatformAdmin->value,
+            'is_active' => true,
+        ]);
+        $admin->assignRole(RoleName::PlatformAdmin->value);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/platform-admin/exercises?search=Catalog%20Search&per_page=100')
+            ->assertOk()
+            ->assertJsonCount(100, 'data')
+            ->assertJsonPath('meta.pagination.total', 125)
+            ->assertJsonPath('meta.pagination.per_page', 100)
+            ->assertJsonPath('meta.pagination.current_page', 1)
+            ->assertJsonPath('meta.pagination.last_page', 2);
+    }
+
     private function dataset(): string
     {
         $path = tempnam(sys_get_temp_dir(), 'gym-atlas-exercises-');

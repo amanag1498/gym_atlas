@@ -285,13 +285,10 @@ class StepDashboardWidget extends StatelessWidget {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 14),
-                            _StepSyncFooter(
-                              text: _lastSyncedLabel(
-                                stepData.lastSyncedAt,
-                                statusMessage,
-                              ),
-                            ),
+                            if (statusMessage?.trim().isNotEmpty ?? false) ...[
+                              const SizedBox(height: 14),
+                              _StepSyncFooter(text: statusMessage!.trim()),
+                            ],
                           ],
                         );
                       },
@@ -310,33 +307,6 @@ class StepDashboardWidget extends StatelessWidget {
       RegExp(r'\B(?=(\d{3})+(?!\d))'),
       (match) => ',',
     );
-  }
-
-  String _lastSyncedLabel(String? raw, String? statusMessage) {
-    if (statusMessage != null && statusMessage.trim().isNotEmpty) {
-      return statusMessage;
-    }
-
-    if (raw == null || raw.isEmpty) {
-      return 'Waiting for first device sync';
-    }
-
-    final parsed = DateTime.tryParse(raw)?.toLocal();
-    if (parsed == null) {
-      return 'Last synced just now';
-    }
-
-    final diff = DateTime.now().difference(parsed);
-    if (diff.inMinutes < 1) {
-      return 'Last synced just now';
-    }
-    if (diff.inHours < 1) {
-      return 'Last synced ${diff.inMinutes} min ago';
-    }
-    if (diff.inDays < 1) {
-      return 'Last synced ${diff.inHours} hr ago';
-    }
-    return 'Last synced ${diff.inDays} day${diff.inDays == 1 ? '' : 's'} ago';
   }
 }
 

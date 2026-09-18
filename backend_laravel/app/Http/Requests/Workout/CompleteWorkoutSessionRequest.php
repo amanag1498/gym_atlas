@@ -19,7 +19,7 @@ class CompleteWorkoutSessionRequest extends FormRequest
             'notes' => ['nullable', 'string'],
             'exercises' => ['present', 'array'],
             'exercises.*.id' => ['nullable', 'integer', 'exists:workout_session_exercises,id'],
-            'exercises.*.exercise_id' => ['required', 'integer', 'exists:exercises,id'],
+            'exercises.*.exercise_id' => ['nullable', 'required_without:exercises.*.id', 'integer', 'exists:exercises,id'],
             'exercises.*.sort_order' => ['nullable', 'integer', 'min:1'],
             'exercises.*.planned_sets' => ['nullable', 'integer', 'min:1'],
             'exercises.*.tracking_mode' => ['nullable', Rule::in(['reps', 'timed', 'cardio', 'distance'])],

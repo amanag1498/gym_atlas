@@ -82,6 +82,15 @@ class WhatsAppConsentService
 
         return $users->mapWithKeys(function (User $user) use ($preferences): array {
             $preference = $preferences->get($user->id);
+            if ($preference === null) {
+                $phone = $this->normalizePhone($user->phone);
+
+                return [$user->id => [
+                    'phone' => $phone,
+                    'exclusion_reason' => $phone ? null : 'invalid_or_missing_phone',
+                ]];
+            }
+
             if ($preference?->status === 'revoked') {
                 return [$user->id => ['phone' => null, 'exclusion_reason' => 'whatsapp_opted_out']];
             }

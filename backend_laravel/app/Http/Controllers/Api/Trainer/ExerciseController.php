@@ -59,7 +59,8 @@ class ExerciseController extends Controller
             ->orderBy('name');
 
         $this->exerciseCatalogExperienceService->applyTrainerRecent($query, $request, $request->user());
-        $paginator = $query->paginate((int) $request->integer('per_page', 15));
+        $perPage = min(max((int) $request->integer('per_page', 25), 1), 100);
+        $paginator = $query->paginate($perPage);
 
         return $this->paginated($paginator, ExerciseResource::collection($paginator->getCollection()), 'Exercises fetched successfully.');
     }

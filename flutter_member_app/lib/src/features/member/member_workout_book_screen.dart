@@ -66,18 +66,12 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   List<Map<String, dynamic>> _plans = const [];
   List<Map<String, dynamic>> _exercises = const [];
   ApiPagination _bookPage = const ApiPagination.singlePage();
-  ApiPagination _recommendedPage = const ApiPagination.singlePage();
   ApiPagination _planPage = const ApiPagination.singlePage();
   ApiPagination _exercisePage = const ApiPagination.singlePage();
   List<Map<String, dynamic>> _equipmentProfiles = const [];
   String _exerciseCatalogView = 'all';
   int? _selectedEquipmentProfileId;
 
-  bool get _hasMore =>
-      _bookPage.hasMore ||
-      _recommendedPage.hasMore ||
-      _planPage.hasMore ||
-      _exercisePage.hasMore;
   String? _catalogDifficulty;
   String? _catalogProgramType;
   bool _featuredOnly = false;
@@ -194,7 +188,6 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       _plans = apiPageItems(responses[2]);
       _exercises = apiPageItems(responses[3]);
       _bookPage = ApiPagination.fromResponse(responses[0]);
-      _recommendedPage = ApiPagination.fromResponse(responses[1]);
       _planPage = ApiPagination.fromResponse(responses[2]);
       _exercisePage = ApiPagination.fromResponse(responses[3]);
       final equipmentData = responses[4]['data'];
@@ -243,8 +236,8 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     }
   }
 
-  Future<void> _loadMore() async {
-    if (_loadingMore || !_hasMore) return;
+  Future<void> _loadMoreBooks() async {
+    if (_loadingMore || !_bookPage.hasMore) return;
     setState(() => _loadingMore = true);
     try {
       final catalogQuery = <String, dynamic>{
@@ -254,50 +247,72 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
         if (_catalogProgramType != null) 'program_type': _catalogProgramType,
         if (_featuredOnly) 'featured': true,
       };
-      if (_bookPage.hasMore) {
-        final response = await widget.repository.fetchWorkoutBooks(
-          queryParameters: {...catalogQuery, 'page': _bookPage.nextPage},
-        );
-        _books = mergeApiPageItems(_books, apiPageItems(response));
-        _bookPage = ApiPagination.fromResponse(response);
-      }
-      if (_recommendedPage.hasMore) {
-        final response = await widget.repository.fetchRecommendedWorkoutBooks(
-          queryParameters: {'page': _recommendedPage.nextPage},
-        );
-        _recommendedBooks = mergeApiPageItems(
-          _recommendedBooks,
-          apiPageItems(response),
-        );
-        _recommendedPage = ApiPagination.fromResponse(response);
-      }
-      if (_planPage.hasMore) {
-        final response = await widget.repository.fetchWorkoutPlans(
-          page: _planPage.nextPage,
-        );
-        _plans = mergeApiPageItems(_plans, apiPageItems(response));
-        _planPage = ApiPagination.fromResponse(response);
-      }
-      if (_exercisePage.hasMore) {
-        final response = await widget.repository.fetchWorkoutExercises(
-          queryParameters: {
-            ..._exerciseQuery(),
-            'page': _exercisePage.nextPage,
-          },
-        );
-        _exercises = mergeApiPageItems(_exercises, apiPageItems(response));
-        _exercisePage = ApiPagination.fromResponse(response);
-      }
+      final response = await widget.repository.fetchWorkoutBooks(
+        queryParameters: {...catalogQuery, 'page': _bookPage.nextPage},
+      );
+      _books = mergeApiPageItems(_books, apiPageItems(response));
+      _bookPage = ApiPagination.fromResponse(response);
     } catch (exception) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
-      }
+      _showLoadMoreError(exception);
     } finally {
       if (mounted) setState(() => _loadingMore = false);
     }
   }
+
+  Future<void> _loadMorePlans() async {
+    if (_loadingMore || !_planPage.hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final response = await widget.repository.fetchWorkoutPlans(
+        page: _planPage.nextPage,
+      );
+      _plans = mergeApiPageItems(_plans, apiPageItems(response));
+      _planPage = ApiPagination.fromResponse(response);
+    } catch (exception) {
+      _showLoadMoreError(exception);
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  Future<void> _loadMoreExercises() async {
+    if (_loadingMore || !_exercisePage.hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final response = await widget.repository.fetchWorkoutExercises(
+        queryParameters: {..._exerciseQuery(), 'page': _exercisePage.nextPage},
+      );
+      _exercises = mergeApiPageItems(_exercises, apiPageItems(response));
+      _exercisePage = ApiPagination.fromResponse(response);
+    } catch (exception) {
+      _showLoadMoreError(exception);
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  void _showLoadMoreError(Object exception) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(exception.toString())));
+  }
+
+  Widget _loadMoreButton({
+    required String label,
+    required VoidCallback onPressed,
+  }) => Center(
+    child: OutlinedButton.icon(
+      onPressed: _loadingMore ? null : onPressed,
+      icon: _loadingMore
+          ? const SizedBox.square(
+              dimension: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.expand_more_rounded),
+      label: Text(_loadingMore ? 'Loading...' : label),
+    ),
+  );
 
   void _scheduleExerciseSearch() {
     _exerciseSearchDebounce?.cancel();
@@ -334,7 +349,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
 
   Map<String, dynamic> _exerciseQuery() => <String, dynamic>{
     'page': 1,
-    'per_page': 50,
+    'per_page': 100,
     'locale': WidgetsBinding.instance.platformDispatcher.locale.languageCode,
     if (_exerciseSearchController.text.trim().isNotEmpty)
       'search': _exerciseSearchController.text.trim(),
@@ -1305,7 +1320,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                       ? _selectedBuilderExerciseId
                       : null,
                   isExpanded: true,
-                  items: filteredExercises.take(40).map((exercise) {
+                  items: filteredExercises.map((exercise) {
                     final id = (exercise['id'] as num?)?.toInt();
                     return DropdownMenuItem<int>(
                       value: id,
@@ -1336,6 +1351,13 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                     icon: Icons.fitness_center_rounded,
                   ),
                 ),
+                if (_exercisePage.hasMore) ...[
+                  const SizedBox(height: 12),
+                  _loadMoreButton(
+                    label: 'Load more exercises',
+                    onPressed: _loadMoreExercises,
+                  ),
+                ],
                 const SizedBox(height: 12),
                 _buildExerciseMetaPanel(context, selectedExercise),
                 const SizedBox(height: 12),
@@ -2220,27 +2242,6 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                       ],
                     ),
             ),
-            if (_hasMore)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  8,
-                  AppSpacing.lg,
-                  AppSpacing.md,
-                ),
-                child: OutlinedButton.icon(
-                  onPressed: _loadingMore ? null : _loadMore,
-                  icon: _loadingMore
-                      ? const SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.expand_more_rounded),
-                  label: Text(
-                    _loadingMore ? 'Loading...' : 'Load more workout data',
-                  ),
-                ),
-              ),
           ],
         ),
       ),
@@ -2267,7 +2268,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
         AppSpacing.lg,
         AppSpacing.xl,
       ),
-      itemCount: _plans.length + 1,
+      itemCount: _plans.length + 1 + (_planPage.hasMore ? 1 : 0),
       itemBuilder: (context, index) {
         if (index == 0) {
           return _WorkoutBookSectionIntro(
@@ -2276,6 +2277,15 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                 'Start a plan, preview the structure, or tune custom splits.',
             icon: Icons.bookmark_added_rounded,
             gradient: const [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
+          );
+        }
+        if (index > _plans.length) {
+          return Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xs),
+            child: _loadMoreButton(
+              label: 'Load more plans',
+              onPressed: _loadMorePlans,
+            ),
           );
         }
         final plan = _plans[index - 1];
@@ -2465,6 +2475,13 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                   ),
                 );
               }),
+              if (_bookPage.hasMore) ...[
+                const SizedBox(height: AppSpacing.xs),
+                _loadMoreButton(
+                  label: 'Load more workout books',
+                  onPressed: _loadMoreBooks,
+                ),
+              ],
             ],
           ],
         );

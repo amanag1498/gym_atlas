@@ -805,6 +805,56 @@ class WorkoutScopeTest extends TestCase
         ]);
     }
 
+    public function test_member_can_complete_existing_session_exercise_without_resending_exercise_id(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch] = $this->makeGymContext();
+        $trainer = $this->makeTrainer($gym, $branch);
+        $member = $this->makeMember($gym, $branch, $trainer->id);
+        [$exercise] = $this->makePlanExercises($gym, $branch, $trainer);
+
+        $plan = app(WorkoutPlanService::class)->createPlans($trainer, [
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_ids' => [$member->id],
+            'name' => 'Completion without exercise id',
+            'duration_weeks' => 1,
+            'days' => [[
+                'day_number' => 1,
+                'exercises' => [[
+                    'exercise_id' => $exercise->id,
+                    'sets' => 1,
+                    'reps' => '10',
+                    'target_weight' => 25,
+                ]],
+            ]],
+        ])->firstOrFail();
+
+        $started = $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/workout-sessions/start', [
+                'workout_plan_id' => $plan->id,
+                'workout_plan_day_id' => $plan->days->first()->id,
+                'session_date' => now()->toDateString(),
+            ])
+            ->assertCreated();
+
+        $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/workout-sessions/'.$started->json('data.id').'/complete', [
+                'exercises' => [[
+                    'id' => $started->json('data.exercises.0.id'),
+                    'tracking_mode' => 'reps',
+                    'sets' => [[
+                        'set_number' => 1,
+                        'reps' => 10,
+                        'weight' => 25,
+                        'is_completed' => true,
+                    ]],
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'completed');
+    }
+
     public function test_single_exercise_group_is_rejected(): void
     {
         $this->seed(PermissionSeeder::class);

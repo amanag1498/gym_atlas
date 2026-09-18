@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/gym_flutter_core.dart' show AtlasBrandLockup;
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -85,7 +86,10 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
                             RevealOnBuild(
                               delay: const Duration(milliseconds: 40),
                               offset: const Offset(0, 0.04),
-                              child: _BrandLockup(logoSize: logoSize),
+                              child: AtlasBrandLockup(
+                                audience: 'Trainer',
+                                markSize: logoSize,
+                              ),
                             ),
                             SizedBox(height: compact ? 28 : 40),
                             RevealOnBuild(
@@ -167,59 +171,6 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
           );
         },
       ),
-    );
-  }
-}
-
-class _BrandLockup extends StatelessWidget {
-  const _BrandLockup({required this.logoSize});
-
-  final double logoSize;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Row(
-      children: [
-        Container(
-          width: logoSize,
-          height: logoSize,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [AppColors.primary, AppColors.primaryBright],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.22),
-                blurRadius: 28,
-                offset: const Offset(0, 14),
-              ),
-            ],
-          ),
-          alignment: Alignment.center,
-          child: Icon(
-            Icons.sports_gymnastics_rounded,
-            color: Colors.white,
-            size: math.max(24, logoSize * 0.4),
-          ),
-        ),
-        const SizedBox(width: 14),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(
-              'GymAtlas',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 }

@@ -11,6 +11,10 @@ class NotificationChannelPreference extends Model
 {
     use HasFactory;
 
+    protected $attributes = [
+        'is_enabled' => true,
+    ];
+
     protected $fillable = [
         'user_id',
         'gym_id',

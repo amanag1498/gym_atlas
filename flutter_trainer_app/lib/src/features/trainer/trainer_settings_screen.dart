@@ -9,26 +9,13 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/premium_card.dart';
 import '../../core/config.dart';
 import '../auth/session_controller.dart';
-import 'notification_preferences_sheet.dart';
-import 'trainer_profile_screen.dart';
-import 'trainer_repository.dart';
 
 class TrainerSettingsScreen extends StatelessWidget {
-  const TrainerSettingsScreen({super.key, required this.repository});
-
-  final TrainerRepository repository;
+  const TrainerSettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final session = context.watch<TrainerSessionController>();
-    final user = session.user;
-    final name = user?.name.trim().isNotEmpty == true ? user!.name : 'Trainer';
-    final email = user?.email.trim().isNotEmpty == true
-        ? user!.email
-        : 'trainer account';
-    final role = user?.activeRole.trim().isNotEmpty == true
-        ? user!.activeRole
-        : 'trainer';
     final baseUri = Uri.tryParse(TrainerConfig.apiBaseUrl);
     final webBase = baseUri == null
         ? null
@@ -55,85 +42,23 @@ class TrainerSettingsScreen extends StatelessWidget {
             children: [
               const _SettingsTopBar(
                 title: 'Settings',
-                subtitle: 'Profile, access, notifications, and preferences.',
+                subtitle: 'Help, legal information, and account controls.',
               ),
               const SizedBox(height: AppSpacing.md),
               _RevealSettings(
-                child: _ProfileHeader(
-                  name: name,
-                  email: email,
-                  role: role,
-                  isActive: user?.isActive == true,
-                  onEdit: () => _openProfile(context),
-                ),
-              ),
-              const SizedBox(height: 15),
-              _RevealSettings(
                 delay: const Duration(milliseconds: 70),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _StatusCell(
-                        title: _titleCase(role),
-                        subtitle: 'Role',
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _StatusCell(
-                        title: user?.isActive == true ? 'Active' : 'Limited',
-                        subtitle: 'Session',
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _StatusCell(
-                        title: '${user?.permissions.length ?? 0}',
-                        subtitle: 'Access',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              _RevealSettings(
-                delay: const Duration(milliseconds: 110),
-                child: _SettingsGroup(
-                  title: 'Account',
-                  children: [
-                    _SettingsRow(
-                      icon: Icons.person_outline_rounded,
-                      title: 'Trainer profile',
-                      onPressed: () => _openProfile(context),
-                    ),
-                    _SettingsRow(
-                      icon: Icons.verified_user_outlined,
-                      title: 'Role and access',
-                      onPressed: () => _showAccess(context, session),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              _RevealSettings(
-                delay: const Duration(milliseconds: 150),
-                child: _SettingsGroup(
-                  title: 'Notifications',
-                  children: [
-                    _SettingsRow(
-                      icon: Icons.notifications_none_rounded,
-                      title: 'Notification preferences',
-                      onPressed: () => _openNotificationPreferences(context),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              _RevealSettings(
-                delay: const Duration(milliseconds: 190),
                 child: _SettingsGroup(
                   title: 'Support and legal',
                   children: [
+                    _SettingsRow(
+                      icon: Icons.help_outline_rounded,
+                      title: 'Help & FAQ',
+                      onPressed: () => _openLink(
+                        context,
+                        _webUrl(webBase, '/faq'),
+                        'Help and FAQ page',
+                      ),
+                    ),
                     _SettingsRow(
                       icon: Icons.support_agent_rounded,
                       title: 'Contact us',
@@ -176,7 +101,7 @@ class TrainerSettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               _RevealSettings(
-                delay: const Duration(milliseconds: 230),
+                delay: const Duration(milliseconds: 110),
                 child: _SessionCard(
                   onLogout: () => _confirmLogout(context, session),
                 ),
@@ -190,98 +115,6 @@ class TrainerSettingsScreen extends StatelessWidget {
 
   String _webUrl(String? webBase, String path) =>
       webBase == null ? path : '$webBase$path';
-
-  Future<void> _openProfile(BuildContext context) async {
-    await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => TrainerProfileScreen(repository: repository),
-      ),
-    );
-  }
-
-  Future<void> _openNotificationPreferences(BuildContext context) async {
-    await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => TrainerNotificationPreferencesSheet(
-        onLoad: repository.fetchNotificationPreferences,
-        onSave: repository.updateNotificationPreferences,
-      ),
-    );
-  }
-
-  Future<void> _showAccess(
-    BuildContext context,
-    TrainerSessionController session,
-  ) {
-    final user = session.user;
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        margin: const EdgeInsets.all(12),
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: AppColors.stroke),
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.strokeStrong,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                'Role and access',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                'Your current trainer roles and enabled capabilities.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 18),
-              _AccessBlock(
-                label: 'Active role',
-                values: [_titleCase(user?.activeRole ?? 'trainer')],
-              ),
-              const SizedBox(height: 12),
-              _AccessBlock(
-                label: 'Roles',
-                values: (user?.roles ?? const <String>[])
-                    .map(_titleCase)
-                    .toList(),
-              ),
-              const SizedBox(height: 12),
-              _AccessBlock(
-                label: 'Permissions',
-                values: user?.permissions ?? const <String>[],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   Future<void> _openLink(
     BuildContext context,
@@ -419,120 +252,6 @@ class _RevealSettings extends StatelessWidget {
   }
 }
 
-class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({
-    required this.name,
-    required this.email,
-    required this.role,
-    required this.isActive,
-    required this.onEdit,
-  });
-
-  final String name;
-  final String email;
-  final String role;
-  final bool isActive;
-  final Future<void> Function() onEdit;
-
-  @override
-  Widget build(BuildContext context) {
-    final initials = name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((part) => part.isNotEmpty)
-        .take(2)
-        .map((part) => part[0].toUpperCase())
-        .join();
-    return PremiumCard(
-      child: Row(
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppColors.surfaceSoft,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.stroke),
-            ),
-            child: Text(
-              initials.isEmpty ? 'T' : initials,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${_titleCase(role)} • ${isActive ? 'Active account' : email}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          TextButton(onPressed: onEdit, child: const Text('Edit')),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusCell extends StatelessWidget {
-  const _StatusCell({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return PremiumCard(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-      child: Column(
-        children: [
-          Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _SettingsGroup extends StatelessWidget {
   const _SettingsGroup({required this.title, required this.children});
 
@@ -666,78 +385,3 @@ class _SessionCard extends StatelessWidget {
     );
   }
 }
-
-class _AccessBlock extends StatelessWidget {
-  const _AccessBlock({required this.label, required this.values});
-
-  final String label;
-  final List<String> values;
-
-  @override
-  Widget build(BuildContext context) {
-    final visible = values.where((value) => value.trim().isNotEmpty).toList();
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceSoft,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.stroke),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 9),
-          if (visible.isEmpty)
-            Text(
-              'No entries',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
-            )
-          else
-            Wrap(
-              spacing: 7,
-              runSpacing: 7,
-              children: visible
-                  .map(
-                    (value) => Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(99),
-                        border: Border.all(color: AppColors.stroke),
-                      ),
-                      child: Text(
-                        value,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-String _titleCase(String value) => value
-    .replaceAll('_', ' ')
-    .split(' ')
-    .where((part) => part.isNotEmpty)
-    .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
-    .join(' ');

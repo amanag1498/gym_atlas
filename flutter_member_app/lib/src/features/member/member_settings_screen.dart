@@ -9,8 +9,6 @@ import '../../../core/widgets/premium_card.dart';
 import '../../core/config.dart';
 import '../auth/session_controller.dart';
 import 'member_repository.dart';
-import 'notification_preferences_sheet.dart';
-import 'whatsapp_preferences_sheet.dart';
 
 class MemberSettingsScreen extends StatelessWidget {
   const MemberSettingsScreen({
@@ -22,8 +20,6 @@ class MemberSettingsScreen extends StatelessWidget {
     required this.onOpenMembership,
     required this.onOpenAttendance,
     required this.onPreferencesChanged,
-    required this.selectedGymId,
-    required this.selectedGymName,
   });
 
   final MemberRepository repository;
@@ -33,8 +29,6 @@ class MemberSettingsScreen extends StatelessWidget {
   final Future<void> Function() onOpenMembership;
   final Future<void> Function() onOpenAttendance;
   final Future<void> Function() onPreferencesChanged;
-  final int? selectedGymId;
-  final String selectedGymName;
 
   @override
   Widget build(BuildContext context) {
@@ -141,22 +135,10 @@ class MemberSettingsScreen extends StatelessWidget {
                       title: 'Activity History',
                       onPressed: onOpenAttendance,
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 25),
-              _AnimatedSection(
-                delay: const Duration(milliseconds: 170),
-                child: _SettingsGroup(
-                  title: 'Notification',
-                  children: [
-                    _NotificationPreferenceRow(
-                      onPressed: () => _openPreferences(context),
-                    ),
                     _SettingsRow(
-                      icon: Icons.chat_outlined,
-                      title: 'WhatsApp notifications',
-                      onPressed: () => _openWhatsAppPreferences(context),
+                      icon: Icons.insights_rounded,
+                      title: 'Workout progress settings',
+                      onPressed: () => _openWorkoutProgressSettings(context),
                     ),
                   ],
                 ),
@@ -208,35 +190,202 @@ class MemberSettingsScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _openPreferences(BuildContext context) async {
-    final changed = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => MemberNotificationPreferencesSheet(
-        onLoad: repository.fetchNotificationPreferences,
-        onSave: repository.updateNotificationPreferences,
-      ),
-    );
-
-    if (changed == true) {
-      await onPreferencesChanged();
+  Future<void> _openWorkoutProgressSettings(BuildContext context) async {
+    Map<String, dynamic> preferences = const {};
+    try {
+      final response = await repository.fetchWorkoutPreferences();
+      preferences = Map<String, dynamic>.from(
+        response['data'] as Map? ?? const <String, dynamic>{},
+      );
+    } catch (exception) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      return;
     }
-  }
 
-  Future<void> _openWhatsAppPreferences(BuildContext context) async {
-    final changed = await showModalBottomSheet<bool>(
+    if (!context.mounted) {
+      return;
+    }
+
+    final target = TextEditingController(
+      text: preferences['target_weight_kg']?.toString() ?? '',
+    );
+    final minutes = TextEditingController(
+      text: preferences['reminder_minutes_before']?.toString() ?? '60',
+    );
+    final workoutTimeValue =
+        preferences['default_workout_time']?.toString() ?? '18:00';
+    final workoutTime = TextEditingController(
+      text: workoutTimeValue.length >= 5
+          ? workoutTimeValue.substring(0, 5)
+          : '18:00',
+    );
+    final quietStartValue = preferences['quiet_hours_start']?.toString() ?? '';
+    final quietEndValue = preferences['quiet_hours_end']?.toString() ?? '';
+    final quietStart = TextEditingController(
+      text: quietStartValue.length >= 5 ? quietStartValue.substring(0, 5) : '',
+    );
+    final quietEnd = TextEditingController(
+      text: quietEndValue.length >= 5 ? quietEndValue.substring(0, 5) : '',
+    );
+    var showGoal = preferences['show_weight_goal'] != false;
+    var reminderEnabled =
+        preferences['scheduled_workout_reminder_enabled'] == true;
+    var missedFollowUp =
+        preferences['missed_workout_follow_up_enabled'] == true;
+    var streakEncouragement =
+        preferences['streak_encouragement_enabled'] == true;
+
+    final save = await showDialog<bool>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => MemberWhatsAppPreferencesSheet(
-        repository: repository,
-        gymId: selectedGymId,
-        scopeName: selectedGymId == null ? 'Atlas' : selectedGymName,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Workout progress settings'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: target,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Target weight (kg)',
+                    helperText: 'Leave blank to clear the goal.',
+                  ),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Show goal on chart'),
+                  value: showGoal,
+                  onChanged: (value) => setDialogState(() => showGoal = value),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Scheduled workout reminders'),
+                  value: reminderEnabled,
+                  onChanged: (value) =>
+                      setDialogState(() => reminderEnabled = value),
+                ),
+                if (reminderEnabled)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: workoutTime,
+                          decoration: const InputDecoration(
+                            labelText: 'Workout time HH:mm',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: minutes,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Minutes before',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Missed-workout follow-up'),
+                  value: missedFollowUp,
+                  onChanged: (value) =>
+                      setDialogState(() => missedFollowUp = value),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Consistency encouragement'),
+                  value: streakEncouragement,
+                  onChanged: (value) =>
+                      setDialogState(() => streakEncouragement = value),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: quietStart,
+                        decoration: const InputDecoration(
+                          labelText: 'Quiet from HH:mm',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: quietEnd,
+                        decoration: const InputDecoration(
+                          labelText: 'Quiet until HH:mm',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
       ),
     );
-    if (changed == true) {
-      await onPreferencesChanged();
+
+    try {
+      if (save == true) {
+        await repository.updateWorkoutPreferences({
+          'target_weight_kg': target.text.trim().isEmpty
+              ? null
+              : double.tryParse(target.text.trim()),
+          'show_weight_goal': showGoal,
+          'scheduled_workout_reminder_enabled': reminderEnabled,
+          'reminder_minutes_before': int.tryParse(minutes.text.trim()) ?? 60,
+          'default_workout_time': workoutTime.text.trim(),
+          'missed_workout_follow_up_enabled': missedFollowUp,
+          'streak_encouragement_enabled': streakEncouragement,
+          'quiet_hours_start': quietStart.text.trim().isEmpty
+              ? null
+              : quietStart.text.trim(),
+          'quiet_hours_end': quietEnd.text.trim().isEmpty
+              ? null
+              : quietEnd.text.trim(),
+          'timezone': 'Asia/Kolkata',
+        });
+        await onPreferencesChanged();
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Workout progress settings updated.')),
+          );
+        }
+      }
+    } catch (exception) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      }
+    } finally {
+      target.dispose();
+      minutes.dispose();
+      workoutTime.dispose();
+      quietStart.dispose();
+      quietEnd.dispose();
     }
   }
 
@@ -564,41 +713,6 @@ class _SettingsRow extends StatelessWidget {
   }
 }
 
-class _NotificationPreferenceRow extends StatelessWidget {
-  const _NotificationPreferenceRow({required this.onPressed});
-
-  final Future<void> Function() onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onPressed,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const _RowIcon(icon: Icons.notifications_none_rounded),
-            const SizedBox(width: 15),
-            Expanded(
-              child: Text(
-                'Pop-up Notification',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            _GradientSwitchPreview(onTap: onPressed),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _SessionCard extends StatelessWidget {
   const _SessionCard({required this.onLogout});
 
@@ -671,59 +785,6 @@ class _RowIcon extends StatelessWidget {
         border: Border.all(color: AppColors.stroke),
       ),
       child: Icon(icon, size: 16, color: AppColors.primaryBright),
-    );
-  }
-}
-
-class _GradientSwitchPreview extends StatelessWidget {
-  const _GradientSwitchPreview({required this.onTap});
-
-  final Future<void> Function() onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(50),
-      child: SizedBox(
-        width: 52,
-        height: 30,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Positioned(
-              left: 4,
-              right: 4,
-              height: 30,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceSoft,
-                  borderRadius: BorderRadius.circular(50),
-                  border: Border.all(color: AppColors.stroke),
-                ),
-              ),
-            ),
-            Positioned(
-              right: 4,
-              child: Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryBright,
-                  borderRadius: BorderRadius.circular(50),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primaryBright.withValues(alpha: 0.18),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

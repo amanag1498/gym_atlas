@@ -41,7 +41,6 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
   String? _error;
   String? _lastSuccessMessage;
   Map<String, dynamic> _summary = const {};
-  Map<String, dynamic> _todaySteps = const {};
   Map<String, dynamic> _workoutAnalytics = const {};
   Map<String, dynamic> _workoutPreferences = const {};
   List<Map<String, dynamic>> _stepSummary = const [];
@@ -109,7 +108,6 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
         widget.repository.fetchWeightLogs(),
         widget.repository.fetchBodyMeasurements(),
         widget.repository.fetchPhotos(),
-        widget.repository.fetchTodaySteps(),
         widget.repository.fetchStepSummary(range: '7d'),
       ]);
 
@@ -122,10 +120,7 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
       _weightPage = ApiPagination.fromResponse(results[1]);
       _measurementPage = ApiPagination.fromResponse(results[2]);
       _photoPage = ApiPagination.fromResponse(results[3]);
-      _todaySteps = Map<String, dynamic>.from(
-        results[4]['data'] as Map? ?? const {},
-      );
-      _stepSummary = (results[5]['data'] as List<dynamic>? ?? const [])
+      _stepSummary = (results[4]['data'] as List<dynamic>? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map))
           .toList();
       try {
@@ -226,9 +221,6 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
     final quietEnd = TextEditingController(
       text: quietEndValue.length >= 5 ? quietEndValue.substring(0, 5) : '',
     );
-    final timezone = TextEditingController(
-      text: _workoutPreferences['timezone']?.toString() ?? 'Asia/Kolkata',
-    );
     var showGoal = _workoutPreferences['show_weight_goal'] != false;
     var reminderEnabled =
         _workoutPreferences['scheduled_workout_reminder_enabled'] == true;
@@ -326,14 +318,6 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
                     ),
                   ],
                 ),
-                TextField(
-                  controller: timezone,
-                  decoration: const InputDecoration(
-                    labelText: 'Timezone',
-                    helperText:
-                        'Use an IANA timezone, for example Asia/Kolkata.',
-                  ),
-                ),
               ],
             ),
           ),
@@ -367,14 +351,13 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
       'quiet_hours_end': quietEnd.text.trim().isEmpty
           ? null
           : quietEnd.text.trim(),
-      'timezone': timezone.text.trim(),
+      'timezone': 'Asia/Kolkata',
     });
     target.dispose();
     minutes.dispose();
     workoutTime.dispose();
     quietStart.dispose();
     quietEnd.dispose();
-    timezone.dispose();
     await _afterSave('Workout progress settings updated.');
   }
 
@@ -951,8 +934,8 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
                         'Body metrics, steps, and progress tracking in one place.',
                     actions: [
                       MemberHeaderActionButton(
-                        icon: Icons.refresh_rounded,
-                        onTap: _load,
+                        icon: Icons.tune_rounded,
+                        onTap: _editWorkoutPreferences,
                       ),
                     ],
                   ),
@@ -979,28 +962,22 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
                     controller: _tabController,
                     children: [
                       _ProgressOverviewTab(
-                        latestWeight: latestWeight,
                         latestMeasurement: latestMeasurement,
                         recentPhotos: recentPhotos,
                         weightLogs: _weightLogs,
                         bodyMeasurements: _bodyMeasurements,
                         photos: _photos,
-                        todaySteps: _todaySteps,
                         stepSummary: _stepSummary,
                       ),
                       _WorkoutAnalyticsTab(
                         analytics: _workoutAnalytics,
-                        onEditPreferences: _editWorkoutPreferences,
                         onOverrideWorkout: _overrideWorkout,
                         onExportData: _exportWorkoutData,
                         onSharePlan: _shareWorkoutPlan,
                         onImportHistory: _importWorkoutHistory,
                         onAdoptSharedPlan: _adoptSharedWorkoutPlan,
                       ),
-                      _StepHistoryTab(
-                        todaySteps: _todaySteps,
-                        stepSummary: _stepSummary,
-                      ),
+                      _StepHistoryTab(stepSummary: _stepSummary),
                       _WeightLogsTab(
                         weightLogs: _weightLogs,
                         weightController: _weightController,
@@ -1099,181 +1076,223 @@ class _StrengthTrackingHeader extends StatelessWidget {
                   (weightCount + measurementCount + photoCount + stepCount + 2))
               .clamp(0.28, 0.88)
               .toDouble();
+    const showBodyMetricsHeroCard = bool.fromEnvironment(
+      'SHOW_BODY_METRICS_HERO_CARD',
+    );
 
     return Column(
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(30),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withValues(alpha: 0.98),
-                  const Color(0xFFF6FBFF),
-                  const Color(0xFFF8FAFC),
+        if (showBodyMetricsHeroCard) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(30),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withValues(alpha: 0.98),
+                    const Color(0xFFF6FBFF),
+                    const Color(0xFFF8FAFC),
+                  ],
+                ),
+                border: Border.all(
+                  color: AppColors.stroke.withValues(alpha: 0.8),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.shadow.withValues(alpha: 0.06),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
                 ],
               ),
-              border: Border.all(
-                color: AppColors.stroke.withValues(alpha: 0.8),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.shadow.withValues(alpha: 0.06),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Stack(
-              children: [
-                Positioned(
-                  top: -34,
-                  right: -28,
-                  child: Container(
-                    width: 146,
-                    height: 146,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.primary.withValues(alpha: 0.10),
+              child: Stack(
+                children: [
+                  Positioned(
+                    top: -34,
+                    right: -28,
+                    child: Container(
+                      width: 146,
+                      height: 146,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.primary.withValues(alpha: 0.10),
+                      ),
                     ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (successMessage != null) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceSoft,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: AppColors.stroke),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.check_circle_rounded,
-                                color: AppColors.primaryBright,
-                                size: 18,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  successMessage!,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: AppColors.textPrimary,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                      ],
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (successMessage != null) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceSoft,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: AppColors.stroke),
+                            ),
+                            child: Row(
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 7,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.68),
-                                    borderRadius: BorderRadius.circular(999),
-                                    border: Border.all(color: AppColors.stroke),
-                                  ),
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: AppColors.primaryBright,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
                                   child: Text(
-                                    'BODY METRICS',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelSmall
+                                    successMessage!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.bodySmall
                                         ?.copyWith(
-                                          color: AppColors.primaryBright,
-                                          fontWeight: FontWeight.w900,
-                                          letterSpacing: 0.8,
+                                          color: AppColors.textPrimary,
+                                          fontWeight: FontWeight.w800,
                                         ),
                                   ),
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'Track the numbers that move with you',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineSmall
-                                      ?.copyWith(
-                                        color: AppColors.textPrimary,
-                                        fontWeight: FontWeight.w900,
-                                        letterSpacing: -0.9,
-                                        height: 0.98,
-                                      ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Weight, measurements, steps, and progress photos in the same premium tracking flow.',
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: AppColors.textSecondary,
-                                        fontWeight: FontWeight.w600,
-                                        height: 1.4,
-                                      ),
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          _StrengthHeroRing(
-                            progress: progress,
-                            label: weightLabel == 'No log' ? '--' : weightLabel,
-                          ),
+                          const SizedBox(height: 14),
                         ],
-                      ),
-                      const SizedBox(height: 18),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _StrengthHeroChip(
-                            icon: Icons.monitor_weight_rounded,
-                            label: '$weightCount weight logs',
-                          ),
-                          _StrengthHeroChip(
-                            icon: Icons.straighten_rounded,
-                            label: '$measurementCount measurements',
-                          ),
-                          _StrengthHeroChip(
-                            icon: Icons.directions_walk_rounded,
-                            label: '$stepCount step days',
-                          ),
-                          _StrengthHeroChip(
-                            icon: Icons.photo_camera_back_rounded,
-                            label: '$photoCount photos',
-                          ),
-                        ],
-                      ),
-                    ],
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 7,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.68,
+                                      ),
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(
+                                        color: AppColors.stroke,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'BODY METRICS',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
+                                            color: AppColors.primaryBright,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 0.8,
+                                          ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'Track the numbers that move with you',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineSmall
+                                        ?.copyWith(
+                                          color: AppColors.textPrimary,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: -0.9,
+                                          height: 0.98,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Weight, measurements, steps, and progress photos in the same premium tracking flow.',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: AppColors.textSecondary,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.4,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            _StrengthHeroRing(
+                              progress: progress,
+                              label: weightLabel == 'No log'
+                                  ? '--'
+                                  : weightLabel,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _StrengthHeroChip(
+                              icon: Icons.monitor_weight_rounded,
+                              label: '$weightCount weight logs',
+                            ),
+                            _StrengthHeroChip(
+                              icon: Icons.straighten_rounded,
+                              label: '$measurementCount measurements',
+                            ),
+                            _StrengthHeroChip(
+                              icon: Icons.directions_walk_rounded,
+                              label: '$stepCount step days',
+                            ),
+                            _StrengthHeroChip(
+                              icon: Icons.photo_camera_back_rounded,
+                              label: '$photoCount photos',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ] else if (successMessage != null) ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceSoft,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppColors.stroke),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.check_circle_rounded,
+                  color: AppColors.primaryBright,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    successMessage!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-        ),
-        const SizedBox(height: AppSpacing.md),
+        ],
         _StrengthTabSlider(controller: tabController),
       ],
     );
@@ -1519,23 +1538,19 @@ class _StrengthTabPill extends StatelessWidget {
 
 class _ProgressOverviewTab extends StatelessWidget {
   const _ProgressOverviewTab({
-    required this.latestWeight,
     required this.latestMeasurement,
     required this.recentPhotos,
     required this.weightLogs,
     required this.bodyMeasurements,
     required this.photos,
-    required this.todaySteps,
     required this.stepSummary,
   });
 
-  final Map<String, dynamic> latestWeight;
   final Map<String, dynamic> latestMeasurement;
   final List<Map<String, dynamic>> recentPhotos;
   final List<Map<String, dynamic>> weightLogs;
   final List<Map<String, dynamic>> bodyMeasurements;
   final List<Map<String, dynamic>> photos;
-  final Map<String, dynamic> todaySteps;
   final List<Map<String, dynamic>> stepSummary;
 
   @override
@@ -1555,61 +1570,9 @@ class _ProgressOverviewTab extends StatelessWidget {
       );
     }
 
-    final latestWeightValue = _asDouble(latestWeight['weight_kg']);
-    final previousWeightValue = weightLogs.length > 1
-        ? _asDouble(weightLogs[1]['weight_kg'])
-        : latestWeightValue;
-    final delta = latestWeightValue - previousWeightValue;
-    final trendText = weightLogs.length < 2
-        ? 'Building baseline'
-        : delta == 0
-        ? 'Stable'
-        : delta < 0
-        ? '${delta.abs().toStringAsFixed(1)} kg down'
-        : '${delta.toStringAsFixed(1)} kg up';
-
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        _StrengthMetricRail(
-          items: [
-            _StrengthMetricData(
-              label: 'Latest weight',
-              value: latestWeightValue > 0
-                  ? '${latestWeightValue.toStringAsFixed(1)} kg'
-                  : 'No log',
-              icon: Icons.monitor_weight_rounded,
-              color: const Color(0xFF92A3FD),
-            ),
-            _StrengthMetricData(
-              label: 'Today steps',
-              value: _formatCompactNumber(
-                (todaySteps['steps'] as num?)?.toInt() ?? 0,
-              ),
-              icon: Icons.directions_walk_rounded,
-              color: const Color(0xFF40D9B8),
-            ),
-            _StrengthMetricData(
-              label: 'Trend',
-              value: trendText,
-              icon: Icons.show_chart_rounded,
-              color: const Color(0xFF40D9B8),
-            ),
-            _StrengthMetricData(
-              label: 'Measure logs',
-              value: '${bodyMeasurements.length}',
-              icon: Icons.straighten_rounded,
-              color: const Color(0xFFC58BF2),
-            ),
-            _StrengthMetricData(
-              label: 'Photos',
-              value: '${photos.length}',
-              icon: Icons.photo_camera_back_rounded,
-              color: const Color(0xFFFFB86C),
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
         MetricTrendChart(
           title: 'Weight trend',
           subtitle: 'Your logged weight across the visible timeline',
@@ -1620,11 +1583,12 @@ class _ProgressOverviewTab extends StatelessWidget {
         const SizedBox(height: 18),
         MetricTrendChart(
           title: 'Seven-day steps',
-          subtitle: 'Daily movement from synced step history',
+          subtitle: 'Your daily movement over the past week',
           points: _metricPoints(stepSummary, 'date', 'steps'),
           accentColor: const Color(0xFF40D9B8),
           unit: ' steps',
-          emptyMessage: 'Sync steps on two days to see your activity trend.',
+          emptyMessage:
+              'Your activity trend will appear after steps are recorded on two days.',
         ),
         const SizedBox(height: 18),
         _StrengthInsightPanel(
@@ -1696,7 +1660,6 @@ class _ProgressOverviewTab extends StatelessWidget {
 class _WorkoutAnalyticsTab extends StatelessWidget {
   const _WorkoutAnalyticsTab({
     required this.analytics,
-    required this.onEditPreferences,
     required this.onOverrideWorkout,
     required this.onExportData,
     required this.onSharePlan,
@@ -1705,7 +1668,6 @@ class _WorkoutAnalyticsTab extends StatelessWidget {
   });
 
   final Map<String, dynamic> analytics;
-  final VoidCallback onEditPreferences;
   final Future<void> Function(Map<String, dynamic>) onOverrideWorkout;
   final VoidCallback onExportData;
   final VoidCallback onSharePlan;
@@ -1754,20 +1716,9 @@ class _WorkoutAnalyticsTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: _StrengthSectionTitle(
-                title: 'Training analytics',
-                action: '${adherence['percentage'] ?? '--'}% adherence',
-              ),
-            ),
-            IconButton(
-              onPressed: onEditPreferences,
-              tooltip: 'Goals and reminders',
-              icon: const Icon(Icons.tune_rounded),
-            ),
-          ],
+        _StrengthSectionTitle(
+          title: 'Training analytics',
+          action: '${adherence['percentage'] ?? '--'}% adherence',
         ),
         const SizedBox(height: 10),
         _StrengthInsightPanel(
@@ -1927,77 +1878,34 @@ class _WorkoutAnalyticsTab extends StatelessWidget {
 }
 
 class _StepHistoryTab extends StatelessWidget {
-  const _StepHistoryTab({required this.todaySteps, required this.stepSummary});
+  const _StepHistoryTab({required this.stepSummary});
 
-  final Map<String, dynamic> todaySteps;
   final List<Map<String, dynamic>> stepSummary;
 
   @override
   Widget build(BuildContext context) {
-    final today = (todaySteps['steps'] as num?)?.toInt() ?? 0;
-    final goal = (todaySteps['goalSteps'] as num?)?.toInt() ?? 10000;
-    final progress = goal <= 0
-        ? 0
-        : ((today / goal) * 100).round().clamp(0, 100);
-    final weeklyTotal = stepSummary.fold<int>(
-      0,
-      (sum, item) => sum + ((item['steps'] as num?)?.toInt() ?? 0),
-    );
-    final activeDays = stepSummary
-        .where((item) => ((item['steps'] as num?)?.toInt() ?? 0) > 0)
-        .length;
-
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        _StrengthMetricRail(
-          items: [
-            _StrengthMetricData(
-              label: 'Today',
-              value: _formatCompactNumber(today),
-              icon: Icons.directions_walk_rounded,
-              color: const Color(0xFF40D9B8),
-            ),
-            _StrengthMetricData(
-              label: 'Goal progress',
-              value: '$progress%',
-              icon: Icons.track_changes_rounded,
-              color: const Color(0xFF92A3FD),
-            ),
-            _StrengthMetricData(
-              label: '7 day total',
-              value: _formatCompactNumber(weeklyTotal),
-              icon: Icons.calendar_month_rounded,
-              color: const Color(0xFFC58BF2),
-            ),
-            _StrengthMetricData(
-              label: 'Active days',
-              value: '$activeDays/${stepSummary.length}',
-              icon: Icons.local_fire_department_rounded,
-              color: const Color(0xFFFFB86C),
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
         MetricTrendChart(
           title: 'Daily step trend',
-          subtitle: 'Compare movement across the last seven synced days',
+          subtitle: 'See how your daily movement changes through the week',
           points: _metricPoints(stepSummary, 'date', 'steps'),
           accentColor: const Color(0xFF40D9B8),
           unit: ' steps',
-          emptyMessage: 'Sync steps on two days to unlock this chart.',
+          emptyMessage:
+              'Your trend will appear after steps are recorded on two days.',
         ),
         const SizedBox(height: 18),
         _StrengthInsightPanel(
-          title: 'Server-backed step history',
-          subtitle:
-              'Synced steps are stored on your profile, so this view works across app refreshes.',
+          title: 'Your recent steps',
+          subtitle: 'Follow your daily movement and progress toward your goal.',
           icon: Icons.query_stats_rounded,
           child: stepSummary.isEmpty
               ? const _StrengthMiniEmpty(
                   icon: Icons.directions_walk_rounded,
                   text:
-                      'Step history will appear after your first successful sync.',
+                      'Your step history will appear after your first active day.',
                 )
               : Column(
                   children: stepSummary.reversed.map((day) {
@@ -2013,7 +1921,7 @@ class _StepHistoryTab extends StatelessWidget {
                         title: _formatCompactNumber(steps),
                         subtitle:
                             '${_formatDate(day['date'])} • $dayProgress% of goal',
-                        badge: steps > 0 ? 'Synced' : 'Rest',
+                        badge: steps > 0 ? 'Active' : 'Rest day',
                         icon: Icons.directions_walk_rounded,
                         color: steps > 0
                             ? const Color(0xFF40D9B8)
@@ -2557,104 +2465,6 @@ class _SelectedPhotoPreview extends StatelessWidget {
       ),
     );
   }
-}
-
-class _StrengthMetricRail extends StatelessWidget {
-  const _StrengthMetricRail({required this.items});
-
-  final List<_StrengthMetricData> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 118,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (context, index) =>
-            _StrengthMetricTile(data: items[index]),
-      ),
-    );
-  }
-}
-
-class _StrengthMetricTile extends StatelessWidget {
-  const _StrengthMetricTile({required this.data});
-
-  final _StrengthMetricData data;
-
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: Duration(milliseconds: 320 + data.label.length * 8),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) => Opacity(
-        opacity: value,
-        child: Transform.translate(
-          offset: Offset(18 * (1 - value), 0),
-          child: child,
-        ),
-      ),
-      child: SizedBox(
-        width: 168,
-        child: PremiumCard(
-          glowColor: data.color,
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceSoft,
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: AppColors.stroke),
-                ),
-                child: Icon(data.icon, color: data.color, size: 20),
-              ),
-              const Spacer(),
-              Text(
-                data.value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                data.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StrengthMetricData {
-  const _StrengthMetricData({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
 }
 
 class _StrengthFormPanel extends StatelessWidget {
