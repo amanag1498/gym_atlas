@@ -3,6 +3,7 @@
 use App\Enums\RoleName;
 use App\Http\Middleware\EnsureActiveAccount;
 use App\Http\Middleware\EnsureActiveRole;
+use App\Http\Middleware\EnforceMobileAppAvailability;
 use App\Http\Middleware\EnsureBranchScope;
 use App\Http\Middleware\EnsureGymScope;
 use App\Http\Middleware\EnsurePermission;
@@ -33,6 +34,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->api(append: [
             ValidatePaginationParameters::class,
+            EnforceMobileAppAvailability::class,
         ]);
 
         $middleware->redirectGuestsTo(static function (Request $request): string {

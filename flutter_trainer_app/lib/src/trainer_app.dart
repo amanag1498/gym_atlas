@@ -3,7 +3,11 @@ import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:gym_flutter_core/gym_flutter_core.dart'
-    show BrandedStartupLoader, ChatNotificationService;
+    show
+        AppRuntimeController,
+        AppRuntimeGate,
+        BrandedStartupLoader,
+        ChatNotificationService;
 import 'package:provider/provider.dart';
 
 import 'core/api_client.dart';
@@ -28,6 +32,7 @@ class _TrainerAppState extends State<TrainerApp> {
   late final TrainerAuthService _authService;
   late final TrainerFcmTokenService _fcmTokenService;
   late final TrainerSessionController _sessionController;
+  late final AppRuntimeController _runtimeController;
   late final ChatNotificationService _chatNotificationService;
   StreamSubscription<RemoteMessage>? _foregroundNotificationSubscription;
   StreamSubscription<RemoteMessage>? _notificationOpenSubscription;
@@ -43,6 +48,10 @@ class _TrainerAppState extends State<TrainerApp> {
     super.initState();
     _storage = const TrainerTokenStorage();
     _apiClient = TrainerApiClient(token: null, onUnauthorized: () async {});
+    _runtimeController = AppRuntimeController(
+      dio: _apiClient.dio,
+      appType: 'trainer',
+    );
     _authService = TrainerAuthService(_apiClient);
     _fcmTokenService = TrainerFcmTokenService(_apiClient);
     _chatNotificationService = ChatNotificationService();
@@ -84,7 +93,12 @@ class _TrainerAppState extends State<TrainerApp> {
         .catchError((Object exception) {
           debugPrint('[fcm] initial notification skipped: $exception');
         });
-    _sessionController.bootstrap();
+    unawaited(_start());
+  }
+
+  Future<void> _start() async {
+    await _runtimeController.initialize();
+    await _sessionController.bootstrap();
   }
 
   void _handleNotificationOpen(RemoteMessage message) {
@@ -146,6 +160,7 @@ class _TrainerAppState extends State<TrainerApp> {
   void dispose() {
     _foregroundNotificationSubscription?.cancel();
     _notificationOpenSubscription?.cancel();
+    _runtimeController.dispose();
     _sessionController.dispose();
     super.dispose();
   }
@@ -158,6 +173,11 @@ class _TrainerAppState extends State<TrainerApp> {
         debugShowCheckedModeBanner: false,
         title: 'Atlas Trainer',
         theme: AppTheme.build(),
+        builder: (context, child) => AppRuntimeGate(
+          controller: _runtimeController,
+          audience: 'Trainer',
+          child: child ?? const SizedBox.shrink(),
+        ),
         home: Consumer<TrainerSessionController>(
           builder: (context, session, _) {
             if (session.initializing) {

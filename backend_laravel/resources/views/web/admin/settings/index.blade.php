@@ -92,6 +92,65 @@
                         @error('demo_trainer_login_email') <div class="mt-2 text-sm text-rose-600">{{ $message }}</div> @enderror
                     </div>
 
+                    <div class="md:col-span-2 xl:col-span-6 mt-2 border-t border-slate-200 pt-6 dark:border-slate-700">
+                        <h4 class="text-base font-semibold text-slate-950 dark:text-white">App availability</h4>
+                        <p class="mt-1 text-sm text-slate-500">Block both mobile apps during maintenance or require a minimum Member/Trainer build. App config and platform administration remain available.</p>
+                    </div>
+
+                    <label class="md:col-span-2 xl:col-span-3 panel-card-muted flex items-start justify-between gap-4 px-4 py-4">
+                        <span><span class="block font-semibold text-slate-950">Maintenance mode</span><span class="mt-1 block text-sm text-slate-500">Shows a blocking service-status screen in both apps.</span></span>
+                        <span><input type="hidden" name="maintenance_mode_enabled" value="0"><input type="checkbox" name="maintenance_mode_enabled" value="1" class="mt-1 h-5 w-5 rounded border-slate-300 text-teal-600" @checked(old('maintenance_mode_enabled', $settings['maintenance_mode_enabled'] ?? false))></span>
+                    </label>
+
+                    <label class="md:col-span-2 xl:col-span-3 panel-card-muted flex items-start justify-between gap-4 px-4 py-4">
+                        <span><span class="block font-semibold text-slate-950">Force app upgrade</span><span class="mt-1 block text-sm text-slate-500">Rejects builds below the configured minimum with HTTP 426.</span></span>
+                        <span><input type="hidden" name="force_upgrade_enabled" value="0"><input type="checkbox" name="force_upgrade_enabled" value="1" class="mt-1 h-5 w-5 rounded border-slate-300 text-teal-600" @checked(old('force_upgrade_enabled', $settings['force_upgrade_enabled'] ?? false))></span>
+                    </label>
+
+                    <div class="xl:col-span-3">
+                        <label class="panel-label" for="maintenance_title">Maintenance title</label>
+                        <input id="maintenance_title" name="maintenance_title" value="{{ old('maintenance_title', $settings['maintenance_title'] ?? '') }}" class="panel-input">
+                        @error('maintenance_title') <div class="mt-2 text-sm text-rose-600">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="xl:col-span-3">
+                        <label class="panel-label" for="maintenance_message">Maintenance message</label>
+                        <textarea id="maintenance_message" name="maintenance_message" rows="2" class="panel-input">{{ old('maintenance_message', $settings['maintenance_message'] ?? '') }}</textarea>
+                        @error('maintenance_message') <div class="mt-2 text-sm text-rose-600">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="xl:col-span-3">
+                        <label class="panel-label" for="upgrade_title">Upgrade title</label>
+                        <input id="upgrade_title" name="upgrade_title" value="{{ old('upgrade_title', $settings['upgrade_title'] ?? '') }}" class="panel-input">
+                        @error('upgrade_title') <div class="mt-2 text-sm text-rose-600">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="xl:col-span-3">
+                        <label class="panel-label" for="upgrade_message">Upgrade message</label>
+                        <textarea id="upgrade_message" name="upgrade_message" rows="2" class="panel-input">{{ old('upgrade_message', $settings['upgrade_message'] ?? '') }}</textarea>
+                        @error('upgrade_message') <div class="mt-2 text-sm text-rose-600">{{ $message }}</div> @enderror
+                    </div>
+
+                    @foreach (['member' => 'Member', 'trainer' => 'Trainer'] as $appKey => $appLabel)
+                        @foreach (['android' => 'Android', 'ios' => 'iOS'] as $platformKey => $platformLabel)
+                            <div class="md:col-span-2 xl:col-span-6 mt-2">
+                                <div class="text-sm font-semibold text-slate-800 dark:text-slate-200">{{ $appLabel }} · {{ $platformLabel }}</div>
+                            </div>
+                            <div class="xl:col-span-1">
+                                <label class="panel-label" for="{{ $appKey }}_{{ $platformKey }}_min_build">Minimum build</label>
+                                <input id="{{ $appKey }}_{{ $platformKey }}_min_build" name="{{ $appKey }}_{{ $platformKey }}_min_build" type="number" min="1" value="{{ old("{$appKey}_{$platformKey}_min_build", $settings["{$appKey}_{$platformKey}_min_build"] ?? 1) }}" class="panel-input">
+                                @error($appKey.'_'.$platformKey.'_min_build') <div class="mt-2 text-sm text-rose-600">{{ $message }}</div> @enderror
+                            </div>
+                            <div class="xl:col-span-1">
+                                <label class="panel-label" for="{{ $appKey }}_{{ $platformKey }}_min_version">Version label</label>
+                                <input id="{{ $appKey }}_{{ $platformKey }}_min_version" name="{{ $appKey }}_{{ $platformKey }}_min_version" value="{{ old("{$appKey}_{$platformKey}_min_version", $settings["{$appKey}_{$platformKey}_min_version"] ?? '1.0.0') }}" class="panel-input">
+                                @error($appKey.'_'.$platformKey.'_min_version') <div class="mt-2 text-sm text-rose-600">{{ $message }}</div> @enderror
+                            </div>
+                            <div class="xl:col-span-4">
+                                <label class="panel-label" for="{{ $appKey }}_{{ $platformKey }}_store_url">Store URL</label>
+                                <input id="{{ $appKey }}_{{ $platformKey }}_store_url" name="{{ $appKey }}_{{ $platformKey }}_store_url" value="{{ old("{$appKey}_{$platformKey}_store_url", $settings["{$appKey}_{$platformKey}_store_url"] ?? '') }}" class="panel-input" placeholder="https://...">
+                                @error($appKey.'_'.$platformKey.'_store_url') <div class="mt-2 text-sm text-rose-600">{{ $message }}</div> @enderror
+                            </div>
+                        @endforeach
+                    @endforeach
+
                     <div class="md:col-span-2 xl:col-span-2">
                         <label class="panel-label" for="promoted_listing_price">Promoted Listing Price</label>
                         <input id="promoted_listing_price" name="promoted_listing_price" value="{{ old('promoted_listing_price', $settings['promoted_listing_price'] ?? '') }}" class="panel-input">

@@ -4,7 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_flutter_core/gym_flutter_core.dart'
-    show ChatNotificationService;
+    show AppRuntimeController, AppRuntimeGate, ChatNotificationService;
 import 'package:provider/provider.dart';
 
 import '../core/theme/app_theme.dart';
@@ -34,6 +34,7 @@ class _MemberAppState extends State<MemberApp> {
   late final AuthService authService;
   late final MemberFcmTokenService fcmTokenService;
   late final MemberSessionController sessionController;
+  late final AppRuntimeController runtimeController;
   late final MemberRepository memberRepository;
   late final ChatNotificationService _chatNotificationService;
   late final GoRouter router;
@@ -56,6 +57,10 @@ class _MemberAppState extends State<MemberApp> {
     super.initState();
     storage = const SecureStorageService();
     apiClient = MemberApiClient();
+    runtimeController = AppRuntimeController(
+      dio: apiClient.dio,
+      appType: 'member',
+    );
     authService = AuthService(apiClient);
     fcmTokenService = MemberFcmTokenService(apiClient);
     sessionController = MemberSessionController(
@@ -176,7 +181,12 @@ class _MemberAppState extends State<MemberApp> {
         .catchError((Object exception) {
           debugPrint('[fcm] initial notification skipped: $exception');
         });
-    sessionController.bootstrap();
+    unawaited(_start());
+  }
+
+  Future<void> _start() async {
+    await runtimeController.initialize();
+    await sessionController.bootstrap();
   }
 
   void _handleNotificationOpen(RemoteMessage message) {
@@ -334,6 +344,7 @@ class _MemberAppState extends State<MemberApp> {
     sessionController.removeListener(_openPendingTrialRequestsIfReady);
     sessionController.removeListener(_openPendingHomeSectionIfReady);
     router.dispose();
+    runtimeController.dispose();
     sessionController.dispose();
     super.dispose();
   }
@@ -352,6 +363,11 @@ class _MemberAppState extends State<MemberApp> {
         title: 'Atlas Member',
         routerConfig: router,
         theme: AppTheme.build(),
+        builder: (context, child) => AppRuntimeGate(
+          controller: runtimeController,
+          audience: 'Member',
+          child: child ?? const SizedBox.shrink(),
+        ),
       ),
     );
   }
