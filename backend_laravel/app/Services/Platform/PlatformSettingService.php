@@ -90,9 +90,12 @@ class PlatformSettingService
     {
         $values = $this->all();
         $appType = in_array($appType, ['member', 'trainer'], true) ? $appType : 'member';
-        $platform = in_array($platform, ['android', 'ios'], true) ? $platform : 'android';
+        $platform = in_array($platform, ['android', 'ios', 'web', 'desktop'], true) ? $platform : 'android';
+        $isStorePlatform = in_array($platform, ['android', 'ios'], true);
         $prefix = "{$appType}_{$platform}";
-        $minimumBuild = max(1, (int) ($values["{$prefix}_min_build"] ?? 1));
+        $minimumBuild = $isStorePlatform
+            ? max(1, (int) ($values["{$prefix}_min_build"] ?? 1))
+            : 1;
 
         return [
             'demo_login_enabled' => (bool) ($values['demo_login_enabled'] ?? false),
@@ -103,11 +106,14 @@ class PlatformSettingService
             'maintenance_message' => (string) ($values['maintenance_message'] ?? 'Atlas is temporarily unavailable. Please try again shortly.'),
             'force_upgrade_enabled' => (bool) ($values['force_upgrade_enabled'] ?? false),
             'minimum_build_number' => $minimumBuild,
-            'minimum_version' => (string) ($values["{$prefix}_min_version"] ?? '1.0.0'),
+            'minimum_version' => $isStorePlatform
+                ? (string) ($values["{$prefix}_min_version"] ?? '1.0.0')
+                : $platform,
             'update_title' => (string) ($values['upgrade_title'] ?? 'Update Atlas to continue'),
             'update_message' => (string) ($values['upgrade_message'] ?? 'A newer version is required to continue.'),
-            'store_url' => $values["{$prefix}_store_url"] ?? null,
+            'store_url' => $isStorePlatform ? ($values["{$prefix}_store_url"] ?? null) : null,
             'update_required' => (bool) ($values['force_upgrade_enabled'] ?? false)
+                && $isStorePlatform
                 && $currentBuild > 0
                 && $currentBuild < $minimumBuild,
         ];

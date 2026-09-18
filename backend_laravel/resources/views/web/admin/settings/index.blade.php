@@ -95,6 +95,7 @@
                     <div class="md:col-span-2 xl:col-span-6 mt-2 border-t border-slate-200 pt-6 dark:border-slate-700">
                         <h4 class="text-base font-semibold text-slate-950 dark:text-white">App availability</h4>
                         <p class="mt-1 text-sm text-slate-500">Block both mobile apps during maintenance or require a minimum Member/Trainer build. App config and platform administration remain available.</p>
+                        <p class="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">Publish and verify the replacement build first. A store URL is required whenever a minimum build above 1 is enforced.</p>
                     </div>
 
                     <label class="md:col-span-2 xl:col-span-3 panel-card-muted flex items-start justify-between gap-4 px-4 py-4">

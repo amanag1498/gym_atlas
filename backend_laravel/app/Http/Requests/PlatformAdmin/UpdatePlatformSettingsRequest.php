@@ -4,6 +4,7 @@ namespace App\Http\Requests\PlatformAdmin;
 
 use App\Enums\RoleName;
 use App\Models\User;
+use App\Services\Platform\PlatformSettingService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -54,21 +55,34 @@ class UpdatePlatformSettingsRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            if (! $this->boolean('demo_login_enabled')) {
+            $effective = array_merge(app(PlatformSettingService::class)->all(), $this->all());
+
+            if (filter_var($effective['demo_login_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+                $memberEmail = mb_strtolower(trim((string) ($effective['demo_member_login_email'] ?? '')));
+                $trainerEmail = mb_strtolower(trim((string) ($effective['demo_trainer_login_email'] ?? '')));
+
+                if ($memberEmail === '' && $trainerEmail === '') {
+                    $validator->errors()->add('demo_member_login_email', 'Configure at least one reviewer email before enabling demo login.');
+                } else {
+                    $this->validateDemoUser($validator, 'demo_member_login_email', $memberEmail, RoleName::Member->value);
+                    $this->validateDemoUser($validator, 'demo_trainer_login_email', $trainerEmail, RoleName::Trainer->value);
+                }
+            }
+
+            if (! filter_var($effective['force_upgrade_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
                 return;
             }
 
-            $memberEmail = mb_strtolower(trim((string) $this->input('demo_member_login_email', '')));
-            $trainerEmail = mb_strtolower(trim((string) $this->input('demo_trainer_login_email', '')));
-
-            if ($memberEmail === '' && $trainerEmail === '') {
-                $validator->errors()->add('demo_member_login_email', 'Configure at least one reviewer email before enabling demo login.');
-
-                return;
+            foreach (['member_android', 'member_ios', 'trainer_android', 'trainer_ios'] as $target) {
+                $minimumBuild = (int) ($effective["{$target}_min_build"] ?? 1);
+                $storeUrl = trim((string) ($effective["{$target}_store_url"] ?? ''));
+                if ($minimumBuild > 1 && $storeUrl === '') {
+                    $validator->errors()->add(
+                        "{$target}_store_url",
+                        'Add the published store URL before requiring this app build.',
+                    );
+                }
             }
-
-            $this->validateDemoUser($validator, 'demo_member_login_email', $memberEmail, RoleName::Member->value);
-            $this->validateDemoUser($validator, 'demo_trainer_login_email', $trainerEmail, RoleName::Trainer->value);
         });
     }
 

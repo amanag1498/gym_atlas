@@ -20,10 +20,15 @@ class AppRuntimeController extends ChangeNotifier with WidgetsBindingObserver {
   String appVersion = '1.0.0';
   int buildNumber = 1;
   Future<void>? _refreshInFlight;
+  Timer? _gatePollTimer;
 
   static String get clientPlatform {
     if (kIsWeb) return 'web';
-    return defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android => 'android',
+      TargetPlatform.iOS => 'ios',
+      _ => 'desktop',
+    };
   }
 
   Future<void> initialize() async {
@@ -56,6 +61,13 @@ class AppRuntimeController extends ChangeNotifier with WidgetsBindingObserver {
       ),
     );
     await refresh();
+    _gatePollTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      final current = config;
+      if (current?.maintenanceEnabled == true ||
+          current?.updateRequired == true) {
+        unawaited(refresh());
+      }
+    });
   }
 
   Future<void> refresh() {
@@ -100,6 +112,7 @@ class AppRuntimeController extends ChangeNotifier with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _gatePollTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -197,7 +210,7 @@ class AppRuntimeGate extends StatelessWidget {
             actionLabel: config.storeUrl == null ? 'Check again' : 'Update now',
             onAction: config.storeUrl == null
                 ? controller.refresh
-                : () => _openStore(config.storeUrl!),
+                : () => _openStore(context, config.storeUrl!),
             secondaryLabel: config.storeUrl == null ? null : 'I have updated',
             onSecondary: config.storeUrl == null ? null : controller.refresh,
             busy: controller.loading,
@@ -221,9 +234,23 @@ class AppRuntimeGate extends StatelessWidget {
     );
   }
 
-  Future<void> _openStore(String value) async {
+  Future<void> _openStore(BuildContext context, String value) async {
     final uri = Uri.tryParse(value);
-    if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
+    var opened = false;
+    try {
+      if (uri != null) {
+        opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {
+      opened = false;
+    }
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open the app store. Please try again.'),
+        ),
+      );
+    }
   }
 }
 

@@ -38,8 +38,19 @@ class EnforceMobileAppAvailability
         $platform = strtolower(trim((string) $request->header('X-Client-Platform', '')));
         $currentBuild = (int) $request->header('X-App-Version-Code', 0);
 
-        if (! in_array($appType, ['member', 'trainer'], true)
-            || ! in_array($platform, ['android', 'ios'], true)) {
+        if (! in_array($appType, ['member', 'trainer'], true)) {
+            return ApiResponse::error(
+                'A current Atlas app is required to continue.',
+                426,
+                ['code' => 'app_upgrade_required'],
+            );
+        }
+
+        if (in_array($platform, ['web', 'desktop'], true)) {
+            return $next($request);
+        }
+
+        if (! in_array($platform, ['android', 'ios'], true)) {
             return ApiResponse::error(
                 'A current Atlas app is required to continue.',
                 426,

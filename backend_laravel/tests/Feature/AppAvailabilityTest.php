@@ -2,8 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Http\Requests\PlatformAdmin\UpdatePlatformSettingsRequest as ApiSettingsRequest;
+use App\Http\Requests\Web\Platform\UpdatePlatformSettingsRequest as WebSettingsRequest;
 use App\Models\PlatformSetting;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Validator;
 use Tests\TestCase;
 
 class AppAvailabilityTest extends TestCase
@@ -88,6 +91,59 @@ class AppAvailabilityTest extends TestCase
         $this->setSetting('force_upgrade_enabled', true);
 
         $this->getJson('/api/public/discovery/gyms')->assertOk();
+    }
+
+    public function test_force_upgrade_does_not_apply_mobile_store_versions_to_flutter_web_or_desktop(): void
+    {
+        $this->setSetting('force_upgrade_enabled', true);
+        $this->setSetting('member_android_min_build', 99);
+
+        foreach (['web', 'desktop'] as $platform) {
+            $headers = [
+                'X-Atlas-App' => 'member',
+                'X-Client-Platform' => $platform,
+                'X-App-Version-Code' => '1',
+            ];
+
+            $this->withHeaders($headers)
+                ->getJson('/api/public/app-config')
+                ->assertOk()
+                ->assertJsonPath('data.platform', $platform)
+                ->assertJsonPath('data.update_required', false)
+                ->assertJsonPath('data.store_url', null);
+
+            $this->withHeaders($headers)
+                ->getJson('/api/public/discovery/gyms')
+                ->assertOk();
+        }
+    }
+
+    public function test_settings_reject_an_enforced_build_without_its_store_url(): void
+    {
+        foreach ([ApiSettingsRequest::class, WebSettingsRequest::class] as $requestClass) {
+            $input = [
+                'force_upgrade_enabled' => true,
+                'member_ios_min_build' => 2,
+            ];
+            $request = $requestClass::create('/settings', 'PUT', $input);
+            $request->setContainer($this->app);
+            $validator = Validator::make($input, $request->rules());
+            $request->withValidator($validator);
+
+            $this->assertTrue($validator->fails());
+            $this->assertArrayHasKey('member_ios_store_url', $validator->errors()->toArray());
+
+            $validInput = [
+                ...$input,
+                'member_ios_store_url' => 'https://apps.apple.com/app/id123456789',
+            ];
+            $validRequest = $requestClass::create('/settings', 'PUT', $validInput);
+            $validRequest->setContainer($this->app);
+            $validValidator = Validator::make($validInput, $validRequest->rules());
+            $validRequest->withValidator($validValidator);
+
+            $this->assertFalse($validValidator->fails());
+        }
     }
 
     private function setSetting(string $key, mixed $value): void
