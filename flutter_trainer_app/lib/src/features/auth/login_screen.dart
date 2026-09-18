@@ -56,10 +56,10 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
               ? 24.0
               : 32.0;
           final headlineSize = width < 360
-              ? 30.0
+              ? 28.0
               : width < 430
-              ? 36.0
-              : 40.0;
+              ? 32.0
+              : 34.0;
           final logoSize = compact ? 56.0 : 64.0;
 
           return Stack(
@@ -97,19 +97,19 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
                                 ),
                               ),
                             ),
-                            SizedBox(height: compact ? 28 : 40),
+                            SizedBox(height: compact ? 28 : 36),
                             RevealOnBuild(
                               delay: const Duration(milliseconds: 120),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   Text(
-                                    'Your floor is\nready.',
+                                    'Sign in to continue',
                                     textAlign: TextAlign.center,
                                     style: theme.textTheme.displaySmall
                                         ?.copyWith(
                                           fontSize: headlineSize,
-                                          height: 0.94,
+                                          height: 1.02,
                                           letterSpacing: 0,
                                           fontWeight: FontWeight.w700,
                                         ),
@@ -117,10 +117,10 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
                                   const SizedBox(height: 12),
                                   ConstrainedBox(
                                     constraints: const BoxConstraints(
-                                      maxWidth: 340,
+                                      maxWidth: 280,
                                     ),
                                     child: Text(
-                                      'See your members, build better sessions, and keep every follow-up close at hand.',
+                                      'Use your coaching account to open Atlas.',
                                       textAlign: TextAlign.center,
                                       style: theme.textTheme.bodyLarge
                                           ?.copyWith(
@@ -141,11 +141,6 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
                                 compact: compact,
                                 busy: session.busy,
                                 error: session.error,
-                                title: 'Good to see you',
-                                subtitle:
-                                    'Sign in with the account connected to your coaching profile.',
-                                footer:
-                                    'Your clients, plans, and tasks will be waiting.',
                                 onPressed: session.busy
                                     ? null
                                     : () => context
@@ -238,9 +233,6 @@ class _LoginPanel extends StatelessWidget {
     required this.compact,
     required this.busy,
     required this.error,
-    required this.title,
-    required this.subtitle,
-    required this.footer,
     required this.onPressed,
     required this.onApplePressed,
   });
@@ -248,9 +240,6 @@ class _LoginPanel extends StatelessWidget {
   final bool compact;
   final bool busy;
   final String? error;
-  final String title;
-  final String subtitle;
-  final String footer;
   final VoidCallback? onPressed;
   final VoidCallback? onApplePressed;
 
@@ -260,165 +249,162 @@ class _LoginPanel extends StatelessWidget {
     final showApple = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withValues(alpha: 0.96),
-            const Color(0xFFF8FBFF),
-          ],
-        ),
+        borderRadius: BorderRadius.circular(24),
+        color: Colors.white.withValues(alpha: 0.96),
         border: Border.all(color: Colors.white.withValues(alpha: 0.88)),
         boxShadow: [
           BoxShadow(
             color: AppColors.shadow.withValues(alpha: 0.10),
-            blurRadius: 32,
-            offset: const Offset(0, 22),
-          ),
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.08),
-            blurRadius: 40,
-            offset: const Offset(0, 14),
+            blurRadius: 24,
+            offset: const Offset(0, 16),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: Stack(
-          children: [
-            Positioned(
-              top: -28,
-              right: -8,
-              child: Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      AppColors.primary.withValues(alpha: 0.16),
-                      AppColors.primaryBright.withValues(alpha: 0.04),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
+        borderRadius: BorderRadius.circular(24),
+        child: Padding(
+          padding: EdgeInsets.all(compact ? 16 : 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (error != null) ...[
+                _LoginError(message: error!),
+                SizedBox(height: compact ? 14 : 16),
+              ],
+              _GoogleSignInButton(
+                label: busy ? 'Signing in...' : 'Sign in with Google',
+                loading: busy,
+                onPressed: onPressed,
               ),
-            ),
-            Padding(
-              padding: EdgeInsets.all(compact ? 18 : 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontSize: compact ? 22 : 24,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    subtitle,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                      height: 1.45,
-                    ),
-                  ),
-                  if (error != null) ...[
-                    const SizedBox(height: 16),
-                    _LoginError(message: error!),
-                  ],
-                  SizedBox(height: compact ? 18 : 22),
-                  GradientButton(
-                    expanded: true,
-                    label: busy ? 'Signing in...' : 'Continue with Google',
-                    icon: busy ? null : Icons.arrow_forward_rounded,
-                    loading: busy,
-                    onPressed: onPressed,
-                  ),
-                  if (showApple) ...[
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        const Expanded(child: Divider()),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: Text(
-                            'or',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ),
-                        const Expanded(child: Divider()),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: onApplePressed,
-                        icon: const Icon(Icons.apple, size: 20),
-                        label: const Text('Sign in with Apple'),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(48),
-                          backgroundColor: Colors.black,
-                          foregroundColor: Colors.white,
-                          disabledBackgroundColor: Colors.black54,
-                          disabledForegroundColor: Colors.white70,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+              if (showApple) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Expanded(child: Divider()),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        'or',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
                         ),
                       ),
                     ),
+                    const Expanded(child: Divider()),
                   ],
-                  const SizedBox(height: 18),
-                  _LoginHintRow(icon: Icons.groups_2_outlined, label: footer),
-                  const SizedBox(height: 10),
-                  _LoginHintRow(
-                    icon: Icons.bolt_rounded,
-                    label: showApple
-                        ? 'Choose Google or Apple. Your coaching workspace stays the same.'
-                        : 'One tap, then you are back to coaching.',
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: onApplePressed,
+                    icon: const Icon(Icons.apple, size: 20),
+                    label: const Text('Sign in with Apple'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                      backgroundColor: Colors.black,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.black54,
+                      disabledForegroundColor: Colors.white70,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
                   ),
-                ],
-              ),
-            ),
-          ],
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _LoginHintRow extends StatelessWidget {
-  const _LoginHintRow({required this.icon, required this.label});
+class _GoogleSignInButton extends StatelessWidget {
+  const _GoogleSignInButton({
+    required this.label,
+    required this.loading,
+    required this.onPressed,
+  });
 
-  final IconData icon;
   final String label;
+  final bool loading;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final enabled = onPressed != null && !loading;
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 18, color: AppColors.primary),
-        const SizedBox(width: 9),
-        Expanded(
-          child: Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: AppColors.textSecondary,
-              height: 1.35,
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: Material(
+        color: enabled ? Colors.white : const Color(0xFFF2F4F7),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(14),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (loading)
+                    SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.4,
+                        color: AppColors.primary,
+                      ),
+                    )
+                  else
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const _GoogleMark(),
+                        const SizedBox(width: 12),
+                        Text(
+                          label,
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _GoogleMark extends StatelessWidget {
+  const _GoogleMark();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('G', style: TextStyle(color: Color(0xFF4285F4), fontSize: 20)),
+        Text('o', style: TextStyle(color: Color(0xFFDB4437), fontSize: 20)),
+        Text('o', style: TextStyle(color: Color(0xFFF4B400), fontSize: 20)),
+        Text('g', style: TextStyle(color: Color(0xFF4285F4), fontSize: 20)),
+        Text('l', style: TextStyle(color: Color(0xFF0F9D58), fontSize: 20)),
+        Text('e', style: TextStyle(color: Color(0xFFDB4437), fontSize: 20)),
       ],
     );
   }
