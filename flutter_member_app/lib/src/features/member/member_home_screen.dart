@@ -1234,238 +1234,6 @@ class _MemberHomeSkeleton extends StatelessWidget {
   }
 }
 
-class _GymWorkspaceCard extends StatelessWidget {
-  const _GymWorkspaceCard({
-    required this.relationship,
-    required this.relationshipCount,
-    required this.onTap,
-  });
-
-  final Map<String, dynamic> relationship;
-  final int relationshipCount;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final gym = Map<String, dynamic>.from(
-      relationship['gym'] as Map? ?? const {},
-    );
-    final branch = Map<String, dynamic>.from(
-      relationship['branch'] as Map? ?? const {},
-    );
-    final trainer = Map<String, dynamic>.from(
-      relationship['assigned_trainer'] as Map? ?? const {},
-    );
-    final membership = Map<String, dynamic>.from(
-      relationship['membership'] as Map? ?? const {},
-    );
-    final plan = Map<String, dynamic>.from(
-      membership['plan'] as Map? ?? const {},
-    );
-    final gymName = gym['name']?.toString().trim().isNotEmpty == true
-        ? gym['name']!.toString().trim()
-        : 'Gym membership';
-    final logoUrl = gym['logo_url']?.toString().trim();
-    final branchDetails = <String>[
-      if (branch['name']?.toString().trim().isNotEmpty == true)
-        branch['name'].toString().trim(),
-      if (branch['city']?.toString().trim().isNotEmpty == true)
-        branch['city'].toString().trim(),
-    ];
-    final planName = plan['name']?.toString().trim();
-    final trainerName = trainer['name']?.toString().trim();
-    final canSwitch = relationshipCount > 1 && onTap != null;
-
-    return Semantics(
-      container: true,
-      label:
-          'Active gym, $gymName'
-          '${branchDetails.isEmpty ? '' : ', ${branchDetails.join(', ')}'}',
-      child: Container(
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Colors.white, Color(0xFFF3FCFA), Color(0xFFF7F5FF)],
-          ),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.16)),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.09),
-              blurRadius: 26,
-              offset: const Offset(0, 14),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              top: -46,
-              right: -34,
-              child: Container(
-                width: 132,
-                height: 132,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.accentPurple.withValues(alpha: 0.08),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 0,
-              top: 18,
-              bottom: 18,
-              child: Container(
-                width: 4,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [AppColors.primaryBright, AppColors.accentPurple],
-                  ),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 17),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final largeText =
-                      MediaQuery.textScalerOf(context).scale(1) > 1.3;
-                  final compact = constraints.maxWidth < 350 || largeText;
-                  final identity = Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      _GymWorkspaceLogo(
-                        imageUrl: logoUrl,
-                        gymName: gymName,
-                        size: compact ? 58 : 66,
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const _GymWorkspaceActiveLabel(),
-                            const SizedBox(height: 7),
-                            Text(
-                              gymName,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(
-                                    color: AppColors.textPrimary,
-                                    fontWeight: FontWeight.w900,
-                                    height: 1.05,
-                                    letterSpacing: -0.35,
-                                  ),
-                            ),
-                            if (branchDetails.isNotEmpty) ...[
-                              const SizedBox(height: 5),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.location_on_outlined,
-                                    size: 15,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      branchDetails.join(' · '),
-                                      maxLines: largeText ? 2 : 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelMedium
-                                          ?.copyWith(
-                                            color: AppColors.textSecondary,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      identity,
-                      const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _GymWorkspaceStatusPill(
-                            icon: Icons.card_membership_rounded,
-                            label: planName?.isNotEmpty == true
-                                ? planName!
-                                : 'Active membership',
-                          ),
-                          _GymWorkspaceStatusPill(
-                            icon: trainerName?.isNotEmpty == true
-                                ? Icons.verified_user_rounded
-                                : Icons.person_outline_rounded,
-                            label: trainerName?.isNotEmpty == true
-                                ? 'Coach: $trainerName'
-                                : 'Coach not assigned',
-                            muted: trainerName?.isNotEmpty != true,
-                          ),
-                        ],
-                      ),
-                      if (canSwitch) ...[
-                        const SizedBox(height: 14),
-                        SizedBox(
-                          width: compact ? double.infinity : null,
-                          child: OutlinedButton.icon(
-                            onPressed: onTap,
-                            icon: const Icon(
-                              Icons.swap_horiz_rounded,
-                              size: 19,
-                            ),
-                            label: const Text('Switch gym'),
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size(0, 48),
-                              foregroundColor: AppColors.primary,
-                              backgroundColor: Colors.white.withValues(
-                                alpha: 0.72,
-                              ),
-                              side: BorderSide(
-                                color: AppColors.primary.withValues(
-                                  alpha: 0.22,
-                                ),
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              textStyle: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _GymWorkspaceLogo extends StatelessWidget {
   const _GymWorkspaceLogo({
     required this.imageUrl,
@@ -1515,8 +1283,205 @@ class _GymWorkspaceLogo extends StatelessWidget {
   }
 }
 
-class _GymWorkspaceActiveLabel extends StatelessWidget {
-  const _GymWorkspaceActiveLabel();
+class _MemberWorkspaceIdentity extends StatelessWidget {
+  const _MemberWorkspaceIdentity({
+    required this.relationship,
+    required this.relationshipCount,
+    required this.isTrialUser,
+    required this.onSwitchGym,
+  });
+
+  final Map<String, dynamic> relationship;
+  final int relationshipCount;
+  final bool isTrialUser;
+  final VoidCallback? onSwitchGym;
+
+  @override
+  Widget build(BuildContext context) {
+    final gym = Map<String, dynamic>.from(
+      relationship['gym'] as Map? ?? const {},
+    );
+    final branch = Map<String, dynamic>.from(
+      relationship['branch'] as Map? ?? const {},
+    );
+    final hasGym = relationship.isNotEmpty;
+    final title = gym['name']?.toString().trim().isNotEmpty == true
+        ? gym['name']!.toString().trim()
+        : isTrialUser
+        ? 'Find your training space'
+        : 'Your personal fitness space';
+    final branchDetails = <String>[
+      if (branch['name']?.toString().trim().isNotEmpty == true)
+        branch['name'].toString().trim(),
+      if (branch['city']?.toString().trim().isNotEmpty == true)
+        branch['city'].toString().trim(),
+    ];
+    final detail = hasGym
+        ? branchDetails.join(' · ')
+        : isTrialUser
+        ? 'Explore clubs and discover the right fit'
+        : 'Train your way and connect with a gym anytime';
+    final label = hasGym
+        ? 'ACTIVE GYM'
+        : isTrialUser
+        ? 'TRIAL JOURNEY'
+        : 'INDEPENDENT TRAINING';
+    final canSwitch = hasGym && relationshipCount > 1 && onSwitchGym != null;
+
+    return Semantics(
+      container: true,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.3;
+          final compact = constraints.maxWidth < 350 || largeText;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  if (hasGym)
+                    _GymWorkspaceLogo(
+                      imageUrl: gym['logo_url']?.toString().trim(),
+                      gymName: title,
+                      size: compact ? 58 : 66,
+                    )
+                  else
+                    _PersonalWorkspaceIcon(
+                      isTrialUser: isTrialUser,
+                      size: compact ? 58 : 66,
+                    ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _WorkspaceLabel(label: label),
+                        const SizedBox(height: 7),
+                        Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w900,
+                                height: 1.05,
+                                letterSpacing: -0.35,
+                              ),
+                        ),
+                        if (detail.isNotEmpty) ...[
+                          const SizedBox(height: 5),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                hasGym
+                                    ? Icons.location_on_outlined
+                                    : isTrialUser
+                                    ? Icons.explore_outlined
+                                    : Icons.bolt_rounded,
+                                size: 15,
+                                color: AppColors.textSecondary,
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  detail,
+                                  maxLines: largeText ? 2 : 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(
+                                        color: AppColors.textSecondary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (canSwitch) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: compact ? double.infinity : null,
+                  child: OutlinedButton.icon(
+                    onPressed: onSwitchGym,
+                    icon: const Icon(Icons.swap_horiz_rounded, size: 19),
+                    label: const Text('Switch gym'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 48),
+                      foregroundColor: AppColors.primary,
+                      backgroundColor: Colors.white.withValues(alpha: 0.72),
+                      side: BorderSide(
+                        color: AppColors.primary.withValues(alpha: 0.22),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PersonalWorkspaceIcon extends StatelessWidget {
+  const _PersonalWorkspaceIcon({required this.isTrialUser, required this.size});
+
+  final bool isTrialUser;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      image: true,
+      label: isTrialUser ? 'Trial training' : 'Independent training',
+      child: ExcludeSemantics(
+        child: Container(
+          key: const ValueKey('personal-workspace-icon'),
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppColors.primaryBright, AppColors.accentPurple],
+            ),
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.18),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Icon(
+            isTrialUser ? Icons.explore_rounded : Icons.fitness_center_rounded,
+            color: Colors.white,
+            size: size * 0.46,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkspaceLabel extends StatelessWidget {
+  const _WorkspaceLabel({required this.label});
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -1528,62 +1493,12 @@ class _GymWorkspaceActiveLabel extends StatelessWidget {
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
       ),
       child: Text(
-        'ACTIVE GYM',
+        label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
           color: AppColors.primary,
           fontWeight: FontWeight.w900,
           letterSpacing: 0.8,
         ),
-      ),
-    );
-  }
-}
-
-class _GymWorkspaceStatusPill extends StatelessWidget {
-  const _GymWorkspaceStatusPill({
-    required this.icon,
-    required this.label,
-    this.muted = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool muted;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = muted ? AppColors.textSecondary : AppColors.primary;
-    return Container(
-      constraints: const BoxConstraints(minHeight: 36),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: muted
-            ? AppColors.surfaceSoft
-            : AppColors.primary.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(
-          color: muted
-              ? AppColors.stroke
-              : AppColors.primary.withValues(alpha: 0.12),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: color,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1706,6 +1621,17 @@ class _DashboardPage extends StatelessWidget {
           (relationship['gym_id'] as num?)?.toInt() == selectedGymId,
       orElse: () => gymRelationships.firstOrNull ?? const {},
     );
+    final selectedRelationshipMembership = Map<String, dynamic>.from(
+      selectedGymRelationship['membership'] as Map? ?? const {},
+    );
+    final selectedPlan = Map<String, dynamic>.from(
+      selectedRelationshipMembership['plan'] as Map? ?? const {},
+    );
+    final selectedTrainer = Map<String, dynamic>.from(
+      selectedGymRelationship['assigned_trainer'] as Map? ?? const {},
+    );
+    final selectedPlanName = selectedPlan['name']?.toString().trim();
+    final selectedTrainerName = selectedTrainer['name']?.toString().trim();
     final readinessSignals = <bool>[
       profileReady,
       hasWeightLog,
@@ -1717,20 +1643,16 @@ class _DashboardPage extends StatelessWidget {
     final readinessPercent = (0.18 + (readinessCount * 0.16)).clamp(0.18, 0.98);
     final weeklyBars = _weeklyActivityBars(history);
     final latestWorkoutItems = _latestWorkoutItems(plans, history);
-    final heroLabel = hasTrainer
-        ? 'Trainer connected'
-        : hasGymMembership
-        ? 'Membership active'
-        : isTrialUser
-        ? 'Trial access active'
-        : 'Independent member';
+    final heroLabel = 'Today\'s readiness';
     final heroTitle = checkedInToday
         ? 'Session active'
         : stepGoalReached
         ? 'Hit today\'s goal'
         : hasGymMembership
-        ? 'Membership active'
-        : 'Ready to train?';
+        ? 'Ready for today'
+        : isTrialUser
+        ? 'Keep exploring'
+        : 'Build your momentum';
     final heroSubtitle = hasWarning
         ? 'Membership needs attention'
         : hasTrainer
@@ -1842,20 +1764,16 @@ class _DashboardPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            if (selectedGymRelationship.isNotEmpty) ...[
-              RevealOnBuild(
-                delay: const Duration(milliseconds: 25),
-                child: _GymWorkspaceCard(
+            RevealOnBuild(
+              delay: const Duration(milliseconds: 25),
+              child: _PerformanceHeroPanel(
+                key: const ValueKey('member-unified-hero'),
+                identity: _MemberWorkspaceIdentity(
                   relationship: selectedGymRelationship,
                   relationshipCount: gymRelationships.length,
-                  onTap: gymRelationships.length > 1 ? onSwitchGym : null,
+                  isTrialUser: isTrialUser,
+                  onSwitchGym: gymRelationships.length > 1 ? onSwitchGym : null,
                 ),
-              ),
-              const SizedBox(height: 14),
-            ],
-            RevealOnBuild(
-              delay: const Duration(milliseconds: 40),
-              child: _PerformanceHeroPanel(
                 title: heroTitle,
                 subtitle: heroSubtitle,
                 badge: heroLabel,
@@ -1875,11 +1793,15 @@ class _DashboardPage extends StatelessWidget {
                         : 'Start streak',
                   ),
                   _DashboardChipData(
-                    icon: hasGymMembership
+                    icon: selectedTrainerName?.isNotEmpty == true
                         ? Icons.verified_user_rounded
+                        : selectedPlanName?.isNotEmpty == true
+                        ? Icons.card_membership_rounded
                         : Icons.person_outline_rounded,
-                    label: hasGymMembership
-                        ? (checkedInToday ? 'Checked in' : 'Access active')
+                    label: selectedTrainerName?.isNotEmpty == true
+                        ? 'Coach connected'
+                        : selectedPlanName?.isNotEmpty == true
+                        ? selectedPlanName!
                         : (profileReady ? 'Profile ready' : 'Setup pending'),
                   ),
                 ],
@@ -2568,6 +2490,8 @@ class _HeaderAction extends StatelessWidget {
 
 class _PerformanceHeroPanel extends StatelessWidget {
   const _PerformanceHeroPanel({
+    super.key,
+    this.identity,
     required this.title,
     required this.subtitle,
     required this.badge,
@@ -2580,6 +2504,7 @@ class _PerformanceHeroPanel extends StatelessWidget {
     required this.chips,
   });
 
+  final Widget? identity;
   final String title;
   final String subtitle;
   final String badge;
@@ -2707,6 +2632,23 @@ class _PerformanceHeroPanel extends StatelessWidget {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (identity != null) ...[
+                        identity!,
+                        const SizedBox(height: 18),
+                        Container(
+                          height: 1,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                AppColors.primary.withValues(alpha: 0.22),
+                                AppColors.accentPurple.withValues(alpha: 0.10),
+                                Colors.transparent,
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                      ],
                       if (largeText) ...[
                         summary,
                         const SizedBox(height: 14),

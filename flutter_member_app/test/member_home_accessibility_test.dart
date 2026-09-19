@@ -42,7 +42,7 @@ void main() {
             child: const MemberHomeScreen(
               storePreviewData: {
                 'context': {
-                  'user_state': 'independent_user',
+                  'user_state': 'gym_member_with_trainer',
                   'member_profile': {'member_onboarding_completed': true},
                   'user': {'member_onboarding_completed': true},
                   'capabilities': <String, dynamic>{},
@@ -85,7 +85,10 @@ void main() {
     expect(find.text('Hi, Atlas'), findsOneWidget);
     expect(find.text('Gyms'), findsOneWidget);
     expect(find.byKey(const ValueKey('active-gym-logo')), findsOneWidget);
+    expect(find.byKey(const ValueKey('member-unified-hero')), findsOneWidget);
     expect(find.text('ACTIVE GYM'), findsOneWidget);
+    expect(find.text("TODAY'S READINESS"), findsOneWidget);
+    expect(find.text('Membership active'), findsNothing);
     expect(find.text('Switch gym'), findsOneWidget);
     expect(find.text('More ways to manage your fitness'), findsNothing);
     expect(find.text('Coach connection'), findsNothing);
@@ -119,6 +122,65 @@ void main() {
 
     await tester.pumpWidget(buildHome(const Size(812, 375)));
     await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('independent member gets a purposeful personal workspace', (
+    tester,
+  ) async {
+    final client = MemberApiClient();
+    final session =
+        MemberSessionController(
+            storage: const SecureStorageService(),
+            apiClient: client,
+            authService: AuthService(client),
+          )
+          ..user = const MemberUser(
+            id: 2,
+            name: 'Independent Member',
+            email: 'independent@example.com',
+            activeRole: 'member',
+            isActive: true,
+            roles: ['member'],
+          )
+          ..token = 'preview-token';
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<MemberSessionController>.value(
+        value: session,
+        child: MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(375, 812),
+              textScaler: TextScaler.linear(2),
+              disableAnimations: true,
+            ),
+            child: const MemberHomeScreen(
+              storePreviewData: {
+                'context': {
+                  'user_state': 'independent_user',
+                  'member_profile': {'member_onboarding_completed': true},
+                  'user': {'member_onboarding_completed': true},
+                  'capabilities': <String, dynamic>{},
+                  'gym_relationships': <Map<String, dynamic>>[],
+                },
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('member-unified-hero')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('personal-workspace-icon')),
+      findsOneWidget,
+    );
+    expect(find.text('INDEPENDENT TRAINING'), findsOneWidget);
+    expect(find.text('Your personal fitness space'), findsOneWidget);
+    expect(find.text('ACTIVE GYM'), findsNothing);
+    expect(find.text('Switch gym'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }
