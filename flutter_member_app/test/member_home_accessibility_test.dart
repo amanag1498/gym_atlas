@@ -1,0 +1,87 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_member_app/src/core/api_client.dart';
+import 'package:flutter_member_app/src/core/models.dart';
+import 'package:flutter_member_app/src/core/secure_storage_service.dart';
+import 'package:flutter_member_app/src/features/auth/auth_service.dart';
+import 'package:flutter_member_app/src/features/auth/session_controller.dart';
+import 'package:flutter_member_app/src/features/member/member_home_screen.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+
+void main() {
+  testWidgets('member home supports compact screens and large text', (
+    tester,
+  ) async {
+    final client = MemberApiClient();
+    final session =
+        MemberSessionController(
+            storage: const SecureStorageService(),
+            apiClient: client,
+            authService: AuthService(client),
+          )
+          ..user = const MemberUser(
+            id: 1,
+            name: 'Atlas Member With A Long Name',
+            email: 'member@example.com',
+            activeRole: 'member',
+            isActive: true,
+            roles: ['member'],
+          )
+          ..token = 'preview-token';
+
+    Widget buildHome(Size size) {
+      return ChangeNotifierProvider<MemberSessionController>.value(
+        value: session,
+        child: MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(
+              size: size,
+              textScaler: TextScaler.linear(2),
+              disableAnimations: true,
+            ),
+            child: const MemberHomeScreen(
+              storePreviewData: {
+                'context': {
+                  'user_state': 'independent_user',
+                  'member_profile': {'member_onboarding_completed': true},
+                  'user': {'member_onboarding_completed': true},
+                  'capabilities': <String, dynamic>{},
+                },
+              },
+            ),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildHome(const Size(375, 812)));
+    await tester.pump();
+
+    expect(find.text('Hi, Atlas'), findsOneWidget);
+    expect(find.text('Gyms'), findsOneWidget);
+    final gymsAction = find.bySemanticsLabel('Gyms');
+    expect(gymsAction, findsOneWidget);
+    expect(
+      tester.getSemantics(gymsAction),
+      matchesSemantics(
+        label: 'Gyms',
+        isButton: true,
+        hasTapAction: true,
+        hasSelectedState: true,
+        isSelected: false,
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    await tester.scrollUntilVisible(
+      find.text('More ways to manage your fitness'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(buildHome(const Size(812, 375)));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
+}

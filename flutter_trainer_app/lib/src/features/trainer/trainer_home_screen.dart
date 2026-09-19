@@ -415,7 +415,9 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       _chatConversations = chatConversations;
       _independentInvitations = independentInvitations;
     } catch (exception) {
-      _error = exception.toString();
+      debugPrint('[trainer-home][error] Dashboard load failed: $exception');
+      _error =
+          'We could not load your coaching dashboard. Check your connection and try again.';
     }
 
     if (mounted) {
@@ -2351,6 +2353,7 @@ class _TrainerBottomNavItem extends StatelessWidget {
       button: true,
       selected: active,
       label: label,
+      onTap: onTap,
       child: ExcludeSemantics(
         child: InkWell(
           onTap: onTap,
@@ -2373,15 +2376,18 @@ class _TrainerBottomNavItem extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: active ? AppColors.primary : AppColors.textMuted,
-                    fontWeight: active ? FontWeight.w900 : FontWeight.w700,
-                    fontSize: 10,
-                    height: 1.1,
+                MediaQuery.withClampedTextScaling(
+                  maxScaleFactor: 1.3,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: active ? AppColors.primary : AppColors.textMuted,
+                      fontWeight: active ? FontWeight.w900 : FontWeight.w700,
+                      fontSize: 10,
+                      height: 1.1,
+                    ),
                   ),
                 ),
               ],
@@ -2409,6 +2415,7 @@ class _TrainerCenterAction extends StatelessWidget {
       button: true,
       selected: active,
       label: 'Plans',
+      onTap: onTap,
       child: ExcludeSemantics(
         child: SizedBox(
           width: 72,
@@ -2475,13 +2482,16 @@ class _TrainerCenterAction extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 2),
-              Text(
-                'Plans',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: active ? AppColors.primary : AppColors.textMuted,
-                  fontWeight: active ? FontWeight.w900 : FontWeight.w700,
-                  fontSize: 10,
-                  height: 1.1,
+              MediaQuery.withClampedTextScaling(
+                maxScaleFactor: 1.3,
+                child: Text(
+                  'Plans',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: active ? AppColors.primary : AppColors.textMuted,
+                    fontWeight: active ? FontWeight.w900 : FontWeight.w700,
+                    fontSize: 10,
+                    height: 1.1,
+                  ),
                 ),
               ),
             ],
@@ -4230,6 +4240,7 @@ class _PremiumDashboardBackgroundState
     extends State<_PremiumDashboardBackground>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  bool? _animationsDisabled;
 
   @override
   void initState() {
@@ -4237,7 +4248,23 @@ class _PremiumDashboardBackgroundState
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 14),
-    )..repeat();
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final animationsDisabled = MediaQuery.disableAnimationsOf(context);
+    if (_animationsDisabled == animationsDisabled) return;
+    _animationsDisabled = animationsDisabled;
+
+    if (animationsDisabled) {
+      _controller
+        ..stop()
+        ..value = 0;
+    } else {
+      _controller.repeat();
+    }
   }
 
   @override
@@ -4527,8 +4554,8 @@ class _SquareIconButton extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Container(
-            width: 46,
-            height: 46,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.92),
               boxShadow: [
@@ -4581,6 +4608,7 @@ class _SquareIconButton extends StatelessWidget {
       child: Semantics(
         button: true,
         label: semanticLabel,
+        onTap: onTap,
         child: ExcludeSemantics(child: button),
       ),
     );
@@ -4661,78 +4689,83 @@ class _FitnessHeroCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final compact = constraints.maxWidth < 360;
+                  final largeText =
+                      MediaQuery.textScalerOf(context).scale(1) > 1.3;
+                  final compact = constraints.maxWidth < 360 || largeText;
                   final ringSize = compact ? 86.0 : 104.0;
+                  final summary = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.68),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: AppColors.stroke.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        child: Text(
+                          specialization.toUpperCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.9,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Coaching overview',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.displaySmall?.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w900,
+                          height: 0.95,
+                          letterSpacing: -1.4,
+                          fontSize: compact ? 28 : null,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Members, plans and follow-ups in one place',
+                        maxLines: largeText ? 2 : 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  );
+                  final ring = _TrainerHeroProgressOrb(
+                    progress: progress,
+                    progressLabel: '${completion.round()}%',
+                    size: ringSize,
+                  );
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 7,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.68),
-                                    borderRadius: BorderRadius.circular(999),
-                                    border: Border.all(
-                                      color: AppColors.stroke.withValues(
-                                        alpha: 0.5,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    specialization.toUpperCase(),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      color: AppColors.primary,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 0.9,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'Coaching overview',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.displaySmall?.copyWith(
-                                    color: AppColors.textPrimary,
-                                    fontWeight: FontWeight.w900,
-                                    height: 0.95,
-                                    letterSpacing: -1.4,
-                                    fontSize: compact ? 28 : null,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Members, plans and follow-ups in one place',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: AppColors.textSecondary,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          _TrainerHeroProgressOrb(
-                            progress: progress,
-                            progressLabel: '${completion.round()}%',
-                            size: ringSize,
-                          ),
-                        ],
-                      ),
+                      if (largeText) ...[
+                        summary,
+                        const SizedBox(height: 14),
+                        Align(alignment: Alignment.centerRight, child: ring),
+                      ] else
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(child: summary),
+                            const SizedBox(width: 14),
+                            ring,
+                          ],
+                        ),
                       const SizedBox(height: 18),
                       Wrap(
                         spacing: 8,
@@ -4742,24 +4775,36 @@ class _FitnessHeroCard extends StatelessWidget {
                             .toList(),
                       ),
                       const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _ReferenceMiniButton(
-                              title: 'Assigned Members',
-                              onPressed: onOpenMembers,
+                      if (largeText) ...[
+                        _ReferenceMiniButton(
+                          title: 'Assigned Members',
+                          onPressed: onOpenMembers,
+                        ),
+                        const SizedBox(height: 10),
+                        _ReferenceMiniButton(
+                          title: 'Edit Profile',
+                          secondary: true,
+                          onPressed: onEditProfile,
+                        ),
+                      ] else
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _ReferenceMiniButton(
+                                title: 'Assigned Members',
+                                onPressed: onOpenMembers,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _ReferenceMiniButton(
-                              title: 'Edit Profile',
-                              secondary: true,
-                              onPressed: onEditProfile,
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _ReferenceMiniButton(
+                                title: 'Edit Profile',
+                                secondary: true,
+                                onPressed: onEditProfile,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
                     ],
                   );
                 },
@@ -4899,7 +4944,9 @@ class _TrainerHeroProgressOrb extends StatelessWidget {
             ),
             TweenAnimationBuilder<double>(
               tween: Tween<double>(begin: 0, end: progress),
-              duration: const Duration(milliseconds: 850),
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 850),
               curve: Curves.easeOutCubic,
               builder: (context, value, _) => SizedBox(
                 width: size - 26,

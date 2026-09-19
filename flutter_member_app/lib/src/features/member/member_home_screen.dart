@@ -303,7 +303,9 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
         _connectRealtime(token);
       }
     } catch (exception) {
-      _error = exception.toString();
+      debugPrint('[member-home][error] Dashboard load failed: $exception');
+      _error =
+          'We could not load your dashboard. Check your connection and try again.';
     }
     if (mounted) {
       setState(() => _loading = false);
@@ -1060,6 +1062,7 @@ class _GlassBottomNavItem extends StatelessWidget {
       button: true,
       selected: active,
       label: label,
+      onTap: onTap,
       child: ExcludeSemantics(
         child: InkWell(
           onTap: onTap,
@@ -1082,15 +1085,18 @@ class _GlassBottomNavItem extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: active ? AppColors.primary : AppColors.textMuted,
-                    fontWeight: active ? FontWeight.w900 : FontWeight.w700,
-                    fontSize: 10,
-                    height: 1.1,
+                MediaQuery.withClampedTextScaling(
+                  maxScaleFactor: 1.3,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: active ? AppColors.primary : AppColors.textMuted,
+                      fontWeight: active ? FontWeight.w900 : FontWeight.w700,
+                      fontSize: 10,
+                      height: 1.1,
+                    ),
                   ),
                 ),
               ],
@@ -1118,6 +1124,7 @@ class _MemberCenterAction extends StatelessWidget {
       button: true,
       selected: active,
       label: 'Gyms',
+      onTap: onTap,
       child: ExcludeSemantics(
         child: SizedBox(
           width: 72,
@@ -1184,13 +1191,16 @@ class _MemberCenterAction extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 2),
-              Text(
-                'Gyms',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: active ? AppColors.primary : AppColors.textMuted,
-                  fontWeight: active ? FontWeight.w900 : FontWeight.w700,
-                  fontSize: 10,
-                  height: 1.1,
+              MediaQuery.withClampedTextScaling(
+                maxScaleFactor: 1.3,
+                child: Text(
+                  'Gyms',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: active ? AppColors.primary : AppColors.textMuted,
+                    fontWeight: active ? FontWeight.w900 : FontWeight.w700,
+                    fontSize: 10,
+                    height: 1.1,
+                  ),
                 ),
               ),
             ],
@@ -2434,6 +2444,7 @@ class _PremiumDashboardBackgroundState
     extends State<_PremiumDashboardBackground>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  bool? _animationsDisabled;
 
   @override
   void initState() {
@@ -2441,7 +2452,23 @@ class _PremiumDashboardBackgroundState
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 14),
-    )..repeat();
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final animationsDisabled = MediaQuery.disableAnimationsOf(context);
+    if (_animationsDisabled == animationsDisabled) return;
+    _animationsDisabled = animationsDisabled;
+
+    if (animationsDisabled) {
+      _controller
+        ..stop()
+        ..value = 0;
+    } else {
+      _controller.repeat();
+    }
   }
 
   @override
@@ -2641,6 +2668,7 @@ class _HeaderAction extends StatelessWidget {
       child: Semantics(
         button: true,
         label: semanticLabel,
+        onTap: onTap,
         child: ExcludeSemantics(
           child: InkWell(
             onTap: onTap,
@@ -2649,8 +2677,8 @@ class _HeaderAction extends StatelessWidget {
               clipBehavior: Clip.none,
               children: [
                 Container(
-                  width: 46,
-                  height: 46,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.92),
                     boxShadow: [
@@ -2779,78 +2807,83 @@ class _PerformanceHeroPanel extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final compact = constraints.maxWidth < 360;
+                  final largeText =
+                      MediaQuery.textScalerOf(context).scale(1) > 1.3;
+                  final compact = constraints.maxWidth < 360 || largeText;
                   final ringSize = compact ? 86.0 : 104.0;
+                  final summary = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.68),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: AppColors.stroke.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        child: Text(
+                          badge.toUpperCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.9,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.displaySmall?.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w900,
+                          height: 0.95,
+                          letterSpacing: -1.4,
+                          fontSize: compact ? 28 : null,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        subtitle,
+                        maxLines: largeText ? 2 : 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  );
+                  final ring = _HeroRing(
+                    progress: progress,
+                    label: progressLabel,
+                    size: ringSize,
+                  );
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 7,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.68),
-                                    borderRadius: BorderRadius.circular(999),
-                                    border: Border.all(
-                                      color: AppColors.stroke.withValues(
-                                        alpha: 0.5,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    badge.toUpperCase(),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      color: AppColors.primary,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 0.9,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.displaySmall?.copyWith(
-                                    color: AppColors.textPrimary,
-                                    fontWeight: FontWeight.w900,
-                                    height: 0.95,
-                                    letterSpacing: -1.4,
-                                    fontSize: compact ? 28 : null,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  subtitle,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: AppColors.textSecondary,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          _HeroRing(
-                            progress: progress,
-                            label: progressLabel,
-                            size: ringSize,
-                          ),
-                        ],
-                      ),
+                      if (largeText) ...[
+                        summary,
+                        const SizedBox(height: 14),
+                        Align(alignment: Alignment.centerRight, child: ring),
+                      ] else
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(child: summary),
+                            const SizedBox(width: 14),
+                            ring,
+                          ],
+                        ),
                       const SizedBox(height: 18),
                       Wrap(
                         spacing: 8,
@@ -2860,25 +2893,38 @@ class _PerformanceHeroPanel extends StatelessWidget {
                             .toList(),
                       ),
                       const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _DashboardPillButton(
-                              label: primaryActionLabel,
-                              onTap: onPrimaryAction,
-                              filled: true,
+                      if (largeText) ...[
+                        _DashboardPillButton(
+                          label: primaryActionLabel,
+                          onTap: onPrimaryAction,
+                          filled: true,
+                        ),
+                        const SizedBox(height: 10),
+                        _DashboardPillButton(
+                          label: secondaryActionLabel,
+                          onTap: onSecondaryAction,
+                          filled: false,
+                        ),
+                      ] else
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _DashboardPillButton(
+                                label: primaryActionLabel,
+                                onTap: onPrimaryAction,
+                                filled: true,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _DashboardPillButton(
-                              label: secondaryActionLabel,
-                              onTap: onSecondaryAction,
-                              filled: false,
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _DashboardPillButton(
+                                label: secondaryActionLabel,
+                                onTap: onSecondaryAction,
+                                filled: false,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
                     ],
                   );
                 },
@@ -2931,7 +2977,9 @@ class _HeroRing extends StatelessWidget {
             ),
             TweenAnimationBuilder<double>(
               tween: Tween<double>(begin: 0, end: progress),
-              duration: const Duration(milliseconds: 850),
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 850),
               curve: Curves.easeOutCubic,
               builder: (context, value, _) => SizedBox(
                 width: size - 26,
@@ -3205,17 +3253,12 @@ class _DashboardActionCarousel extends StatefulWidget {
 
 class _DashboardActionCarouselState extends State<_DashboardActionCarousel> {
   late final PageController _controller;
-  double _page = 0;
+  int _currentPage = 0;
 
   @override
   void initState() {
     super.initState();
-    _controller = PageController(viewportFraction: 0.78)
-      ..addListener(() {
-        if (_controller.hasClients) {
-          setState(() => _page = _controller.page ?? 0);
-        }
-      });
+    _controller = PageController(viewportFraction: 0.84);
   }
 
   @override
@@ -3226,62 +3269,88 @@ class _DashboardActionCarouselState extends State<_DashboardActionCarousel> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.actions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
+    final cardHeight = 214.0 + ((textScale - 1).clamp(0, 1).toDouble() * 180);
+
     return Column(
       children: [
         SizedBox(
-          height: 214,
+          height: cardHeight,
           child: PageView.builder(
             controller: _controller,
             physics: const BouncingScrollPhysics(),
             itemCount: widget.actions.length,
+            onPageChanged: (index) => setState(() => _currentPage = index),
             itemBuilder: (context, index) {
-              final delta = (_page - index).abs().clamp(0.0, 1.0);
-              final scale = 1 - (delta * 0.12);
-              final opacity = 1 - (delta * 0.22);
-              final lift = 18 * delta;
-
-              return Transform.translate(
-                offset: Offset(0, lift),
-                child: Transform.scale(
-                  scale: scale,
-                  child: Opacity(
-                    opacity: opacity,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: RevealOnBuild(
-                        delay: Duration(milliseconds: 35 * index),
-                        offset: const Offset(0.04, 0.07),
-                        duration: const Duration(milliseconds: 460),
-                        child: _DashboardActionFeaturedCard(
-                          data: widget.actions[index],
-                        ),
-                      ),
-                    ),
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: RevealOnBuild(
+                  delay: Duration(milliseconds: 35 * index),
+                  offset: const Offset(0.04, 0.07),
+                  duration: const Duration(milliseconds: 460),
+                  child: _DashboardActionFeaturedCard(
+                    data: widget.actions[index],
                   ),
                 ),
               );
             },
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(widget.actions.length, (index) {
-            final active = (_page.round() == index);
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-              width: active ? 18 : 6,
-              height: 6,
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              decoration: BoxDecoration(
-                color: active ? AppColors.primary : AppColors.strokeStrong,
-                borderRadius: BorderRadius.circular(999),
+          children: [
+            IconButton(
+              tooltip: 'Previous tool',
+              onPressed: _currentPage == 0
+                  ? null
+                  : () => _showPage(_currentPage - 1),
+              icon: const Icon(Icons.arrow_back_rounded),
+            ),
+            const SizedBox(width: 8),
+            Semantics(
+              liveRegion: true,
+              label:
+                  'Tool ${_currentPage + 1} of ${widget.actions.length}: '
+                  '${widget.actions[_currentPage].label}',
+              child: ExcludeSemantics(
+                child: Text(
+                  '${_currentPage + 1} of ${widget.actions.length}',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
-            );
-          }),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Next tool',
+              onPressed: _currentPage == widget.actions.length - 1
+                  ? null
+                  : () => _showPage(_currentPage + 1),
+              icon: const Icon(Icons.arrow_forward_rounded),
+            ),
+          ],
         ),
       ],
+    );
+  }
+
+  void _showPage(int page) {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.jumpToPage(page);
+      return;
+    }
+
+    _controller.animateToPage(
+      page,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
     );
   }
 }
@@ -3610,7 +3679,11 @@ class _WorkoutTicket extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
                           'TODAY WORKOUT',
@@ -3620,7 +3693,6 @@ class _WorkoutTicket extends StatelessWidget {
                             letterSpacing: 1.1,
                           ),
                         ),
-                        const Spacer(),
                         _TicketPill(label: status),
                       ],
                     ),
@@ -3645,13 +3717,10 @@ class _WorkoutTicket extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    SizedBox(
-                      height: 42,
-                      child: _DashboardPillButton(
-                        label: hasPlan ? 'Open Workout' : 'Choose Plan',
-                        onTap: onOpenWorkout,
-                        filled: true,
-                      ),
+                    _DashboardPillButton(
+                      label: hasPlan ? 'Open Workout' : 'Choose Plan',
+                      onTap: onOpenWorkout,
+                      filled: true,
                     ),
                   ],
                 ),
@@ -3760,9 +3829,9 @@ class _WeeklyActivityStrip extends StatelessWidget {
                             alignment: Alignment.bottomCenter,
                             child: TweenAnimationBuilder<double>(
                               tween: Tween<double>(begin: 0.16, end: bar),
-                              duration: Duration(
-                                milliseconds: 360 + (index * 70),
-                              ),
+                              duration: MediaQuery.disableAnimationsOf(context)
+                                  ? Duration.zero
+                                  : Duration(milliseconds: 360 + (index * 70)),
                               curve: Curves.easeOutCubic,
                               builder: (context, value, _) =>
                                   FractionallySizedBox(
@@ -4263,7 +4332,7 @@ class _DashboardPillButton extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(999),
       child: Container(
-        height: 46,
+        height: 48,
         alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
