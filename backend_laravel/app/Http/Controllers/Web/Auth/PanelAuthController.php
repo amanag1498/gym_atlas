@@ -116,7 +116,7 @@ class PanelAuthController extends Controller
                 RoleName::GymStaff->value,
             ]);
 
-        if (! $allowed || in_array($user->active_role, [RoleName::Member->value, RoleName::Trainer->value], true)) {
+        if (! $allowed) {
             Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();

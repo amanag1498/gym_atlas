@@ -90,6 +90,84 @@ class PanelFirebaseLoginTest extends TestCase
         $this->assertSame('firebase-owner-web', $user->fresh()->firebase_uid);
     }
 
+    public function test_promoted_member_can_sign_into_gym_panel_and_switch_active_role(): void
+    {
+        $this->seed(PermissionSeeder::class);
+
+        $user = User::factory()->create([
+            'name' => 'Promoted Gym Owner',
+            'email' => 'promoted-owner@example.com',
+            'active_role' => 'member',
+            'is_active' => true,
+        ]);
+        $user->assignRole(['member', 'gym_owner']);
+
+        $this->mock(FirebaseTokenVerifier::class, function ($mock): void {
+            $mock->shouldReceive('verify')
+                ->once()
+                ->andReturn([
+                    'sub' => 'firebase-promoted-owner',
+                    'email' => 'promoted-owner@example.com',
+                    'name' => 'Promoted Gym Owner',
+                    'picture' => 'https://example.com/promoted-owner.png',
+                    'email_verified' => true,
+                    'aud' => 'gym-atlas-test',
+                    'iss' => 'https://securetoken.google.com/gym-atlas-test',
+                    'exp' => now()->addHour()->timestamp,
+                ]);
+        });
+
+        config()->set('services.firebase.project_id', 'gym-atlas-test');
+
+        $response = $this->post('/gym/login/firebase', [
+            'id_token' => 'fake.firebase.jwt',
+        ]);
+
+        $response->assertRedirect(route('web.gym.dashboard'));
+        $this->assertAuthenticatedAs($user, 'web');
+        $this->assertSame('gym_owner', $user->fresh()->active_role);
+    }
+
+    public function test_member_without_gym_panel_role_remains_restricted(): void
+    {
+        $this->seed(PermissionSeeder::class);
+
+        $user = User::factory()->create([
+            'name' => 'Member Only',
+            'email' => 'member-only@example.com',
+            'active_role' => 'member',
+            'is_active' => true,
+        ]);
+        $user->assignRole('member');
+
+        $this->mock(FirebaseTokenVerifier::class, function ($mock): void {
+            $mock->shouldReceive('verify')
+                ->once()
+                ->andReturn([
+                    'sub' => 'firebase-member-only',
+                    'email' => 'member-only@example.com',
+                    'name' => 'Member Only',
+                    'picture' => 'https://example.com/member-only.png',
+                    'email_verified' => true,
+                    'aud' => 'gym-atlas-test',
+                    'iss' => 'https://securetoken.google.com/gym-atlas-test',
+                    'exp' => now()->addHour()->timestamp,
+                ]);
+        });
+
+        config()->set('services.firebase.project_id', 'gym-atlas-test');
+
+        $response = $this->from('/gym/login')->post('/gym/login/firebase', [
+            'id_token' => 'fake.firebase.jwt',
+        ]);
+
+        $response
+            ->assertRedirect('/gym/login')
+            ->assertSessionHasErrors('email');
+        $this->assertGuest('web');
+        $this->assertSame('member', $user->fresh()->active_role);
+    }
+
     public function test_unknown_google_user_cannot_auto_provision_into_gym_web_panel(): void
     {
         $this->seed(PermissionSeeder::class);
