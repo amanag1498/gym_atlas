@@ -13,10 +13,12 @@ class MemberLogbookScreen extends StatefulWidget {
     super.key,
     required this.repository,
     this.memberName = 'Athlete',
+    this.initialTabIndex = 0,
   });
 
   final MemberRepository repository;
   final String memberName;
+  final int initialTabIndex;
 
   @override
   State<MemberLogbookScreen> createState() => _MemberLogbookScreenState();
@@ -122,6 +124,7 @@ class _MemberLogbookScreenState extends State<MemberLogbookScreen> {
 
     return DefaultTabController(
       length: 3,
+      initialIndex: widget.initialTabIndex.clamp(0, 2),
       child: AppGradientScaffold(
         title: 'Logbook',
         body: _loading

@@ -75,6 +75,13 @@ void main() {
     );
     expect(tester.takeException(), isNull);
     await tester.scrollUntilVisible(
+      find.text('Events and bookings'),
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Upcoming events'), findsOneWidget);
+    expect(find.text('Classes, sessions, and your bookings'), findsOneWidget);
+    await tester.scrollUntilVisible(
       find.text('Recent training'),
       500,
       scrollable: find.byType(Scrollable).first,

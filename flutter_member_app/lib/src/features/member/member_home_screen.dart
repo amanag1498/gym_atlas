@@ -737,6 +737,11 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
             unawaited(_handleStepPermissionRequest()),
         onOpenNotifications: _openNotificationsScreen,
         onOpenDietPlan: _openDietPlanScreen,
+        onOpenEvents: () => Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => MemberEventsScreen(repository: _memberRepository),
+          ),
+        ),
         onMessageTrainer: () => setState(() => _index = 3),
         onViewMembership: _openMembershipScreen,
         onOpenProfile: _openProfileScreen,
@@ -1385,6 +1390,7 @@ class _DashboardPage extends StatelessWidget {
     required this.onRequestStepPermission,
     required this.onOpenNotifications,
     required this.onOpenDietPlan,
+    required this.onOpenEvents,
     required this.onMessageTrainer,
     required this.onViewMembership,
     required this.onOpenProfile,
@@ -1412,6 +1418,7 @@ class _DashboardPage extends StatelessWidget {
   final VoidCallback onRequestStepPermission;
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenDietPlan;
+  final VoidCallback onOpenEvents;
   final VoidCallback onMessageTrainer;
   final VoidCallback onViewMembership;
   final VoidCallback onOpenProfile;
@@ -1682,6 +1689,21 @@ class _DashboardPage extends StatelessWidget {
             const SizedBox(height: 16),
             RevealOnBuild(
               delay: const Duration(milliseconds: 95),
+              child: _DashboardSection(
+                eyebrow: 'Discover',
+                title: 'Events and bookings',
+                child: _MemberUtilityPill(
+                  icon: Icons.calendar_month_rounded,
+                  title: 'Upcoming events',
+                  subtitle: 'Classes, sessions, and your bookings',
+                  colors: const [AppColors.primary, AppColors.accentPurple],
+                  onTap: onOpenEvents,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            RevealOnBuild(
+              delay: const Duration(milliseconds: 110),
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final split = constraints.maxWidth >= 680;
@@ -6566,6 +6588,7 @@ class __WorkoutPageState extends State<_WorkoutPage>
         builder: (_) => MemberLogbookScreen(
           repository: widget.repository,
           memberName: widget.userName,
+          initialTabIndex: 1,
         ),
       ),
     );
