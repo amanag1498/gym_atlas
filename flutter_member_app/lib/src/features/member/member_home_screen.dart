@@ -1262,111 +1262,328 @@ class _GymWorkspaceCard extends StatelessWidget {
     final plan = Map<String, dynamic>.from(
       membership['plan'] as Map? ?? const {},
     );
-    final details = <String>[
-      if (branch['name'] != null) branch['name'].toString(),
-      if (plan['name'] != null) plan['name'].toString(),
+    final gymName = gym['name']?.toString().trim().isNotEmpty == true
+        ? gym['name']!.toString().trim()
+        : 'Gym membership';
+    final logoUrl = gym['logo_url']?.toString().trim();
+    final branchDetails = <String>[
+      if (branch['name']?.toString().trim().isNotEmpty == true)
+        branch['name'].toString().trim(),
+      if (branch['city']?.toString().trim().isNotEmpty == true)
+        branch['city'].toString().trim(),
     ];
+    final planName = plan['name']?.toString().trim();
+    final trainerName = trainer['name']?.toString().trim();
+    final canSwitch = relationshipCount > 1 && onTap != null;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
-        child: Ink(
-          padding: const EdgeInsets.all(16),
+    return Semantics(
+      container: true,
+      label:
+          'Active gym, $gymName'
+          '${branchDetails.isEmpty ? '' : ', ${branchDetails.join(', ')}'}',
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Colors.white, Color(0xFFF3FCFA), Color(0xFFF7F5FF)],
+          ),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.16)),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.09),
+              blurRadius: 26,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              top: -46,
+              right: -34,
+              child: Container(
+                width: 132,
+                height: 132,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.accentPurple.withValues(alpha: 0.08),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              top: 18,
+              bottom: 18,
+              child: Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [AppColors.primaryBright, AppColors.accentPurple],
+                  ),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 17),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final largeText =
+                      MediaQuery.textScalerOf(context).scale(1) > 1.3;
+                  final compact = constraints.maxWidth < 350 || largeText;
+                  final identity = Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _GymWorkspaceLogo(
+                        imageUrl: logoUrl,
+                        gymName: gymName,
+                        size: compact ? 58 : 66,
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const _GymWorkspaceActiveLabel(),
+                            const SizedBox(height: 7),
+                            Text(
+                              gymName,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1.05,
+                                    letterSpacing: -0.35,
+                                  ),
+                            ),
+                            if (branchDetails.isNotEmpty) ...[
+                              const SizedBox(height: 5),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.location_on_outlined,
+                                    size: 15,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      branchDetails.join(' · '),
+                                      maxLines: largeText ? 2 : 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelMedium
+                                          ?.copyWith(
+                                            color: AppColors.textSecondary,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      identity,
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _GymWorkspaceStatusPill(
+                            icon: Icons.card_membership_rounded,
+                            label: planName?.isNotEmpty == true
+                                ? planName!
+                                : 'Active membership',
+                          ),
+                          _GymWorkspaceStatusPill(
+                            icon: trainerName?.isNotEmpty == true
+                                ? Icons.verified_user_rounded
+                                : Icons.person_outline_rounded,
+                            label: trainerName?.isNotEmpty == true
+                                ? 'Coach: $trainerName'
+                                : 'Coach not assigned',
+                            muted: trainerName?.isNotEmpty != true,
+                          ),
+                        ],
+                      ),
+                      if (canSwitch) ...[
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          width: compact ? double.infinity : null,
+                          child: OutlinedButton.icon(
+                            onPressed: onTap,
+                            icon: const Icon(
+                              Icons.swap_horiz_rounded,
+                              size: 19,
+                            ),
+                            label: const Text('Switch gym'),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(0, 48),
+                              foregroundColor: AppColors.primary,
+                              backgroundColor: Colors.white.withValues(
+                                alpha: 0.72,
+                              ),
+                              side: BorderSide(
+                                color: AppColors.primary.withValues(
+                                  alpha: 0.22,
+                                ),
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              textStyle: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GymWorkspaceLogo extends StatelessWidget {
+  const _GymWorkspaceLogo({
+    required this.imageUrl,
+    required this.gymName,
+    required this.size,
+  });
+
+  final String? imageUrl;
+  final String gymName;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      image: true,
+      label: '$gymName logo',
+      child: ExcludeSemantics(
+        child: Container(
+          width: size,
+          height: size,
+          padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFF102A24), Color(0xFF184E42)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+              colors: [AppColors.primaryBright, AppColors.accentPurple],
             ),
             borderRadius: BorderRadius.circular(22),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF102A24).withValues(alpha: .18),
-                blurRadius: 22,
-                offset: const Offset(0, 10),
+                color: AppColors.primary.withValues(alpha: 0.18),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .12),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: const Icon(
-                  Icons.fitness_center_rounded,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      relationshipCount > 1
-                          ? 'Active gym • $relationshipCount memberships'
-                          : 'Active gym workspace',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: .68),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: .4,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      gym['name']?.toString() ?? 'Gym membership',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    if (details.isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        details.join(' • '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: .74),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 7),
-                    Text(
-                      trainer['name'] == null
-                          ? 'No trainer assigned in this gym'
-                          : 'Trainer: ${trainer['name']}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF9DE7D2),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (onTap != null)
-                const Padding(
-                  padding: EdgeInsets.only(left: 8),
-                  child: Icon(Icons.swap_horiz_rounded, color: Colors.white),
-                ),
-            ],
+          child: AppNetworkImage(
+            key: const ValueKey('active-gym-logo'),
+            imageUrl: imageUrl,
+            height: size - 6,
+            width: size - 6,
+            borderRadius: 19,
+            fit: BoxFit.cover,
+            placeholderIcon: Icons.storefront_rounded,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _GymWorkspaceActiveLabel extends StatelessWidget {
+  const _GymWorkspaceActiveLabel();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
+      ),
+      child: Text(
+        'ACTIVE GYM',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: AppColors.primary,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
+  }
+}
+
+class _GymWorkspaceStatusPill extends StatelessWidget {
+  const _GymWorkspaceStatusPill({
+    required this.icon,
+    required this.label,
+    this.muted = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool muted;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = muted ? AppColors.textSecondary : AppColors.primary;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 36),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: muted
+            ? AppColors.surfaceSoft
+            : AppColors.primary.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(
+          color: muted
+              ? AppColors.stroke
+              : AppColors.primary.withValues(alpha: 0.12),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

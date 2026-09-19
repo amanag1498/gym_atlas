@@ -46,6 +46,31 @@ void main() {
                   'member_profile': {'member_onboarding_completed': true},
                   'user': {'member_onboarding_completed': true},
                   'capabilities': <String, dynamic>{},
+                  'selected_gym_id': 11,
+                  'gym_relationships': [
+                    {
+                      'gym_id': 11,
+                      'gym': {
+                        'name': 'Atlas Performance Club With A Long Name',
+                        'logo_url': '/storage/gyms/atlas-logo.png',
+                      },
+                      'branch': {
+                        'name': 'Downtown Strength Studio',
+                        'city': 'Bengaluru',
+                      },
+                      'membership': {
+                        'plan': {'name': 'Performance Plus'},
+                      },
+                      'assigned_trainer': {'name': 'Coach With A Long Name'},
+                    },
+                    {
+                      'gym_id': 12,
+                      'gym': {'name': 'Second Gym'},
+                      'membership': {
+                        'plan': {'name': 'Standard'},
+                      },
+                    },
+                  ],
                 },
               },
             ),
@@ -59,6 +84,9 @@ void main() {
 
     expect(find.text('Hi, Atlas'), findsOneWidget);
     expect(find.text('Gyms'), findsOneWidget);
+    expect(find.byKey(const ValueKey('active-gym-logo')), findsOneWidget);
+    expect(find.text('ACTIVE GYM'), findsOneWidget);
+    expect(find.text('Switch gym'), findsOneWidget);
     expect(find.text('More ways to manage your fitness'), findsNothing);
     expect(find.text('Coach connection'), findsNothing);
     final gymsAction = find.bySemanticsLabel('Gyms');
