@@ -727,7 +727,6 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
         plans: _plans,
         history: _history,
         progressSummary: _progressSummary,
-        logbookSummary: _logbookSummary,
         steps: effectiveSteps,
         stepPermissionStatus: _stepPermissionStatus,
         stepLoading: _stepSyncLoading,
@@ -1537,7 +1536,6 @@ class _DashboardPage extends StatelessWidget {
     required this.plans,
     required this.history,
     required this.progressSummary,
-    required this.logbookSummary,
     required this.steps,
     required this.stepPermissionStatus,
     required this.stepLoading,
@@ -1565,7 +1563,6 @@ class _DashboardPage extends StatelessWidget {
   final List<Map<String, dynamic>> plans;
   final List<Map<String, dynamic>> history;
   final Map<String, dynamic> progressSummary;
-  final Map<String, dynamic> logbookSummary;
   final Map<String, dynamic>? steps;
   final String stepPermissionStatus;
   final bool stepLoading;
@@ -1615,11 +1612,6 @@ class _DashboardPage extends StatelessWidget {
     final hasWarning =
         hasGymMembership && (dueAmount > 0 || _isExpiringSoon(expiryDate));
     final checkedInToday = attendanceStatus['checked_in_today'] == true;
-    final latestWeightText = latestWeightLog['weight_kg'] != null
-        ? '${latestWeightLog['weight_kg']} kg'
-        : '--';
-    final totalVolume =
-        (logbookSummary['total_volume'] as num?)?.toDouble() ?? 0;
     final stepSummary = steps == null
         ? null
         : StepDashboardData(
@@ -1692,8 +1684,8 @@ class _DashboardPage extends StatelessWidget {
     ];
     final readinessCount = readinessSignals.where((value) => value).length;
     final readinessPercent = (0.18 + (readinessCount * 0.16)).clamp(0.18, 0.98);
-    final weeklyBars = _weeklyActivityBars(history);
-    final latestWorkoutItems = _latestWorkoutItems(plans, history);
+    final weeklyActivity = _weeklyActivityDays(history);
+    final latestWorkoutItems = _latestWorkoutItems(history);
     final heroLabel = 'Today\'s readiness';
     final heroTitle = checkedInToday
         ? 'Session active'
@@ -1715,40 +1707,6 @@ class _DashboardPage extends StatelessWidget {
         : 'Build your independent routine';
     final firstName =
         userName.trim().split(RegExp(r'\s+')).firstOrNull ?? userName;
-    final metricCards = [
-      _DashboardMetricData(
-        label: 'Streak',
-        value: workoutStreak > 0 ? '$workoutStreak d' : '0 d',
-        helper: checkedInToday ? 'Checked in' : 'Workout rhythm',
-        icon: Icons.local_fire_department_rounded,
-        color: AppColors.primary,
-      ),
-      _DashboardMetricData(
-        label: 'Weight',
-        value: latestWeightText,
-        helper: hasWeightLog ? 'Latest log' : 'Add log',
-        icon: Icons.monitor_weight_rounded,
-        color: AppColors.primaryBright,
-      ),
-      _DashboardMetricData(
-        label: 'Volume',
-        value: totalVolume > 0 ? _formatVolume(totalVolume) : '--',
-        helper: totalVolume > 0 ? 'Training load' : 'No volume',
-        icon: Icons.fitness_center_rounded,
-        color: AppColors.primaryBright,
-      ),
-      _DashboardMetricData(
-        label: 'Access',
-        value: hasGymMembership
-            ? 'Active'
-            : isTrialUser
-            ? 'Trial'
-            : 'Solo',
-        helper: hasTrainer ? 'Coach linked' : heroLabel,
-        icon: hasGymMembership ? Icons.verified_rounded : Icons.explore_rounded,
-        color: AppColors.primary,
-      ),
-    ];
     final focusBanner = hasWarning
         ? _DashboardFocusBannerData(
             eyebrow: 'Membership Alert',
@@ -1835,25 +1793,54 @@ class _DashboardPage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             RevealOnBuild(
-              delay: const Duration(milliseconds: 70),
-              child: _DashboardSection(
-                eyebrow: 'Snapshot',
-                title: 'Today at a glance',
-                child: _MetricGrid(metrics: metricCards),
-              ),
-            ),
-            const SizedBox(height: 16),
-            RevealOnBuild(
-              delay: const Duration(milliseconds: 85),
+              delay: const Duration(milliseconds: 55),
               child: _DashboardSection(
                 eyebrow: 'Focus',
-                title: 'What deserves attention now',
+                title: 'Your next best move',
                 child: _DashboardFocusBanner(data: focusBanner),
               ),
             ),
             const SizedBox(height: 16),
             RevealOnBuild(
-              delay: const Duration(milliseconds: 95),
+              delay: const Duration(milliseconds: 75),
+              child: _DashboardSection(
+                eyebrow: 'Progress',
+                title: 'Your last 7 days',
+                child: _WeeklyActivityStrip(days: weeklyActivity),
+              ),
+            ),
+            const SizedBox(height: 16),
+            RevealOnBuild(
+              delay: const Duration(milliseconds: 90),
+              child: _DashboardSection(
+                eyebrow: 'Movement',
+                title: 'Steps and health',
+                child: StepDashboardWidget(
+                  steps: stepSummary,
+                  permissionStatus: stepPermissionStatus,
+                  loading: stepLoading,
+                  statusMessage: stepStatusMessage,
+                  onRefresh: () => unawaited(onRefresh()),
+                  onRequestPermission: onRequestStepPermission,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            RevealOnBuild(
+              delay: const Duration(milliseconds: 105),
+              child: _DashboardSection(
+                eyebrow: 'History',
+                title: 'Recent training',
+                child: _RecentWorkoutRows(
+                  workouts: latestWorkoutItems.take(3).toList(),
+                  hasActivePlan: hasActivePlan,
+                  onOpenLogbook: onOpenLogbook,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            RevealOnBuild(
+              delay: const Duration(milliseconds: 120),
               child: _DashboardSection(
                 eyebrow: 'Discover',
                 title: 'Events and bookings',
@@ -1866,148 +1853,18 @@ class _DashboardPage extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            RevealOnBuild(
-              delay: const Duration(milliseconds: 110),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final split = constraints.maxWidth >= 680;
-                  final stepCard = StepDashboardWidget(
-                    steps: stepSummary,
-                    permissionStatus: stepPermissionStatus,
-                    loading: stepLoading,
-                    statusMessage: stepStatusMessage,
-                    onRefresh: () => unawaited(onRefresh()),
-                    onRequestPermission: onRequestStepPermission,
-                  );
-                  final workoutCard = _WorkoutTicket(
-                    title: hasActivePlan
-                        ? activeWorkoutLabel
-                        : 'Choose today\'s plan',
-                    subtitle: hasActivePlan
-                        ? (todayWorkout['goal']?.toString() ??
-                              todayWorkout['focus']?.toString() ??
-                              'Training plan')
-                        : 'Pick a workout from your library',
-                    duration: hasActivePlan
-                        ? '${todayWorkout['estimated_duration_minutes']?.toString() ?? '30'} min'
-                        : 'Flexible',
-                    status: checkedInToday
-                        ? 'Checked in'
-                        : hasActivePlan
-                        ? 'Ready'
-                        : 'No plan',
-                  );
-
-                  if (!split) {
-                    return Column(
-                      children: [
-                        _DashboardSection(
-                          eyebrow: 'Movement',
-                          title: 'Health and training',
-                          child: stepCard,
-                        ),
-                        const SizedBox(height: 16),
-                        _DashboardSection(
-                          eyebrow: 'Workout',
-                          title: 'Your next session',
-                          child: workoutCard,
-                        ),
-                      ],
-                    );
-                  }
-
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: _DashboardSection(
-                          eyebrow: 'Movement',
-                          title: 'Health and training',
-                          child: stepCard,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _DashboardSection(
-                          eyebrow: 'Workout',
-                          title: 'Your next session',
-                          child: workoutCard,
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-            RevealOnBuild(
-              delay: const Duration(milliseconds: 120),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final split = constraints.maxWidth >= 680;
-                  final activityCard = _WeeklyActivityStrip(
-                    checkedInToday: checkedInToday,
-                    streakDays: workoutStreak,
-                    weeklyBars: weeklyBars,
-                  );
-                  final recentCard = _RecentWorkoutRows(
-                    workouts: latestWorkoutItems.take(2).toList(),
-                    hasActivePlan: hasActivePlan,
-                    onOpenLogbook: onOpenLogbook,
-                  );
-
-                  if (!split) {
-                    return Column(
-                      children: [
-                        _DashboardSection(
-                          eyebrow: 'Insights',
-                          title: 'Weekly consistency',
-                          child: activityCard,
-                        ),
-                        const SizedBox(height: 16),
-                        _DashboardSection(
-                          eyebrow: 'History',
-                          title: 'Recent training',
-                          child: recentCard,
-                        ),
-                      ],
-                    );
-                  }
-
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: _DashboardSection(
-                          eyebrow: 'Insights',
-                          title: 'Weekly consistency',
-                          child: activityCard,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _DashboardSection(
-                          eyebrow: 'History',
-                          title: 'Recent training',
-                          child: recentCard,
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
           ],
         ),
       ),
     );
   }
 
-  List<double> _weeklyActivityBars(List<Map<String, dynamic>> sessions) {
+  List<_WeeklyActivityDay> _weeklyActivityDays(
+    List<Map<String, dynamic>> sessions,
+  ) {
     final today = DateTime.now();
     final normalizedToday = DateTime(today.year, today.month, today.day);
-    return List<double>.generate(7, (index) {
+    return List<_WeeklyActivityDay>.generate(7, (index) {
       final day = normalizedToday.subtract(Duration(days: 6 - index));
       final count = sessions.where((session) {
         final date = DateTime.tryParse(
@@ -2020,46 +1877,50 @@ class _DashboardPage extends StatelessWidget {
             date.month == day.month &&
             date.day == day.day;
       }).length;
-      return count == 0 ? 0.18 : (count / 3).clamp(0.22, 1.0);
+      return _WeeklyActivityDay(
+        date: day,
+        sessions: count,
+        isToday: index == 6,
+      );
     });
   }
 
   List<Map<String, Object>> _latestWorkoutItems(
-    List<Map<String, dynamic>> plans,
     List<Map<String, dynamic>> history,
   ) {
-    if (plans.isNotEmpty) {
-      return plans.take(3).map((plan) {
-        final name = plan['name']?.toString() ?? 'Workout';
-        final duration = plan['estimated_duration_minutes']?.toString();
-        final focus =
-            plan['focus']?.toString() ??
-            plan['goal']?.toString() ??
-            'Training plan';
-        final progressRaw = (plan['completion_ratio'] as num?)?.toDouble();
-        return <String, Object>{
-          'title': name,
-          'meta':
-              '${focus.isEmpty ? 'Workout plan' : focus} • ${duration ?? '30'} min',
-          'progress': progressRaw == null ? 0.16 : progressRaw.clamp(0.08, 1.0),
-        };
-      }).toList();
-    }
+    final sortedHistory = [...history]
+      ..sort((a, b) {
+        final aDate = DateTime.tryParse(a['session_date']?.toString() ?? '');
+        final bDate = DateTime.tryParse(b['session_date']?.toString() ?? '');
+        return (bDate ?? DateTime.fromMillisecondsSinceEpoch(0)).compareTo(
+          aDate ?? DateTime.fromMillisecondsSinceEpoch(0),
+        );
+      });
 
-    return history.take(3).map((session) {
+    return sortedHistory.take(3).map((session) {
       final name =
           session['plan_name']?.toString() ??
           session['workout_name']?.toString() ??
           'Workout session';
-      final calories = session['estimated_kcal']?.toString();
-      final duration = session['duration_minutes']?.toString();
-      final completed =
-          (session['status']?.toString() ?? '').toLowerCase() == 'completed';
+      final date = DateTime.tryParse(session['session_date']?.toString() ?? '');
+      final calories = _roundedNumber(session['estimated_kcal']);
+      final duration = _roundedNumber(session['duration_minutes']);
+      final rawStatus = (session['status']?.toString() ?? '').toLowerCase();
+      final completed = rawStatus == 'completed';
+      final meta = <String>[
+        if (date != null) DateFormat('MMM d').format(date),
+        if (duration != null && duration > 0) '$duration min',
+        if (calories != null && calories > 0) '$calories kcal',
+      ];
       return <String, Object>{
         'title': name,
-        'meta':
-            '${calories ?? '180'} Calories Burn | ${duration ?? '25'} minutes',
-        'progress': completed ? 1.0 : 0.4,
+        'meta': meta.isEmpty ? 'Workout session' : meta.join(' · '),
+        'completed': completed,
+        'status': completed
+            ? 'Completed'
+            : rawStatus.isEmpty
+            ? 'Logged'
+            : '${rawStatus[0].toUpperCase()}${rawStatus.substring(1)}',
       };
     }).toList();
   }
@@ -2106,11 +1967,11 @@ class _DashboardPage extends StatelessWidget {
     return diff >= 0 && diff <= 7;
   }
 
-  String _formatVolume(double value) {
-    if (value <= 0) {
-      return '0 kg';
+  int? _roundedNumber(dynamic value) {
+    if (value is num) {
+      return value.round();
     }
-    return '${value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 1)} kg';
+    return num.tryParse(value?.toString() ?? '')?.round();
   }
 
   String _formatCompactNumber(num value) {
@@ -2122,6 +1983,18 @@ class _DashboardPage extends StatelessWidget {
     }
     return value.toStringAsFixed(0);
   }
+}
+
+class _WeeklyActivityDay {
+  const _WeeklyActivityDay({
+    required this.date,
+    required this.sessions,
+    required this.isToday,
+  });
+
+  final DateTime date;
+  final int sessions;
+  final bool isToday;
 }
 
 class _DashboardChipData {
@@ -2899,111 +2772,6 @@ class _MetricRail extends StatelessWidget {
   }
 }
 
-class _MetricGrid extends StatelessWidget {
-  const _MetricGrid({required this.metrics});
-
-  final List<_DashboardMetricData> metrics;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 620 ? 4 : 2;
-        final spacing = constraints.maxWidth >= 620 ? 12.0 : 10.0;
-        final tileWidth =
-            (constraints.maxWidth - (spacing * (columns - 1))) / columns;
-
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: [
-            for (final entry in metrics.asMap().entries)
-              SizedBox(
-                width: tileWidth,
-                child: RevealOnBuild(
-                  delay: Duration(milliseconds: 30 * entry.key),
-                  offset: const Offset(0, 0.06),
-                  duration: const Duration(milliseconds: 420),
-                  child: _MetricGridItem(data: entry.value),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _MetricGridItem extends StatelessWidget {
-  const _MetricGridItem({required this.data});
-
-  final _DashboardMetricData data;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.75)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.shadow.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: data.color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: data.color.withValues(alpha: 0.14)),
-            ),
-            child: Icon(data.icon, color: data.color, size: 20),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            data.value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            data.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            data.helper,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textMuted,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _MetricRailItem extends StatelessWidget {
   const _MetricRailItem({required this.data});
 
@@ -3179,96 +2947,148 @@ class _DashboardFocusBanner extends StatelessWidget {
   }
 }
 
-class _WorkoutTicket extends StatelessWidget {
-  const _WorkoutTicket({
-    required this.title,
-    required this.subtitle,
-    required this.duration,
-    required this.status,
-  });
+class _WeeklyActivityStrip extends StatelessWidget {
+  const _WeeklyActivityStrip({required this.days});
 
-  final String title;
-  final String subtitle;
-  final String duration;
-  final String status;
+  final List<_WeeklyActivityDay> days;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.90),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.75)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.shadow.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 10),
+    final totalSessions = days.fold<int>(
+      0,
+      (total, day) => total + day.sessions,
+    );
+    final activeDays = days.where((day) => day.sessions > 0).length;
+    final maxSessions = math.max(
+      1,
+      days.fold<int>(0, (maximum, day) => math.max(maximum, day.sessions)),
+    );
+    final summary = totalSessions == 0
+        ? 'No workouts logged in the last 7 days'
+        : '$activeDays active ${activeDays == 1 ? 'day' : 'days'} across $totalSessions ${totalSessions == 1 ? 'session' : 'sessions'}';
+
+    return Semantics(
+      container: true,
+      label: 'Seven day training activity. $summary.',
+      child: Container(
+        key: const ValueKey('weekly-activity-chart'),
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white.withValues(alpha: 0.96),
+              AppColors.surfaceSoft,
+            ],
           ),
-        ],
-      ),
-      child: IntrinsicHeight(
-        child: Row(
-          children: [
-            Container(
-              width: 7,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [AppColors.primaryBright, AppColors.primary],
-                ),
-                borderRadius: BorderRadius.horizontal(
-                  left: Radius.circular(28),
-                ),
-              ),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: AppColors.stroke.withValues(alpha: 0.75)),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.shadow.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 10),
             ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      alignment: WrapAlignment.spaceBetween,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Text(
-                          'TODAY WORKOUT',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.1,
-                          ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Training rhythm',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w900,
                         ),
-                        _TicketPill(label: status),
-                      ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        summary,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w700,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 11,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.13),
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w900,
-                        height: 1.02,
+                  ),
+                  child: Text(
+                    '$totalSessions total',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              height: 158,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    bottom: 35,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: List.generate(
+                        3,
+                        (_) => Divider(
+                          height: 1,
+                          color: AppColors.stroke.withValues(alpha: 0.55),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                  ),
+                  Positioned.fill(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        _TicketPill(label: subtitle),
-                        _TicketPill(label: duration),
+                        for (var index = 0; index < days.length; index++)
+                          Expanded(
+                            child: _WeeklyActivityColumn(
+                              day: days[index],
+                              maxSessions: maxSessions,
+                              animationDelay: index,
+                            ),
+                          ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              totalSessions == 0
+                  ? 'Complete a workout to start your weekly trend.'
+                  : 'Bars show completed and logged sessions for each day.',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: AppColors.textMuted,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
@@ -3278,149 +3098,113 @@ class _WorkoutTicket extends StatelessWidget {
   }
 }
 
-class _TicketPill extends StatelessWidget {
-  const _TicketPill({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceSoft,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.55)),
-      ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: AppColors.textSecondary,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-}
-
-class _WeeklyActivityStrip extends StatelessWidget {
-  const _WeeklyActivityStrip({
-    required this.checkedInToday,
-    required this.streakDays,
-    required this.weeklyBars,
+class _WeeklyActivityColumn extends StatelessWidget {
+  const _WeeklyActivityColumn({
+    required this.day,
+    required this.maxSessions,
+    required this.animationDelay,
   });
 
-  final bool checkedInToday;
-  final int streakDays;
-  final List<double> weeklyBars;
+  final _WeeklyActivityDay day;
+  final int maxSessions;
+  final int animationDelay;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.75)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.shadow.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Weekly activity',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w900,
+    final heightFactor = day.sessions == 0
+        ? 0.025
+        : (day.sessions / maxSessions).clamp(0.12, 1.0);
+    final dayLabel = DateFormat('E').format(day.date).substring(0, 1);
+    return Semantics(
+      excludeSemantics: true,
+      label:
+          '${DateFormat('EEEE, MMMM d').format(day.date)}, ${day.sessions} ${day.sessions == 1 ? 'session' : 'sessions'}',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Text(
+              day.sessions == 0 ? '–' : '${day.sessions}',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: day.sessions == 0
+                    ? AppColors.textMuted
+                    : AppColors.textPrimary,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Expanded(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0, end: heightFactor),
+                  duration: MediaQuery.disableAnimationsOf(context)
+                      ? Duration.zero
+                      : Duration(milliseconds: 320 + (animationDelay * 45)),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, _) => FractionallySizedBox(
+                    heightFactor: value,
+                    child: Container(
+                      width: 22,
+                      decoration: BoxDecoration(
+                        gradient: day.sessions == 0
+                            ? null
+                            : LinearGradient(
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                                colors: day.isToday
+                                    ? const [
+                                        AppColors.primary,
+                                        AppColors.accentPurple,
+                                      ]
+                                    : const [
+                                        AppColors.primaryBright,
+                                        AppColors.primary,
+                                      ],
+                              ),
+                        color: day.sessions == 0
+                            ? AppColors.strokeStrong
+                            : null,
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: day.sessions == 0
+                            ? null
+                            : [
+                                BoxShadow(
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.14,
+                                  ),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                      ),
+                    ),
                   ),
                 ),
               ),
-              _TicketPill(
-                label: checkedInToday
-                    ? 'Checked in'
-                    : streakDays > 0
-                    ? '$streakDays day streak'
-                    : '7 days',
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 106,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: List.generate(weeklyBars.length, (index) {
-                final bar = weeklyBars[index];
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.bottomCenter,
-                            child: TweenAnimationBuilder<double>(
-                              tween: Tween<double>(begin: 0.16, end: bar),
-                              duration: MediaQuery.disableAnimationsOf(context)
-                                  ? Duration.zero
-                                  : Duration(milliseconds: 360 + (index * 70)),
-                              curve: Curves.easeOutCubic,
-                              builder: (context, value, _) =>
-                                  FractionallySizedBox(
-                                    heightFactor: value,
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          begin: Alignment.bottomCenter,
-                                          end: Alignment.topCenter,
-                                          colors: index == weeklyBars.length - 1
-                                              ? const [
-                                                  AppColors.primaryBright,
-                                                  AppColors.primary,
-                                                ]
-                                              : [
-                                                  AppColors.strokeStrong,
-                                                  AppColors.stroke,
-                                                ],
-                                        ),
-                                        borderRadius: BorderRadius.circular(
-                                          999,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          const ['S', 'M', 'T', 'W', 'T', 'F', 'S'][index],
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: AppColors.textMuted,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
             ),
-          ),
-        ],
+            const SizedBox(height: 7),
+            Text(
+              dayLabel,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: day.isToday
+                    ? AppColors.primary
+                    : AppColors.textSecondary,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 1),
+            Text(
+              DateFormat('d').format(day.date),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: day.isToday ? AppColors.primary : AppColors.textMuted,
+                fontWeight: day.isToday ? FontWeight.w900 : FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -3508,7 +3292,8 @@ class _RecentWorkoutRows extends StatelessWidget {
               (entry) => _RecentWorkoutRow(
                 title: entry.value['title']?.toString() ?? 'Workout',
                 meta: entry.value['meta']?.toString() ?? '',
-                progress: (entry.value['progress'] as num?)?.toDouble() ?? 0,
+                completed: entry.value['completed'] == true,
+                status: entry.value['status']?.toString() ?? 'Logged',
                 showDivider: entry.key < workouts.length - 1,
                 onTap: onOpenLogbook,
               ),
@@ -3523,91 +3308,112 @@ class _RecentWorkoutRow extends StatelessWidget {
   const _RecentWorkoutRow({
     required this.title,
     required this.meta,
-    required this.progress,
+    required this.completed,
+    required this.status,
     required this.showDivider,
     required this.onTap,
   });
 
   final String title;
   final String meta;
-  final double progress;
+  final bool completed;
+  final String status;
   final bool showDivider;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        AppColors.primary.withValues(alpha: 0.10),
-                        AppColors.primaryBright.withValues(alpha: 0.06),
-                      ],
+    return Semantics(
+      button: true,
+      label: '$title, $meta, $status. Open workout history.',
+      child: ExcludeSemantics(
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            AppColors.primary.withValues(alpha: 0.10),
+                            AppColors.primaryBright.withValues(alpha: 0.06),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(17),
+                      ),
+                      child: const Icon(
+                        Icons.bolt_rounded,
+                        color: AppColors.primary,
+                      ),
                     ),
-                    borderRadius: BorderRadius.circular(17),
-                  ),
-                  child: const Icon(
-                    Icons.bolt_rounded,
-                    color: AppColors.primary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w900,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            meta,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color:
+                            (completed ? AppColors.success : AppColors.primary)
+                                .withValues(alpha: 0.10),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color:
+                              (completed
+                                      ? AppColors.success
+                                      : AppColors.primary)
+                                  .withValues(alpha: 0.18),
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        meta,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.w700,
-                            ),
+                      child: Icon(
+                        completed ? Icons.check_rounded : Icons.history_rounded,
+                        color: completed
+                            ? AppColors.success
+                            : AppColors.primary,
+                        size: 21,
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
-                SizedBox(
-                  width: 42,
-                  height: 42,
-                  child: CircularProgressIndicator(
-                    value: progress.clamp(0.0, 1.0),
-                    strokeWidth: 4,
-                    backgroundColor: AppColors.stroke,
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      AppColors.primary,
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              if (showDivider) Divider(height: 1, color: AppColors.stroke),
+            ],
           ),
-          if (showDivider) Divider(height: 1, color: AppColors.stroke),
-        ],
+        ),
       ),
     );
   }

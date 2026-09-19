@@ -57,7 +57,8 @@ class StepDashboardWidget extends StatelessWidget {
     final granted = permissionStatus == 'granted';
     final needsPermission =
         permissionStatus == 'denied' || permissionStatus == 'unknown';
-    final stepData = steps ??
+    final stepData =
+        steps ??
         const StepDashboardData(
           today: 0,
           goal: 10000,
@@ -76,10 +77,7 @@ class StepDashboardWidget extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              _surface,
-              _surfaceSoft,
-            ],
+            colors: [_surface, _surfaceSoft],
           ),
           border: Border.all(color: _stroke.withValues(alpha: 0.88)),
           boxShadow: [
@@ -155,27 +153,32 @@ class StepDashboardWidget extends StatelessWidget {
                           children: [
                             Text(
                               'Today\'s Steps',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: _ink,
-                                fontWeight: FontWeight.w900,
-                              ),
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    color: _ink,
+                                    fontWeight: FontWeight.w900,
+                                  ),
                             ),
                             const SizedBox(height: 3),
                             Text(
                               granted
-                                  ? 'Daily movement score'
+                                  ? 'Progress toward your daily goal'
                                   : supported
-                                      ? 'Connect health access'
-                                      : 'Health steps unavailable',
-                              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                color: _mutedSoft,
-                                fontWeight: FontWeight.w700,
-                              ),
+                                  ? 'Connect health access'
+                                  : 'Health steps unavailable',
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(
+                                    color: _mutedSoft,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                             ),
                           ],
                         ),
                       ),
-                      _StepRefreshButton(loading: loading, onRefresh: onRefresh),
+                      _StepRefreshButton(
+                        loading: loading,
+                        onRefresh: onRefresh,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -202,20 +205,22 @@ class StepDashboardWidget extends StatelessWidget {
                               _formatCount(stepData.today),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                                color: _ink,
-                                fontWeight: FontWeight.w900,
-                                height: 0.92,
-                                letterSpacing: -1.8,
-                              ),
+                              style: Theme.of(context).textTheme.displayMedium
+                                  ?.copyWith(
+                                    color: _ink,
+                                    fontWeight: FontWeight.w900,
+                                    height: 0.92,
+                                    letterSpacing: -1.8,
+                                  ),
                             ),
                             const SizedBox(height: 8),
                             Text(
                               'steps today',
-                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                color: _mutedSoft,
-                                fontWeight: FontWeight.w800,
-                              ),
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(
+                                    color: _mutedSoft,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                             ),
                             const SizedBox(height: 10),
                             Container(
@@ -232,10 +237,11 @@ class StepDashboardWidget extends StatelessWidget {
                               ),
                               child: Text(
                                 '${stepData.progressPercent}% of ${_formatCount(stepData.goal)}',
-                                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                  color: _primaryBright,
-                                  fontWeight: FontWeight.w900,
-                                ),
+                                style: Theme.of(context).textTheme.labelLarge
+                                    ?.copyWith(
+                                      color: _primaryBright,
+                                      fontWeight: FontWeight.w900,
+                                    ),
                               ),
                             ),
                           ],
@@ -246,7 +252,8 @@ class StepDashboardWidget extends StatelessWidget {
                           children: [
                             compact
                                 ? Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       count,
                                       const SizedBox(height: 18),
@@ -268,7 +275,8 @@ class StepDashboardWidget extends StatelessWidget {
                                 _StepStatPill(
                                   icon: Icons.route_rounded,
                                   label: 'Distance',
-                                  value: '${stepData.distanceKm.toStringAsFixed(1)} km',
+                                  value:
+                                      '${stepData.distanceKm.toStringAsFixed(1)} km',
                                   color: _primaryBright,
                                 ),
                                 _StepStatPill(
@@ -279,7 +287,7 @@ class StepDashboardWidget extends StatelessWidget {
                                 ),
                                 _StepStatPill(
                                   icon: Icons.bolt_rounded,
-                                  label: 'Streak',
+                                  label: 'Step streak',
                                   value: '${stepData.streakDays} d',
                                   color: _success,
                                 ),
@@ -354,129 +362,144 @@ class _StepProgressRing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: progress),
-      duration: const Duration(milliseconds: 520),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) {
-        return SizedBox(
-          width: size,
-          height: size,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Container(
-                width: size,
-                height: size,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.86),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.shadow.withValues(alpha: 0.06),
-                      blurRadius: 18,
-                      offset: const Offset(0, 10),
+    return Semantics(
+      label: '$percent percent of daily step goal',
+      child: ExcludeSemantics(
+        child: TweenAnimationBuilder<double>(
+          tween: Tween<double>(begin: 0, end: progress),
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 520),
+          curve: Curves.easeOutCubic,
+          builder: (context, value, child) {
+            return SizedBox(
+              width: size,
+              height: size,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: size,
+                    height: size,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.86),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.shadow.withValues(alpha: 0.06),
+                          blurRadius: 18,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+                  SizedBox(
+                    width: size - 18,
+                    height: size - 18,
+                    child: CircularProgressIndicator(
+                      value: value,
+                      strokeWidth: 12,
+                      strokeCap: StrokeCap.round,
+                      backgroundColor: StepDashboardWidget._stroke,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        StepDashboardWidget._primaryBright,
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: size - 50,
+                    height: size - 50,
+                    child: CircularProgressIndicator(
+                      value: (value * 0.82).clamp(0.0, 1.0),
+                      strokeWidth: 7,
+                      strokeCap: StrokeCap.round,
+                      backgroundColor: Colors.transparent,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        StepDashboardWidget._primary,
+                      ),
+                    ),
+                  ),
+                  child!,
+                ],
+              ),
+            );
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$percent%',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: StepDashboardWidget._ink,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
                 ),
               ),
-              SizedBox(
-                width: size - 18,
-                height: size - 18,
-                child: CircularProgressIndicator(
-                  value: value,
-                  strokeWidth: 12,
-                  strokeCap: StrokeCap.round,
-                  backgroundColor: StepDashboardWidget._stroke,
-                  valueColor: const AlwaysStoppedAnimation<Color>(StepDashboardWidget._primaryBright),
+              Text(
+                'goal',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: StepDashboardWidget._mutedSoft,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              SizedBox(
-                width: size - 50,
-                height: size - 50,
-                child: CircularProgressIndicator(
-                  value: (value * 0.82).clamp(0.0, 1.0),
-                  strokeWidth: 7,
-                  strokeCap: StrokeCap.round,
-                  backgroundColor: Colors.transparent,
-                  valueColor: const AlwaysStoppedAnimation<Color>(StepDashboardWidget._primary),
-                ),
-              ),
-              child!,
             ],
           ),
-        );
-      },
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '$percent%',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: StepDashboardWidget._ink,
-              fontWeight: FontWeight.w900,
-              height: 1,
-            ),
-          ),
-          Text(
-            'goal',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: StepDashboardWidget._mutedSoft,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
 class _StepRefreshButton extends StatelessWidget {
-  const _StepRefreshButton({
-    required this.loading,
-    required this.onRefresh,
-  });
+  const _StepRefreshButton({required this.loading, required this.onRefresh});
 
   final bool loading;
   final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: loading ? null : onRefresh,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        width: 46,
-        height: 46,
-        decoration: BoxDecoration(
-          color: StepDashboardWidget._surface,
+    return Semantics(
+      button: true,
+      enabled: !loading,
+      label: loading ? 'Refreshing step data' : 'Refresh step data',
+      child: ExcludeSemantics(
+        child: InkWell(
+          onTap: loading ? null : onRefresh,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: StepDashboardWidget._strokeStrong),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.shadow.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: loading
-            ? const Center(
-                child: SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      StepDashboardWidget._primaryBright,
-                    ),
-                  ),
+          child: Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: StepDashboardWidget._surface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: StepDashboardWidget._strokeStrong),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.shadow.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 6),
                 ),
-              )
-            : const Icon(
-                Icons.refresh_rounded,
-                color: StepDashboardWidget._primaryBright,
-                size: 21,
-              ),
+              ],
+            ),
+            child: loading
+                ? const Center(
+                    child: SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          StepDashboardWidget._primaryBright,
+                        ),
+                      ),
+                    ),
+                  )
+                : const Icon(
+                    Icons.refresh_rounded,
+                    color: StepDashboardWidget._primaryBright,
+                    size: 21,
+                  ),
+          ),
+        ),
       ),
     );
   }
@@ -621,7 +644,8 @@ class _StepUnavailableState extends StatelessWidget {
         const _StepStatePanel(
           icon: Icons.mobile_off_rounded,
           title: 'Health steps unavailable',
-          message: 'Use Health Connect on Android or HealthKit on iPhone to sync movement.',
+          message:
+              'Use Health Connect on Android or HealthKit on iPhone to sync movement.',
         ),
         const SizedBox(height: 14),
         GradientButton(

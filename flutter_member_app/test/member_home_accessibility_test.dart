@@ -6,6 +6,7 @@ import 'package:flutter_member_app/src/features/auth/auth_service.dart';
 import 'package:flutter_member_app/src/features/auth/session_controller.dart';
 import 'package:flutter_member_app/src/features/member/member_home_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 void main() {
@@ -30,6 +31,7 @@ void main() {
           ..token = 'preview-token';
 
     Widget buildHome(Size size) {
+      final today = DateTime.now().toIso8601String().split('T').first;
       return ChangeNotifierProvider<MemberSessionController>.value(
         value: session,
         child: MaterialApp(
@@ -39,7 +41,7 @@ void main() {
               textScaler: TextScaler.linear(2),
               disableAnimations: true,
             ),
-            child: const MemberHomeScreen(
+            child: MemberHomeScreen(
               storePreviewData: {
                 'context': {
                   'user_state': 'gym_member',
@@ -68,6 +70,22 @@ void main() {
                     },
                   ],
                 },
+                'plans': const [
+                  {
+                    'name': 'Assigned Plan Only',
+                    'status': 'active',
+                    'goal': 'Strength',
+                  },
+                ],
+                'history': [
+                  {
+                    'session_date': today,
+                    'plan_name': 'Actual History Workout',
+                    'duration_minutes': 42,
+                    'estimated_kcal': 310,
+                    'status': 'completed',
+                  },
+                ],
               },
             ),
           ),
@@ -90,6 +108,8 @@ void main() {
     expect(find.text('Switch gym'), findsOneWidget);
     expect(find.text('More ways to manage your fitness'), findsNothing);
     expect(find.text('Coach connection'), findsNothing);
+    expect(find.text('Today at a glance'), findsNothing);
+    expect(find.text('Your next session'), findsNothing);
     final gymsAction = find.bySemanticsLabel('Gyms');
     expect(gymsAction, findsOneWidget);
     expect(
@@ -103,6 +123,24 @@ void main() {
       ),
     );
     expect(tester.takeException(), isNull);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('weekly-activity-chart')),
+      350,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Training rhythm'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'.*, 1 session')), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Actual History Workout'),
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(
+      find.text(
+        '${DateFormat('MMM d').format(DateTime.now())} · 42 min · 310 kcal',
+      ),
+      findsOneWidget,
+    );
     await tester.scrollUntilVisible(
       find.text('Events and bookings'),
       400,
