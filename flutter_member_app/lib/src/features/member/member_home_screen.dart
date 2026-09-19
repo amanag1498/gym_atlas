@@ -1247,11 +1247,20 @@ class _GymWorkspaceLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final normalizedImageUrl = imageUrl?.trim();
+    final initials = gymName
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .take(2)
+        .map((part) => part[0].toUpperCase())
+        .join();
     return Semantics(
       image: true,
       label: '$gymName logo',
       child: ExcludeSemantics(
         child: Container(
+          key: const ValueKey('active-gym-logo'),
           width: size,
           height: size,
           padding: const EdgeInsets.all(3),
@@ -1268,15 +1277,30 @@ class _GymWorkspaceLogo extends StatelessWidget {
               ),
             ],
           ),
-          child: AppNetworkImage(
-            key: const ValueKey('active-gym-logo'),
-            imageUrl: imageUrl,
-            height: size - 6,
-            width: size - 6,
-            borderRadius: 19,
-            fit: BoxFit.cover,
-            placeholderIcon: Icons.storefront_rounded,
-          ),
+          child: normalizedImageUrl?.isNotEmpty == true
+              ? AppNetworkImage(
+                  imageUrl: normalizedImageUrl,
+                  height: size - 6,
+                  width: size - 6,
+                  borderRadius: 19,
+                  fit: BoxFit.cover,
+                  placeholderIcon: Icons.storefront_rounded,
+                )
+              : Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(19),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    initials.isEmpty ? 'GYM' : initials,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ),
         ),
       ),
     );
@@ -1632,6 +1656,33 @@ class _DashboardPage extends StatelessWidget {
     );
     final selectedPlanName = selectedPlan['name']?.toString().trim();
     final selectedTrainerName = selectedTrainer['name']?.toString().trim();
+    final heroChips = <_DashboardChipData>[
+      _DashboardChipData(
+        icon: Icons.directions_walk_rounded,
+        label: stepSummary != null
+            ? '${_formatCompactNumber(stepSummary.today)} steps'
+            : 'Steps pending',
+      ),
+      _DashboardChipData(
+        icon: Icons.local_fire_department_rounded,
+        label: workoutStreak > 0 ? '$workoutStreak day streak' : 'Start streak',
+      ),
+      if (selectedTrainerName?.isNotEmpty == true)
+        const _DashboardChipData(
+          icon: Icons.verified_user_rounded,
+          label: 'Coach connected',
+        )
+      else if (selectedPlanName?.isNotEmpty == true)
+        _DashboardChipData(
+          icon: Icons.card_membership_rounded,
+          label: selectedPlanName!,
+        )
+      else if (selectedGymRelationship.isEmpty && !isTrialUser)
+        _DashboardChipData(
+          icon: Icons.person_outline_rounded,
+          label: profileReady ? 'Profile ready' : 'Setup pending',
+        ),
+    ];
     final readinessSignals = <bool>[
       profileReady,
       hasWeightLog,
@@ -1779,32 +1830,7 @@ class _DashboardPage extends StatelessWidget {
                 badge: heroLabel,
                 progress: readinessPercent,
                 progressLabel: '${(readinessPercent * 100).round()}%',
-                chips: [
-                  _DashboardChipData(
-                    icon: Icons.directions_walk_rounded,
-                    label: stepSummary != null
-                        ? '${_formatCompactNumber(stepSummary.today)} steps'
-                        : 'Steps pending',
-                  ),
-                  _DashboardChipData(
-                    icon: Icons.local_fire_department_rounded,
-                    label: workoutStreak > 0
-                        ? '$workoutStreak day streak'
-                        : 'Start streak',
-                  ),
-                  _DashboardChipData(
-                    icon: selectedTrainerName?.isNotEmpty == true
-                        ? Icons.verified_user_rounded
-                        : selectedPlanName?.isNotEmpty == true
-                        ? Icons.card_membership_rounded
-                        : Icons.person_outline_rounded,
-                    label: selectedTrainerName?.isNotEmpty == true
-                        ? 'Coach connected'
-                        : selectedPlanName?.isNotEmpty == true
-                        ? selectedPlanName!
-                        : (profileReady ? 'Profile ready' : 'Setup pending'),
-                  ),
-                ],
+                chips: heroChips,
               ),
             ),
             const SizedBox(height: 16),
@@ -2565,54 +2591,91 @@ class _PerformanceHeroPanel extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final largeText =
                       MediaQuery.textScalerOf(context).scale(1) > 1.3;
                   final compact = constraints.maxWidth < 360 || largeText;
-                  final ringSize = compact ? 86.0 : 104.0;
+                  final integrated = identity != null;
+                  final ringSize = integrated
+                      ? (compact ? 72.0 : 82.0)
+                      : (compact ? 86.0 : 104.0);
                   final summary = Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 7,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.68),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: AppColors.stroke.withValues(alpha: 0.5),
+                      if (integrated)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                color: AppColors.primaryBright,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 7),
+                            Flexible(
+                              child: Text(
+                                badge.toUpperCase(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.9,
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 7,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.68),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: AppColors.stroke.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          child: Text(
+                            badge.toUpperCase(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.9,
+                            ),
                           ),
                         ),
-                        child: Text(
-                          badge.toUpperCase(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.9,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
+                      SizedBox(height: integrated ? 7 : 12),
                       Text(
                         title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.displaySmall?.copyWith(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w900,
-                          height: 0.95,
-                          letterSpacing: -1.4,
-                          fontSize: compact ? 28 : null,
-                        ),
+                        style:
+                            (integrated
+                                    ? theme.textTheme.headlineSmall
+                                    : theme.textTheme.displaySmall)
+                                ?.copyWith(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w900,
+                                  height: integrated ? 1.02 : 0.95,
+                                  letterSpacing: integrated ? -0.7 : -1.4,
+                                  fontSize: integrated
+                                      ? (compact ? 24 : 26)
+                                      : null,
+                                ),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: integrated ? 5 : 8),
                       Text(
                         subtitle,
                         maxLines: largeText ? 2 : 1,
@@ -2634,20 +2697,7 @@ class _PerformanceHeroPanel extends StatelessWidget {
                     children: [
                       if (identity != null) ...[
                         identity!,
-                        const SizedBox(height: 18),
-                        Container(
-                          height: 1,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                AppColors.primary.withValues(alpha: 0.22),
-                                AppColors.accentPurple.withValues(alpha: 0.10),
-                                Colors.transparent,
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 16),
                       ],
                       if (largeText) ...[
                         summary,
@@ -2662,7 +2712,7 @@ class _PerformanceHeroPanel extends StatelessWidget {
                             ring,
                           ],
                         ),
-                      const SizedBox(height: 18),
+                      SizedBox(height: integrated ? 14 : 18),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,

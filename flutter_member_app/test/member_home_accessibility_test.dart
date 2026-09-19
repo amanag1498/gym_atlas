@@ -42,7 +42,7 @@ void main() {
             child: const MemberHomeScreen(
               storePreviewData: {
                 'context': {
-                  'user_state': 'gym_member_with_trainer',
+                  'user_state': 'gym_member',
                   'member_profile': {'member_onboarding_completed': true},
                   'user': {'member_onboarding_completed': true},
                   'capabilities': <String, dynamic>{},
@@ -52,16 +52,12 @@ void main() {
                       'gym_id': 11,
                       'gym': {
                         'name': 'Atlas Performance Club With A Long Name',
-                        'logo_url': '/storage/gyms/atlas-logo.png',
                       },
                       'branch': {
                         'name': 'Downtown Strength Studio',
                         'city': 'Bengaluru',
                       },
-                      'membership': {
-                        'plan': {'name': 'Performance Plus'},
-                      },
-                      'assigned_trainer': {'name': 'Coach With A Long Name'},
+                      'membership': <String, dynamic>{},
                     },
                     {
                       'gym_id': 12,
@@ -85,10 +81,12 @@ void main() {
     expect(find.text('Hi, Atlas'), findsOneWidget);
     expect(find.text('Gyms'), findsOneWidget);
     expect(find.byKey(const ValueKey('active-gym-logo')), findsOneWidget);
+    expect(find.text('AP'), findsOneWidget);
     expect(find.byKey(const ValueKey('member-unified-hero')), findsOneWidget);
     expect(find.text('ACTIVE GYM'), findsOneWidget);
     expect(find.text("TODAY'S READINESS"), findsOneWidget);
     expect(find.text('Membership active'), findsNothing);
+    expect(find.text('Profile ready'), findsNothing);
     expect(find.text('Switch gym'), findsOneWidget);
     expect(find.text('More ways to manage your fitness'), findsNothing);
     expect(find.text('Coach connection'), findsNothing);
