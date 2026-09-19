@@ -67,6 +67,8 @@ void main() {
 
     expect(find.text('Hi, Atlas'), findsOneWidget);
     expect(find.text('Plans'), findsOneWidget);
+    expect(find.text('Unread conversations'), findsNothing);
+    expect(find.text('Trial leads'), findsNothing);
     final plansAction = find.bySemanticsLabel('Plans');
     expect(plansAction, findsOneWidget);
     expect(
@@ -81,7 +83,7 @@ void main() {
     );
     expect(tester.takeException(), isNull);
     await tester.scrollUntilVisible(
-      find.text('Unread conversations'),
+      find.text('Recent member progress'),
       500,
       scrollable: find.byType(Scrollable).first,
     );

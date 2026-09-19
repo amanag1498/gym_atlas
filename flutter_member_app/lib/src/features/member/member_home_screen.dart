@@ -737,22 +737,12 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
             unawaited(_handleStepPermissionRequest()),
         onOpenNotifications: _openNotificationsScreen,
         onOpenDietPlan: _openDietPlanScreen,
-        onOpenEvents: () => Navigator.of(context).push<void>(
-          MaterialPageRoute(
-            builder: (_) => MemberEventsScreen(repository: _memberRepository),
-          ),
-        ),
-        onStartWorkout: () => setState(() => _index = 1),
         onMessageTrainer: () => setState(() => _index = 3),
-        onLogWeight: () => setState(() => _index = 2),
-        onFindGyms: () => setState(() => _index = 4),
         onViewMembership: _openMembershipScreen,
         onOpenProfile: _openProfileScreen,
         onOpenSettings: _openSettingsScreen,
         onOpenLogbook: _openLogbookScreen,
-        onOpenAttendance: _openAttendanceScreen,
         onOpenWorkout: _openAssignedWorkoutScreen,
-        onOpenTrials: () => _openTrialRequestsScreen(initialStatusTab: true),
         gymRelationships: gymRelationships,
         selectedGymId: selectedGymId,
         onSwitchGym: _openGymSwitcher,
@@ -1395,18 +1385,12 @@ class _DashboardPage extends StatelessWidget {
     required this.onRequestStepPermission,
     required this.onOpenNotifications,
     required this.onOpenDietPlan,
-    required this.onOpenEvents,
-    required this.onStartWorkout,
     required this.onMessageTrainer,
-    required this.onLogWeight,
-    required this.onFindGyms,
     required this.onViewMembership,
     required this.onOpenProfile,
     required this.onOpenSettings,
     required this.onOpenLogbook,
-    required this.onOpenAttendance,
     required this.onOpenWorkout,
-    required this.onOpenTrials,
     required this.gymRelationships,
     required this.selectedGymId,
     required this.onSwitchGym,
@@ -1428,18 +1412,12 @@ class _DashboardPage extends StatelessWidget {
   final VoidCallback onRequestStepPermission;
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenDietPlan;
-  final VoidCallback onOpenEvents;
-  final VoidCallback onStartWorkout;
   final VoidCallback onMessageTrainer;
-  final VoidCallback onLogWeight;
-  final VoidCallback onFindGyms;
   final VoidCallback onViewMembership;
   final VoidCallback onOpenProfile;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenLogbook;
-  final VoidCallback onOpenAttendance;
   final VoidCallback onOpenWorkout;
-  final VoidCallback onOpenTrials;
   final List<Map<String, dynamic>> gymRelationships;
   final int? selectedGymId;
   final VoidCallback onSwitchGym;
@@ -1458,14 +1436,8 @@ class _DashboardPage extends StatelessWidget {
     final memberProfile = Map<String, dynamic>.from(
       contextData['member_profile'] as Map? ?? const {},
     );
-    final trainerConnection = Map<String, dynamic>.from(
-      contextData['trainer_connection'] as Map? ?? const {},
-    );
     final attendanceStatus = Map<String, dynamic>.from(
       contextData['attendance_status'] as Map? ?? const {},
-    );
-    final assignedTrainer = Map<String, dynamic>.from(
-      trainerConnection['assigned_trainer'] as Map? ?? const {},
     );
     final latestWeightLog = Map<String, dynamic>.from(
       progressSummary['latest_weight_log'] as Map? ?? const {},
@@ -1498,9 +1470,6 @@ class _DashboardPage extends StatelessWidget {
           );
     final activeWorkoutLabel =
         todayWorkout['name']?.toString() ?? 'No workout assigned';
-    final assignedTrainerName = hasTrainer
-        ? (assignedTrainer['name']?.toString() ?? 'Trainer pending')
-        : 'No trainer linked';
     final profileReady =
         (memberProfile['member_onboarding_completed'] as bool?) ?? false;
     final hasWeightLog = latestWeightLog['weight_kg'] != null;
@@ -1547,7 +1516,6 @@ class _DashboardPage extends StatelessWidget {
         : isTrialUser
         ? 'Explore gyms and keep moving'
         : 'Build your independent routine';
-    const heroActionLabel = 'Profile';
     final firstName =
         userName.trim().split(RegExp(r'\s+')).firstOrNull ?? userName;
     final metricCards = [
@@ -1582,109 +1550,6 @@ class _DashboardPage extends StatelessWidget {
         helper: hasTrainer ? 'Coach linked' : heroLabel,
         icon: hasGymMembership ? Icons.verified_rounded : Icons.explore_rounded,
         color: AppColors.primary,
-      ),
-    ];
-    final dashboardActions = [
-      _DashboardActionData(
-        label: hasGymMembership ? 'Start workout' : 'Explore gyms',
-        helper: hasGymMembership ? 'Open today plan' : 'Browse nearby gyms',
-        description: hasGymMembership
-            ? 'Jump straight into your assigned plan for today.'
-            : 'Discover gyms, compare options, and request access.',
-        icon: hasGymMembership
-            ? Icons.fitness_center_rounded
-            : Icons.travel_explore_rounded,
-        color: AppColors.primary,
-        onTap: hasGymMembership ? onStartWorkout : onFindGyms,
-      ),
-      _DashboardActionData(
-        label: 'Diet plans',
-        helper: 'Build meals and nutrition',
-        description:
-            'Create a personal meal-based diet or start from an Atlas template.',
-        icon: Icons.restaurant_menu_rounded,
-        color: AppColors.primaryBright,
-        onTap: onOpenDietPlan,
-      ),
-      _DashboardActionData(
-        label: 'Upcoming events',
-        helper: 'Classes and community sessions',
-        description:
-            'Browse the complete schedule, reserve a spot, or review your bookings.',
-        icon: Icons.calendar_month_rounded,
-        color: AppColors.accentPurple,
-        onTap: onOpenEvents,
-      ),
-      _DashboardActionData(
-        label: 'Open profile',
-        helper: 'Update your setup',
-        description: 'Review your baseline and keep your profile complete.',
-        icon: Icons.person_rounded,
-        color: AppColors.primaryBright,
-        onTap: onOpenProfile,
-      ),
-      _DashboardActionData(
-        label: 'Body progress',
-        helper: 'Weight logs and trends',
-        description:
-            'Track body updates and keep your progress history current.',
-        icon: Icons.monitor_weight_rounded,
-        color: AppColors.accentPurple,
-        onTap: onLogWeight,
-      ),
-      _DashboardActionData(
-        label: hasTrainer ? 'Message coach' : 'Trainer support',
-        helper: hasTrainer ? 'Open coaching chat' : 'Unlock coach access',
-        description: hasTrainer
-            ? 'Continue your conversation and review coach updates.'
-            : 'Connect with a gym to unlock trainer-backed support.',
-        icon: hasTrainer
-            ? Icons.chat_bubble_rounded
-            : Icons.support_agent_rounded,
-        color: AppColors.primary,
-        onTap: hasTrainer ? onMessageTrainer : onFindGyms,
-      ),
-      _DashboardActionData(
-        label: 'Membership',
-        helper: hasGymMembership
-            ? 'Status and due dates'
-            : 'See access options',
-        description: 'Review access status, dues, and membership details.',
-        icon: Icons.card_membership_rounded,
-        color: AppColors.primaryBright,
-        onTap: onViewMembership,
-      ),
-      _DashboardActionData(
-        label: 'Trial requests',
-        helper: 'Manage gym trials',
-        description: 'Check trial request progress and pending gym responses.',
-        icon: Icons.assignment_turned_in_rounded,
-        color: AppColors.accentPurple,
-        onTap: onOpenTrials,
-      ),
-      _DashboardActionData(
-        label: 'Workout logs',
-        helper: 'History, PRs, volume',
-        description: 'See completed sessions, personal records, and volume.',
-        icon: Icons.menu_book_rounded,
-        color: AppColors.primary,
-        onTap: onOpenLogbook,
-      ),
-      _DashboardActionData(
-        label: 'Attendance',
-        helper: 'Check-ins and visit history',
-        description: 'Review daily check-ins and your recent gym visits.',
-        icon: Icons.fact_check_outlined,
-        color: AppColors.primaryBright,
-        onTap: onOpenAttendance,
-      ),
-      _DashboardActionData(
-        label: 'Settings',
-        helper: 'Account, alerts, logout',
-        description: 'Manage preferences, notifications, and account actions.',
-        icon: Icons.settings_rounded,
-        color: AppColors.textSecondary,
-        onTap: onOpenSettings,
       ),
     ];
     final focusBanner = hasWarning
@@ -1772,12 +1637,6 @@ class _DashboardPage extends StatelessWidget {
                 badge: heroLabel,
                 progress: readinessPercent,
                 progressLabel: '${(readinessPercent * 100).round()}%',
-                primaryActionLabel: hasGymMembership
-                    ? 'Start Workout'
-                    : 'Explore Gyms',
-                secondaryActionLabel: heroActionLabel,
-                onPrimaryAction: hasGymMembership ? onStartWorkout : onFindGyms,
-                onSecondaryAction: onOpenProfile,
                 chips: [
                   _DashboardChipData(
                     icon: Icons.directions_walk_rounded,
@@ -1800,13 +1659,6 @@ class _DashboardPage extends StatelessWidget {
                         : (profileReady ? 'Profile ready' : 'Setup pending'),
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            RevealOnBuild(
-              delay: const Duration(milliseconds: 55),
-              child: _MemberNextActionDock(
-                actions: dashboardActions.take(3).toList(),
               ),
             ),
             const SizedBox(height: 16),
@@ -1842,7 +1694,6 @@ class _DashboardPage extends StatelessWidget {
                     onRequestPermission: onRequestStepPermission,
                   );
                   final workoutCard = _WorkoutTicket(
-                    hasPlan: hasActivePlan,
                     title: hasActivePlan
                         ? activeWorkoutLabel
                         : 'Choose today\'s plan',
@@ -1859,7 +1710,6 @@ class _DashboardPage extends StatelessWidget {
                         : hasActivePlan
                         ? 'Ready'
                         : 'No plan',
-                    onOpenWorkout: onOpenWorkout,
                   );
 
                   if (!split) {
@@ -1961,33 +1811,6 @@ class _DashboardPage extends StatelessWidget {
                 },
               ),
             ),
-            const SizedBox(height: 16),
-            RevealOnBuild(
-              delay: const Duration(milliseconds: 140),
-              child: _DashboardSection(
-                eyebrow: 'Tools',
-                title: 'More ways to manage your fitness',
-                child: _DashboardActionCarousel(
-                  actions: dashboardActions.skip(3).toList(),
-                ),
-              ),
-            ),
-            if (hasTrainer || hasGymMembership || isTrialUser) ...[
-              const SizedBox(height: 16),
-              RevealOnBuild(
-                delay: const Duration(milliseconds: 155),
-                child: _DashboardSection(
-                  eyebrow: 'Support',
-                  title: hasTrainer ? 'Coach connection' : 'Next unlock',
-                  child: _CoachMiniPanel(
-                    hasTrainer: hasTrainer,
-                    trainerName: assignedTrainerName,
-                    workoutLabel: activeWorkoutLabel,
-                    onTap: hasTrainer ? onMessageTrainer : onFindGyms,
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -2137,24 +1960,6 @@ class _DashboardMetricData {
   final Color color;
 }
 
-class _DashboardActionData {
-  const _DashboardActionData({
-    required this.label,
-    required this.helper,
-    required this.description,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  final String label;
-  final String helper;
-  final String description;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-}
-
 class _DashboardFocusBannerData {
   const _DashboardFocusBannerData({
     required this.eyebrow,
@@ -2218,214 +2023,6 @@ class _DashboardSection extends StatelessWidget {
         ),
         child,
       ],
-    );
-  }
-}
-
-class _MemberNextActionDock extends StatelessWidget {
-  const _MemberNextActionDock({required this.actions});
-
-  final List<_DashboardActionData> actions;
-
-  @override
-  Widget build(BuildContext context) {
-    final primary = actions.firstOrNull;
-    final secondary = actions.skip(1).take(2).toList();
-
-    if (primary == null) {
-      return const SizedBox.shrink();
-    }
-
-    final primaryCard = _MemberPriorityActionCard(
-      action: primary,
-      prominent: true,
-    );
-    final secondaryCards = [
-      for (final action in secondary) _MemberPriorityActionCard(action: action),
-    ];
-
-    return Column(
-      children: [
-        primaryCard,
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            for (final entry in secondaryCards.asMap().entries) ...[
-              if (entry.key > 0) const SizedBox(width: 10),
-              Expanded(child: entry.value),
-            ],
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _MemberPriorityActionCard extends StatelessWidget {
-  const _MemberPriorityActionCard({
-    required this.action,
-    this.prominent = false,
-  });
-
-  final _DashboardActionData action;
-  final bool prominent;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Semantics(
-      button: true,
-      label: action.label,
-      child: InkWell(
-        onTap: action.onTap,
-        borderRadius: BorderRadius.circular(prominent ? 28 : 22),
-        child: Container(
-          constraints: BoxConstraints(minHeight: prominent ? 118 : 86),
-          padding: EdgeInsets.all(prominent ? 18 : 14),
-          decoration: BoxDecoration(
-            gradient: prominent
-                ? LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [action.color, AppColors.primaryBright],
-                  )
-                : null,
-            color: prominent ? null : Colors.white.withValues(alpha: 0.94),
-            borderRadius: BorderRadius.circular(prominent ? 28 : 22),
-            border: Border.all(
-              color: prominent
-                  ? Colors.white.withValues(alpha: 0.30)
-                  : AppColors.stroke.withValues(alpha: 0.70),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: (prominent ? action.color : AppColors.shadow).withValues(
-                  alpha: prominent ? 0.22 : 0.08,
-                ),
-                blurRadius: prominent ? 24 : 14,
-                offset: const Offset(0, 12),
-              ),
-            ],
-          ),
-          child: prominent
-              ? Row(
-                  children: [
-                    _MemberPriorityIcon(
-                      icon: action.icon,
-                      color: Colors.white,
-                      prominent: true,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            action.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            action.helper,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.86),
-                              fontWeight: FontWeight.w700,
-                              height: 1.3,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    const Icon(
-                      Icons.arrow_forward_rounded,
-                      color: Colors.white,
-                      size: 22,
-                    ),
-                  ],
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        _MemberPriorityIcon(
-                          icon: action.icon,
-                          color: action.color,
-                        ),
-                        const Spacer(),
-                        Icon(
-                          Icons.arrow_outward_rounded,
-                          size: 18,
-                          color: action.color,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      action.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      action.helper,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w700,
-                        height: 1.25,
-                      ),
-                    ),
-                  ],
-                ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MemberPriorityIcon extends StatelessWidget {
-  const _MemberPriorityIcon({
-    required this.icon,
-    required this.color,
-    this.prominent = false,
-  });
-
-  final IconData icon;
-  final Color color;
-  final bool prominent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: prominent ? 54 : 38,
-      height: prominent ? 54 : 38,
-      decoration: BoxDecoration(
-        color: prominent
-            ? Colors.white.withValues(alpha: 0.18)
-            : color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(prominent ? 20 : 14),
-        border: Border.all(
-          color: prominent
-              ? Colors.white.withValues(alpha: 0.22)
-              : color.withValues(alpha: 0.15),
-        ),
-      ),
-      child: Icon(icon, color: color, size: prominent ? 26 : 20),
     );
   }
 }
@@ -2737,10 +2334,10 @@ class _PerformanceHeroPanel extends StatelessWidget {
     required this.badge,
     required this.progress,
     required this.progressLabel,
-    required this.primaryActionLabel,
-    required this.secondaryActionLabel,
-    required this.onPrimaryAction,
-    required this.onSecondaryAction,
+    this.primaryActionLabel,
+    this.secondaryActionLabel,
+    this.onPrimaryAction,
+    this.onSecondaryAction,
     required this.chips,
   });
 
@@ -2749,10 +2346,10 @@ class _PerformanceHeroPanel extends StatelessWidget {
   final String badge;
   final double progress;
   final String progressLabel;
-  final String primaryActionLabel;
-  final String secondaryActionLabel;
-  final VoidCallback onPrimaryAction;
-  final VoidCallback onSecondaryAction;
+  final String? primaryActionLabel;
+  final String? secondaryActionLabel;
+  final VoidCallback? onPrimaryAction;
+  final VoidCallback? onSecondaryAction;
   final List<_DashboardChipData> chips;
 
   @override
@@ -2892,39 +2489,48 @@ class _PerformanceHeroPanel extends StatelessWidget {
                             .map((chip) => _HeroChip(data: chip))
                             .toList(),
                       ),
-                      const SizedBox(height: 20),
-                      if (largeText) ...[
-                        _DashboardPillButton(
-                          label: primaryActionLabel,
-                          onTap: onPrimaryAction,
-                          filled: true,
-                        ),
-                        const SizedBox(height: 10),
-                        _DashboardPillButton(
-                          label: secondaryActionLabel,
-                          onTap: onSecondaryAction,
-                          filled: false,
-                        ),
-                      ] else
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _DashboardPillButton(
-                                label: primaryActionLabel,
-                                onTap: onPrimaryAction,
-                                filled: true,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: _DashboardPillButton(
-                                label: secondaryActionLabel,
-                                onTap: onSecondaryAction,
-                                filled: false,
-                              ),
+                      if (primaryActionLabel != null &&
+                          onPrimaryAction != null) ...[
+                        const SizedBox(height: 20),
+                        if (largeText) ...[
+                          _DashboardPillButton(
+                            label: primaryActionLabel!,
+                            onTap: onPrimaryAction!,
+                            filled: true,
+                          ),
+                          if (secondaryActionLabel != null &&
+                              onSecondaryAction != null) ...[
+                            const SizedBox(height: 10),
+                            _DashboardPillButton(
+                              label: secondaryActionLabel!,
+                              onTap: onSecondaryAction!,
+                              filled: false,
                             ),
                           ],
-                        ),
+                        ] else
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _DashboardPillButton(
+                                  label: primaryActionLabel!,
+                                  onTap: onPrimaryAction!,
+                                  filled: true,
+                                ),
+                              ),
+                              if (secondaryActionLabel != null &&
+                                  onSecondaryAction != null) ...[
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _DashboardPillButton(
+                                    label: secondaryActionLabel!,
+                                    onTap: onSecondaryAction!,
+                                    filled: false,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                      ],
                     ],
                   );
                 },
@@ -3241,288 +2847,6 @@ class _MetricRailItem extends StatelessWidget {
   }
 }
 
-class _DashboardActionCarousel extends StatefulWidget {
-  const _DashboardActionCarousel({required this.actions});
-
-  final List<_DashboardActionData> actions;
-
-  @override
-  State<_DashboardActionCarousel> createState() =>
-      _DashboardActionCarouselState();
-}
-
-class _DashboardActionCarouselState extends State<_DashboardActionCarousel> {
-  late final PageController _controller;
-  int _currentPage = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = PageController(viewportFraction: 0.84);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.actions.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    final textScale = MediaQuery.textScalerOf(context).scale(1);
-    final cardHeight = 214.0 + ((textScale - 1).clamp(0, 1).toDouble() * 180);
-
-    return Column(
-      children: [
-        SizedBox(
-          height: cardHeight,
-          child: PageView.builder(
-            controller: _controller,
-            physics: const BouncingScrollPhysics(),
-            itemCount: widget.actions.length,
-            onPageChanged: (index) => setState(() => _currentPage = index),
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: RevealOnBuild(
-                  delay: Duration(milliseconds: 35 * index),
-                  offset: const Offset(0.04, 0.07),
-                  duration: const Duration(milliseconds: 460),
-                  child: _DashboardActionFeaturedCard(
-                    data: widget.actions[index],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            IconButton(
-              tooltip: 'Previous tool',
-              onPressed: _currentPage == 0
-                  ? null
-                  : () => _showPage(_currentPage - 1),
-              icon: const Icon(Icons.arrow_back_rounded),
-            ),
-            const SizedBox(width: 8),
-            Semantics(
-              liveRegion: true,
-              label:
-                  'Tool ${_currentPage + 1} of ${widget.actions.length}: '
-                  '${widget.actions[_currentPage].label}',
-              child: ExcludeSemantics(
-                child: Text(
-                  '${_currentPage + 1} of ${widget.actions.length}',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              tooltip: 'Next tool',
-              onPressed: _currentPage == widget.actions.length - 1
-                  ? null
-                  : () => _showPage(_currentPage + 1),
-              icon: const Icon(Icons.arrow_forward_rounded),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  void _showPage(int page) {
-    if (MediaQuery.disableAnimationsOf(context)) {
-      _controller.jumpToPage(page);
-      return;
-    }
-
-    _controller.animateToPage(
-      page,
-      duration: const Duration(milliseconds: 240),
-      curve: Curves.easeOutCubic,
-    );
-  }
-}
-
-class _DashboardActionFeaturedCard extends StatelessWidget {
-  const _DashboardActionFeaturedCard({required this.data});
-
-  final _DashboardActionData data;
-
-  @override
-  Widget build(BuildContext context) {
-    const accentColor = AppColors.primary;
-
-    return InkWell(
-      onTap: data.onTap,
-      borderRadius: BorderRadius.circular(28),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: AppColors.stroke.withValues(alpha: 0.72)),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.shadow.withValues(alpha: 0.12),
-              blurRadius: 24,
-              offset: const Offset(0, 16),
-            ),
-            BoxShadow(
-              color: accentColor.withValues(alpha: 0.08),
-              blurRadius: 22,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: Stack(
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.96),
-                ),
-              ),
-              Positioned(
-                top: -8,
-                right: -6,
-                child: Transform.rotate(
-                  angle: -0.24,
-                  child: Container(
-                    width: 88,
-                    height: 88,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(28),
-                      color: const Color(0xFFF8FAFC),
-                      border: Border.all(
-                        color: accentColor.withValues(alpha: 0.08),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 18,
-                right: 18,
-                child: Icon(
-                  Icons.north_east_rounded,
-                  color: accentColor.withValues(alpha: 0.70),
-                  size: 20,
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Transform.translate(
-                          offset: const Offset(0, -2),
-                          child: Container(
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              color: accentColor.withValues(alpha: 0.10),
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: accentColor.withValues(alpha: 0.14),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: accentColor.withValues(alpha: 0.08),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
-                            ),
-                            child: Icon(
-                              data.icon,
-                              color: accentColor,
-                              size: 22,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            data.helper,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(
-                                  color: AppColors.textSecondary,
-                                  fontWeight: FontWeight.w800,
-                                  height: 1.15,
-                                ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      data.label,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w900,
-                            height: 1.04,
-                          ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      data.description,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w700,
-                        height: 1.35,
-                      ),
-                    ),
-                    const Spacer(),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Open',
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(
-                                color: accentColor,
-                                fontWeight: FontWeight.w900,
-                              ),
-                        ),
-                        const SizedBox(width: 6),
-                        Icon(
-                          Icons.arrow_forward_rounded,
-                          size: 18,
-                          color: accentColor,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _DashboardFocusBanner extends StatelessWidget {
   const _DashboardFocusBanner({required this.data});
 
@@ -3626,20 +2950,16 @@ class _DashboardFocusBanner extends StatelessWidget {
 
 class _WorkoutTicket extends StatelessWidget {
   const _WorkoutTicket({
-    required this.hasPlan,
     required this.title,
     required this.subtitle,
     required this.duration,
     required this.status,
-    required this.onOpenWorkout,
   });
 
-  final bool hasPlan;
   final String title;
   final String subtitle;
   final String duration;
   final String status;
-  final VoidCallback onOpenWorkout;
 
   @override
   Widget build(BuildContext context) {
@@ -3715,12 +3035,6 @@ class _WorkoutTicket extends StatelessWidget {
                         _TicketPill(label: subtitle),
                         _TicketPill(label: duration),
                       ],
-                    ),
-                    const SizedBox(height: 16),
-                    _DashboardPillButton(
-                      label: hasPlan ? 'Open Workout' : 'Choose Plan',
-                      onTap: onOpenWorkout,
-                      filled: true,
                     ),
                   ],
                 ),
@@ -4213,101 +3527,6 @@ class _MemberUtilityPill extends StatelessWidget {
               ),
             ),
             const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CoachMiniPanel extends StatelessWidget {
-  const _CoachMiniPanel({
-    required this.hasTrainer,
-    required this.trainerName,
-    required this.workoutLabel,
-    required this.onTap,
-  });
-
-  final bool hasTrainer;
-  final String trainerName;
-  final String workoutLabel;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.90),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: AppColors.stroke.withValues(alpha: 0.72)),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.shadow.withValues(alpha: 0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: hasTrainer
-                      ? const [AppColors.primary, AppColors.accentPurple]
-                      : [
-                          AppColors.primary.withValues(alpha: 0.10),
-                          AppColors.primaryBright.withValues(alpha: 0.06),
-                        ],
-                ),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                hasTrainer ? Icons.person_rounded : Icons.lock_rounded,
-                color: hasTrainer ? Colors.white : AppColors.primary,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    hasTrainer ? trainerName : 'Coach locked',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  Text(
-                    hasTrainer
-                        ? workoutLabel
-                        : 'Join a gym to unlock trainer support',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Icon(
-              hasTrainer ? Icons.chat_bubble_rounded : Icons.north_east_rounded,
-              color: AppColors.primary,
-              size: 20,
-            ),
           ],
         ),
       ),

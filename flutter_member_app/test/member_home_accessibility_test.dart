@@ -59,6 +59,8 @@ void main() {
 
     expect(find.text('Hi, Atlas'), findsOneWidget);
     expect(find.text('Gyms'), findsOneWidget);
+    expect(find.text('More ways to manage your fitness'), findsNothing);
+    expect(find.text('Coach connection'), findsNothing);
     final gymsAction = find.bySemanticsLabel('Gyms');
     expect(gymsAction, findsOneWidget);
     expect(
@@ -73,7 +75,7 @@ void main() {
     );
     expect(tester.takeException(), isNull);
     await tester.scrollUntilVisible(
-      find.text('More ways to manage your fitness'),
+      find.text('Recent training'),
       500,
       scrollable: find.byType(Scrollable).first,
     );
