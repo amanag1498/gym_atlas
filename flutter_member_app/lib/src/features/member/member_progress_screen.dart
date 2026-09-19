@@ -37,7 +37,9 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
   bool _savingWeight = false;
   bool _savingMeasurement = false;
   bool _savingPhoto = false;
-  bool _loadingMore = false;
+  bool _loadingMoreWeight = false;
+  bool _loadingMoreMeasurements = false;
+  bool _loadingMorePhotos = false;
   String? _error;
   String? _lastSuccessMessage;
   Map<String, dynamic> _summary = const {};
@@ -50,9 +52,6 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
   ApiPagination _weightPage = const ApiPagination.singlePage();
   ApiPagination _measurementPage = const ApiPagination.singlePage();
   ApiPagination _photoPage = const ApiPagination.singlePage();
-
-  bool get _hasMore =>
-      _weightPage.hasMore || _measurementPage.hasMore || _photoPage.hasMore;
 
   final _weightController = TextEditingController();
   final _weightNotesController = TextEditingController();
@@ -138,7 +137,9 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
         // Preserve existing progress during a rolling backend/app deployment.
       }
     } catch (exception) {
-      _error = exception.toString();
+      _error =
+          'We could not load your progress right now. Check your connection and try again.';
+      debugPrint('[member-progress] initial load failed: $exception');
     }
 
     if (mounted) {
@@ -146,43 +147,73 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
     }
   }
 
-  Future<void> _loadMoreProgress() async {
-    if (_loadingMore || !_hasMore) return;
-    setState(() => _loadingMore = true);
+  Future<void> _loadMoreWeight() async {
+    if (_loadingMoreWeight || !_weightPage.hasMore) return;
+    setState(() => _loadingMoreWeight = true);
     try {
-      if (_weightPage.hasMore) {
-        final response = await widget.repository.fetchWeightLogs(
-          page: _weightPage.nextPage,
-        );
-        _weightLogs = mergeApiPageItems(_weightLogs, apiPageItems(response));
-        _weightPage = ApiPagination.fromResponse(response);
-      }
-      if (_measurementPage.hasMore) {
-        final response = await widget.repository.fetchBodyMeasurements(
-          page: _measurementPage.nextPage,
-        );
-        _bodyMeasurements = mergeApiPageItems(
-          _bodyMeasurements,
-          apiPageItems(response),
-        );
-        _measurementPage = ApiPagination.fromResponse(response);
-      }
-      if (_photoPage.hasMore) {
-        final response = await widget.repository.fetchPhotos(
-          page: _photoPage.nextPage,
-        );
-        _photos = mergeApiPageItems(_photos, apiPageItems(response));
-        _photoPage = ApiPagination.fromResponse(response);
-      }
+      final response = await widget.repository.fetchWeightLogs(
+        page: _weightPage.nextPage,
+      );
+      _weightLogs = mergeApiPageItems(_weightLogs, apiPageItems(response));
+      _weightPage = ApiPagination.fromResponse(response);
     } catch (exception) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
-      }
+      _showLoadMoreError('weight history', exception);
     } finally {
-      if (mounted) setState(() => _loadingMore = false);
+      if (mounted) setState(() => _loadingMoreWeight = false);
     }
+  }
+
+  Future<void> _loadMoreMeasurements() async {
+    if (_loadingMoreMeasurements || !_measurementPage.hasMore) return;
+    setState(() => _loadingMoreMeasurements = true);
+    try {
+      final response = await widget.repository.fetchBodyMeasurements(
+        page: _measurementPage.nextPage,
+      );
+      _bodyMeasurements = mergeApiPageItems(
+        _bodyMeasurements,
+        apiPageItems(response),
+      );
+      _measurementPage = ApiPagination.fromResponse(response);
+    } catch (exception) {
+      _showLoadMoreError('measurement history', exception);
+    } finally {
+      if (mounted) setState(() => _loadingMoreMeasurements = false);
+    }
+  }
+
+  Future<void> _loadMorePhotos() async {
+    if (_loadingMorePhotos || !_photoPage.hasMore) return;
+    setState(() => _loadingMorePhotos = true);
+    try {
+      final response = await widget.repository.fetchPhotos(
+        page: _photoPage.nextPage,
+      );
+      _photos = mergeApiPageItems(_photos, apiPageItems(response));
+      _photoPage = ApiPagination.fromResponse(response);
+    } catch (exception) {
+      _showLoadMoreError('photo history', exception);
+    } finally {
+      if (mounted) setState(() => _loadingMorePhotos = false);
+    }
+  }
+
+  void _showLoadMoreError(String historyName, Object exception) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Could not load older $historyName. Please try again.'),
+      ),
+    );
+    debugPrint('[member-progress] load more failed: $exception');
+  }
+
+  void _showActionError(String action, Object exception) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Could not $action. Please try again.')),
+    );
+    debugPrint('[member-progress] $action failed: $exception');
   }
 
   Future<void> _afterSave(String message) async {
@@ -758,12 +789,7 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
         _selectedPhotoBytes = bytes;
       });
     } catch (exception) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      _showActionError('open that photo', exception);
     }
   }
 
@@ -776,9 +802,9 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
 
   Future<void> _saveWeight() async {
     final weight = double.tryParse(_weightController.text.trim());
-    if (weight == null) {
+    if (weight == null || weight <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid weight value.')),
+        const SnackBar(content: Text('Enter a weight greater than zero.')),
       );
       return;
     }
@@ -794,12 +820,7 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
       _weightNotesController.clear();
       await _afterSave('Weight log saved.');
     } catch (exception) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      _showActionError('save your weight', exception);
     } finally {
       if (mounted) {
         setState(() => _savingWeight = false);
@@ -808,6 +829,36 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
   }
 
   Future<void> _saveMeasurement() async {
+    final measurementInputs = <String, TextEditingController>{
+      'chest': _chestController,
+      'waist': _waistController,
+      'hips': _hipsController,
+      'arm': _armController,
+      'thigh': _thighController,
+      'calf': _calfController,
+      'body fat': _bodyFatController,
+    };
+    for (final entry in measurementInputs.entries) {
+      final text = entry.value.text.trim();
+      if (text.isEmpty) continue;
+      final value = double.tryParse(text);
+      if (value == null || value <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Enter a valid ${entry.key} value above zero.'),
+          ),
+        );
+        return;
+      }
+      if (entry.key == 'body fat' && value > 100) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Body fat percentage cannot be above 100%.'),
+          ),
+        );
+        return;
+      }
+    }
     final payload = {
       'measured_on': DateTime.now().toIso8601String().split('T').first,
       'chest_cm': _nullableDouble(_chestController.text),
@@ -847,12 +898,7 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
       _measurementNotesController.clear();
       await _afterSave('Body measurements saved.');
     } catch (exception) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      _showActionError('save your measurements', exception);
     } finally {
       if (mounted) {
         setState(() => _savingMeasurement = false);
@@ -885,12 +931,7 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
       _photoNotesController.clear();
       await _afterSave('Progress photo uploaded.');
     } catch (exception) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      _showActionError('upload your progress photo', exception);
     } finally {
       if (mounted) {
         setState(() => _savingPhoto = false);
@@ -910,11 +951,9 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
         (_summary['recent_progress_photos'] as List<dynamic>? ?? const [])
             .map((item) => Map<String, dynamic>.from(item as Map))
             .toList();
-    final firstName = firstNameFromFullName(widget.memberName);
-
     return AppGradientScaffold(
-      title: 'Strength Tracking',
-      subtitle: 'Weight, measurements, and progress photos',
+      title: 'Body progress',
+      subtitle: 'Understand your trends and add your next check-in',
       body: _loading
           ? const _ProgressSkeleton()
           : _error != null
@@ -928,16 +967,8 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
                     AppSpacing.lg,
                     0,
                   ),
-                  child: MemberPageGreetingHeader(
-                    firstName: firstName,
-                    subtitle:
-                        'Body metrics, steps, and progress tracking in one place.',
-                    actions: [
-                      MemberHeaderActionButton(
-                        icon: Icons.tune_rounded,
-                        onTap: _editWorkoutPreferences,
-                      ),
-                    ],
+                  child: _BodyProgressHeader(
+                    onOpenSettings: _editWorkoutPreferences,
                   ),
                 ),
                 Padding(
@@ -982,8 +1013,19 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
                         weightLogs: _weightLogs,
                         weightController: _weightController,
                         notesController: _weightNotesController,
+                        goalValue:
+                            _workoutPreferences['show_weight_goal'] == false
+                            ? null
+                            : double.tryParse(
+                                _workoutPreferences['target_weight_kg']
+                                        ?.toString() ??
+                                    '',
+                              ),
                         saving: _savingWeight,
                         onSave: _saveWeight,
+                        hasMore: _weightPage.hasMore,
+                        loadingMore: _loadingMoreWeight,
+                        onLoadMore: _loadMoreWeight,
                       ),
                       _BodyMeasurementsTab(
                         measurements: _bodyMeasurements,
@@ -997,6 +1039,9 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
                         notesController: _measurementNotesController,
                         saving: _savingMeasurement,
                         onSave: _saveMeasurement,
+                        hasMore: _measurementPage.hasMore,
+                        loadingMore: _loadingMoreMeasurements,
+                        onLoadMore: _loadMoreMeasurements,
                       ),
                       _ProgressPhotosTab(
                         photos: _photos,
@@ -1013,33 +1058,65 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
                             : _clearSelectedPhoto,
                         saving: _savingPhoto,
                         onSave: _savePhoto,
+                        hasMore: _photoPage.hasMore,
+                        loadingMore: _loadingMorePhotos,
+                        onLoadMore: _loadMorePhotos,
                       ),
                     ],
                   ),
                 ),
-                if (_hasMore)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.lg,
-                      8,
-                      AppSpacing.lg,
-                      AppSpacing.md,
-                    ),
-                    child: OutlinedButton.icon(
-                      onPressed: _loadingMore ? null : _loadMoreProgress,
-                      icon: _loadingMore
-                          ? const SizedBox.square(
-                              dimension: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.expand_more_rounded),
-                      label: Text(
-                        _loadingMore ? 'Loading...' : 'Load older progress',
-                      ),
-                    ),
-                  ),
               ],
             ),
+    );
+  }
+}
+
+class _BodyProgressHeader extends StatelessWidget {
+  const _BodyProgressHeader({required this.onOpenSettings});
+
+  final VoidCallback onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Body progress',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.7,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'See what is changing, then add your next check-in.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Tooltip(
+          message: 'Progress settings',
+          child: Semantics(
+            button: true,
+            label: 'Open progress settings',
+            child: MemberHeaderActionButton(
+              icon: Icons.tune_rounded,
+              onTap: onOpenSettings,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1408,13 +1485,14 @@ class _StrengthTabSlider extends StatefulWidget {
 
 class _StrengthTabSliderState extends State<_StrengthTabSlider> {
   static const _items = [
-    (label: 'Overview', icon: Icons.dashboard_customize_rounded),
+    (label: 'Summary', icon: Icons.dashboard_customize_rounded),
     (label: 'Training', icon: Icons.insights_rounded),
     (label: 'Steps', icon: Icons.directions_walk_rounded),
     (label: 'Weight', icon: Icons.monitor_weight_rounded),
-    (label: 'Measure', icon: Icons.straighten_rounded),
+    (label: 'Measurements', icon: Icons.straighten_rounded),
     (label: 'Photos', icon: Icons.photo_camera_back_rounded),
   ];
+  final _tabKeys = List<GlobalKey>.generate(6, (_) => GlobalKey());
 
   @override
   void initState() {
@@ -1440,6 +1518,18 @@ class _StrengthTabSliderState extends State<_StrengthTabSlider> {
   void _handleTabChange() {
     if (mounted) {
       setState(() {});
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final selectedContext =
+            _tabKeys[widget.controller.index].currentContext;
+        if (selectedContext != null) {
+          Scrollable.ensureVisible(
+            selectedContext,
+            alignment: 0.5,
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+          );
+        }
+      });
     }
   }
 
@@ -1452,24 +1542,20 @@ class _StrengthTabSliderState extends State<_StrengthTabSlider> {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: AppColors.stroke),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 390;
-          return Row(
-            children: [
-              for (var index = 0; index < _items.length; index++)
-                Expanded(
-                  child: _StrengthTabPill(
-                    label: _items[index].label,
-                    icon: _items[index].icon,
-                    active: widget.controller.index == index,
-                    compact: compact,
-                    onTap: () => widget.controller.animateTo(index),
-                  ),
-                ),
-            ],
-          );
-        },
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (var index = 0; index < _items.length; index++)
+              _StrengthTabPill(
+                key: _tabKeys[index],
+                label: _items[index].label,
+                icon: _items[index].icon,
+                active: widget.controller.index == index,
+                onTap: () => widget.controller.animateTo(index),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1477,59 +1563,59 @@ class _StrengthTabSliderState extends State<_StrengthTabSlider> {
 
 class _StrengthTabPill extends StatelessWidget {
   const _StrengthTabPill({
+    super.key,
     required this.label,
     required this.icon,
     required this.active,
-    required this.compact,
     required this.onTap,
   });
 
   final String label;
   final IconData icon;
   final bool active;
-  final bool compact;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-        margin: const EdgeInsets.symmetric(horizontal: 2),
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 8 : 12,
-          vertical: 11,
-        ),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(999),
-          color: active ? AppColors.primary : Colors.transparent,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: compact ? 16 : 18,
-              color: active ? Colors.white : AppColors.textSecondary,
-            ),
-            if (!compact || active) ...[
+    return Semantics(
+      button: true,
+      selected: active,
+      label: '$label tab',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          constraints: const BoxConstraints(minHeight: 48),
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            color: active ? AppColors.primary : Colors.transparent,
+            border: active
+                ? Border.all(color: AppColors.primaryBright, width: 1.5)
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: active ? Colors.white : AppColors.textSecondary,
+              ),
               const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: active ? Colors.white : AppColors.textSecondary,
-                    fontWeight: active ? FontWeight.w900 : FontWeight.w700,
-                  ),
+              Text(
+                label,
+                maxLines: 1,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: active ? Colors.white : AppColors.textSecondary,
+                  fontWeight: active ? FontWeight.w900 : FontWeight.w700,
                 ),
               ),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -1579,16 +1665,6 @@ class _ProgressOverviewTab extends StatelessWidget {
           points: _metricPoints(weightLogs, 'log_date', 'weight_kg'),
           accentColor: const Color(0xFF92A3FD),
           unit: ' kg',
-        ),
-        const SizedBox(height: 18),
-        MetricTrendChart(
-          title: 'Seven-day steps',
-          subtitle: 'Your daily movement over the past week',
-          points: _metricPoints(stepSummary, 'date', 'steps'),
-          accentColor: const Color(0xFF40D9B8),
-          unit: ' steps',
-          emptyMessage:
-              'Your activity trend will appear after steps are recorded on two days.',
         ),
         const SizedBox(height: 18),
         _StrengthInsightPanel(
@@ -1941,21 +2017,38 @@ class _WeightLogsTab extends StatelessWidget {
     required this.weightLogs,
     required this.weightController,
     required this.notesController,
+    required this.goalValue,
     required this.saving,
     required this.onSave,
+    required this.hasMore,
+    required this.loadingMore,
+    required this.onLoadMore,
   });
 
   final List<Map<String, dynamic>> weightLogs;
   final TextEditingController weightController;
   final TextEditingController notesController;
+  final double? goalValue;
   final bool saving;
   final VoidCallback onSave;
+  final bool hasMore;
+  final bool loadingMore;
+  final VoidCallback onLoadMore;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
+        MetricTrendChart(
+          title: 'Weight trend',
+          subtitle: 'Dates are spaced by the time between check-ins',
+          points: _metricPoints(weightLogs, 'log_date', 'weight_kg'),
+          accentColor: const Color(0xFF92A3FD),
+          unit: ' kg',
+          goalValue: goalValue,
+        ),
+        const SizedBox(height: 18),
         _StrengthFormPanel(
           title: 'Quick weight check-in',
           subtitle: 'Log one clean number. Notes are optional.',
@@ -1990,14 +2083,6 @@ class _WeightLogsTab extends StatelessWidget {
               onPressed: saving ? null : onSave,
             ),
           ],
-        ),
-        const SizedBox(height: 18),
-        MetricTrendChart(
-          title: 'Weight trend',
-          subtitle: 'Oldest to latest visible check-in',
-          points: _metricPoints(weightLogs, 'log_date', 'weight_kg'),
-          accentColor: const Color(0xFF92A3FD),
-          unit: ' kg',
         ),
         const SizedBox(height: 18),
         _StrengthSectionTitle(
@@ -2035,6 +2120,14 @@ class _WeightLogsTab extends StatelessWidget {
               ),
             );
           }),
+        if (hasMore) ...[
+          const SizedBox(height: 4),
+          _LoadOlderButton(
+            label: 'Load older weight logs',
+            loading: loadingMore,
+            onPressed: onLoadMore,
+          ),
+        ],
       ],
     );
   }
@@ -2053,6 +2146,9 @@ class _BodyMeasurementsTab extends StatelessWidget {
     required this.notesController,
     required this.saving,
     required this.onSave,
+    required this.hasMore,
+    required this.loadingMore,
+    required this.onLoadMore,
   });
 
   final List<Map<String, dynamic>> measurements;
@@ -2066,12 +2162,17 @@ class _BodyMeasurementsTab extends StatelessWidget {
   final TextEditingController notesController;
   final bool saving;
   final VoidCallback onSave;
+  final bool hasMore;
+  final bool loadingMore;
+  final VoidCallback onLoadMore;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
+        _BodyMeasurementTrends(measurements: measurements),
+        const SizedBox(height: 18),
         _StrengthFormPanel(
           title: 'Body snapshot',
           subtitle: 'Add only the numbers you measured today.',
@@ -2090,7 +2191,8 @@ class _BodyMeasurementsTab extends StatelessWidget {
                   _NumberField(controller: calfController, label: 'Calf'),
                   _NumberField(
                     controller: bodyFatController,
-                    label: 'Body fat %',
+                    label: 'Body fat',
+                    unit: '%',
                   ),
                 ];
 
@@ -2139,28 +2241,6 @@ class _BodyMeasurementsTab extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 18),
-        MetricTrendChart(
-          title: 'Waist trend',
-          subtitle: 'Centimetres across your measurement snapshots',
-          points: _metricPoints(measurements, 'measured_on', 'waist_cm'),
-          accentColor: const Color(0xFFC58BF2),
-          unit: ' cm',
-          emptyMessage: 'Add waist measurements on two dates to see a trend.',
-        ),
-        const SizedBox(height: 12),
-        MetricTrendChart(
-          title: 'Body-fat trend',
-          subtitle: 'Percentage across your measurement snapshots',
-          points: _metricPoints(
-            measurements,
-            'measured_on',
-            'body_fat_percentage',
-          ),
-          accentColor: const Color(0xFFFFB86C),
-          unit: '%',
-          emptyMessage: 'Add body-fat values on two dates to see a trend.',
-        ),
-        const SizedBox(height: 18),
         _StrengthSectionTitle(
           title: 'Measurement history',
           action: '${measurements.length} snapshots',
@@ -2180,6 +2260,99 @@ class _BodyMeasurementsTab extends StatelessWidget {
               child: _StrengthMeasurementSnapshot(measurement: measurement),
             ),
           ),
+        if (hasMore) ...[
+          const SizedBox(height: 4),
+          _LoadOlderButton(
+            label: 'Load older measurements',
+            loading: loadingMore,
+            onPressed: onLoadMore,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _BodyMeasurementTrends extends StatefulWidget {
+  const _BodyMeasurementTrends({required this.measurements});
+
+  final List<Map<String, dynamic>> measurements;
+
+  @override
+  State<_BodyMeasurementTrends> createState() => _BodyMeasurementTrendsState();
+}
+
+class _BodyMeasurementTrendsState extends State<_BodyMeasurementTrends> {
+  static const _metrics = [
+    (label: 'Waist', key: 'waist_cm', unit: ' cm', color: Color(0xFFC58BF2)),
+    (
+      label: 'Body fat',
+      key: 'body_fat_percentage',
+      unit: '%',
+      color: Color(0xFFFFB86C),
+    ),
+    (label: 'Chest', key: 'chest_cm', unit: ' cm', color: Color(0xFF92A3FD)),
+    (label: 'Hips', key: 'hips_cm', unit: ' cm', color: Color(0xFF40D9B8)),
+    (label: 'Arm', key: 'arm_cm', unit: ' cm', color: Color(0xFF6E7BF2)),
+    (label: 'Thigh', key: 'thigh_cm', unit: ' cm', color: Color(0xFFFF8A9B)),
+    (label: 'Calf', key: 'calf_cm', unit: ' cm', color: Color(0xFF45B7D1)),
+  ];
+
+  String _selectedKey = 'waist_cm';
+
+  @override
+  Widget build(BuildContext context) {
+    final available = _metrics
+        .where(
+          (metric) => widget.measurements.any(
+            (measurement) => measurement[metric.key] != null,
+          ),
+        )
+        .toList();
+    final choices = available.isEmpty ? _metrics : available;
+    final selected = choices.any((metric) => metric.key == _selectedKey)
+        ? choices.firstWhere((metric) => metric.key == _selectedKey)
+        : choices.first;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _StrengthSectionTitle(
+          title: 'Measurement trends',
+          action: '${available.length} tracked',
+        ),
+        const SizedBox(height: 10),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: choices.map((metric) {
+              final active = metric.key == selected.key;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(metric.label),
+                  selected: active,
+                  showCheckmark: true,
+                  onSelected: (_) => setState(() => _selectedKey = metric.key),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        MetricTrendChart(
+          title: '${selected.label} trend',
+          subtitle: 'Dates are spaced by the time between snapshots',
+          points: _metricPoints(
+            widget.measurements,
+            'measured_on',
+            selected.key,
+          ),
+          accentColor: selected.color,
+          unit: selected.unit,
+          emptyMessage:
+              'Add ${selected.label.toLowerCase()} values to compare change over time.',
+        ),
       ],
     );
   }
@@ -2198,6 +2371,9 @@ class _ProgressPhotosTab extends StatelessWidget {
     required this.onClearPhotoPressed,
     required this.saving,
     required this.onSave,
+    required this.hasMore,
+    required this.loadingMore,
+    required this.onLoadMore,
   });
 
   final List<Map<String, dynamic>> photos;
@@ -2211,6 +2387,9 @@ class _ProgressPhotosTab extends StatelessWidget {
   final VoidCallback? onClearPhotoPressed;
   final bool saving;
   final VoidCallback onSave;
+  final bool hasMore;
+  final bool loadingMore;
+  final VoidCallback onLoadMore;
 
   @override
   Widget build(BuildContext context) {
@@ -2334,6 +2513,14 @@ class _ProgressPhotosTab extends StatelessWidget {
               child: _StrengthPhotoTimelineTile(photo: photo),
             ),
           ),
+        if (hasMore) ...[
+          const SizedBox(height: 4),
+          _LoadOlderButton(
+            label: 'Load older photos',
+            loading: loadingMore,
+            onPressed: onLoadMore,
+          ),
+        ],
       ],
     );
   }
@@ -2438,7 +2625,11 @@ class _SelectedPhotoPreview extends StatelessWidget {
             borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
             child: AspectRatio(
               aspectRatio: 0.82,
-              child: Image.memory(bytes, fit: BoxFit.cover),
+              child: Image.memory(
+                bytes,
+                fit: BoxFit.cover,
+                semanticLabel: '$label progress photo preview',
+              ),
             ),
           ),
           Padding(
@@ -2858,6 +3049,8 @@ class _StrengthPhotoTimelineTile extends StatelessWidget {
                   : Image.network(
                       url,
                       fit: BoxFit.cover,
+                      semanticLabel:
+                          '${_titleCase(photo['photo_type']?.toString() ?? 'Progress')} photo from ${_formatDate(photo['captured_on'])}',
                       errorBuilder: (_, __, ___) => Container(
                         color: AppColors.surfaceSoft,
                         child: const Icon(Icons.broken_image_outlined),
@@ -2929,6 +3122,8 @@ class _PhotoFrame extends StatelessWidget {
                 : Image.network(
                     url,
                     fit: BoxFit.cover,
+                    semanticLabel:
+                        '$label progress photo from ${_formatDate(photo['captured_on'])}',
                     errorBuilder: (_, __, ___) => Container(
                       color: AppColors.surfaceSoft,
                       child: const Icon(Icons.broken_image_outlined),
@@ -3058,18 +3253,52 @@ class _StrengthMiniEmpty extends StatelessWidget {
   }
 }
 
+class _LoadOlderButton extends StatelessWidget {
+  const _LoadOlderButton({
+    required this.label,
+    required this.loading,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool loading;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: loading ? null : onPressed,
+        icon: loading
+            ? const SizedBox.square(
+                dimension: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.expand_more_rounded),
+        label: Text(loading ? 'Loading…' : label),
+      ),
+    );
+  }
+}
+
 class _NumberField extends StatelessWidget {
-  const _NumberField({required this.controller, required this.label});
+  const _NumberField({
+    required this.controller,
+    required this.label,
+    this.unit = 'cm',
+  });
 
   final TextEditingController controller;
   final String label;
+  final String unit;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      decoration: InputDecoration(labelText: label),
+      decoration: InputDecoration(labelText: label, suffixText: unit),
     );
   }
 }
@@ -3167,6 +3396,7 @@ List<MetricChartPoint> _metricPoints(
         (point) => MetricChartPoint(
           label: DateFormat('d MMM').format(point.date.toLocal()),
           value: point.value,
+          timestamp: point.date,
         ),
       )
       .toList();

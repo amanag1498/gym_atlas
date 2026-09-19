@@ -1722,6 +1722,7 @@ List<MetricChartPoint> _trainerMetricPoints(
         (point) => MetricChartPoint(
           label: DateFormat('d MMM').format(point.date.toLocal()),
           value: point.value,
+          timestamp: point.date,
         ),
       )
       .toList();
