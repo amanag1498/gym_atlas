@@ -53,7 +53,7 @@
                 </div>
 
                 @if(! $guestBookingAllowed)
-                    <div class="mt-7 rounded-2xl border border-indigo-100 bg-indigo-50 p-5 text-sm leading-6 text-indigo-900">This gym shared the event by link. Sign in to the Atlas Member app to reserve your place. It will not enroll you into the hosting gym.</div>
+                    <div class="mt-7 rounded-2xl border border-indigo-100 bg-indigo-50 p-5 text-sm leading-6 text-indigo-900">This gym shared the event by link. Sign in to Gym Atlas to reserve your place. It will not enroll you into the hosting gym.</div>
                 @elseif($bookingOpen && (!$full || $event->waitlist_enabled))
                     <form method="POST" action="{{ route('public.events.book', $event->public_token) }}" class="mt-7 space-y-5">
                         @csrf
@@ -82,7 +82,7 @@
                 @else
                     <div class="mt-7 rounded-2xl bg-slate-100 p-5 text-sm text-slate-600">{{ $full ? 'This event is fully booked.' : 'Booking is not currently open.' }}</div>
                 @endif
-                <a href="gymatlasmember:///events/{{ $event->public_token }}" class="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700"><i class="ti ti-device-mobile"></i> Open in Atlas Member App</a>
+                <a href="gymatlasmember:///events/{{ $event->public_token }}" class="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700"><i class="ti ti-device-mobile"></i> Open in Gym Atlas</a>
             </section>
         </div>
     </div>

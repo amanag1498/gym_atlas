@@ -100,6 +100,47 @@ class WorkoutPortabilityTest extends TestCase
         ]);
     }
 
+    public function test_member_creates_a_public_link_that_previews_the_plan(): void
+    {
+        [$owner, $plan] = $this->memberPlan();
+
+        $share = $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/member/workout-plans/'.$plan->id.'/shares', [
+                'expires_in_days' => 7,
+            ])
+            ->assertCreated()
+            ->json('data');
+
+        $this->assertSame(
+            route('public.workout-plans.shared', $share['token']),
+            $share['share_url'],
+        );
+
+        $this->get($share['share_url'])
+            ->assertOk()
+            ->assertSee('Portable Strength')
+            ->assertSee('Save your own copy')
+            ->assertSee('Open in Gym Atlas')
+            ->assertSee('/workouts/shared/'.$share['token'], false)
+            ->assertSee('Bench Press');
+    }
+
+    public function test_recipient_scoped_share_does_not_expose_a_public_preview(): void
+    {
+        [$owner, $plan] = $this->memberPlan();
+        $recipient = $this->member('private-recipient@example.com');
+
+        $share = $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/member/workout-plans/'.$plan->id.'/shares', [
+                'recipient_user_id' => $recipient->id,
+            ])
+            ->assertCreated()
+            ->json('data');
+
+        $this->get(route('public.workout-plans.shared', $share['token']))
+            ->assertNotFound();
+    }
+
     public function test_shared_plan_recipient_scope_is_enforced(): void
     {
         [$owner, $plan] = $this->memberPlan();

@@ -20,6 +20,8 @@ class UpdateTrainerRequest extends FormRequest
             'name' => ['sometimes', 'string', 'max:160'],
             'email' => ['sometimes', 'email', 'max:255', Rule::unique('users', 'email')->ignore($trainerId)],
             'phone' => ['nullable', 'string', 'max:30'],
+            'gender' => ['nullable', Rule::in(['male', 'female', 'non_binary', 'prefer_not_to_say'])],
+            'date_of_birth' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today', 'after_or_equal:1900-01-01'],
             'avatar' => ['nullable', 'url', 'max:2048'],
             'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],

@@ -33,13 +33,13 @@
     ];
 @endphp
 
-<x-public.layouts.app page-title="Atlas Member App" page-description="Use the Atlas Member App independently for personal workouts, diet plans and progress, then connect a gym for memberships, attendance, trainer assignments and gym-scoped features.">
+<x-public.layouts.app page-title="Gym Atlas" page-description="Use Gym Atlas independently for personal workouts, diet plans and progress, then connect a gym for memberships, attendance, trainer assignments and gym-scoped features.">
     <div class="atlas-app-story atlas-member-story">
     <section class="atlas-app-hero relative overflow-hidden bg-slate-950 py-20 text-white sm:py-24 lg:py-32">
             <div class="absolute inset-0 bg-[radial-gradient(circle_at_12%_20%,rgba(70,95,255,0.38),transparent_30rem),radial-gradient(circle_at_90%_78%,rgba(34,211,238,0.13),transparent_25rem)]" aria-hidden="true"></div>
             <div class="public-container relative grid items-center gap-14 lg:grid-cols-[1.05fr_0.95fr]">
                 <div>
-                    <p class="mb-5 text-sm font-semibold uppercase tracking-[0.24em] text-cyan-300">Atlas Member App</p>
+                    <p class="mb-5 text-sm font-semibold uppercase tracking-[0.24em] text-cyan-300">Gym Atlas</p>
                     <h1 class="max-w-3xl text-4xl font-bold leading-[1.02] tracking-[-0.045em] text-white sm:text-5xl lg:text-7xl">Your training and progress, with or without a gym.</h1>
                     <p class="mt-7 max-w-2xl text-lg leading-8 text-slate-300">Start individually with personal workouts, diet plans and progress tracking. Connect a gym later to add membership, attendance, trainer assignments and gym-scoped features without losing your history.</p>
                     <div class="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -49,7 +49,7 @@
                     <p class="mt-5 text-sm leading-6 text-slate-400">App-store availability and download links are shown only after the live listings are verified.</p>
                 </div>
                 <figure class="atlas-app-hero-device mx-auto w-full max-w-[28rem] public-media-frame bg-white/5 p-3 sm:p-4">
-                    <img src="{{ asset('images/product/member/dashboard-720.webp') }}" alt="Atlas Member dashboard with membership and fitness information." class="public-app-shot rounded-[1.4rem]" width="720" height="1280" fetchpriority="high">
+                    <img src="{{ asset('images/product/member/dashboard-720.webp') }}" alt="Gym Atlas dashboard with membership and fitness information." class="public-app-shot rounded-[1.4rem]" width="720" height="1280" fetchpriority="high">
                 </figure>
             </div>
         </section>
@@ -87,9 +87,9 @@
                 </div>
                 <div class="atlas-screen-stage mt-12 grid gap-6 md:grid-cols-3">
                     @foreach ([
-                        ['image' => 'activity-720.webp', 'title' => 'Daily activity', 'alt' => 'Atlas Member activity screen showing current fitness activity.'],
-                        ['image' => 'workouts-720.webp', 'title' => 'Workout plans', 'alt' => 'Atlas Member workout screen showing available plans.'],
-                        ['image' => 'workout-history-720.webp', 'title' => 'Training history', 'alt' => 'Atlas Member workout history screen showing completed sessions.'],
+                        ['image' => 'activity-720.webp', 'title' => 'Daily activity', 'alt' => 'Gym Atlas activity screen showing current fitness activity.'],
+                        ['image' => 'workouts-720.webp', 'title' => 'Workout plans', 'alt' => 'Gym Atlas workout screen showing available plans.'],
+                        ['image' => 'workout-history-720.webp', 'title' => 'Training history', 'alt' => 'Gym Atlas workout history screen showing completed sessions.'],
                     ] as $screen)
                         <figure class="atlas-screen-card public-surface-premium overflow-hidden p-3">
                             <div class="public-media-frame border-0 shadow-none">

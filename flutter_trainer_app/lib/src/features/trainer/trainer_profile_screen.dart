@@ -1,8 +1,12 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/premium_card.dart';
 import 'trainer_certification_builder.dart';
 import 'trainer_photo_picker.dart';
 import 'trainer_repository.dart';
@@ -21,6 +25,8 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _photoController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _dateOfBirthController = TextEditingController();
   final TextEditingController _bioController = TextEditingController();
   final TextEditingController _specializationController =
       TextEditingController();
@@ -42,11 +48,13 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
   bool _submittingVerification = false;
   bool _editing = true;
   String? _error;
+  String? _photoError;
   Map<String, dynamic> _profile = const {};
   Map<String, dynamic> _trainerUser = const {};
   final List<Map<String, dynamic>> _certifications = <Map<String, dynamic>>[];
   Map<String, dynamic>? _pendingCertificationProof;
   Uint8List? _profilePhotoPreviewBytes;
+  String? _gender;
 
   @override
   void initState() {
@@ -58,6 +66,8 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
   void dispose() {
     _photoController.dispose();
     _nameController.dispose();
+    _phoneController.dispose();
+    _dateOfBirthController.dispose();
     _bioController.dispose();
     _specializationController.dispose();
     _experienceController.dispose();
@@ -92,6 +102,10 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
       _trainerUser = trainerUser;
       _photoController.text = profile['profile_photo_url']?.toString() ?? '';
       _nameController.text = trainerUser['name']?.toString() ?? 'Trainer';
+      _phoneController.text = trainerUser['phone']?.toString() ?? '';
+      _dateOfBirthController.text =
+          trainerUser['date_of_birth']?.toString() ?? '';
+      _gender = trainerUser['gender']?.toString();
       _bioController.text = profile['bio']?.toString() ?? '';
       _specializationController.text = _list(
         profile['specializations'],
@@ -132,6 +146,11 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
 
     try {
       await widget.repository.updateProfile({
+        'name': _nameController.text.trim(),
+        'phone': _emptyToNull(_phoneController.text),
+        'gender': _gender,
+        'date_of_birth': _emptyToNull(_dateOfBirthController.text),
+        'profile_photo_url': _emptyToNull(_photoController.text),
         'bio': _emptyToNull(_bioController.text),
         'specializations': _splitList(_specializationController.text),
         'experience_years':
@@ -144,17 +163,7 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
         return;
       }
 
-      setState(() {
-        _editing = false;
-        _saving = false;
-      });
-      await _loadProfile();
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Trainer profile updated.')));
+      Navigator.of(context).pop(true);
     } catch (exception) {
       if (!mounted) {
         return;
@@ -192,6 +201,10 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
     try {
       if (_editing) {
         await widget.repository.updateProfile({
+          'name': _nameController.text.trim(),
+          'phone': _emptyToNull(_phoneController.text),
+          'gender': _gender,
+          'date_of_birth': _emptyToNull(_dateOfBirthController.text),
           'bio': _emptyToNull(_bioController.text),
           'specializations': _splitList(_specializationController.text),
           'experience_years':
@@ -205,7 +218,6 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
       if (!mounted) return;
       setState(() {
         if (profile.isNotEmpty) _profile = profile;
-        _editing = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -223,19 +235,82 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
     }
   }
 
-  Future<void> _pickAndUploadPhoto() async {
+  Future<void> _showPhotoSourceSheet() async {
+    if (_uploadingPhoto || _saving) return;
+    setState(() => _photoError = null);
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            0,
+            AppSpacing.lg,
+            AppSpacing.lg,
+          ),
+          child: PremiumCard(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Choose profile photo',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Use a clear profile image from your gallery or camera.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: const Text('Gallery'),
+                  subtitle: const Text('Choose a saved photo'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _pickAndUploadPhoto(ImageSource.gallery);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_camera_outlined),
+                  title: const Text('Camera'),
+                  subtitle: const Text('Capture a new photo'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _pickAndUploadPhoto(ImageSource.camera);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndUploadPhoto(ImageSource source) async {
     if (_uploadingPhoto) {
       return;
     }
 
-    setState(() => _uploadingPhoto = true);
+    setState(() {
+      _uploadingPhoto = true;
+      _photoError = null;
+    });
     try {
-      final picked = await TrainerPhotoPicker().pickCompressedProfilePhoto();
+      final picked = await TrainerPhotoPicker().pickCompressedProfilePhoto(
+        source: source,
+      );
       if (picked == null) {
         return;
-      }
-      if (mounted) {
-        setState(() => _profilePhotoPreviewBytes = picked.bytes);
       }
       final response = await widget.repository.uploadProfilePhoto(
         bytes: picked.bytes,
@@ -254,6 +329,7 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
       setState(() {
         _photoController.text = photoUrl;
         _profile = {..._profile, 'profile_photo_url': photoUrl};
+        _profilePhotoPreviewBytes = picked.bytes;
       });
       ScaffoldMessenger.of(
         context,
@@ -262,14 +338,20 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      setState(() => _photoError = exception.toString());
     } finally {
       if (mounted) {
         setState(() => _uploadingPhoto = false);
       }
     }
+  }
+
+  void _removePhoto() {
+    setState(() {
+      _photoController.clear();
+      _profilePhotoPreviewBytes = null;
+      _photoError = null;
+    });
   }
 
   Future<void> _pickAndUploadCertification() async {
@@ -346,8 +428,6 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final completion =
-        (_profile['profile_completion_percentage'] as num?)?.toDouble() ?? 0;
     final verificationStatus =
         _profile['verification_status']?.toString().toLowerCase() ?? 'pending';
     final verificationReason = _profile['verification_rejection_reason']
@@ -355,250 +435,149 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
         .trim();
     final verificationSubmitted = _profile['verification_submitted'] == true;
     final displayName = _trainerUser['name']?.toString() ?? 'Trainer';
-    final specialization = _profile['primary_specialization']
-        ?.toString()
-        .trim();
-    return Scaffold(
-      backgroundColor: _FitProfileColor.white,
-      appBar: AppBar(
-        backgroundColor: _FitProfileColor.white,
-        elevation: 0,
-        centerTitle: true,
-        leadingWidth: 72,
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 25),
-          child: _FitIconButton(
-            icon: Icons.arrow_back_ios_new_rounded,
-            onTap: () => Navigator.of(context).pop(),
-          ),
-        ),
-        title: Text(
-          'Trainer Profile',
-          style: TextStyle(
-            color: _FitProfileColor.black,
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        actions: <Widget>[
-          if (!_loading && _error == null)
-            Padding(
-              padding: const EdgeInsets.only(right: 18),
-              child: TextButton(
-                onPressed: _saving
-                    ? null
-                    : () => setState(() => _editing = !_editing),
-                style: TextButton.styleFrom(
-                  foregroundColor: _FitProfileColor.primaryEnd,
-                  textStyle: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                child: Text(_editing ? 'Cancel' : 'Edit'),
-              ),
-            ),
-        ],
+    return AppGradientScaffold(
+      title: 'Edit Profile',
+      bottomNavigationBar: _TrainerProfileSaveBar(
+        saving: _saving,
+        onSave:
+            _saving ||
+                _submittingVerification ||
+                _uploadingPhoto ||
+                _loading ||
+                _error != null
+            ? null
+            : _saveProfile,
       ),
-      body: _loading
-          ? const LoadingStateView(label: 'Loading trainer profile...')
-          : _error != null
-          ? ErrorStateView(message: _error!, onRetry: _loadProfile)
-          : RefreshIndicator(
-              onRefresh: _loadProfile,
-              color: _FitProfileColor.primaryEnd,
-              child: Form(
+      body: SafeArea(
+        bottom: false,
+        child: _loading
+            ? const LoadingStateView(label: 'Loading trainer profile...')
+            : _error != null
+            ? ErrorStateView(message: _error!, onRetry: _loadProfile)
+            : Form(
                 key: _formKey,
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(
                     parent: BouncingScrollPhysics(),
                   ),
-                  padding: const EdgeInsets.fromLTRB(25, 15, 25, 32),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                    AppSpacing.lg,
+                    AppSpacing.xl,
+                  ),
                   children: <Widget>[
+                    const _TrainerEditorTopBar(),
+                    const SizedBox(height: AppSpacing.md),
                     _FitProfileHeader(
                       name: displayName,
                       email: _trainerUser['email']?.toString() ?? '',
-                      specialization: specialization,
                       imageUrl: _photoController.text.trim(),
                       previewBytes: _profilePhotoPreviewBytes,
                       uploading: _uploadingPhoto,
-                      editing: _editing,
-                      onPhotoTap: _uploadingPhoto ? null : _pickAndUploadPhoto,
+                      error: _photoError,
+                      onPhotoTap: _uploadingPhoto
+                          ? null
+                          : _showPhotoSourceSheet,
+                      onRemovePhoto: _photoController.text.trim().isEmpty
+                          ? null
+                          : _removePhoto,
                     ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: _FitProfileStatCell(
-                            title: '${completion.toStringAsFixed(0)}%',
-                            subtitle: 'Complete',
-                          ),
-                        ),
-                        Container(
-                          height: 48,
-                          width: 1,
-                          color: _FitProfileColor.border,
-                        ),
-                        Expanded(
-                          child: _FitProfileStatCell(
-                            title: _experienceController.text.trim().isEmpty
-                                ? '--'
-                                : '${_experienceController.text.trim()}y',
-                            subtitle: 'Experience',
-                          ),
-                        ),
-                        Container(
-                          height: 48,
-                          width: 1,
-                          color: _FitProfileColor.border,
-                        ),
-                        Expanded(
-                          child: _FitProfileStatCell(
-                            title: _profile['client_count']?.toString() ?? '0',
-                            subtitle: 'Clients',
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 25),
                     _FitProfileCard(
-                      title: 'Profile completion',
+                      title: 'Basic Details',
                       subtitle:
-                          'Keep the essentials complete so gyms and clients can trust the profile at a glance.',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(999),
-                            child: LinearProgressIndicator(
-                              value: (completion.clamp(0, 100)) / 100,
-                              minHeight: 10,
-                              backgroundColor: _FitProfileColor.field,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                _FitProfileColor.primaryEnd,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: <Widget>[
-                              _FitChip(
-                                label:
-                                    '${completion.toStringAsFixed(0)}% complete',
-                                icon: Icons.auto_awesome_rounded,
-                              ),
-                              _FitChip(
-                                label:
-                                    verificationStatus == 'pending' &&
-                                        !verificationSubmitted
-                                    ? 'verification not submitted'
-                                    : 'verification $verificationStatus',
-                                icon: Icons.verified_outlined,
-                              ),
-                              _FitChip(
-                                label: _profile['is_active'] == true
-                                    ? 'active trainer'
-                                    : 'inactive trainer',
-                                icon: Icons.flash_on_rounded,
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    _FitProfileCard(
-                      title: 'Personal coaching verification',
-                      subtitle: verificationStatus == 'verified'
-                          ? 'Verified. You can invite and coach your own members alongside members assigned by a gym.'
-                          : verificationStatus == 'suspended'
-                          ? 'Personal coaching access is suspended. Your gym assignment is separate and remains unchanged.'
-                          : verificationStatus == 'rejected'
-                          ? 'Update the requested details, save, then resubmit your application.'
-                          : verificationSubmitted
-                          ? 'Your application is under platform review. Gym membership and gym-assigned members are unaffected.'
-                          : 'Complete your bio, specialization, experience and certification details, then submit for review.',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          const Text(
-                            'Verification only unlocks personal member invitations. A trainer can be gym-assigned and verified at the same time.',
-                          ),
-                          if (verificationStatus != 'verified' &&
-                              verificationStatus != 'suspended' &&
-                              (verificationStatus == 'rejected' ||
-                                  !verificationSubmitted)) ...[
-                            const SizedBox(height: 14),
-                            GradientButton(
-                              label: _submittingVerification
-                                  ? 'Submitting...'
-                                  : verificationStatus == 'rejected'
-                                  ? 'Resubmit verification'
-                                  : 'Submit for verification',
-                              icon: Icons.verified_user_outlined,
-                              expanded: true,
-                              loading: _submittingVerification,
-                              onPressed: _submittingVerification
-                                  ? null
-                                  : _submitVerification,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    if (verificationReason?.isNotEmpty == true) ...[
-                      const SizedBox(height: 14),
-                      _FitProfileCard(
-                        title: verificationStatus == 'suspended'
-                            ? 'Independent coaching suspended'
-                            : 'Verification changes required',
-                        subtitle: verificationReason!,
-                        child: const Text(
-                          'Update your professional details or certification evidence, save the profile, then resubmit verification.',
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                    _FitProfileCard(
-                      title: 'Identity',
-                      subtitle:
-                          'These fields come from the user account and assigned gym context.',
+                          'Keep your account details accurate. Birth date and gender are optional.',
                       child: Column(
                         children: <Widget>[
                           TextFormField(
                             controller: _nameController,
-                            readOnly: true,
+                            textCapitalization: TextCapitalization.words,
                             decoration: _fitInputDecoration(
                               'Name',
                               icon: Icons.person_outline_rounded,
                             ),
+                            validator: (value) => (value ?? '').trim().isEmpty
+                                ? 'Name is required'
+                                : null,
                           ),
                           const SizedBox(height: 14),
                           TextFormField(
-                            controller: _gymController,
-                            readOnly: true,
+                            controller: _phoneController,
+                            readOnly: !_editing,
+                            keyboardType: TextInputType.phone,
+                            autofillHints: const [
+                              AutofillHints.telephoneNumber,
+                            ],
                             decoration: _fitInputDecoration(
-                              'Assigned gym',
-                              icon: Icons.apartment_rounded,
+                              'Phone number',
+                              icon: Icons.phone_outlined,
                             ),
+                            validator: (value) {
+                              final phone = (value ?? '').trim();
+                              if (phone.isEmpty) {
+                                return 'Phone number is required';
+                              }
+                              final digitCount = phone.codeUnits
+                                  .where((unit) => unit >= 48 && unit <= 57)
+                                  .length;
+                              if (digitCount < 7 || digitCount > 15) {
+                                return 'Enter a valid phone number';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          DropdownButtonFormField<String>(
+                            initialValue:
+                                const [
+                                  'female',
+                                  'male',
+                                  'non_binary',
+                                  'prefer_not_to_say',
+                                ].contains(_gender)
+                                ? _gender
+                                : null,
+                            decoration: _fitInputDecoration(
+                              'Gender (optional)',
+                              icon: Icons.person_outline_rounded,
+                            ),
+                            items:
+                                const {
+                                      'female': 'Female',
+                                      'male': 'Male',
+                                      'non_binary': 'Non-binary',
+                                      'prefer_not_to_say': 'Prefer not to say',
+                                    }.entries
+                                    .map(
+                                      (entry) => DropdownMenuItem<String>(
+                                        value: entry.key,
+                                        child: Text(entry.value),
+                                      ),
+                                    )
+                                    .toList(),
+                            onChanged: _editing
+                                ? (value) => setState(() => _gender = value)
+                                : null,
                           ),
                           const SizedBox(height: 14),
                           TextFormField(
-                            controller: _branchController,
+                            controller: _dateOfBirthController,
                             readOnly: true,
+                            onTap: _editing ? _pickDateOfBirth : null,
                             decoration: _fitInputDecoration(
-                              'Assigned branch',
-                              icon: Icons.location_on_outlined,
+                              'Date of birth (optional)',
+                              icon: Icons.cake_outlined,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 25),
                     _FitProfileCard(
-                      title: 'Coaching details',
-                      subtitle: _editing
-                          ? 'Update the fields that are saved to the trainer profile API.'
-                          : 'Review the trainer profile information currently visible to the gym.',
+                      title: 'Coaching Details',
+                      subtitle:
+                          'Tell members about your specialties and experience.',
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
@@ -683,20 +662,76 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
                         ],
                       ),
                     ),
-                    if (_editing) ...[
-                      const SizedBox(height: 24),
-                      GradientButton(
-                        label: _saving ? 'Saving...' : 'Save profile',
-                        icon: Icons.check_circle_rounded,
-                        expanded: true,
-                        onPressed: _saving ? null : _saveProfile,
+                    const SizedBox(height: 25),
+                    _FitProfileCard(
+                      title: 'Personal Coaching Verification',
+                      subtitle: verificationStatus == 'verified'
+                          ? 'Your personal coaching profile is verified.'
+                          : verificationStatus == 'suspended'
+                          ? 'Personal coaching access is suspended. Contact support for help.'
+                          : verificationStatus == 'rejected'
+                          ? 'Update the requested details, then resubmit for review.'
+                          : verificationSubmitted
+                          ? 'Your application is under review.'
+                          : 'Complete your coaching details and certifications to apply.',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (verificationReason?.isNotEmpty == true)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: Text(
+                                verificationReason!,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                          if (verificationStatus != 'verified' &&
+                              verificationStatus != 'suspended' &&
+                              (verificationStatus == 'rejected' ||
+                                  !verificationSubmitted))
+                            OutlinedButton.icon(
+                              onPressed: _submittingVerification || _saving
+                                  ? null
+                                  : _submitVerification,
+                              icon: _submittingVerification
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.verified_user_outlined),
+                              label: Text(
+                                verificationStatus == 'rejected'
+                                    ? 'Resubmit verification'
+                                    : 'Submit for verification',
+                              ),
+                            ),
+                        ],
                       ),
-                    ],
+                    ),
                   ],
                 ),
               ),
-            ),
+      ),
     );
+  }
+
+  Future<void> _pickDateOfBirth() async {
+    final now = DateTime.now();
+    final current = DateTime.tryParse(_dateOfBirthController.text);
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: current ?? DateTime(now.year - 18, now.month, now.day),
+      firstDate: DateTime(1900),
+      lastDate: DateTime(now.year, now.month, now.day),
+    );
+    if (selected != null && mounted) {
+      setState(() {
+        _dateOfBirthController.text =
+            '${selected.year.toString().padLeft(4, '0')}-${selected.month.toString().padLeft(2, '0')}-${selected.day.toString().padLeft(2, '0')}';
+      });
+    }
   }
 
   static List<String> _splitList(String raw) {
@@ -750,155 +785,200 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
   }
 }
 
+class _TrainerEditorTopBar extends StatelessWidget {
+  const _TrainerEditorTopBar();
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      IconButton(
+        tooltip: 'Back',
+        onPressed: () => Navigator.of(context).maybePop(),
+        icon: const Icon(Icons.arrow_back_rounded),
+        style: IconButton.styleFrom(
+          backgroundColor: AppColors.surface,
+          side: const BorderSide(color: AppColors.stroke),
+          fixedSize: const Size(42, 42),
+        ),
+      ),
+      const SizedBox(width: AppSpacing.md),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Edit Profile',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Keep your account and coaching details accurate.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
+class _TrainerProfileSaveBar extends StatelessWidget {
+  const _TrainerProfileSaveBar({required this.saving, required this.onSave});
+
+  final bool saving;
+  final VoidCallback? onSave;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: AppColors.surface,
+    elevation: 10,
+    shadowColor: Colors.black.withValues(alpha: 0.10),
+    child: SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(AppSpacing.lg, 12, AppSpacing.lg, 12),
+      child: FilledButton(
+        onPressed: onSave,
+        style: FilledButton.styleFrom(
+          minimumSize: const Size.fromHeight(52),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+        child: saving
+            ? const SizedBox.square(
+                dimension: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.4,
+                  color: Colors.white,
+                ),
+              )
+            : const Text('Save changes'),
+      ),
+    ),
+  );
+}
+
 class _FitProfileHeader extends StatelessWidget {
   const _FitProfileHeader({
     required this.name,
     required this.email,
-    required this.specialization,
     required this.imageUrl,
     required this.previewBytes,
     required this.uploading,
-    required this.editing,
+    required this.error,
     required this.onPhotoTap,
+    required this.onRemovePhoto,
   });
 
   final String name;
   final String email;
-  final String? specialization;
   final String imageUrl;
   final Uint8List? previewBytes;
   final bool uploading;
-  final bool editing;
+  final String? error;
   final VoidCallback? onPhotoTap;
+  final VoidCallback? onRemovePhoto;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Stack(
-          clipBehavior: Clip.none,
-          children: <Widget>[
-            Container(
-              width: 68,
-              height: 68,
-              decoration: BoxDecoration(
-                color: _FitProfileColor.field,
-                borderRadius: BorderRadius.circular(22),
+    final hasPhoto = imageUrl.isNotEmpty || previewBytes != null;
+    return PremiumCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Semantics(
+                label: hasPhoto ? 'Current profile photo' : 'Profile avatar',
+                image: hasPhoto,
+                child: AppNetworkImage(
+                  imageUrl: imageUrl,
+                  memoryBytes: previewBytes,
+                  height: 72,
+                  width: 72,
+                  borderRadius: 36,
+                  fallbackIcon: Icons.person_outline_rounded,
+                ),
               ),
-              clipBehavior: Clip.antiAlias,
-              child: AppNetworkImage(
-                imageUrl: imageUrl,
-                memoryBytes: previewBytes,
-                height: 68,
-                width: 68,
-                borderRadius: 22,
-                fallbackIcon: Icons.person_outline_rounded,
-              ),
-            ),
-            if (editing)
-              Positioned(
-                right: -6,
-                bottom: -6,
-                child: InkWell(
-                  onTap: onPhotoTap,
-                  borderRadius: BorderRadius.circular(999),
-                  child: Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      gradient: _FitProfileColor.primaryGradient,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: _FitProfileColor.white,
-                        width: 3,
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Profile photo',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    child: Icon(
-                      uploading
-                          ? Icons.hourglass_empty_rounded
-                          : Icons.camera_alt_rounded,
-                      color: _FitProfileColor.white,
-                      size: 15,
+                    const SizedBox(height: 4),
+                    Text(
+                      name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 5),
+                    Text(
+                      uploading ? 'Uploading photo…' : email,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-          ],
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: _FitProfileColor.black,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                email.isNotEmpty ? email : 'Trainer account',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: _FitProfileColor.gray,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 9),
-              _FitChip(
-                label: specialization?.isNotEmpty == true
-                    ? specialization!
-                    : 'Add specialization',
-                icon: Icons.bolt_rounded,
-                compact: true,
               ),
             ],
           ),
-        ),
-      ],
-    );
-  }
-}
-
-class _FitProfileStatCell extends StatelessWidget {
-  const _FitProfileStatCell({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: <Widget>[
-        Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: _FitProfileColor.black,
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              OutlinedButton.icon(
+                onPressed: uploading ? null : onPhotoTap,
+                icon: uploading
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        hasPhoto
+                            ? Icons.photo_camera_outlined
+                            : Icons.add_a_photo_rounded,
+                      ),
+                label: Text(hasPhoto ? 'Change photo' : 'Add photo'),
+              ),
+              if (onRemovePhoto != null)
+                TextButton.icon(
+                  onPressed: uploading ? null : onRemovePhoto,
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  label: const Text('Remove photo'),
+                ),
+            ],
           ),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          subtitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: _FitProfileColor.gray,
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
+          if (error != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              error!,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.error),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -916,42 +996,27 @@ class _FitProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: _FitProfileColor.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _FitProfileColor.border),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: _FitProfileColor.black.withValues(alpha: 0.05),
-            blurRadius: 22,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
+    return PremiumCard(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
             title,
-            style: TextStyle(
-              color: _FitProfileColor.black,
-              fontSize: 15,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 5),
           Text(
             subtitle,
-            style: TextStyle(
-              color: _FitProfileColor.gray,
-              fontSize: 12,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
               height: 1.35,
-              fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 12),
           child,
         ],
       ),
@@ -1074,77 +1139,6 @@ class _CertificationPreviewList extends StatelessWidget {
   }
 }
 
-class _FitChip extends StatelessWidget {
-  const _FitChip({
-    required this.label,
-    required this.icon,
-    this.compact = false,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 9 : 12,
-        vertical: compact ? 6 : 8,
-      ),
-      decoration: BoxDecoration(
-        color: _FitProfileColor.field,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(icon, size: compact ? 13 : 15, color: _FitProfileColor.accent),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: _FitProfileColor.black,
-                fontSize: compact ? 11 : 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FitIconButton extends StatelessWidget {
-  const _FitIconButton({required this.icon, required this.onTap});
-
-  final IconData icon;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: _FitProfileColor.field,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, size: 18, color: _FitProfileColor.black),
-        ),
-      ),
-    );
-  }
-}
-
 InputDecoration _fitInputDecoration(
   String label, {
   String? hint,
@@ -1173,14 +1167,12 @@ InputDecoration _fitInputDecoration(
 }
 
 class _FitProfileColor {
-  static const Color white = Colors.white;
-  static const Color black = Color(0xFF1D1617);
-  static const Color gray = Color(0xFF7B6F72);
-  static const Color field = Color(0xFFF7F8F8);
-  static const Color border = Color(0xFFEDEDED);
-  static const Color accent = Color(0xFF92A3FD);
-  static const Color primaryStart = Color(0xFF9DCEFF);
-  static const Color primaryEnd = Color(0xFF92A3FD);
+  static const Color black = AppColors.textPrimary;
+  static const Color gray = AppColors.textSecondary;
+  static const Color field = AppColors.surfaceSoft;
+  static const Color border = AppColors.stroke;
+  static const Color primaryStart = AppColors.primary;
+  static const Color primaryEnd = AppColors.primaryBright;
 
   static const LinearGradient primaryGradient = LinearGradient(
     colors: <Color>[primaryStart, primaryEnd],

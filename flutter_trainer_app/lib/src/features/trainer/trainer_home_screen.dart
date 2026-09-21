@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:gym_flutter_core/workout_builder_validation.dart';
 import 'package:gym_flutter_core/workout_plan_summary_view.dart';
 import 'package:provider/provider.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
@@ -19,6 +20,7 @@ import 'socket_service.dart';
 import 'trainer_member_detail_screen.dart';
 import 'trainer_onboarding_flow.dart';
 import 'trainer_profile_screen.dart';
+import 'trainer_profile_overview_screen.dart';
 import 'trainer_coaching_mode.dart';
 import 'trainer_repository.dart';
 import 'trainer_diet_plan_screen.dart';
@@ -257,6 +259,8 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     if (!mounted) {
       return;
     }
+    final sessionController = context.read<TrainerSessionController>();
+    if (sessionController.token == null) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -264,6 +268,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
 
     try {
       final contextResponse = await _repository.fetchContext();
+      if (!mounted || sessionController.token == null) return;
       final contextData = _map(contextResponse['data']);
       final trainerProfile = _map(contextData['trainer_profile']);
       final hasTrainerProfile = trainerProfile.isNotEmpty;
@@ -415,6 +420,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       _chatConversations = chatConversations;
       _independentInvitations = independentInvitations;
     } catch (exception) {
+      if (!mounted || sessionController.token == null) return;
       debugPrint('[trainer-home][error] Dashboard load failed: $exception');
       _error =
           'We could not load your coaching dashboard. Check your connection and try again.';
@@ -560,11 +566,24 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
     }
   }
 
+  Future<void> _openProfileViewScreen() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) =>
+            TrainerProfileOverviewScreen(repository: _repository),
+      ),
+    );
+
+    if (mounted) {
+      await _load();
+    }
+  }
+
   Future<void> _openSettingsScreen() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) =>
-            TrainerSettingsScreen(onEditProfile: _openProfileEditSheet),
+            TrainerSettingsScreen(onViewProfile: _openProfileViewScreen),
       ),
     );
     if (mounted) {
@@ -691,6 +710,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         plans: _plans,
         exercises: _exercises,
         repository: _repository,
+        previewMode: widget.storePreviewData != null,
         initialAssignmentKey: _workoutFocusAssignmentKey,
         onRefresh: _load,
         hasMore:
@@ -720,6 +740,10 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         onLoadMore: _loadMoreNotifications,
         onMarkRead: (notificationId) async {
           await _repository.markNotificationRead(notificationId);
+          await _load();
+        },
+        onMarkUnread: (notificationId) async {
+          await _repository.markNotificationUnread(notificationId);
           await _load();
         },
         onMarkAllRead: () async {
@@ -804,6 +828,10 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                   onLoadMore: _loadMoreNotifications,
                   onMarkRead: (notificationId) async {
                     await _repository.markNotificationRead(notificationId);
+                    await _load();
+                  },
+                  onMarkUnread: (notificationId) async {
+                    await _repository.markNotificationUnread(notificationId);
                     await _load();
                   },
                   onMarkAllRead: () async {
@@ -2263,68 +2291,68 @@ class _TrainerBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      minimum: const EdgeInsets.only(bottom: 0),
-      child: SizedBox(
-        height: 92,
-        child: Stack(
-          alignment: Alignment.topCenter,
-          children: [
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                height: 62,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.shadow.withValues(alpha: 0.10),
-                      blurRadius: 14,
-                      offset: const Offset(0, -3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _TrainerBottomNavItem(
-                      label: 'Home',
-                      icon: Icons.home_rounded,
-                      active: currentIndex == 0,
-                      onTap: () => onSelect(0),
-                    ),
-                    _TrainerBottomNavItem(
-                      label: 'Clients',
-                      icon: Icons.groups_rounded,
-                      active: currentIndex == 1,
-                      onTap: () => onSelect(1),
-                    ),
-                    const SizedBox(width: 58),
-                    _TrainerBottomNavItem(
-                      label: 'Chat',
-                      icon: Icons.chat_bubble_rounded,
-                      active: currentIndex == 3,
-                      onTap: () => onSelect(3),
-                    ),
-                    _TrainerBottomNavItem(
-                      label: 'Alerts',
-                      icon: Icons.notifications_rounded,
-                      active: currentIndex == 4,
-                      onTap: () => onSelect(4),
-                    ),
-                  ],
-                ),
+    return SizedBox(
+      height: 62,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.topCenter,
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              height: 62,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.shadow.withValues(alpha: 0.10),
+                    blurRadius: 14,
+                    offset: const Offset(0, -3),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _TrainerBottomNavItem(
+                    label: 'Home',
+                    icon: Icons.home_rounded,
+                    active: currentIndex == 0,
+                    onTap: () => onSelect(0),
+                  ),
+                  _TrainerBottomNavItem(
+                    label: 'Clients',
+                    icon: Icons.groups_rounded,
+                    active: currentIndex == 1,
+                    onTap: () => onSelect(1),
+                  ),
+                  const SizedBox(width: 58),
+                  _TrainerBottomNavItem(
+                    label: 'Chat',
+                    icon: Icons.chat_bubble_rounded,
+                    active: currentIndex == 3,
+                    onTap: () => onSelect(3),
+                  ),
+                  _TrainerBottomNavItem(
+                    label: 'Alerts',
+                    icon: Icons.notifications_rounded,
+                    active: currentIndex == 4,
+                    onTap: () => onSelect(4),
+                  ),
+                ],
               ),
             ),
-            _TrainerCenterAction(
+          ),
+          Positioned(
+            top: -26,
+            child: _TrainerCenterAction(
               active: currentIndex == 2,
               onTap: () => onSelect(2),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -5600,6 +5628,7 @@ class _WorkoutPage extends StatefulWidget {
     required this.plans,
     required this.exercises,
     required this.repository,
+    required this.previewMode,
     required this.initialAssignmentKey,
     required this.onRefresh,
     required this.hasMore,
@@ -5613,6 +5642,7 @@ class _WorkoutPage extends StatefulWidget {
   final List<Map<String, dynamic>> plans;
   final List<Map<String, dynamic>> exercises;
   final TrainerRepository repository;
+  final bool previewMode;
   final String? initialAssignmentKey;
   final Future<void> Function() onRefresh;
   final bool hasMore;
@@ -5628,6 +5658,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   final _goalController = TextEditingController();
   final _difficultyController = TextEditingController(text: 'intermediate');
   final _durationController = TextEditingController(text: '4');
+  final _minutesController = TextEditingController(text: '45');
   final _notesController = TextEditingController();
   final _exerciseSearchController = TextEditingController();
   final _exercisePickerTextController = TextEditingController();
@@ -5671,6 +5702,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   bool _savingPlan = false;
   bool _savingExercise = false;
   bool _loadingExerciseCatalog = false;
+  int _exerciseSearchGeneration = 0;
   bool _recentExercisesOnly = false;
   bool _loadingProgressions = false;
   List<Map<String, dynamic>> _progressionRecommendations = const [];
@@ -5730,7 +5762,9 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       );
     }
     _loadDayIntoFields(_selectedDayKey);
-    unawaited(_loadProgressionRecommendations());
+    if (!widget.previewMode) {
+      unawaited(_loadProgressionRecommendations());
+    }
   }
 
   @override
@@ -5757,6 +5791,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     _goalController.dispose();
     _difficultyController.dispose();
     _durationController.dispose();
+    _minutesController.dispose();
     _notesController.dispose();
     _exerciseSearchDebounce?.cancel();
     _exerciseSearchController.dispose();
@@ -5823,6 +5858,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   Future<void> _setRecentExercises(bool recent) async {
     if (_loadingExerciseCatalog) return;
     if (!recent && _exerciseSearchController.text.trim().isEmpty) {
+      _exerciseSearchGeneration++;
       setState(() {
         _recentExercisesOnly = false;
         _catalogExercises = widget.exercises;
@@ -5846,6 +5882,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   }
 
   Future<void> _searchExercises() async {
+    final generation = ++_exerciseSearchGeneration;
     setState(() => _loadingExerciseCatalog = true);
     try {
       final response = await widget.repository.fetchExercises(
@@ -5854,24 +5891,29 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         perPage: 100,
         locale: WidgetsBinding.instance.platformDispatcher.locale.languageCode,
       );
-      if (!mounted) return;
+      if (!mounted || generation != _exerciseSearchGeneration) return;
       final exercises = apiPageItems(response);
       setState(() {
         _catalogExercises = exercises;
         _catalogExercisePage = ApiPagination.fromResponse(response);
-        if (_selectedExerciseId == null && exercises.isNotEmpty) {
-          _selectedExerciseId = (exercises.first['id'] as num?)?.toInt();
+        if (!exercises.any(
+          (exercise) =>
+              (exercise['id'] as num?)?.toInt() == _selectedExerciseId,
+        )) {
+          _selectedExerciseId = (exercises.firstOrNull?['id'] as num?)?.toInt();
         }
       });
       _syncExercisePickerText();
     } catch (exception) {
-      if (mounted) {
+      if (mounted && generation == _exerciseSearchGeneration) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(exception.toString())));
       }
     } finally {
-      if (mounted) setState(() => _loadingExerciseCatalog = false);
+      if (mounted && generation == _exerciseSearchGeneration) {
+        setState(() => _loadingExerciseCatalog = false);
+      }
     }
   }
 
@@ -6234,11 +6276,24 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                                 icon: Icons.date_range_rounded,
                               ),
                               validator: (value) {
-                                final parsed = int.tryParse(
-                                  value?.trim() ?? '',
-                                );
-                                if (parsed == null || parsed < 1) {
-                                  return 'Min 1';
+                                final parsed = int.tryParse(value?.trim() ?? '');
+                                if (parsed == null || parsed < 1 || parsed > 52) {
+                                  return 'Use 1 to 52 weeks';
+                                }
+                                return null;
+                              },
+                            ),
+                            TextFormField(
+                              controller: _minutesController,
+                              keyboardType: TextInputType.number,
+                              decoration: _workoutInputDecoration(
+                                'Minutes per session',
+                                icon: Icons.timer_outlined,
+                              ),
+                              validator: (value) {
+                                final parsed = int.tryParse(value?.trim() ?? '');
+                                if (parsed == null || parsed < 10 || parsed > 240) {
+                                  return 'Use 10 to 240 minutes';
                                 }
                                 return null;
                               },
@@ -6251,7 +6306,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                           minLines: 2,
                           maxLines: 4,
                           decoration: _workoutInputDecoration(
-                            'Trainer notes',
+                            'Plan notes',
                             icon: Icons.notes_rounded,
                           ),
                         ),
@@ -7198,6 +7253,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       _goalController.clear();
       _difficultyController.text = 'intermediate';
       _durationController.text = '4';
+      _minutesController.text = '45';
       _notesController.clear();
       _selectedWeekDays
         ..clear()
@@ -7245,7 +7301,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   }
 
   void _addExerciseToCurrentDay() {
-    final selectedExercise = widget.exercises.firstWhere(
+    final selectedExercise = _catalogExercises.firstWhere(
       (item) => (item['id'] as num?)?.toInt() == _selectedExerciseId,
       orElse: () => const <String, dynamic>{},
     );
@@ -7824,6 +7880,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
           ? null
           : _difficultyController.text.trim(),
       'duration_weeks': durationWeeks,
+      'estimated_session_minutes': int.parse(_minutesController.text.trim()),
       'weekly_schedule': days,
       'notes': _notesController.text.trim().isEmpty
           ? null
@@ -8500,11 +8557,8 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     }
 
     _persistCurrentDayFromFields();
-    final selectedMember = _selectedMember();
-    final gymId = _activeGymId(selectedMember);
-    final branchId = _activeBranchId(selectedMember);
-    final relationshipId = _intValue(selectedMember['relationship_id']);
-    final memberId = _intValue(selectedMember['member_id']);
+    final gymId = _activeGymId(const {});
+    final branchId = _activeBranchId(const {});
     final days = _selectedWeekDays.toList()
       ..sort((a, b) => _dayNumbers[a]!.compareTo(_dayNumbers[b]!));
     if (days.isEmpty) {
@@ -8513,49 +8567,42 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       );
       return;
     }
-    if (gymId == null && relationshipId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Select a valid coaching member before saving.'),
-        ),
-      );
-      return;
-    }
     final payloadDays = _draftPayloadDays(days);
     if (payloadDays == null) {
       return;
     }
-    final durationWeeks = int.tryParse(_durationController.text.trim()) ?? 4;
+    final durationWeeks = int.tryParse(_durationController.text.trim());
+    if (durationWeeks == null || durationWeeks < 1 || durationWeeks > 52) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Duration must be from 1 to 52 weeks.')),
+      );
+      return;
+    }
+
+    final payload = _templatePayload(
+      gymId: gymId,
+      branchId: branchId,
+      durationWeeks: durationWeeks,
+      days: days,
+      payloadDays: payloadDays,
+    );
+    final validationError = validateWorkoutBuilderPayload(payload);
+    if (validationError != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(validationError)));
+      return;
+    }
 
     setState(() => _savingPlan = true);
     try {
-      final payload = _templatePayload(
-        gymId: gymId,
-        branchId: branchId,
-        durationWeeks: durationWeeks,
-        days: days,
-        payloadDays: payloadDays,
-      );
-      final response = relationshipId != null && memberId != null
-          ? await widget.repository.createWorkoutPlan({
-              ...payload,
-              'independent_trainer_member_relationship_id': relationshipId,
-              'member_ids': <int>[memberId],
-              'starts_on': DateTime.now().toIso8601String().split('T').first,
-            })
-          : await widget.repository.createWorkoutTemplate(payload);
+      final response = await widget.repository.createWorkoutTemplate(payload);
       final createdTemplateId = (_map(response['data'])['id'] as num?)?.toInt();
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            relationshipId != null
-                ? 'Independent workout assigned to the member.'
-                : 'Workout saved to your library.',
-          ),
-        ),
+        SnackBar(content: const Text('Workout saved to your library.')),
       );
       _resetBuilder();
       await widget.onRefresh();
@@ -11150,6 +11197,7 @@ class _NotificationPage extends StatelessWidget {
     required this.loadingMore,
     required this.onLoadMore,
     required this.onMarkRead,
+    required this.onMarkUnread,
     required this.onMarkAllRead,
     required this.onUpdateTrial,
     required this.onOpenTrialLeads,
@@ -11166,6 +11214,7 @@ class _NotificationPage extends StatelessWidget {
   final bool loadingMore;
   final Future<void> Function() onLoadMore;
   final Future<void> Function(int notificationId) onMarkRead;
+  final Future<void> Function(int notificationId) onMarkUnread;
   final Future<void> Function() onMarkAllRead;
   final Future<void> Function(int trialRequestId, String status) onUpdateTrial;
   final VoidCallback onOpenTrialLeads;
@@ -11181,144 +11230,166 @@ class _NotificationPage extends StatelessWidget {
         .where((item) => item['read_at'] == null)
         .length;
 
-    return RefreshIndicator(
-      onRefresh: onRefresh,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(25, 15, 25, 104),
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Notification',
-                  style: const TextStyle(
-                    color: Color(0xFF1D1617),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
+    return ColoredBox(
+      color: Colors.white,
+      child: RefreshIndicator(
+        onRefresh: onRefresh,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(25, 15, 25, 28),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Notification',
+                    style: const TextStyle(
+                      color: Color(0xFF1D1617),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                if (members.isNotEmpty) ...[
+                  _TrainerNotificationTopButton(
+                    icon: Icons.campaign_outlined,
+                    onTap: () => _openAnnouncementSheet(context),
+                    tooltip: 'Send member update',
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                if (unreadCount > 0) ...[
+                  _TrainerNotificationTopButton(
+                    icon: Icons.done_all_rounded,
+                    tooltip: 'Mark all notifications read',
+                    onTap: () async {
+                      try {
+                        await onMarkAllRead();
+                      } catch (exception) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(exception.toString())),
+                          );
+                        }
+                      }
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                _TrainerNotificationTopButton(
+                  icon: Icons.refresh_rounded,
+                  onTap: () => onRefresh(),
+                  tooltip: 'Refresh notifications',
+                ),
+              ],
+            ),
+            if (trialRequests.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              _TrainerNotificationSectionTitle(
+                title: 'Trial requests',
+                action: 'View all',
+                onTap: onOpenTrialLeads,
+              ),
+              const SizedBox(height: 10),
+              ...trialRequests.take(5).map((trial) {
+                final id = (trial['id'] as num?)?.toInt();
+                final member = _map(trial['member']);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _TrainerTrialLeadCard(
+                    title:
+                        member['name']?.toString() ??
+                        trial['name']?.toString() ??
+                        'Trial lead',
+                    subtitle:
+                        'Preferred ${prettyDate(trial['preferred_date'])} ${trial['preferred_time'] ?? ''}',
+                    status: trial['status']?.toString() ?? 'pending',
+                    onAccept: id == null
+                        ? null
+                        : () => onUpdateTrial(id, 'accepted'),
+                    onCompleted: id == null
+                        ? null
+                        : () => onUpdateTrial(id, 'completed'),
+                  ),
+                );
+              }),
+            ],
+            const SizedBox(height: 18),
+            const _TrainerNotificationSectionTitle(
+              title: 'Updates',
+              action: 'Latest',
+            ),
+            const SizedBox(height: 2),
+            if (notifications.isEmpty)
+              const EmptyStateView(
+                title: 'No notifications yet',
+                message: 'Member updates and coaching alerts will appear here.',
+                icon: Icons.notifications_none_rounded,
+              )
+            else
+              ...notifications.asMap().entries.expand((entry) {
+                final item = entry.value;
+                final isUnread = item['read_at'] == null;
+                return [
+                  _TrainerNotificationRow(
+                    notification: item,
+                    isUnread: isUnread,
+                    onRespondGymInvitation: onRespondGymInvitation,
+                    onMarkRead: () async {
+                      final id = (item['id'] as num?)?.toInt();
+                      if (id == null) {
+                        return;
+                      }
+                      try {
+                        await onMarkRead(id);
+                      } catch (exception) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(exception.toString())),
+                          );
+                        }
+                      }
+                    },
+                    onMarkUnread: () async {
+                      final id = (item['id'] as num?)?.toInt();
+                      if (id == null) return;
+                      try {
+                        await onMarkUnread(id);
+                      } catch (exception) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(exception.toString())),
+                          );
+                        }
+                      }
+                    },
+                    onOpenEvent: onOpenEvent,
+                  ),
+                  if (entry.key < notifications.length - 1)
+                    Divider(
+                      color: const Color(0xFF786F72).withValues(alpha: 0.26),
+                      height: 1,
+                    ),
+                ];
+              }),
+            if (hasMore) ...[
+              const SizedBox(height: 20),
+              Center(
+                child: OutlinedButton.icon(
+                  onPressed: loadingMore ? null : onLoadMore,
+                  icon: loadingMore
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.expand_more_rounded),
+                  label: Text(
+                    loadingMore ? 'Loading...' : 'Load older updates',
                   ),
                 ),
               ),
-              if (members.isNotEmpty) ...[
-                _SquareIconButton(
-                  icon: Icons.campaign_outlined,
-                  onTap: () => _openAnnouncementSheet(context),
-                ),
-                const SizedBox(width: 8),
-              ],
-              if (unreadCount > 0) ...[
-                _SquareIconButton(
-                  icon: Icons.done_all_rounded,
-                  onTap: () async {
-                    try {
-                      await onMarkAllRead();
-                    } catch (exception) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(exception.toString())),
-                        );
-                      }
-                    }
-                  },
-                ),
-                const SizedBox(width: 8),
-              ],
-              _SquareIconButton(
-                icon: Icons.refresh_rounded,
-                onTap: () => onRefresh(),
-              ),
             ],
-          ),
-          if (trialRequests.isNotEmpty) ...[
-            const SizedBox(height: 18),
-            _TrainerNotificationSectionTitle(
-              title: 'Trial requests',
-              action: 'View all',
-              onTap: onOpenTrialLeads,
-            ),
-            const SizedBox(height: 10),
-            ...trialRequests.take(5).map((trial) {
-              final id = (trial['id'] as num?)?.toInt();
-              final member = _map(trial['member']);
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _TrainerTrialLeadCard(
-                  title:
-                      member['name']?.toString() ??
-                      trial['name']?.toString() ??
-                      'Trial lead',
-                  subtitle:
-                      'Preferred ${prettyDate(trial['preferred_date'])} ${trial['preferred_time'] ?? ''}',
-                  status: trial['status']?.toString() ?? 'pending',
-                  onAccept: id == null
-                      ? null
-                      : () => onUpdateTrial(id, 'accepted'),
-                  onCompleted: id == null
-                      ? null
-                      : () => onUpdateTrial(id, 'completed'),
-                ),
-              );
-            }),
           ],
-          const SizedBox(height: 18),
-          const _TrainerNotificationSectionTitle(
-            title: 'Updates',
-            action: 'Latest',
-          ),
-          const SizedBox(height: 2),
-          if (notifications.isEmpty)
-            const EmptyStateView(
-              title: 'No notification feed items',
-              message: 'Member updates and coaching alerts will appear here.',
-              icon: Icons.notifications_none_rounded,
-            )
-          else
-            ...notifications.asMap().entries.expand((entry) {
-              final item = entry.value;
-              final isUnread = item['read_at'] == null;
-              return [
-                _TrainerNotificationRow(
-                  notification: item,
-                  isUnread: isUnread,
-                  onRespondGymInvitation: onRespondGymInvitation,
-                  onMarkRead: () async {
-                    final id = (item['id'] as num?)?.toInt();
-                    if (id == null) {
-                      return;
-                    }
-                    try {
-                      await onMarkRead(id);
-                    } catch (exception) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(exception.toString())),
-                        );
-                      }
-                    }
-                  },
-                  onOpenEvent: onOpenEvent,
-                ),
-                if (entry.key < notifications.length - 1)
-                  Divider(color: AppColors.stroke, height: 1),
-              ];
-            }),
-          if (hasMore) ...[
-            const SizedBox(height: 20),
-            Center(
-              child: OutlinedButton.icon(
-                onPressed: loadingMore ? null : onLoadMore,
-                icon: loadingMore
-                    ? const SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.expand_more_rounded),
-                label: Text(
-                  loadingMore ? 'Loading...' : 'Load older notifications',
-                ),
-              ),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
@@ -11697,6 +11768,32 @@ InputDecoration _fitInputDecoration(String label, IconData icon) {
   );
 }
 
+class _TrainerNotificationTopButton extends StatelessWidget {
+  const _TrainerNotificationTopButton({
+    required this.icon,
+    required this.onTap,
+    required this.tooltip,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: onTap,
+      tooltip: tooltip,
+      icon: Icon(icon, color: const Color(0xFF1D1617), size: 18),
+      style: IconButton.styleFrom(
+        backgroundColor: const Color(0xFFF7F8F8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        fixedSize: const Size(44, 44),
+      ),
+    );
+  }
+}
+
 class _TrainerNotificationSectionTitle extends StatelessWidget {
   const _TrainerNotificationSectionTitle({
     required this.title,
@@ -11722,7 +11819,16 @@ class _TrainerNotificationSectionTitle extends StatelessWidget {
             ),
           ),
         ),
-        TextButton(onPressed: onTap, child: Text(action)),
+        onTap == null
+            ? Text(
+                action,
+                style: const TextStyle(
+                  color: Color(0xFF786F72),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              )
+            : TextButton(onPressed: onTap, child: Text(action)),
       ],
     );
   }
@@ -11846,6 +11952,7 @@ class _TrainerNotificationRow extends StatelessWidget {
     required this.notification,
     required this.isUnread,
     required this.onMarkRead,
+    required this.onMarkUnread,
     required this.onRespondGymInvitation,
     required this.onOpenEvent,
   });
@@ -11853,6 +11960,7 @@ class _TrainerNotificationRow extends StatelessWidget {
   final Map<String, dynamic> notification;
   final bool isUnread;
   final VoidCallback onMarkRead;
+  final VoidCallback onMarkUnread;
   final Future<void> Function(int invitationId, String decision)
   onRespondGymInvitation;
   final Future<void> Function(int? eventId) onOpenEvent;
@@ -11886,153 +11994,168 @@ class _TrainerNotificationRow extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Column(
           children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    color.withValues(alpha: 0.88),
-                    color.withValues(alpha: 0.58),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        color.withValues(alpha: 0.88),
+                        color.withValues(alpha: 0.58),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _notificationIcon(type),
+                    color: Colors.white,
+                    size: 20,
+                  ),
                 ),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                _notificationIcon(type),
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 15),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+                const SizedBox(width: 15),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: const Color(0xFF1D1617),
-                            fontWeight: isUnread
-                                ? FontWeight.w800
-                                : FontWeight.w600,
-                            fontSize: 13,
-                            height: 1.25,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: const Color(0xFF1D1617),
+                                fontWeight: isUnread
+                                    ? FontWeight.w800
+                                    : FontWeight.w600,
+                                fontSize: 13,
+                                height: 1.25,
+                              ),
+                            ),
                           ),
+                          if (isUnread)
+                            Container(
+                              width: 8,
+                              height: 8,
+                              margin: const EdgeInsets.only(left: 8),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF92A3FD),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        body,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: const Color(
+                            0xFF786F72,
+                          ).withValues(alpha: 0.92),
+                          fontSize: 11,
+                          height: 1.35,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                      if (isUnread)
-                        Container(
-                          width: 8,
-                          height: 8,
-                          margin: const EdgeInsets.only(left: 8),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF92A3FD),
-                            shape: BoxShape.circle,
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              prettyDateTime(notification['created_at']),
+                              style: const TextStyle(
+                                color: Color(0xFF786F72),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    body,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: const Color(0xFF786F72).withValues(alpha: 0.92),
-                      fontSize: 11,
-                      height: 1.35,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  if (canRespond)
-                    Row(
-                      children: [
-                        OutlinedButton(
-                          onPressed: () =>
-                              onRespondGymInvitation(invitationId, 'reject'),
-                          child: const Text('Decline'),
-                        ),
-                        const SizedBox(width: 8),
-                        FilledButton(
-                          onPressed: () =>
-                              onRespondGymInvitation(invitationId, 'accept'),
-                          child: const Text('Accept'),
-                        ),
-                      ],
-                    ),
-                  if (canRespond) const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          prettyDateTime(notification['created_at']),
-                          style: const TextStyle(
-                            color: Color(0xFF786F72),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
+                          if (eventId != null) ...[
+                            Text(
+                              'Open event',
+                              style: TextStyle(
+                                color: color,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              color: color,
+                              size: 17,
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF7F8F8),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              _notificationLabel(type),
+                              style: TextStyle(
+                                color: color,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                      if (eventId != null) ...[
-                        Text(
-                          'Open event',
-                          style: TextStyle(
-                            color: color,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(width: 2),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: color,
-                          size: 17,
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF7F8F8),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          _notificationLabel(type),
-                          style: TextStyle(
-                            color: color,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: isUnread ? onMarkRead : onMarkUnread,
+                  tooltip: isUnread ? 'Mark as read' : 'Mark as unread',
+                  icon: Icon(
+                    isUnread
+                        ? Icons.done_rounded
+                        : Icons.mark_email_unread_rounded,
+                    color: const Color(0xFF786F72),
+                    size: 18,
+                  ),
+                ),
+              ],
             ),
-            if (isUnread) ...[
-              const SizedBox(width: 8),
-              IconButton(
-                onPressed: onMarkRead,
-                icon: const Icon(
-                  Icons.done_rounded,
-                  color: Color(0xFF786F72),
-                  size: 18,
+            if (canRespond) ...[
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.only(left: 57),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () =>
+                            onRespondGymInvitation(invitationId, 'reject'),
+                        child: const Text('Decline'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () =>
+                            onRespondGymInvitation(invitationId, 'accept'),
+                        child: const Text('Accept'),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

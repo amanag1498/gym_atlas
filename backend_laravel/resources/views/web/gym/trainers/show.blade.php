@@ -18,6 +18,7 @@
                         @if ($trainer->phone)
                             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $trainer->phone }}</p>
                         @endif
+                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $trainer->gender ? str($trainer->gender)->replace('_', ' ')->title() : 'Gender not set' }} • {{ $trainer->date_of_birth?->format('d M Y') ?? 'Birth date not set' }}</p>
                         <div class="mt-3 flex flex-wrap gap-2">
                             <x-status-badge :label="$trainerProfile?->status ?? ($trainer->is_active ? 'Active' : 'Inactive')" />
                             <x-status-badge :label="$trainerProfile?->branch?->name ?? 'Gym-wide'" tone="info" />

@@ -93,5 +93,82 @@ void main() {
     await tester.pumpWidget(buildHome(const Size(812, 375)));
     await tester.pump();
     expect(tester.takeException(), isNull);
+
+    await tester.tap(find.bySemanticsLabel('Plans'));
+    await tester.pump();
+    expect(find.text('Minutes per session'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'trainer alerts show the notification inbox on a compact screen',
+    (tester) async {
+      final client = TrainerApiClient();
+      final session =
+          TrainerSessionController(
+              storage: const TrainerTokenStorage(),
+              apiClient: client,
+              authService: TrainerAuthService(client),
+            )
+            ..user = const TrainerUser(
+              id: 2,
+              name: 'Atlas Trainer',
+              email: 'trainer@example.com',
+              activeRole: 'trainer',
+              isActive: true,
+              roles: ['trainer'],
+              permissions: [],
+            )
+            ..token = 'preview-token';
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<TrainerSessionController>.value(
+          value: session,
+          child: MaterialApp(
+            home: MediaQuery(
+              data: const MediaQueryData(
+                size: Size(375, 812),
+                textScaler: TextScaler.linear(1.5),
+                disableAnimations: true,
+              ),
+              child: const TrainerHomeScreen(
+                initialIndex: 4,
+                storePreviewData: {
+                  'context': {
+                    'user': {'trainer_onboarding_completed': true},
+                    'trainer_profile': {'id': 2},
+                  },
+                  'notifications': [
+                    {
+                      'id': 1,
+                      'title': 'New member update',
+                      'body': 'A member completed their workout.',
+                      'type': 'workout_update',
+                      'read_at': null,
+                    },
+                    {
+                      'id': 2,
+                      'title': 'Previous update',
+                      'body': 'Your schedule has changed.',
+                      'type': 'schedule_update',
+                      'read_at': '2026-09-20T10:00:00Z',
+                    },
+                  ],
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Notification'), findsOneWidget);
+      expect(find.text('Updates'), findsOneWidget);
+      expect(find.text('Latest'), findsOneWidget);
+      expect(find.byTooltip('Mark all notifications read'), findsOneWidget);
+      expect(find.byTooltip('Mark as read'), findsOneWidget);
+      expect(find.byTooltip('Mark as unread'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

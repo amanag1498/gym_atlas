@@ -1,8 +1,8 @@
-# Gym Atlas Member
+# Gym Atlas
 
 ## App information
 
-- Name: `Gym Atlas Member`
+- Name: `Gym Atlas`
 - Subtitle: `Train. Track. Stay coached.`
 - Primary category: `Health & Fitness`
 - Secondary category: `Lifestyle`
@@ -20,7 +20,7 @@ support—together in one focused fitness companion.
 
 ## Description
 
-Gym Atlas Member brings your gym journey into one calm, connected place.
+Gym Atlas brings your gym journey into one calm, connected place.
 
 Follow assigned workouts and meal-based diet plans, log training sessions and
 sets, review attendance and membership details, and track body progress over

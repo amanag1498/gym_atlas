@@ -17,6 +17,8 @@ class MemberAppProfileResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'email' => $this->email,
+            'phone' => $this->phone,
+            'date_of_birth' => $this->date_of_birth?->toDateString(),
             'photo' => $this->avatar,
             'auth_provider' => $this->auth_provider,
             'google_id' => $this->google_id,
@@ -29,7 +31,7 @@ class MemberAppProfileResource extends JsonResource
             'available_fitness_goals' => FitnessGoalResource::collection(
                 FitnessGoal::query()->active()->ordered()->get()
             )->resolve($request),
-            'gender' => $profile?->gender,
+            'gender' => $this->gender ?? $profile?->gender,
             'height_cm' => $profile?->height_cm !== null ? (float) $profile->height_cm : null,
             'weight_kg' => $profile?->weight_kg !== null ? (float) $profile->weight_kg : null,
             'experience_level' => $profile?->experience_level,

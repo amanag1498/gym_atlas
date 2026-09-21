@@ -47,6 +47,7 @@ use App\Http\Controllers\Web\IndependentTrainerMemberInvitationController;
 use App\Http\Controllers\Web\MemberEmailInvitationController;
 use App\Http\Controllers\Web\Public\EventBookingController as PublicEventBookingController;
 use App\Http\Controllers\Web\Public\GymSelfEnrollmentController as PublicGymSelfEnrollmentController;
+use App\Http\Controllers\Web\Public\SharedWorkoutPlanController as PublicSharedWorkoutPlanController;
 use App\Http\Controllers\Web\Public\WhatsAppOnboardingController;
 use App\Http\Controllers\Web\TrainerEmailInvitationController;
 use App\Http\Requests\Web\Public\StoreContactSubmissionRequest;
@@ -63,6 +64,9 @@ use App\Services\Trials\TrialRequestService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+
+Route::get('/workouts/shared/{token}', [PublicSharedWorkoutPlanController::class, 'show'])
+    ->whereAlphaNumeric('token')->middleware('throttle:60,1')->name('public.workout-plans.shared');
 
 Route::get('/events/{publicToken}', [PublicEventBookingController::class, 'show'])
     ->whereUuid('publicToken')->middleware('throttle:60,1')->name('public.events.show');

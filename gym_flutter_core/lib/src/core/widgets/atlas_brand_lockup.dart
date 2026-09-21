@@ -14,10 +14,13 @@ class AtlasBrandLockup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final productName = audience.toLowerCase() == 'trainer'
+        ? 'Gym Atlas Coach'
+        : 'Gym Atlas';
 
     return Semantics(
       container: true,
-      label: 'Gym Atlas $audience app',
+      label: '$productName app',
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

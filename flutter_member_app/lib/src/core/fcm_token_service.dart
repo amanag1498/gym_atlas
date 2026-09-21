@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, debugPrint, defaultTargetPlatform, kIsWeb;
+import 'package:gym_flutter_core/fcm_retry_policy.dart';
 
 import 'api_client.dart';
 
@@ -10,111 +11,164 @@ class MemberFcmTokenService {
   MemberFcmTokenService(this._client);
 
   final MemberApiClient _client;
-  bool _listeningForRefresh = false;
-  bool _registrationInFlight = false;
+  final FcmRetryPolicy _retryPolicy = FcmRetryPolicy();
   Timer? _retryTimer;
-  int _retryAttempt = 0;
+  StreamSubscription<String>? _tokenRefreshSubscription;
+  Future<void>? _registrationFuture;
+  final Set<Future<void>> _refreshRegistrations = {};
   String? _lastAppRole;
+  String? _registeredToken;
+  int _generation = 0;
+  bool _active = false;
 
   Future<void> registerToken({required String appRole}) async {
+    _active = true;
     _lastAppRole = appRole;
     _retryTimer?.cancel();
-    _retryAttempt = 0;
-    await _attemptRegistration(appRole);
+    _retryTimer = null;
+    _retryPolicy.reset();
+    final generation = ++_generation;
+
+    final previousRegistration = _registrationFuture;
+    if (previousRegistration != null) {
+      await previousRegistration;
+    }
+    if (!_isCurrent(appRole, generation)) return;
+    await _runRegistration(appRole, generation);
   }
 
-  Future<void> _attemptRegistration(String appRole) async {
-    if (_registrationInFlight) {
-      return;
+  Future<void> _runRegistration(String appRole, int generation) async {
+    if (!_isCurrent(appRole, generation)) return;
+    final registration = _attemptRegistration(appRole, generation);
+    _registrationFuture = registration;
+    try {
+      await registration;
+    } finally {
+      if (identical(_registrationFuture, registration)) {
+        _registrationFuture = null;
+      }
     }
+  }
 
-    _registrationInFlight = true;
+  Future<void> _attemptRegistration(String appRole, int generation) async {
     try {
       final messaging = FirebaseMessaging.instance;
       await messaging.setAutoInitEnabled(true);
+      if (!_isCurrent(appRole, generation)) return;
+
       final settings = await messaging.requestPermission(
         alert: true,
         badge: true,
         sound: true,
       );
+      if (!_isCurrent(appRole, generation)) return;
       if (settings.authorizationStatus == AuthorizationStatus.denied) {
         debugPrint('[fcm] notification permission denied');
         _retryTimer?.cancel();
         return;
       }
 
-      _listenForTokenRefresh(messaging, appRole);
-      if (!await _waitForApnsRegistration(messaging)) {
-        debugPrint('[fcm] APNs registration timed out');
-        _scheduleRetry();
+      _listenForTokenRefresh(messaging);
+      if (!await _waitForApnsRegistration(messaging, appRole, generation)) {
+        if (_isCurrent(appRole, generation)) {
+          debugPrint('[fcm] APNs registration timed out');
+          _scheduleRetry(appRole, generation);
+        }
         return;
       }
 
       final token = await messaging.getToken();
+      if (!_isCurrent(appRole, generation)) return;
       if (token == null || token.isEmpty) {
-        _scheduleRetry();
+        _scheduleRetry(appRole, generation);
         return;
       }
 
+      _registeredToken = token;
       await _sendToken(token, appRole);
-      _retryAttempt = 0;
+      if (!_isCurrent(appRole, generation)) return;
+      _retryPolicy.reset();
       _retryTimer?.cancel();
+      _retryTimer = null;
       debugPrint('[fcm] token registered for $appRole app');
     } catch (exception) {
+      if (!_isCurrent(appRole, generation)) return;
       debugPrint('[fcm] token registration failed: $exception');
-      _scheduleRetry();
-    } finally {
-      _registrationInFlight = false;
+      _scheduleRetry(appRole, generation);
     }
   }
 
-  void _scheduleRetry() {
-    final appRole = _lastAppRole;
-    if (appRole == null || _retryTimer?.isActive == true) {
+  void _scheduleRetry(String appRole, int generation) {
+    if (!_isCurrent(appRole, generation) || _retryTimer?.isActive == true) {
       return;
     }
 
-    _retryAttempt = (_retryAttempt + 1).clamp(1, 6).toInt();
-    final delaySeconds = 1 << (_retryAttempt - 1);
-    _retryTimer = Timer(Duration(seconds: delaySeconds), () {
-      unawaited(_attemptRegistration(appRole));
+    final delay = _retryPolicy.nextDelay();
+    if (delay == null) {
+      debugPrint('[fcm] token registration paused after repeated failures');
+      return;
+    }
+    _retryTimer = Timer(delay, () {
+      _retryTimer = null;
+      unawaited(_runRegistration(appRole, generation));
     });
-    debugPrint('[fcm] retrying token registration in ${delaySeconds}s');
+    debugPrint('[fcm] retrying token registration in ${delay.inSeconds}s');
   }
 
-  void _listenForTokenRefresh(FirebaseMessaging messaging, String appRole) {
-    if (_listeningForRefresh) {
-      return;
-    }
+  void _listenForTokenRefresh(FirebaseMessaging messaging) {
+    if (_tokenRefreshSubscription != null) return;
 
-    _listeningForRefresh = true;
-    messaging.onTokenRefresh.listen(
+    _tokenRefreshSubscription = messaging.onTokenRefresh.listen(
       (updatedToken) {
+        final appRole = _lastAppRole;
+        final generation = _generation;
+        if (!_active || appRole == null || updatedToken.isEmpty) return;
+        final registration = _registerRefreshedToken(
+          updatedToken,
+          appRole,
+          generation,
+        );
+        _refreshRegistrations.add(registration);
         unawaited(
-          Future<void>(() async {
-            if (updatedToken.isEmpty) {
-              return;
-            }
-            try {
-              await _sendToken(updatedToken, appRole);
-              _retryAttempt = 0;
-              _retryTimer?.cancel();
-            } catch (exception) {
-              debugPrint(
-                '[fcm] refreshed token registration failed: $exception',
-              );
-              _scheduleRetry();
-            }
-          }),
+          registration.whenComplete(
+            () => _refreshRegistrations.remove(registration),
+          ),
         );
       },
       onError: (Object exception) {
+        final appRole = _lastAppRole;
+        if (!_active || appRole == null) return;
         debugPrint('[fcm] token refresh listener failed: $exception');
+        _scheduleRetry(appRole, _generation);
       },
     );
   }
 
-  Future<bool> _waitForApnsRegistration(FirebaseMessaging messaging) async {
+  Future<void> _registerRefreshedToken(
+    String token,
+    String appRole,
+    int generation,
+  ) async {
+    if (!_isCurrent(appRole, generation)) return;
+    try {
+      _registeredToken = token;
+      await _sendToken(token, appRole);
+      if (!_isCurrent(appRole, generation)) return;
+      _retryPolicy.reset();
+      _retryTimer?.cancel();
+      _retryTimer = null;
+    } catch (exception) {
+      if (!_isCurrent(appRole, generation)) return;
+      debugPrint('[fcm] refreshed token registration failed: $exception');
+      _scheduleRetry(appRole, generation);
+    }
+  }
+
+  Future<bool> _waitForApnsRegistration(
+    FirebaseMessaging messaging,
+    String appRole,
+    int generation,
+  ) async {
     if (kIsWeb ||
         (defaultTargetPlatform != TargetPlatform.iOS &&
             defaultTargetPlatform != TargetPlatform.macOS)) {
@@ -122,14 +176,85 @@ class MemberFcmTokenService {
     }
 
     for (var attempt = 0; attempt < 20; attempt++) {
+      if (!_isCurrent(appRole, generation)) return false;
       final apnsToken = await messaging.getAPNSToken();
-      if (apnsToken != null && apnsToken.isNotEmpty) {
-        return true;
-      }
+      if (apnsToken != null && apnsToken.isNotEmpty) return true;
       await Future<void>.delayed(const Duration(milliseconds: 500));
     }
-
     return false;
+  }
+
+  Future<void> unregisterCurrentToken() async {
+    final inFlightRegistration = _registrationFuture;
+    final inFlightRefreshes = List<Future<void>>.of(_refreshRegistrations);
+    await stop();
+    if (inFlightRegistration != null) {
+      await inFlightRegistration;
+    }
+    if (inFlightRefreshes.isNotEmpty) {
+      await Future.wait(inFlightRefreshes);
+    }
+
+    try {
+      final token = _registeredToken ?? await _readTokenIfAvailable();
+      if (token != null && token.isNotEmpty) {
+        await _client.delete('/fcm-tokens', data: {'token': token});
+      }
+    } catch (exception) {
+      debugPrint('[fcm] token unregister skipped: $exception');
+    } finally {
+      _registeredToken = null;
+      await _deleteNativeToken();
+    }
+  }
+
+  Future<void> stop({bool deleteNativeToken = false}) async {
+    final shouldDeleteNativeToken =
+        deleteNativeToken &&
+        (_active ||
+            _registeredToken != null ||
+            _registrationFuture != null ||
+            _refreshRegistrations.isNotEmpty);
+    _active = false;
+    _lastAppRole = null;
+    _generation++;
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    _retryPolicy.reset();
+    if (shouldDeleteNativeToken) await _deleteNativeToken();
+  }
+
+  void dispose() {
+    _active = false;
+    _generation++;
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    final subscription = _tokenRefreshSubscription;
+    _tokenRefreshSubscription = null;
+    if (subscription != null) unawaited(subscription.cancel());
+  }
+
+  bool _isCurrent(String appRole, int generation) {
+    return _active && _lastAppRole == appRole && _generation == generation;
+  }
+
+  Future<String?> _readTokenIfAvailable() async {
+    final messaging = FirebaseMessaging.instance;
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.macOS)) {
+      final apnsToken = await messaging.getAPNSToken();
+      if (apnsToken == null || apnsToken.isEmpty) return null;
+    }
+    return messaging.getToken();
+  }
+
+  Future<void> _deleteNativeToken() async {
+    try {
+      await FirebaseMessaging.instance.deleteToken();
+    } catch (exception) {
+      debugPrint('[fcm] native token cleanup skipped: $exception');
+    }
   }
 
   Future<void> _sendToken(String token, String appRole) {
@@ -144,42 +269,20 @@ class MemberFcmTokenService {
     );
   }
 
-  Future<void> unregisterCurrentToken() async {
-    try {
-      final token = await FirebaseMessaging.instance.getToken();
-      if (token == null || token.isEmpty) {
-        return;
-      }
-      await _client.delete('/fcm-tokens', data: {'token': token});
-    } catch (exception) {
-      debugPrint('[fcm] token unregister skipped: $exception');
-    }
-  }
-
   String _platformLabel() {
-    if (kIsWeb) {
-      return 'web';
-    }
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.android:
-        return 'android';
-      case TargetPlatform.iOS:
-        return 'ios';
-      case TargetPlatform.macOS:
-        return 'macos';
-      case TargetPlatform.windows:
-        return 'windows';
-      case TargetPlatform.linux:
-        return 'linux';
-      case TargetPlatform.fuchsia:
-        return 'fuchsia';
-    }
+    if (kIsWeb) return 'web';
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android => 'android',
+      TargetPlatform.iOS => 'ios',
+      TargetPlatform.macOS => 'macos',
+      TargetPlatform.windows => 'windows',
+      TargetPlatform.linux => 'linux',
+      TargetPlatform.fuchsia => 'fuchsia',
+    };
   }
 
   String _deviceName() {
-    if (kIsWeb) {
-      return 'member-web';
-    }
+    if (kIsWeb) return 'member-web';
     return 'member-${_platformLabel()}';
   }
 }

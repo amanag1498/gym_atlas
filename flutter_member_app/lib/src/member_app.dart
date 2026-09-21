@@ -20,6 +20,7 @@ import 'features/member/member_home_screen.dart';
 import 'features/member/member_events_screen.dart';
 import 'features/member/gym_self_enrollment_screen.dart';
 import 'features/member/member_repository.dart';
+import 'features/member/shared_workout_plan_screen.dart';
 
 class MemberApp extends StatefulWidget {
   const MemberApp({super.key});
@@ -135,6 +136,16 @@ class _MemberAppState extends State<MemberApp> {
               ),
             );
           },
+        ),
+        GoRoute(
+          path: '/workouts/shared/:token',
+          pageBuilder: (context, state) => _buildPage(
+            state,
+            SharedWorkoutPlanScreen(
+              token: state.pathParameters['token'] ?? '',
+              repository: memberRepository,
+            ),
+          ),
         ),
       ],
       redirect: (context, state) {
@@ -360,7 +371,7 @@ class _MemberAppState extends State<MemberApp> {
       ],
       child: MaterialApp.router(
         debugShowCheckedModeBanner: false,
-        title: 'Atlas Member',
+        title: 'Gym Atlas',
         routerConfig: router,
         theme: AppTheme.build(),
         builder: (context, child) => AppRuntimeGate(

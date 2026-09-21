@@ -104,7 +104,7 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   Text(
-                                    'Welcome to Atlas Coach',
+                                    'Welcome to Gym Atlas Coach',
                                     textAlign: TextAlign.center,
                                     style: theme.textTheme.displaySmall
                                         ?.copyWith(

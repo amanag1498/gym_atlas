@@ -42,6 +42,8 @@ class _TrainerOnboardingFlowState extends State<TrainerOnboardingFlow> {
   bool _uploadingPhoto = false;
   bool _uploadingCertification = false;
   late final TextEditingController _photoController;
+  late final TextEditingController _phoneController;
+  late final TextEditingController _dateOfBirthController;
   late final TextEditingController _bioController;
   late final TextEditingController _experienceController;
   late final TextEditingController _certificationNameController;
@@ -53,6 +55,7 @@ class _TrainerOnboardingFlowState extends State<TrainerOnboardingFlow> {
   final List<Map<String, dynamic>> _certifications = <Map<String, dynamic>>[];
   Map<String, dynamic>? _pendingCertificationProof;
   Uint8List? _profilePhotoPreviewBytes;
+  String? _gender;
 
   Map<String, dynamic> get _profile => Map<String, dynamic>.from(
     widget.contextData['trainer_profile'] as Map? ?? const {},
@@ -80,6 +83,13 @@ class _TrainerOnboardingFlowState extends State<TrainerOnboardingFlow> {
     _photoController = TextEditingController(
       text: _profile['profile_photo_url']?.toString() ?? '',
     );
+    _phoneController = TextEditingController(
+      text: _user['phone']?.toString() ?? '',
+    );
+    _dateOfBirthController = TextEditingController(
+      text: _user['date_of_birth']?.toString() ?? '',
+    );
+    _gender = _user['gender']?.toString();
     _bioController = TextEditingController(
       text: _profile['bio']?.toString() ?? '',
     );
@@ -110,6 +120,8 @@ class _TrainerOnboardingFlowState extends State<TrainerOnboardingFlow> {
   @override
   void dispose() {
     _photoController.dispose();
+    _phoneController.dispose();
+    _dateOfBirthController.dispose();
     _bioController.dispose();
     _experienceController.dispose();
     _certificationNameController.dispose();
@@ -248,11 +260,55 @@ class _TrainerOnboardingFlowState extends State<TrainerOnboardingFlow> {
   Widget _buildStep(BuildContext context) {
     switch (_step) {
       case 1:
-        return const _StepShell(
+        return _StepShell(
           eyebrow: 'Welcome',
-          title: 'Set up your trainer profile.',
-          description: 'Complete the required details to continue.',
-          child: SizedBox.shrink(),
+          title: 'Confirm your account details.',
+          description:
+              'Your phone supports gym communication. Date of birth and gender are optional and stay on your Atlas account.',
+          child: Column(
+            children: [
+              TextField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                autofillHints: const [AutofillHints.telephoneNumber],
+                decoration: const InputDecoration(
+                  labelText: 'Phone number',
+                  hintText: '+91 98765 43210',
+                  prefixIcon: Icon(Icons.phone_outlined),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              DropdownButtonFormField<String>(
+                initialValue: _trainerGenderOptions.contains(_gender)
+                    ? _gender
+                    : null,
+                decoration: const InputDecoration(
+                  labelText: 'Gender (optional)',
+                  prefixIcon: Icon(Icons.person_outline_rounded),
+                ),
+                items: _trainerGenderOptions
+                    .map(
+                      (value) => DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(_trainerGenderLabel(value)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setState(() => _gender = value),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _dateOfBirthController,
+                readOnly: true,
+                onTap: _pickDateOfBirth,
+                decoration: const InputDecoration(
+                  labelText: 'Date of birth (optional)',
+                  prefixIcon: Icon(Icons.cake_outlined),
+                  suffixIcon: Icon(Icons.calendar_month_outlined),
+                ),
+              ),
+            ],
+          ),
         );
       case 2:
         return _StepShell(
@@ -381,7 +437,21 @@ class _TrainerOnboardingFlowState extends State<TrainerOnboardingFlow> {
     try {
       switch (_step) {
         case 1:
-          await _persist({'trainer_onboarding_step': 2});
+          final phone = _phoneController.text.trim();
+          final phoneDigitCount = phone.codeUnits
+              .where((unit) => unit >= 48 && unit <= 57)
+              .length;
+          if (phoneDigitCount < 7 || phoneDigitCount > 15) {
+            throw Exception('Enter a valid phone number to continue.');
+          }
+          await _persist({
+            'phone': phone,
+            'gender': _gender,
+            'date_of_birth': _dateOfBirthController.text.trim().isEmpty
+                ? null
+                : _dateOfBirthController.text.trim(),
+            'trainer_onboarding_step': 2,
+          });
           break;
         case 2:
           await _persist({
@@ -441,6 +511,23 @@ class _TrainerOnboardingFlowState extends State<TrainerOnboardingFlow> {
       }
     });
     await widget.repository.updateProfile(cleaned);
+  }
+
+  Future<void> _pickDateOfBirth() async {
+    final now = DateTime.now();
+    final current = DateTime.tryParse(_dateOfBirthController.text);
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: current ?? DateTime(now.year - 18, now.month, now.day),
+      firstDate: DateTime(1900),
+      lastDate: DateTime(now.year, now.month, now.day),
+    );
+    if (selected != null && mounted) {
+      setState(() {
+        _dateOfBirthController.text =
+            '${selected.year.toString().padLeft(4, '0')}-${selected.month.toString().padLeft(2, '0')}-${selected.day.toString().padLeft(2, '0')}';
+      });
+    }
   }
 
   Future<void> _pickAndUploadPhoto() async {
@@ -679,7 +766,11 @@ class _TrainerOnboardingFlowState extends State<TrainerOnboardingFlow> {
   }
 
   String _specializationKey(String value) {
-    return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
+    return String.fromCharCodes(
+      value.toLowerCase().codeUnits.where(
+        (unit) => (unit >= 97 && unit <= 122) || (unit >= 48 && unit <= 57),
+      ),
+    );
   }
 
   String _proofTypeFromName(String filename) {
@@ -1493,3 +1584,17 @@ IconData _specializationIcon(String value) {
   if (normalized.contains('recomposition')) return Icons.auto_graph_rounded;
   return Icons.workspace_premium_rounded;
 }
+
+const _trainerGenderOptions = <String>[
+  'female',
+  'male',
+  'non_binary',
+  'prefer_not_to_say',
+];
+
+String _trainerGenderLabel(String value) => switch (value) {
+  'female' => 'Female',
+  'male' => 'Male',
+  'non_binary' => 'Non-binary',
+  _ => 'Prefer not to say',
+};

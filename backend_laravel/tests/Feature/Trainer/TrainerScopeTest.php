@@ -218,6 +218,53 @@ class TrainerScopeTest extends TestCase
             'id' => $profile->id,
             'profile_photo_url' => $photoUrl,
         ]);
+        $this->assertSame($photoUrl, $trainer->fresh()->avatar);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->putJson('/api/trainer/profile', ['profile_photo_url' => null])
+            ->assertOk()
+            ->assertJsonPath('data.trainer_profile.profile_photo_url', null);
+
+        $this->assertNull($profile->fresh()->profile_photo_url);
+        $this->assertNull($trainer->fresh()->avatar);
+    }
+
+    public function test_trainer_can_save_account_identity_from_own_profile(): void
+    {
+        $this->seed(PermissionSeeder::class);
+
+        [$gym, $branch] = $this->makeGymContext();
+        $trainer = User::factory()->create([
+            'active_role' => RoleName::Trainer->value,
+        ]);
+        $trainer->assignRole(RoleName::Trainer->value);
+        $trainer->gyms()->attach($gym->id);
+        $trainer->branches()->attach($branch->id);
+        TrainerProfile::query()->create([
+            'user_id' => $trainer->id,
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'status' => 'active',
+            'is_active' => true,
+            'verification_status' => 'pending',
+        ]);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->putJson('/api/trainer/profile', [
+                'phone' => '+91 91234 56789',
+                'gender' => 'female',
+                'date_of_birth' => '1990-01-22',
+                'trainer_onboarding_step' => 2,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.trainer_user.phone', '+91 91234 56789')
+            ->assertJsonPath('data.trainer_user.gender', 'female')
+            ->assertJsonPath('data.trainer_user.date_of_birth', '1990-01-22');
+
+        $trainer->refresh();
+        $this->assertSame('+91 91234 56789', $trainer->phone);
+        $this->assertSame('female', $trainer->gender);
+        $this->assertSame('1990-01-22', $trainer->date_of_birth?->toDateString());
     }
 
     public function test_trainer_can_upload_and_save_certification_proof(): void

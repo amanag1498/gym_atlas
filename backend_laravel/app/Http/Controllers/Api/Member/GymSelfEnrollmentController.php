@@ -21,6 +21,9 @@ class GymSelfEnrollmentController extends Controller
     {
         $validated = $request->validate([
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:30', 'regex:/^\+?[0-9() -]{7,30}$/'],
+            'gender' => ['sometimes', 'nullable', 'in:male,female,non_binary,prefer_not_to_say'],
+            'date_of_birth' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'before_or_equal:today', 'after_or_equal:1900-01-01'],
             'reuse_profile' => ['sometimes', 'boolean'],
             'consent' => ['accepted'],
             'whatsapp_marketing_consent' => ['sometimes', 'boolean'],

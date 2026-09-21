@@ -156,6 +156,12 @@ class TrainerEmailInvitationService
                 $payload = $invitation->payload;
                 $payload['name'] = $invitation->invited_name;
                 $payload['email'] = $invitation->invited_email;
+                if ($trainer !== null) {
+                    $payload['name'] = $trainer->name;
+                    $payload['phone'] = $trainer->phone;
+                    $payload['gender'] = $trainer->gender;
+                    $payload['date_of_birth'] = $trainer->date_of_birth?->toDateString();
+                }
                 $trainer = $this->managedUserService->upsertTrainer(
                     $trainer,
                     $invitation->gym,

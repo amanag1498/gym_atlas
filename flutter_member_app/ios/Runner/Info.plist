@@ -2,10 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Gym Atlas Member</string>
+	<string>Gym Atlas</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,19 +15,13 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Gym Atlas Member</string>
+	<string>Gym Atlas</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
-	<key>CFBundleVersion</key>
-	<string>$(FLUTTER_BUILD_NUMBER)</string>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
-	<key>GIDClientID</key>
-	<string>707275991691-catqhsa9ln8j9e87975oikl7ds8gdcs3.apps.googleusercontent.com</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -45,7 +41,48 @@
 			</array>
 		</dict>
 	</array>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>GIDClientID</key>
+	<string>707275991691-catqhsa9ln8j9e87975oikl7ds8gdcs3.apps.googleusercontent.com</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Gym Atlas uses the camera when you take profile and progress photos.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Gym Atlas reads your daily step count to keep your dashboard progress up to date.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Gym Atlas uses your health activity totals to sync step progress with your training dashboard.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Gym Atlas uses your location to show nearby gyms and distance information when you use gym discovery. The app does not continuously track your location.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Gym Atlas uses your current location to sort nearby gyms and show distance in discovery.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Gym Atlas uses your photo library when you choose profile and progress photos.</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneClassName</key>
+					<string>UIWindowScene</string>
+					<key>UISceneConfigurationName</key>
+					<string>flutter</string>
+					<key>UISceneDelegateClassName</key>
+					<string>FlutterSceneDelegate</string>
+					<key>UISceneStoryboardFile</key>
+					<string>Main</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
@@ -68,21 +105,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>CADisableMinimumFrameDurationOnPhone</key>
-	<true/>
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
-	<key>NSHealthShareUsageDescription</key>
-	<string>Gym Atlas Member reads your daily step count to keep your dashboard progress up to date.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>Gym Atlas Member uses your health activity totals to sync step progress with your training dashboard.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Gym Atlas Member uses your current location to sort nearby gyms and show distance in discovery.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Gym Atlas Member uses your location to show nearby gyms and distance information when you use gym discovery. The app does not continuously track your location.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Gym Atlas Member uses the camera when you take profile and progress photos.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Gym Atlas Member uses your photo library when you choose profile and progress photos.</string>
 </dict>
 </plist>

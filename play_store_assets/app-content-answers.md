@@ -1,6 +1,6 @@
 # Play Console app-content answers
 
-Apply these answers separately to Atlas Member and Atlas Trainer unless a
+Apply these answers separately to Gym Atlas and Gym Atlas Coach unless a
 section says otherwise.
 
 ## Privacy policy
@@ -101,7 +101,7 @@ Member-specific:
 - Use explanation:
 
 ```text
-Atlas Member reads steps, distance and active calories only after the user grants permission. The data is used to show the member’s daily activity summary and fitness progress inside the app. It is not used for advertising, sold, or shared with other users.
+Gym Atlas reads steps, distance and active calories only after the user grants permission. The data is used to show the member’s daily activity summary and fitness progress inside the app. It is not used for advertising, sold, or shared with other users.
 ```
 
 Trainer-specific:

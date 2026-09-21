@@ -45,11 +45,11 @@ class MemberProfileController extends Controller
             'emergency_contact_phone',
         ];
         $oldValues = [
-            'user' => $user->only(['name', 'avatar']),
+            'user' => $user->only(['name', 'phone', 'gender', 'date_of_birth', 'avatar']),
             'member_profile' => $currentProfile?->toArray(),
         ];
 
-        $userPayload = $request->safe()->only(['name', 'avatar', 'photo']);
+        $userPayload = $request->safe()->only(['name', 'phone', 'gender', 'date_of_birth', 'avatar', 'photo']);
         if (array_key_exists('photo', $userPayload) && ! array_key_exists('avatar', $userPayload)) {
             $userPayload['avatar'] = $userPayload['photo'];
         }
@@ -59,7 +59,8 @@ class MemberProfileController extends Controller
         $user->save();
 
         $memberProfilePayload = $request->safe()->only($profileFields);
-        $hasProfileFieldInput = collect($profileFields)->contains(
+        $profileCreationFields = array_values(array_diff($profileFields, ['gender']));
+        $hasProfileFieldInput = collect($profileCreationFields)->contains(
             fn (string $field): bool => $request->exists($field)
         ) || $request->exists('fitness_goal_ids');
 
@@ -70,6 +71,9 @@ class MemberProfileController extends Controller
             ]);
 
             $memberProfile->fill($memberProfilePayload);
+            if ($request->exists('gender')) {
+                $memberProfile->gender = $request->validated('gender');
+            }
             $memberProfile->save();
             $this->memberFitnessGoalService->syncForProfile(
                 $memberProfile,
@@ -96,7 +100,7 @@ class MemberProfileController extends Controller
             branch: $freshUser->memberProfile?->branch,
             oldValues: $oldValues,
             newValues: [
-                'user' => $freshUser->only(['name', 'avatar']),
+                'user' => $freshUser->only(['name', 'phone', 'gender', 'date_of_birth', 'avatar']),
                 'member_profile' => $freshUser->memberProfile?->toArray(),
             ],
         );

@@ -1,7 +1,7 @@
 # Atlas Google Play release assets
 
 This folder contains the checked-in, non-secret assets and listing copy for the
-Atlas Member and Atlas Trainer releases.
+Gym Atlas and Gym Atlas Coach releases.
 
 ## Ready assets
 

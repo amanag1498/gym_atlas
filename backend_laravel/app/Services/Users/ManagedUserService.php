@@ -291,7 +291,7 @@ class ManagedUserService
                     'assigned_trainer_user_id' => $trainerId,
                     'assigned_trainer_id' => $trainerId,
                     'fitness_goal' => $this->fitnessGoalSummary($data),
-                    'gender' => $data['gender'] ?? null,
+                    'gender' => $data['gender'] ?? $user->gender,
                     'height_cm' => $data['height_cm'] ?? null,
                     'weight_kg' => $data['weight_kg'] ?? null,
                     'experience_level' => $data['experience_level'] ?? null,
@@ -502,6 +502,14 @@ class ManagedUserService
 
         if (array_key_exists('phone', $data)) {
             $payload['phone'] = $data['phone'];
+        }
+
+        if (array_key_exists('gender', $data)) {
+            $payload['gender'] = $data['gender'];
+        }
+
+        if (array_key_exists('date_of_birth', $data)) {
+            $payload['date_of_birth'] = $data['date_of_birth'];
         }
 
         if (! empty($data['password'])) {

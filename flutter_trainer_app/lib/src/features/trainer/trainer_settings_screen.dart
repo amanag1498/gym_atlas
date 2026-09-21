@@ -11,9 +11,9 @@ import '../../core/config.dart';
 import '../auth/session_controller.dart';
 
 class TrainerSettingsScreen extends StatelessWidget {
-  const TrainerSettingsScreen({super.key, required this.onEditProfile});
+  const TrainerSettingsScreen({super.key, required this.onViewProfile});
 
-  final Future<void> Function() onEditProfile;
+  final Future<void> Function() onViewProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -49,55 +49,28 @@ class TrainerSettingsScreen extends StatelessWidget {
             children: [
               const _SettingsTopBar(
                 title: 'Settings',
-                subtitle:
-                    'Profile, help, legal information, and account controls.',
+                subtitle: 'Manage your account, coaching, and support options.',
               ),
               const SizedBox(height: AppSpacing.md),
-              _RevealSettings(
+              _AnimatedSection(
                 child: _ProfileHeader(
                   name: name,
                   email: email,
                   isActive: user?.isActive == true,
-                  onEdit: onEditProfile,
-                ),
-              ),
-              const SizedBox(height: 15),
-              _RevealSettings(
-                delay: const Duration(milliseconds: 50),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: _TitleSubtitleCell(
-                        title: 'Trainer',
-                        subtitle: 'Account',
-                      ),
-                    ),
-                    const SizedBox(width: 15),
-                    Expanded(
-                      child: _TitleSubtitleCell(
-                        title: user?.isActive == true ? 'Active' : 'Limited',
-                        subtitle: 'Session',
-                      ),
-                    ),
-                    const SizedBox(width: 15),
-                    const Expanded(
-                      child: _TitleSubtitleCell(
-                        title: 'Synced',
-                        subtitle: 'Cloud',
-                      ),
-                    ),
-                  ],
+                  onView: onViewProfile,
                 ),
               ),
               const SizedBox(height: 25),
-              _RevealSettings(
-                delay: const Duration(milliseconds: 90),
+              _AnimatedSection(
+                delay: const Duration(milliseconds: 120),
                 child: _SettingsGroup(
-                  title: 'Support and legal',
+                  title: 'Help & Legal',
+                  subtitle: 'Support and information about your account.',
                   children: [
                     _SettingsRow(
                       icon: Icons.help_outline_rounded,
                       title: 'Help & FAQ',
+                      subtitle: 'Answers to common coaching questions',
                       onPressed: () => _openLink(
                         context,
                         _webUrl(webBase, '/faq'),
@@ -106,7 +79,8 @@ class TrainerSettingsScreen extends StatelessWidget {
                     ),
                     _SettingsRow(
                       icon: Icons.support_agent_rounded,
-                      title: 'Contact us',
+                      title: 'Contact Us',
+                      subtitle: 'Get help from Gym Atlas support',
                       onPressed: () => _openLink(
                         context,
                         _webUrl(webBase, '/contact'),
@@ -115,7 +89,8 @@ class TrainerSettingsScreen extends StatelessWidget {
                     ),
                     _SettingsRow(
                       icon: Icons.privacy_tip_outlined,
-                      title: 'Privacy policy',
+                      title: 'Privacy Policy',
+                      subtitle: 'How your information is handled',
                       onPressed: () => _openLink(
                         context,
                         _webUrl(webBase, '/privacy-policy'),
@@ -124,29 +99,40 @@ class TrainerSettingsScreen extends StatelessWidget {
                     ),
                     _SettingsRow(
                       icon: Icons.gavel_rounded,
-                      title: 'Terms',
+                      title: 'Terms of Service',
+                      subtitle: 'Rules for using Gym Atlas',
                       onPressed: () => _openLink(
                         context,
                         _webUrl(webBase, '/terms'),
                         'Terms',
                       ),
                     ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 25),
+              _AnimatedSection(
+                delay: const Duration(milliseconds: 170),
+                child: _SettingsGroup(
+                  title: 'Account Controls',
+                  subtitle: 'Security and permanent account actions.',
+                  children: [
                     _SettingsRow(
                       icon: Icons.person_remove_outlined,
-                      title: 'Delete account',
+                      title: 'Delete Account',
+                      subtitle: 'Review the permanent deletion process',
                       destructive: true,
-                      onPressed: () => _openLink(
+                      onPressed: () => _confirmAccountDeletion(
                         context,
                         _webUrl(webBase, '/account-deletion?app=trainer'),
-                        'Account deletion page',
                       ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
-              _RevealSettings(
-                delay: const Duration(milliseconds: 130),
+              _AnimatedSection(
+                delay: const Duration(milliseconds: 220),
                 child: _SessionCard(
                   onLogout: () => _confirmLogout(context, session),
                 ),
@@ -160,6 +146,35 @@ class TrainerSettingsScreen extends StatelessWidget {
 
   String _webUrl(String? webBase, String path) =>
       webBase == null ? path : '$webBase$path';
+
+  Future<void> _confirmAccountDeletion(
+    BuildContext context,
+    String deletionUrl,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Review account deletion?'),
+        content: const Text(
+          'Account deletion is permanent and may remove access to your profile. The next page explains what is deleted and how to submit the request.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Review deletion'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      await _openLink(context, deletionUrl, 'Account deletion page');
+    }
+  }
 
   Future<void> _openLink(
     BuildContext context,
@@ -190,12 +205,12 @@ class TrainerSettingsScreen extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: const Text('Sign out?'),
         content: const Text(
-          'Your trainer session will be removed from this device.',
+          'You will need to sign in again to view your coaching data on this device.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: const Text('Stay signed in'),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
@@ -224,9 +239,30 @@ class _SettingsTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _SquareButton(
-          icon: Icons.arrow_back_rounded,
+        InkWell(
           onTap: () => Navigator.of(context).maybePop(),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.stroke),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.arrow_back_rounded,
+              color: AppColors.textPrimary,
+              size: 20,
+            ),
+          ),
         ),
         const SizedBox(width: AppSpacing.md),
         Expanded(
@@ -237,14 +273,12 @@ class _SettingsTopBar extends StatelessWidget {
                 title,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
@@ -257,52 +291,24 @@ class _SettingsTopBar extends StatelessWidget {
   }
 }
 
-class _SquareButton extends StatelessWidget {
-  const _SquareButton({required this.icon, required this.onTap});
-
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.stroke),
-          ),
-          child: Icon(icon, color: AppColors.textPrimary, size: 20),
-        ),
-      ),
-    );
-  }
-}
-
 class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader({
     required this.name,
     required this.email,
     required this.isActive,
-    required this.onEdit,
+    required this.onView,
   });
 
   final String name;
   final String email;
   final bool isActive;
-  final Future<void> Function() onEdit;
+  final Future<void> Function() onView;
 
   @override
   Widget build(BuildContext context) {
     final initials = name
         .trim()
-        .split(RegExp(r'\s+'))
+        .split(' ')
         .where((part) => part.isNotEmpty)
         .take(2)
         .map((part) => part[0].toUpperCase())
@@ -344,7 +350,7 @@ class _ProfileHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  isActive ? 'Trainer account active' : email,
+                  email,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -352,12 +358,34 @@ class _ProfileHeader extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? AppColors.success.withValues(alpha: 0.10)
+                        : AppColors.warning.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    isActive
+                        ? 'Active trainer account'
+                        : 'Account access limited',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: isActive ? AppColors.success : AppColors.warning,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
           InkWell(
-            onTap: onEdit,
+            onTap: onView,
             borderRadius: BorderRadius.circular(16),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -367,7 +395,7 @@ class _ProfileHeader extends StatelessWidget {
                 border: Border.all(color: AppColors.stroke),
               ),
               child: Text(
-                'Edit',
+                'View',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -381,60 +409,47 @@ class _ProfileHeader extends StatelessWidget {
   }
 }
 
-class _TitleSubtitleCell extends StatelessWidget {
-  const _TitleSubtitleCell({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return PremiumCard(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-      child: Column(
-        children: [
-          Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RevealSettings extends StatelessWidget {
-  const _RevealSettings({required this.child, this.delay = Duration.zero});
+class _AnimatedSection extends StatelessWidget {
+  const _AnimatedSection({required this.child, this.delay = Duration.zero});
 
   final Widget child;
   final Duration delay;
 
   @override
   Widget build(BuildContext context) {
-    return RevealOnBuild(delay: delay, child: child);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 420 + delay.inMilliseconds),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        final delayed = delay == Duration.zero
+            ? value
+            : ((value * (420 + delay.inMilliseconds) - delay.inMilliseconds) /
+                      420)
+                  .clamp(0.0, 1.0);
+        return Opacity(
+          opacity: delayed,
+          child: Transform.translate(
+            offset: Offset(0, 18 * (1 - delayed)),
+            child: child,
+          ),
+        );
+      },
+      child: child,
+    );
   }
 }
 
 class _SettingsGroup extends StatelessWidget {
-  const _SettingsGroup({required this.title, required this.children});
+  const _SettingsGroup({
+    required this.title,
+    required this.children,
+    this.subtitle,
+  });
 
   final String title;
   final List<Widget> children;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -450,7 +465,17 @@ class _SettingsGroup extends StatelessWidget {
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 8),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+                height: 1.35,
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
           ...children,
         ],
       ),
@@ -462,58 +487,60 @@ class _SettingsRow extends StatelessWidget {
   const _SettingsRow({
     required this.icon,
     required this.title,
+    required this.subtitle,
     required this.onPressed,
     this.destructive = false,
   });
 
   final IconData icon;
   final String title;
+  final String subtitle;
   final Future<void> Function() onPressed;
   final bool destructive;
 
   @override
   Widget build(BuildContext context) {
-    final color = destructive ? AppColors.error : AppColors.textPrimary;
     return InkWell(
       onTap: onPressed,
       borderRadius: BorderRadius.circular(16),
-      child: SizedBox(
-        height: 50,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 62),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                color: destructive
-                    ? AppColors.error.withValues(alpha: 0.07)
-                    : AppColors.surfaceSoft,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: destructive
-                      ? AppColors.error.withValues(alpha: 0.12)
-                      : AppColors.stroke,
-                ),
-              ),
-              child: Icon(
-                icon,
-                size: 16,
-                color: destructive ? AppColors.error : AppColors.primary,
-              ),
-            ),
-            const SizedBox(width: 13),
+            _RowIcon(icon: icon, destructive: destructive),
+            const SizedBox(width: 15),
             Expanded(
-              child: Text(
-                title,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w700,
-                ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: destructive
+                          ? AppColors.error
+                          : AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      height: 1.25,
+                    ),
+                  ),
+                ],
               ),
             ),
             Icon(
               Icons.chevron_right_rounded,
-              size: 19,
+              size: 20,
               color: destructive ? AppColors.error : AppColors.textMuted,
             ),
           ],
@@ -531,7 +558,7 @@ class _SessionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PremiumCard(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -542,23 +569,65 @@ class _SessionCard extends StatelessWidget {
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
-            'Sign out securely from this trainer device.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+            'Sign out securely. Your stored trainer token will be cleared.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 14),
-          OutlinedButton.icon(
-            onPressed: onLogout,
-            icon: const Icon(Icons.logout_rounded, size: 18),
-            label: const Text('Sign out'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
+          InkWell(
+            onTap: onLogout,
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceSoft,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.stroke),
+              ),
+              child: Text(
+                'Logout',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _RowIcon extends StatelessWidget {
+  const _RowIcon({required this.icon, this.destructive = false});
+
+  final IconData icon;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 30,
+      width: 30,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: destructive
+            ? AppColors.error.withValues(alpha: 0.08)
+            : AppColors.surfaceSoft,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.stroke),
+      ),
+      child: Icon(
+        icon,
+        size: 16,
+        color: destructive ? AppColors.error : AppColors.primaryBright,
       ),
     );
   }

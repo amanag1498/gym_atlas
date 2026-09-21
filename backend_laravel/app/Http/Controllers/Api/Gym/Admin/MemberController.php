@@ -393,6 +393,8 @@ class MemberController extends Controller
             if (Schema::hasColumn('users', 'phone')) {
                 $payload['phone'] = $existingUser->phone;
             }
+            $payload['gender'] = $existingUser->gender;
+            $payload['date_of_birth'] = $existingUser->date_of_birth?->toDateString();
         } else {
             $payload['name'] = $request->validated('name', $member?->name);
             $payload['email'] = $request->validated('email', $member?->email);
@@ -405,12 +407,17 @@ class MemberController extends Controller
         }
 
         $payload['avatar'] = $request->validated('avatar', $member?->avatar);
+        $payload['date_of_birth'] = $existingUser
+            ? $existingUser->date_of_birth?->toDateString()
+            : $request->validated('date_of_birth', $member?->date_of_birth?->toDateString());
         $payload['branch_id'] = $request->validated('branch_id', $profile?->branch_id);
         $payload['assigned_trainer_user_id'] = $request->has('assigned_trainer_user_id')
             ? $request->validated('assigned_trainer_user_id')
             : $profile?->assigned_trainer_user_id;
         $payload['fitness_goal'] = $request->validated('fitness_goal', $profile?->fitness_goal);
-        $payload['gender'] = $request->validated('gender', $profile?->gender);
+        $payload['gender'] = $existingUser
+            ? $existingUser->gender
+            : $request->validated('gender', $member?->gender ?? $profile?->gender);
         $payload['height_cm'] = $request->validated('height_cm', $profile?->height_cm);
         $payload['weight_kg'] = $request->validated('weight_kg', $profile?->weight_kg);
         $payload['experience_level'] = $request->validated('experience_level', $profile?->experience_level);

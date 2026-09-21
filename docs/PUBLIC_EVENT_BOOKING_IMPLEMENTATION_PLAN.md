@@ -24,7 +24,7 @@ Allow a gym or the Gym Atlas platform to publish an event that:
 
 Defaults preserve current behaviour: gym events use `gym_members` and `hosting_gym`; global events use `atlas_members` and `all_atlas`.
 
-`all_atlas` is platform-only discovery. A gym cannot broadcast its event into every Atlas Member app. When a gym chooses `atlas_members`, members outside that gym can resolve and book only after opening the UUID event link or QR. Hosting-gym members may still discover the event normally when visibility is `hosting_gym`.
+`all_atlas` is platform-only discovery. A gym cannot broadcast its event into every Gym Atlas app. When a gym chooses `atlas_members`, members outside that gym can resolve and book only after opening the UUID event link or QR. Hosting-gym members may still discover the event normally when visibility is `hosting_gym`.
 
 ### Guest bookings do not create Atlas accounts
 

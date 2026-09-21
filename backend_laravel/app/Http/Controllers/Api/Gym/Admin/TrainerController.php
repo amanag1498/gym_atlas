@@ -314,6 +314,8 @@ class TrainerController extends Controller
             if ($this->trainerManagementService->hasPhoneColumn()) {
                 $payload['phone'] = $existingUser->phone;
             }
+            $payload['gender'] = $existingUser->gender;
+            $payload['date_of_birth'] = $existingUser->date_of_birth?->toDateString();
         } else {
             $payload['name'] = $request->validated('name', $trainer?->name);
             $payload['email'] = $request->validated('email', $trainer?->email);
@@ -323,6 +325,12 @@ class TrainerController extends Controller
         }
 
         $specializations = $request->validated('specializations', $profile?->specializations ?? []);
+        $payload['gender'] = $existingUser
+            ? $existingUser->gender
+            : $request->validated('gender', $trainer?->gender);
+        $payload['date_of_birth'] = $existingUser
+            ? $existingUser->date_of_birth?->toDateString()
+            : $request->validated('date_of_birth', $trainer?->date_of_birth?->toDateString());
         $payload['specializations'] = $specializations;
         $payload['specialization'] = $specializations[0] ?? $request->validated('specialization', $profile?->specialization);
         $payload['branch_id'] = $request->validated('branch_id', $profile?->branch_id);

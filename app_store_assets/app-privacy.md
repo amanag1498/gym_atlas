@@ -17,7 +17,7 @@ card entry, background location, contacts, microphone, or other collection.
 - All types listed below are linked to the user's identity and are not used for
   tracking.
 
-## Gym Atlas Member
+## Gym Atlas
 
 | App Store data type | Purpose |
 |---|---|
@@ -45,7 +45,7 @@ Collection notes:
 - Purchase history is gym membership and payment-status data; the app does not
   collect card or bank details.
 
-## Gym Atlas Trainer
+## Gym Atlas Coach
 
 | App Store data type | Purpose |
 |---|---|

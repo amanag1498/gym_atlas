@@ -22,6 +22,8 @@ class User extends Authenticatable
         'name',
         'email',
         'phone',
+        'gender',
+        'date_of_birth',
         'password',
         'google_id',
         'firebase_uid',
@@ -52,6 +54,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'date_of_birth' => 'date',
             'password' => 'hashed',
             'is_active' => 'boolean',
             'member_onboarding_completed' => 'boolean',

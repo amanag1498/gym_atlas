@@ -25,12 +25,22 @@ class GymSelfEnrollmentScreen extends StatefulWidget {
 }
 
 class _GymSelfEnrollmentScreenState extends State<GymSelfEnrollmentScreen> {
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _dateOfBirthController = TextEditingController();
   Map<String, dynamic>? _preview;
   bool _loading = true;
   bool _joining = false;
   bool _reuseProfile = true;
   int? _branchId;
   String? _error;
+  String? _gender;
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    _dateOfBirthController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -49,6 +59,10 @@ class _GymSelfEnrollmentScreenState extends State<GymSelfEnrollmentScreen> {
       );
       final data = Map<String, dynamic>.from(response['data'] as Map);
       final gym = Map<String, dynamic>.from(data['gym'] as Map);
+      final profile = Map<String, dynamic>.from(data['profile'] as Map);
+      _phoneController.text = profile['phone']?.toString() ?? '';
+      _dateOfBirthController.text = profile['date_of_birth']?.toString() ?? '';
+      _gender = profile['gender']?.toString();
       final branch = gym['branch'] as Map?;
       if (branch != null) {
         _branchId = (branch['id'] as num?)?.toInt();
@@ -74,6 +88,14 @@ class _GymSelfEnrollmentScreenState extends State<GymSelfEnrollmentScreen> {
       setState(() => _error = 'Choose the gym branch you are joining.');
       return;
     }
+    final phone = _phoneController.text.trim();
+    final phoneDigitCount = phone.codeUnits
+        .where((unit) => unit >= 48 && unit <= 57)
+        .length;
+    if (phoneDigitCount < 7 || phoneDigitCount > 15) {
+      setState(() => _error = 'Enter a valid phone number before joining.');
+      return;
+    }
 
     setState(() {
       _joining = true;
@@ -84,6 +106,11 @@ class _GymSelfEnrollmentScreenState extends State<GymSelfEnrollmentScreen> {
         widget.token,
         branchId: _branchId,
         reuseProfile: _reuseProfile,
+        phone: phone,
+        gender: _gender,
+        dateOfBirth: _dateOfBirthController.text.trim().isEmpty
+            ? null
+            : _dateOfBirthController.text.trim(),
       );
       final data = Map<String, dynamic>.from(response['data'] as Map);
       final gymId = (data['gym_id'] as num?)?.toInt();
@@ -223,6 +250,65 @@ class _GymSelfEnrollmentScreenState extends State<GymSelfEnrollmentScreen> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.md),
+                      TextField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        autofillHints: const [AutofillHints.telephoneNumber],
+                        decoration: const InputDecoration(
+                          labelText: 'Phone number',
+                          prefixIcon: Icon(Icons.phone_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      DropdownButtonFormField<String>(
+                        initialValue:
+                            const [
+                              'female',
+                              'male',
+                              'non_binary',
+                              'prefer_not_to_say',
+                            ].contains(_gender)
+                            ? _gender
+                            : null,
+                        decoration: const InputDecoration(
+                          labelText: 'Gender (optional)',
+                          prefixIcon: Icon(Icons.person_outline_rounded),
+                        ),
+                        items:
+                            const {
+                                  'female': 'Female',
+                                  'male': 'Male',
+                                  'non_binary': 'Non-binary',
+                                  'prefer_not_to_say': 'Prefer not to say',
+                                }.entries
+                                .map(
+                                  (entry) => DropdownMenuItem<String>(
+                                    value: entry.key,
+                                    child: Text(entry.value),
+                                  ),
+                                )
+                                .toList(),
+                        onChanged: (value) => setState(() => _gender = value),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      TextField(
+                        controller: _dateOfBirthController,
+                        readOnly: true,
+                        onTap: _pickDateOfBirth,
+                        decoration: const InputDecoration(
+                          labelText: 'Date of birth (optional)',
+                          prefixIcon: Icon(Icons.cake_outlined),
+                          suffixIcon: Icon(Icons.calendar_month_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'These account details are shared only with gyms you join.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -315,6 +401,23 @@ class _GymSelfEnrollmentScreenState extends State<GymSelfEnrollmentScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _pickDateOfBirth() async {
+    final now = DateTime.now();
+    final current = DateTime.tryParse(_dateOfBirthController.text);
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: current ?? DateTime(now.year - 18, now.month, now.day),
+      firstDate: DateTime(1900),
+      lastDate: DateTime(now.year, now.month, now.day),
+    );
+    if (selected != null && mounted) {
+      setState(() {
+        _dateOfBirthController.text =
+            '${selected.year.toString().padLeft(4, '0')}-${selected.month.toString().padLeft(2, '0')}-${selected.day.toString().padLeft(2, '0')}';
+      });
+    }
   }
 }
 

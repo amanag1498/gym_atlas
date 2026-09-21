@@ -57,6 +57,30 @@ class WorkoutPortabilityService
         return $share;
     }
 
+    public function resolvePublicShare(string $token): WorkoutPlanShare
+    {
+        $share = WorkoutPlanShare::query()
+            ->with('sharedBy')
+            ->where('token_hash', hash('sha256', $token))
+            ->firstOrFail();
+
+        abort_if(
+            $share->status !== 'active'
+                || $share->revoked_at !== null
+                || ($share->expires_at && $share->expires_at->isPast()),
+            410,
+            'This workout plan share is no longer available.',
+        );
+        abort_if(
+            $share->recipient_user_id !== null || $share->recipient_email !== null,
+            404,
+        );
+
+        $share->forceFill(['last_accessed_at' => now()])->save();
+
+        return $share;
+    }
+
     public function adoptShare(User $member, string $token, ?string $name = null): WorkoutPlan
     {
         $share = $this->resolveShare($token, $member);

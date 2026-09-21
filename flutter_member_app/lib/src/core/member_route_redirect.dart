@@ -76,6 +76,14 @@ String? _validatedDestination(Uri? candidate) {
   }
 
   final segments = candidate.pathSegments;
+  if (segments.length == 3 &&
+      segments[0] == 'workouts' &&
+      segments[1] == 'shared' &&
+      _workoutShareTokenPattern.hasMatch(segments[2]) &&
+      candidate.query.isEmpty) {
+    return '/workouts/shared/${segments[2]}';
+  }
+
   if (segments.length != 2) return null;
 
   if (segments.first == 'events') {
@@ -107,6 +115,7 @@ final RegExp _uuidPattern = RegExp(
   r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
 );
 final RegExp _claimTokenPattern = RegExp(r'^[A-Za-z0-9]{64}$');
+final RegExp _workoutShareTokenPattern = RegExp(r'^[A-Za-z0-9]{48}$');
 
 String _routeWithContinuation(String route, String destination) {
   return Uri(

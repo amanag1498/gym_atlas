@@ -94,6 +94,9 @@ class GymSelfEnrollmentService
             'profile' => [
                 'name' => $user->name,
                 'email' => $user->email,
+                'phone' => $user->phone,
+                'gender' => $user->gender ?? $sourceProfile?->gender,
+                'date_of_birth' => $user->date_of_birth?->toDateString(),
                 'photo' => $user->avatar,
                 'fitness_goals' => $sourceProfile?->fitnessGoals?->map(fn ($goal) => [
                     'id' => $goal->id,
@@ -113,6 +116,12 @@ class GymSelfEnrollmentService
     {
         return DB::transaction(function () use ($user, $link, $payload, $request): GymSelfEnrollmentSubmission {
             $user = User::query()->lockForUpdate()->findOrFail($user->id);
+            $identityPayload = collect($payload)
+                ->only(['phone', 'gender', 'date_of_birth'])
+                ->all();
+            if ($identityPayload !== []) {
+                $user->update($identityPayload);
+            }
             $branch = $this->resolveBranch($link, $payload['branch_id'] ?? null);
             $existingProfile = MemberProfile::query()
                 ->where('user_id', $user->id)

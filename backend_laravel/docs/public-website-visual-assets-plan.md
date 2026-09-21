@@ -188,7 +188,7 @@ These are delivery budgets, not source-file limits. If an interface becomes unre
 
 ### Alternative text rules
 
-- Describe the feature demonstrated, not every visible pixel. Example: `Atlas Member workout screen showing assigned Strength Foundation and Mobility Reset plans.`
+- Describe the feature demonstrated, not every visible pixel. Example: `Gym Atlas workout screen showing assigned Strength Foundation and Mobility Reset plans.`
 - Do not start alternative text with `Image of` or repeat the adjacent heading.
 - For screenshots with a detailed explanation next to them, keep alt text concise and provide the full explanation in HTML.
 - Use `alt=""` for gradients, light trails, abstract network backgrounds, and repeated phone screens that add no information beyond a preceding informative image.

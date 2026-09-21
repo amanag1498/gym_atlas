@@ -137,292 +137,310 @@ class _MemberAssignedWorkoutScreenState
 
     return AppGradientScaffold(
       title: 'Assigned Workout',
-      actions: [
-        IconButton(
-          onPressed: widget.onOpenWorkoutBook,
-          icon: const Icon(Icons.menu_book_rounded),
-        ),
-        IconButton(
-          onPressed: _loading ? null : _load,
-          icon: const Icon(Icons.refresh_rounded),
-        ),
-      ],
-      body: _loading && _plans.isEmpty
-          ? const LoadingState(label: 'Loading your assigned workout...')
-          : _error != null && _plans.isEmpty
-          ? ErrorStateView(message: _error!, onRetry: _load)
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                children: [
-                  if (activePlan.isEmpty)
-                    EmptyStateView(
-                      title: 'No assigned workout yet',
-                      message:
-                          'Your trainer has not assigned a workout plan yet. You can still open the workout tracker and start a free session.',
-                      icon: Icons.fitness_center_rounded,
-                      action: GradientButton(
-                        label: 'Open Workout Book',
-                        icon: Icons.menu_book_rounded,
-                        expanded: true,
-                        onPressed: widget.onOpenWorkoutBook,
-                      ),
-                    )
-                  else ...[
-                    if (_plans.length > 1) ...[
-                      DropdownButtonFormField<int>(
-                        key: ValueKey(_selectedPlanId),
-                        initialValue: _selectedPlanId,
-                        isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Viewing assigned plan',
-                        ),
-                        items: _plans
-                            .map(
-                              (plan) => DropdownMenuItem<int>(
-                                value: (plan['id'] as num?)?.toInt(),
-                                child: Text(
-                                  '${plan['name']?.toString() ?? 'Workout plan'} · ${_planSourceLabel(plan)}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) async {
-                          setState(() {
-                            _selectedPlanId = value;
-                            _selectedDayIndex = 0;
-                          });
-                          await _hydrateActivePlanDetail();
-                          if (mounted) setState(() {});
-                        },
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                    ],
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Chip(
-                        avatar: Icon(
-                          activePlan['independent_trainer_member_relationship_id'] !=
-                                  null
-                              ? Icons.verified_user_outlined
-                              : Icons.apartment_rounded,
-                          size: 17,
-                        ),
-                        label: Text(_planSourceLabel(activePlan)),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    RevealOnBuild(
-                      child: _AssignedWorkoutHero(
-                        title: planName,
-                        subtitle: goal,
-                        days: days.length,
-                        exercises: _countExercises(days),
-                        status: _titleCase(status),
-                        todayLabel: todayDay.isEmpty
-                            ? 'Weekly plan ready'
-                            : 'Today: ${_dayLabel(todayDay)}',
-                        onStart: () => widget.onStartAssignedWorkout(
-                          (activePlan['id'] as num?)?.toInt(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    RevealOnBuild(
-                      delay: const Duration(milliseconds: 70),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _AssignedMetricTile(
-                              label: 'Workout days',
-                              value: '${days.length}',
-                              caption: 'Weekly sessions',
-                              icon: Icons.calendar_month_rounded,
-                              gradient: const [
-                                Color(0xFF9DCEFF),
-                                Color(0xFF92A3FD),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: _AssignedMetricTile(
-                              label: 'Selected day',
-                              value: days.isEmpty
-                                  ? '--'
-                                  : _dayLabel(selectedDay),
-                              caption:
-                                  selectedDay['focus']?.toString() ??
-                                  'Focus pending',
-                              icon: Icons.today_rounded,
-                              gradient: const [
-                                Color(0xFFEEA4CE),
-                                Color(0xFFC58BF2),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    RevealOnBuild(
-                      delay: const Duration(milliseconds: 95),
-                      child: GradientButton(
-                        label: 'Start assigned workout',
-                        icon: Icons.play_circle_fill_rounded,
-                        expanded: true,
-                        onPressed: () => widget.onStartAssignedWorkout(
-                          (activePlan['id'] as num?)?.toInt(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    RevealOnBuild(
-                      delay: const Duration(milliseconds: 120),
-                      child: WorkoutReferenceSection(
-                        title: 'Daily workout schedule',
-                        subtitle:
-                            'Choose the workout day you want to review before starting the session.',
-                        child: days.isEmpty
-                            ? const EmptyStateView(
-                                title: 'No workout days configured',
-                                message:
-                                    'Your trainer has not added workout-day blocks yet.',
-                                icon: Icons.event_busy_rounded,
-                              )
-                            : Column(
-                                children: days.asMap().entries.map((entry) {
-                                  final selected =
-                                      entry.key == _selectedDayIndex;
-                                  return Padding(
-                                    padding: EdgeInsets.only(
-                                      bottom: entry.key == days.length - 1
-                                          ? 0
-                                          : AppSpacing.sm,
-                                    ),
-                                    child: WorkoutReferenceScheduleRow(
-                                      onTap: () => setState(
-                                        () => _selectedDayIndex = entry.key,
-                                      ),
-                                      title: _dayLabel(entry.value),
-                                      subtitle:
-                                          entry.value['focus']?.toString() ??
-                                          '${_dayExercises(entry.value).length} exercises configured',
-                                      icon: selected
-                                          ? Icons.play_circle_fill_rounded
-                                          : Icons.calendar_today_rounded,
-                                      trailing: StatusBadge(
-                                        label: selected ? 'Selected' : 'Review',
-                                        color: selected
-                                            ? AppColors.primary
-                                            : AppColors.textSecondary,
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    RevealOnBuild(
-                      delay: const Duration(milliseconds: 170),
-                      child: WorkoutReferenceFocusCard(
-                        title: todayDay.isEmpty
-                            ? 'Weekly plan overview'
-                            : '${_dayLabel(selectedDay)} focus',
-                        subtitle: notes.isEmpty
-                            ? (todayDay.isEmpty
-                                  ? 'Your weekly plan is ready. Select a workout day to review the assigned exercises.'
-                                  : selectedDay['focus']?.toString() ??
-                                        'Trainer focus will appear here.')
-                            : notes.first,
-                        icon: todayDay.isEmpty
-                            ? Icons.route_rounded
-                            : Icons.fitness_center_rounded,
-                        actionLabel: 'Open tracker',
-                        onPressed: () => widget.onStartAssignedWorkout(
-                          (activePlan['id'] as num?)?.toInt(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    RevealOnBuild(
-                      delay: const Duration(milliseconds: 220),
-                      child: WorkoutReferenceExerciseSection(
-                        title: 'Exercises',
-                        countLabel: '${exercises.length} blocks',
-                        children: [
-                          if (exercises.isEmpty)
-                            const EmptyStateView(
-                              title: 'No exercises on this day yet',
-                              message:
-                                  'This workout day is available, but your trainer has not attached exercises yet.',
-                              icon: Icons.playlist_remove_rounded,
-                            )
-                          else
-                            ...exercises.asMap().entries.map((entry) {
-                              final exercise = entry.value;
-                              final detail = Map<String, dynamic>.from(
-                                exercise['exercise'] as Map? ?? const {},
-                              );
-                              final targetWeight =
-                                  (exercise['target_weight'] as num?)
-                                      ?.toDouble();
-
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  bottom: entry.key == exercises.length - 1
-                                      ? 0
-                                      : AppSpacing.sm,
-                                ),
-                                child: WorkoutReferenceScheduleRow(
-                                  title:
-                                      detail['name']?.toString() ??
-                                      exercise['name']?.toString() ??
-                                      'Exercise',
-                                  subtitle:
-                                      '${detail['muscle_group']?.toString() ?? 'General'} • ${exercise['reps'] ?? '--'} reps • Rest ${exercise['rest_seconds'] ?? '--'}s',
-                                  icon: Icons.fitness_center_rounded,
-                                  trailing: StatusBadge(
-                                    label: targetWeight == null
-                                        ? 'Sets ${exercise['sets'] ?? '--'}'
-                                        : '${targetWeight.toStringAsFixed(0)} kg',
-                                    color: targetWeight == null
-                                        ? const Color(0xFF22D3EE)
-                                        : const Color(0xFF34D399),
-                                  ),
-                                ),
-                              );
-                            }),
-                        ],
-                      ),
-                    ),
-                  ],
-                  if (_planPage.hasMore) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    Center(
-                      child: OutlinedButton.icon(
-                        onPressed: _loadingMore ? null : _loadMore,
-                        icon: _loadingMore
-                            ? const SizedBox.square(
-                                dimension: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.expand_more_rounded),
-                        label: Text(
-                          _loadingMore ? 'Loading...' : 'Load more plans',
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.md,
+              AppSpacing.lg,
+              0,
             ),
+            child: _AssignedWorkoutPageHeader(
+              onBack: () => Navigator.of(context).maybePop(),
+              onOpenBook: widget.onOpenWorkoutBook,
+            ),
+          ),
+          Expanded(
+            child: _loading && _plans.isEmpty
+                ? const LoadingState(label: 'Loading your assigned workout...')
+                : _error != null && _plans.isEmpty
+                ? ErrorStateView(message: _error!, onRetry: _load)
+                : RefreshIndicator(
+                    onRefresh: _load,
+                    child: ListView(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      children: [
+                        if (activePlan.isEmpty)
+                          EmptyStateView(
+                            title: 'No assigned workout yet',
+                            message:
+                                'Your trainer has not assigned a workout plan yet. You can still open the workout tracker and start a free session.',
+                            icon: Icons.fitness_center_rounded,
+                            action: GradientButton(
+                              label: 'Open Workout Book',
+                              icon: Icons.menu_book_rounded,
+                              expanded: true,
+                              onPressed: widget.onOpenWorkoutBook,
+                            ),
+                          )
+                        else ...[
+                          if (_plans.length > 1) ...[
+                            DropdownButtonFormField<int>(
+                              key: ValueKey(_selectedPlanId),
+                              initialValue: _selectedPlanId,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                labelText: 'Viewing assigned plan',
+                              ),
+                              items: _plans
+                                  .map(
+                                    (plan) => DropdownMenuItem<int>(
+                                      value: (plan['id'] as num?)?.toInt(),
+                                      child: Text(
+                                        '${plan['name']?.toString() ?? 'Workout plan'} · ${_planSourceLabel(plan)}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) async {
+                                setState(() {
+                                  _selectedPlanId = value;
+                                  _selectedDayIndex = 0;
+                                });
+                                await _hydrateActivePlanDetail();
+                                if (mounted) setState(() {});
+                              },
+                            ),
+                            const SizedBox(height: AppSpacing.lg),
+                          ],
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Chip(
+                              avatar: Icon(
+                                activePlan['independent_trainer_member_relationship_id'] !=
+                                        null
+                                    ? Icons.verified_user_outlined
+                                    : Icons.apartment_rounded,
+                                size: 17,
+                              ),
+                              label: Text(_planSourceLabel(activePlan)),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          RevealOnBuild(
+                            child: _AssignedWorkoutHero(
+                              title: planName,
+                              subtitle: goal,
+                              days: days.length,
+                              exercises: _countExercises(days),
+                              status: _titleCase(status),
+                              todayLabel: todayDay.isEmpty
+                                  ? 'Weekly plan ready'
+                                  : 'Today: ${_dayLabel(todayDay)}',
+                              onStart: () => widget.onStartAssignedWorkout(
+                                (activePlan['id'] as num?)?.toInt(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          RevealOnBuild(
+                            delay: const Duration(milliseconds: 70),
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                final textScale = MediaQuery.textScalerOf(
+                                  context,
+                                ).scale(1);
+                                final stackTiles =
+                                    constraints.maxWidth < 340 ||
+                                    textScale > 1.35;
+                                final tiles = <Widget>[
+                                  _AssignedMetricTile(
+                                    label: 'Workout days',
+                                    value: '${days.length}',
+                                    caption: 'Weekly sessions',
+                                    icon: Icons.calendar_month_rounded,
+                                    gradient: const [
+                                      Color(0xFF9DCEFF),
+                                      Color(0xFF92A3FD),
+                                    ],
+                                  ),
+                                  _AssignedMetricTile(
+                                    label: 'Selected day',
+                                    value: days.isEmpty
+                                        ? '--'
+                                        : _dayLabel(selectedDay),
+                                    caption:
+                                        selectedDay['focus']?.toString() ??
+                                        'Focus pending',
+                                    icon: Icons.today_rounded,
+                                    gradient: const [
+                                      Color(0xFFEEA4CE),
+                                      Color(0xFFC58BF2),
+                                    ],
+                                  ),
+                                ];
+                                if (stackTiles) {
+                                  return Column(
+                                    children: [
+                                      tiles.first,
+                                      const SizedBox(height: AppSpacing.md),
+                                      tiles.last,
+                                    ],
+                                  );
+                                }
+                                return Row(
+                                  children: [
+                                    Expanded(child: tiles.first),
+                                    const SizedBox(width: AppSpacing.md),
+                                    Expanded(child: tiles.last),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          RevealOnBuild(
+                            delay: const Duration(milliseconds: 120),
+                            child: WorkoutReferenceSection(
+                              title: 'Daily workout schedule',
+                              subtitle:
+                                  'Choose the workout day you want to review before starting the session.',
+                              child: days.isEmpty
+                                  ? const EmptyStateView(
+                                      title: 'No workout days configured',
+                                      message:
+                                          'Your trainer has not added workout-day blocks yet.',
+                                      icon: Icons.event_busy_rounded,
+                                    )
+                                  : Column(
+                                      children: days.asMap().entries.map((
+                                        entry,
+                                      ) {
+                                        final selected =
+                                            entry.key == _selectedDayIndex;
+                                        return Padding(
+                                          padding: EdgeInsets.only(
+                                            bottom: entry.key == days.length - 1
+                                                ? 0
+                                                : AppSpacing.sm,
+                                          ),
+                                          child: WorkoutReferenceScheduleRow(
+                                            onTap: () => setState(
+                                              () =>
+                                                  _selectedDayIndex = entry.key,
+                                            ),
+                                            title: _dayLabel(entry.value),
+                                            subtitle:
+                                                entry.value['focus']
+                                                    ?.toString() ??
+                                                '${_dayExercises(entry.value).length} exercises configured',
+                                            icon: selected
+                                                ? Icons.play_circle_fill_rounded
+                                                : Icons.calendar_today_rounded,
+                                            trailing: StatusBadge(
+                                              label: selected
+                                                  ? 'Selected'
+                                                  : 'Review',
+                                              color: selected
+                                                  ? AppColors.primary
+                                                  : AppColors.textSecondary,
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          RevealOnBuild(
+                            delay: const Duration(milliseconds: 170),
+                            child: WorkoutReferenceFocusCard(
+                              title: todayDay.isEmpty
+                                  ? 'Weekly plan overview'
+                                  : '${_dayLabel(selectedDay)} focus',
+                              subtitle: notes.isEmpty
+                                  ? (todayDay.isEmpty
+                                        ? 'Your weekly plan is ready. Select a workout day to review the assigned exercises.'
+                                        : selectedDay['focus']?.toString() ??
+                                              'Trainer focus will appear here.')
+                                  : notes.first,
+                              icon: todayDay.isEmpty
+                                  ? Icons.route_rounded
+                                  : Icons.fitness_center_rounded,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          RevealOnBuild(
+                            delay: const Duration(milliseconds: 220),
+                            child: WorkoutReferenceExerciseSection(
+                              title: 'Exercises',
+                              countLabel: '${exercises.length} blocks',
+                              children: [
+                                if (exercises.isEmpty)
+                                  const EmptyStateView(
+                                    title: 'No exercises on this day yet',
+                                    message:
+                                        'This workout day is available, but your trainer has not attached exercises yet.',
+                                    icon: Icons.playlist_remove_rounded,
+                                  )
+                                else
+                                  ...exercises.asMap().entries.map((entry) {
+                                    final exercise = entry.value;
+                                    final detail = Map<String, dynamic>.from(
+                                      exercise['exercise'] as Map? ?? const {},
+                                    );
+                                    final targetWeight =
+                                        (exercise['target_weight'] as num?)
+                                            ?.toDouble();
+
+                                    return Padding(
+                                      padding: EdgeInsets.only(
+                                        bottom:
+                                            entry.key == exercises.length - 1
+                                            ? 0
+                                            : AppSpacing.sm,
+                                      ),
+                                      child: WorkoutReferenceScheduleRow(
+                                        title:
+                                            detail['name']?.toString() ??
+                                            exercise['name']?.toString() ??
+                                            'Exercise',
+                                        subtitle:
+                                            '${detail['muscle_group']?.toString() ?? 'General'} • ${exercise['reps'] ?? '--'} reps • Rest ${exercise['rest_seconds'] ?? '--'}s',
+                                        icon: Icons.fitness_center_rounded,
+                                        trailing: StatusBadge(
+                                          label: targetWeight == null
+                                              ? 'Sets ${exercise['sets'] ?? '--'}'
+                                              : '${targetWeight.toStringAsFixed(0)} kg',
+                                          color: targetWeight == null
+                                              ? const Color(0xFF22D3EE)
+                                              : const Color(0xFF34D399),
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                              ],
+                            ),
+                          ),
+                        ],
+                        if (_planPage.hasMore) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          Center(
+                            child: OutlinedButton.icon(
+                              onPressed: _loadingMore ? null : _loadMore,
+                              icon: _loadingMore
+                                  ? const SizedBox.square(
+                                      dimension: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.expand_more_rounded),
+                              label: Text(
+                                _loadingMore ? 'Loading...' : 'Load more plans',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -545,6 +563,67 @@ class _MemberAssignedWorkoutScreenState
   }
 }
 
+class _AssignedWorkoutPageHeader extends StatelessWidget {
+  const _AssignedWorkoutPageHeader({
+    required this.onBack,
+    required this.onOpenBook,
+  });
+
+  final VoidCallback onBack;
+  final VoidCallback onOpenBook;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Assigned workout',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.6,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                'Review your plan and start when you are ready.',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            MemberHeaderActionButton(
+              icon: Icons.arrow_back_rounded,
+              onTap: onBack,
+              tooltip: 'Back to training',
+            ),
+            MemberHeaderActionButton(
+              icon: Icons.menu_book_rounded,
+              onTap: onOpenBook,
+              tooltip: 'Workout book',
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _AssignedWorkoutHero extends StatelessWidget {
   const _AssignedWorkoutHero({
     required this.title,
@@ -616,7 +695,7 @@ class _AssignedWorkoutHero extends StatelessWidget {
                           ),
                     ),
                   ),
-                  _AssignedHeroRing(value: days == 0 ? 0.35 : 0.78),
+                  const _AssignedHeroMark(),
                 ],
               ),
               const SizedBox(height: 8),
@@ -639,6 +718,20 @@ class _AssignedWorkoutHero extends StatelessWidget {
                   _AssignedHeroPill(label: '$exercises exercises'),
                 ],
               ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: onStart,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppColors.primary,
+                  ),
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: const Text('Start assigned workout'),
+                ),
+              ),
             ],
           ),
         ],
@@ -647,10 +740,8 @@ class _AssignedWorkoutHero extends StatelessWidget {
   }
 }
 
-class _AssignedHeroRing extends StatelessWidget {
-  const _AssignedHeroRing({required this.value});
-
-  final double value;
+class _AssignedHeroMark extends StatelessWidget {
+  const _AssignedHeroMark();
 
   @override
   Widget build(BuildContext context) {
@@ -660,18 +751,17 @@ class _AssignedHeroRing extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          CircularProgressIndicator(
-            value: 1,
-            color: Colors.white.withValues(alpha: 0.22),
-            strokeWidth: 8,
+          Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withValues(alpha: 0.18),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.32),
+                width: 2,
+              ),
+            ),
           ),
-          CircularProgressIndicator(
-            value: value,
-            color: Colors.white,
-            strokeWidth: 8,
-            strokeCap: StrokeCap.round,
-          ),
-          const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 30),
+          const Icon(Icons.route_rounded, color: Colors.white, size: 30),
         ],
       ),
     );

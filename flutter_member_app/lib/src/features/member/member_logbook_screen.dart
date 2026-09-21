@@ -151,10 +151,12 @@ class _MemberLogbookScreenState extends State<MemberLogbookScreen> {
                             MemberHeaderActionButton(
                               icon: Icons.arrow_back_rounded,
                               onTap: () => Navigator.of(context).maybePop(),
+                              tooltip: 'Back to training',
                             ),
                             MemberHeaderActionButton(
                               icon: Icons.emoji_events_rounded,
                               onTap: () => controller.animateTo(2),
+                              tooltip: 'Personal records',
                             ),
                           ],
                         ),
@@ -210,58 +212,63 @@ class _MemberLogbookScreenState extends State<MemberLogbookScreen> {
                       ],
                     ),
                   ),
-                  if (_historyPage.hasMore)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.lg,
-                        8,
-                        AppSpacing.lg,
-                        AppSpacing.md,
-                      ),
-                      child: OutlinedButton.icon(
-                        onPressed: _loadingMore ? null : _loadMoreHistory,
-                        icon: _loadingMore
-                            ? const SizedBox.square(
-                                dimension: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                  Builder(
+                    builder: (context) {
+                      final controller = DefaultTabController.of(context);
+                      return AnimatedBuilder(
+                        animation: controller,
+                        builder: (context, _) {
+                          final viewingHistory = controller.index == 1;
+                          final viewingRecords = controller.index == 2;
+                          if ((viewingHistory && !_historyPage.hasMore) ||
+                              (viewingRecords && !_recordPage.hasMore) ||
+                              (!viewingHistory && !viewingRecords)) {
+                            return const SizedBox.shrink();
+                          }
+                          final loading = viewingHistory
+                              ? _loadingMore
+                              : _loadingMoreRecords;
+                          return Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              AppSpacing.lg,
+                              8,
+                              AppSpacing.lg,
+                              AppSpacing.md,
+                            ),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: loading
+                                    ? null
+                                    : viewingHistory
+                                    ? _loadMoreHistory
+                                    : _loadMoreRecords,
+                                icon: loading
+                                    ? const SizedBox.square(
+                                        dimension: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : Icon(
+                                        viewingHistory
+                                            ? Icons.expand_more_rounded
+                                            : Icons.emoji_events_rounded,
+                                      ),
+                                label: Text(
+                                  loading
+                                      ? 'Loading...'
+                                      : viewingHistory
+                                      ? 'Load more workout history'
+                                      : 'Load more personal records',
                                 ),
-                              )
-                            : const Icon(Icons.expand_more_rounded),
-                        label: Text(
-                          _loadingMore
-                              ? 'Loading...'
-                              : 'Load more workout history',
-                        ),
-                      ),
-                    ),
-                  if (_recordPage.hasMore)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.lg,
-                        0,
-                        AppSpacing.lg,
-                        AppSpacing.md,
-                      ),
-                      child: OutlinedButton.icon(
-                        onPressed: _loadingMoreRecords
-                            ? null
-                            : _loadMoreRecords,
-                        icon: _loadingMoreRecords
-                            ? const SizedBox.square(
-                                dimension: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.emoji_events_rounded),
-                        label: Text(
-                          _loadingMoreRecords
-                              ? 'Loading...'
-                              : 'Load more personal records',
-                        ),
-                      ),
-                    ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
                 ],
               ),
       ),

@@ -31,6 +31,18 @@
             <x-form-input name="phone" label="Phone Number" type="tel" inputmode="tel" autocomplete="tel" :value="$member?->phone" />
         </div>
         <div data-existing-account-field>
+            <x-form-input name="date_of_birth" label="Date of Birth" type="date" max="{{ now()->toDateString() }}" autocomplete="bday" :value="$member?->date_of_birth?->toDateString()" />
+        </div>
+        <div data-existing-account-field>
+            <label for="gender" class="panel-label">Gender</label>
+            <select id="gender" name="gender" class="panel-select">
+                <option value="">Choose an option</option>
+                @foreach (['female' => 'Female', 'male' => 'Male', 'non_binary' => 'Non-binary', 'prefer_not_to_say' => 'Prefer not to say'] as $value => $label)
+                    <option value="{{ $value }}" @selected(old('gender', $member?->gender ?? $memberProfile?->gender) === $value)>{{ $label }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div data-existing-account-field>
             <x-profile-photo-upload :current-url="$member?->avatar" />
         </div>
         <div>
@@ -237,7 +249,7 @@
                 const accountFields = Array.from(document.querySelectorAll('[data-existing-account-field]'));
                 const profileFields = Array.from(document.querySelectorAll('[data-existing-profile-field]'));
                 const fieldNames = [
-                    'name', 'email', 'phone', 'fitness_goal', 'experience_level',
+                    'name', 'email', 'phone', 'date_of_birth', 'fitness_goal', 'experience_level',
                     'height_cm', 'weight_kg', 'gender', 'medical_notes', 'injury_notes',
                     'emergency_contact_name', 'emergency_contact_phone', 'biometric_identifier',
                 ];

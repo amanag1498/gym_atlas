@@ -361,7 +361,7 @@ class _MemberAttendanceScreenState extends State<MemberAttendanceScreen> {
         );
       }
     } catch (exception) {
-      _error = exception.toString();
+      _error = _activityHistoryError(exception);
     }
 
     if (mounted) {
@@ -419,6 +419,11 @@ class _MemberAttendanceScreenState extends State<MemberAttendanceScreen> {
                         totalVisits: _pagination.total,
                         checkedInToday: checkedInToday,
                         enabled: attendanceEnabled,
+                        statusMessage: _stringValue(
+                          _attendanceStatus['message'],
+                          fallback:
+                              'Connect to an active gym membership to use check-ins.',
+                        ),
                       ),
                     ),
                     const SizedBox(height: 15),
@@ -437,70 +442,55 @@ class _MemberAttendanceScreenState extends State<MemberAttendanceScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 15),
-                    _FitAnimatedSection(
-                      delay: const Duration(milliseconds: 70),
-                      child: Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: _FitInfoCell(
-                              title: '${_pagination.total}',
-                              subtitle: 'Visits',
-                            ),
-                          ),
-                          const SizedBox(width: 15),
-                          Expanded(
-                            child: _FitInfoCell(
-                              title: checkedInToday ? 'Yes' : 'No',
-                              subtitle: 'Today',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                     const SizedBox(height: 25),
                     _FitAnimatedSection(
-                      delay: const Duration(milliseconds: 120),
+                      delay: const Duration(milliseconds: 90),
                       child: _FitGroup(
                         title: 'Recent Check-ins',
                         children: _attendance.isEmpty
                             ? <Widget>[
-                                const _FitInlineEmpty(
+                                _FitInlineEmpty(
                                   icon: Icons.fact_check_outlined,
                                   title: 'No attendance history yet',
-                                  message:
-                                      'Your gym check-ins will appear here after your first visit.',
+                                  message: attendanceEnabled
+                                      ? 'Your verified gym visits will appear here after your first check-in.'
+                                      : 'Attendance becomes available with active gym access.',
                                 ),
                               ]
-                            : _attendance
-                                  .map(
-                                    (entry) =>
-                                        _AttendanceHistoryRow(entry: entry),
-                                  )
-                                  .toList(),
+                            : <Widget>[
+                                ..._attendance.map(
+                                  (entry) =>
+                                      _AttendanceHistoryRow(entry: entry),
+                                ),
+                                if (_pagination.hasMore) ...<Widget>[
+                                  const SizedBox(height: 8),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: OutlinedButton.icon(
+                                      onPressed: _loadingMore
+                                          ? null
+                                          : () => _load(append: true),
+                                      icon: _loadingMore
+                                          ? const SizedBox.square(
+                                              dimension: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Icon(
+                                              Icons.expand_more_rounded,
+                                            ),
+                                      label: Text(
+                                        _loadingMore
+                                            ? 'Loading visits...'
+                                            : 'Load more visits',
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                       ),
                     ),
-                    if (_pagination.hasMore) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      Center(
-                        child: OutlinedButton.icon(
-                          onPressed: _loadingMore
-                              ? null
-                              : () => _load(append: true),
-                          icon: _loadingMore
-                              ? const SizedBox.square(
-                                  dimension: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.expand_more_rounded),
-                          label: Text(
-                            _loadingMore ? 'Loading...' : 'Load more visits',
-                          ),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -524,28 +514,31 @@ class _MembershipTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        InkWell(
-          onTap: () => Navigator.of(context).maybePop(),
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.stroke),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.arrow_back_rounded,
-              color: AppColors.textPrimary,
-              size: 20,
+        Tooltip(
+          message: 'Back',
+          child: InkWell(
+            onTap: () => Navigator.of(context).maybePop(),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.stroke),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.arrow_back_rounded,
+                color: AppColors.textPrimary,
+                size: 20,
+              ),
             ),
           ),
         ),
@@ -573,9 +566,12 @@ class _MembershipTopBar extends StatelessWidget {
         ),
         if (onRefresh != null) ...[
           const SizedBox(width: AppSpacing.md),
-          MemberHeaderActionButton(
-            icon: Icons.refresh_rounded,
-            onTap: onRefresh!,
+          Tooltip(
+            message: 'Refresh',
+            child: MemberHeaderActionButton(
+              icon: Icons.refresh_rounded,
+              onTap: onRefresh!,
+            ),
           ),
         ],
       ],
@@ -683,62 +679,97 @@ class _AttendanceHeader extends StatelessWidget {
     required this.totalVisits,
     required this.checkedInToday,
     required this.enabled,
+    required this.statusMessage,
   });
 
   final String latestGym;
   final int totalVisits;
   final bool checkedInToday;
   final bool enabled;
+  final String statusMessage;
 
   @override
   Widget build(BuildContext context) {
     return PremiumCard(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceSoft,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.stroke),
+                ),
+                child: Icon(
+                  checkedInToday
+                      ? Icons.verified_rounded
+                      : enabled
+                      ? Icons.directions_walk_rounded
+                      : Icons.lock_outline_rounded,
+                  color: AppColors.primaryBright,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 15),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      checkedInToday
+                          ? 'Checked in today'
+                          : enabled
+                          ? 'Ready to check in'
+                          : 'Attendance unavailable',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      enabled
+                          ? totalVisits == 0
+                                ? 'Your first verified gym visit will appear below.'
+                                : 'Latest visit: $latestGym'
+                          : statusMessage,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
           Container(
-            width: 54,
-            height: 54,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: AppColors.surfaceSoft,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: AppColors.stroke),
             ),
-            child: Icon(
-              checkedInToday
-                  ? Icons.verified_rounded
-                  : enabled
-                  ? Icons.directions_walk_rounded
-                  : Icons.lock_outline_rounded,
-              color: AppColors.primaryBright,
-              size: 28,
-            ),
-          ),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: <Widget>[
-                Text(
-                  'Attendance',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w800,
+                Expanded(
+                  child: _AttendanceStat(
+                    value: '$totalVisits',
+                    label: totalVisits == 1 ? 'Total visit' : 'Total visits',
                   ),
                 ),
-                const SizedBox(height: 5),
-                Text(
-                  enabled
-                      ? checkedInToday
-                            ? 'Checked in today at $latestGym'
-                            : totalVisits == 0
-                            ? 'Ready for your first check-in'
-                            : 'Latest visit at $latestGym'
-                      : 'Attendance unlocks with active gym access',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
+                Container(width: 1, height: 32, color: AppColors.stroke),
+                Expanded(
+                  child: _AttendanceStat(
+                    value: checkedInToday ? 'Checked in' : 'Not yet',
+                    label: 'Today',
                   ),
                 ),
               ],
@@ -746,6 +777,38 @@ class _AttendanceHeader extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AttendanceStat extends StatelessWidget {
+  const _AttendanceStat({required this.value, required this.label});
+
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: <Widget>[
+        Text(
+          value,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1007,46 +1070,63 @@ class _AttendanceHistoryRow extends StatelessWidget {
     final gym = entry['gym'] is Map
         ? Map<String, dynamic>.from(entry['gym'] as Map)
         : const <String, dynamic>{};
-    final gymName = _stringValue(
-      gym['name'],
-      fallback: entry['gym_id'] != null
-          ? 'Gym #${entry['gym_id']}'
-          : 'Gym unavailable',
-    );
+    final gymName = _stringValue(gym['name'], fallback: 'Gym visit');
+    final branch = entry['branch'] is Map
+        ? Map<String, dynamic>.from(entry['branch'] as Map)
+        : const <String, dynamic>{};
+    final branchName = _stringValue(branch['name'], fallback: '');
+    final method = _checkInMethodLabel(entry['check_in_method']);
+    final supportingDetails = <String>[
+      if (branchName.isNotEmpty) branchName,
+      if (method.isNotEmpty) method,
+    ].join(' • ');
+    final checkedInAt = _formatDateTime(entry['checked_in_at']);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: <Widget>[
-          _FitRowIcon(icon: Icons.event_available_rounded),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  gymName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w700,
+    return Semantics(
+      label:
+          '$gymName, $checkedInAt'
+          '${supportingDetails.isEmpty ? '' : ', $supportingDetails'}',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const _FitRowIcon(icon: Icons.event_available_rounded),
+            const SizedBox(width: 15),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    gymName,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  _formatDateTime(entry['checked_in_at']),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
+                  const SizedBox(height: 3),
+                  Text(
+                    checkedInAt,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-              ],
+                  if (supportingDetails.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 2),
+                    Text(
+                      supportingDetails,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textMuted,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1326,6 +1406,26 @@ String _formatDateTime(Object? value) {
   }
 
   return DateFormat('dd MMM yyyy • hh:mm a').format(date.toLocal());
+}
+
+String _checkInMethodLabel(Object? value) {
+  final method = value?.toString().trim().toLowerCase() ?? '';
+  if (method.isEmpty) return '';
+  switch (method) {
+    case 'biometric':
+      return 'Biometric check-in';
+    case 'manual':
+      return 'Staff check-in';
+    case 'qr':
+    case 'qr_code':
+      return 'QR check-in';
+    default:
+      return '${_titleCase(method)} check-in';
+  }
+}
+
+String _activityHistoryError(Object _) {
+  return 'We could not load your activity history. Check your connection and try again.';
 }
 
 String _formatCurrency(Object? value) {

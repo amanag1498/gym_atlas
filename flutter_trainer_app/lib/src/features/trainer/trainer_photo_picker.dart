@@ -16,9 +16,11 @@ class TrainerPhotoPicker {
 
   final ImagePicker _picker;
 
-  Future<TrainerPickedPhoto?> pickCompressedProfilePhoto() async {
+  Future<TrainerPickedPhoto?> pickCompressedProfilePhoto({
+    ImageSource source = ImageSource.gallery,
+  }) async {
     final picked = await _picker.pickImage(
-      source: ImageSource.gallery,
+      source: source,
       maxWidth: 1200,
       maxHeight: 1200,
       imageQuality: 88,

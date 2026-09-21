@@ -139,14 +139,14 @@
                     <a class="public-button public-button-secondary" href="{{ route('public.gyms.index') }}">Find a gym when ready</a>
                 </div>
             </div>
-            <div class="home-devices" aria-label="Atlas Member and Trainer application screens">
+            <div class="home-devices" aria-label="Gym Atlas and Gym Atlas Coach application screens">
                 <figure class="home-phone">
                     <figcaption class="home-phone-label">Member App</figcaption>
-                    <img src="{{ asset('images/product/member/dashboard-720.webp') }}" width="720" height="1280" alt="Atlas Member dashboard showing membership and fitness activity information." fetchpriority="high">
+                    <img src="{{ asset('images/product/member/dashboard-720.webp') }}" width="720" height="1280" alt="Gym Atlas dashboard showing membership and fitness activity information." fetchpriority="high">
                 </figure>
                 <figure class="home-phone">
                     <figcaption class="home-phone-label">Trainer App</figcaption>
-                    <img src="{{ asset('images/product/trainer/dashboard-720.webp') }}" width="720" height="1280" alt="Atlas Trainer dashboard showing assigned-member coaching work." decoding="async">
+                    <img src="{{ asset('images/product/trainer/dashboard-720.webp') }}" width="720" height="1280" alt="Gym Atlas Coach dashboard showing assigned-member coaching work." decoding="async">
                 </figure>
             </div>
         </div>
@@ -192,7 +192,7 @@
                 <div class="home-actions"><a class="public-button public-button-primary" href="{{ route('public.member-app') }}">Explore individual Member features</a><a class="public-button public-button-secondary" href="{{ route('public.gyms.index') }}">Find a gym later</a></div>
             </div>
             <figure class="home-shot public-media-frame">
-                <img class="public-app-shot" src="{{ asset('images/product/member/workouts-720.webp') }}" width="720" height="1280" alt="Atlas Member workouts screen showing assigned and personal workout plans." loading="lazy" decoding="async">
+                <img class="public-app-shot" src="{{ asset('images/product/member/workouts-720.webp') }}" width="720" height="1280" alt="Gym Atlas workouts screen showing assigned and personal workout plans." loading="lazy" decoding="async">
             </figure>
         </div>
     </section>
@@ -212,7 +212,7 @@
                 <div class="home-actions"><a class="public-button public-button-primary" href="{{ route('public.for-trainers') }}">See Atlas for trainers</a></div>
             </div>
             <figure class="home-shot public-media-frame">
-                <img class="public-app-shot" src="{{ asset('images/product/trainer/workout-builder-720.webp') }}" width="720" height="1280" alt="Atlas Trainer workout builder used to create and assign structured member plans." loading="lazy" decoding="async">
+                <img class="public-app-shot" src="{{ asset('images/product/trainer/workout-builder-720.webp') }}" width="720" height="1280" alt="Gym Atlas Coach workout builder used to create and assign structured member plans." loading="lazy" decoding="async">
             </figure>
         </div>
     </section>

@@ -30,6 +30,8 @@ dependencies:
   wakelock_plus: ^1.4.0
   gym_flutter_core:
     path: ../gym_flutter_core
+  share_plus: ^12.0.2
+  file_picker: ^11.0.3
 
 dev_dependencies:
   flutter_test:

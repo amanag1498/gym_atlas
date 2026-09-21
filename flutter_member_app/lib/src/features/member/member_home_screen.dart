@@ -223,12 +223,14 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
   Future<void> _load() async {
     final previousScope = _realtimeScope(_contextData, _independentTrainers);
     final sessionController = context.read<MemberSessionController>();
+    if (sessionController.token == null) return;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       final contextResponse = await _memberRepository.fetchContext();
+      if (!mounted || sessionController.token == null) return;
       final freshContext = Map<String, dynamic>.from(
         contextResponse['data'] as Map? ?? const {},
       );
@@ -303,6 +305,7 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
         _connectRealtime(token);
       }
     } catch (exception) {
+      if (!mounted || sessionController.token == null) return;
       debugPrint('[member-home][error] Dashboard load failed: $exception');
       _error =
           'We could not load your dashboard. Check your connection and try again.';
@@ -434,7 +437,6 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
           repository: _memberRepository,
           session: session,
           onOpenProfile: _openProfileScreen,
-          onEditProfile: _openProfileEditScreen,
           onOpenMembership: _openMembershipScreen,
           onOpenAttendance: _openAttendanceScreen,
           onPreferencesChanged: _load,
@@ -582,18 +584,6 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
     );
   }
 
-  Future<void> _openProfileEditScreen() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (context) => MemberProfileScreen(
-          repository: _memberRepository,
-          onProfileUpdated: _load,
-          openEditOnLoad: true,
-        ),
-      ),
-    );
-  }
-
   Future<void> _openTrialRequestsScreen({
     Map<String, dynamic>? initialGym,
     bool initialStatusTab = false,
@@ -634,6 +624,45 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
             });
           },
         ),
+      ),
+    );
+  }
+
+  Future<void> _openDashboardWorkoutPreview(Map<String, dynamic> plan) async {
+    var planDetail = Map<String, dynamic>.from(plan);
+    final planId = (planDetail['id'] as num?)?.toInt();
+    if (planId != null) {
+      try {
+        final response = await _memberRepository.fetchWorkoutPlan(planId);
+        final detail = Map<String, dynamic>.from(
+          response['data'] as Map? ?? const <String, dynamic>{},
+        );
+        if (detail.isNotEmpty) {
+          planDetail = detail;
+        }
+      } catch (_) {
+        // The dashboard payload remains a useful preview if refresh fails.
+      }
+    }
+
+    if (!mounted) return;
+    final days = (planDetail['days'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map(Map<String, dynamic>.from)
+        .toList();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => WorkoutBookPreviewSheet(
+        title: planDetail['name']?.toString() ?? 'Workout plan',
+        planDetail: planDetail,
+        days: days,
+        primaryLabel: 'Continue to workout',
+        primaryAction: () {
+          unawaited(_openAssignedWorkoutScreen());
+        },
       ),
     );
   }
@@ -746,7 +775,7 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
         onOpenProfile: _openProfileScreen,
         onOpenSettings: _openSettingsScreen,
         onOpenLogbook: _openLogbookScreen,
-        onOpenWorkout: _openAssignedWorkoutScreen,
+        onOpenWorkout: _openDashboardWorkoutPreview,
         gymRelationships: gymRelationships,
         selectedGymId: selectedGymId,
         onSwitchGym: _openGymSwitcher,
@@ -762,6 +791,7 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
         workoutDaySelectionEnabled:
             capabilities['workout_day_selection'] == true,
         onOpenWorkoutBook: _openWorkoutBookScreen,
+        restoreActiveSession: widget.storePreviewData == null,
         initialPlanId: _preferredWorkoutPlanId,
         onPlanConsumed: () {
           if (_preferredWorkoutPlanId != null) {
@@ -966,68 +996,68 @@ class _GlassBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      minimum: const EdgeInsets.only(bottom: 0),
-      child: SizedBox(
-        height: 92,
-        child: Stack(
-          alignment: Alignment.topCenter,
-          children: [
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                height: 62,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.shadow.withValues(alpha: 0.10),
-                      blurRadius: 14,
-                      offset: const Offset(0, -3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _GlassBottomNavItem(
-                      label: 'Home',
-                      icon: Icons.home_rounded,
-                      active: currentIndex == 0,
-                      onTap: () => onSelect(0),
-                    ),
-                    _GlassBottomNavItem(
-                      label: 'Train',
-                      icon: Icons.fitness_center_rounded,
-                      active: currentIndex == 1,
-                      onTap: () => onSelect(1),
-                    ),
-                    const SizedBox(width: 58),
-                    _GlassBottomNavItem(
-                      label: 'Body',
-                      icon: Icons.monitor_weight_rounded,
-                      active: currentIndex == 2,
-                      onTap: () => onSelect(2),
-                    ),
-                    _GlassBottomNavItem(
-                      label: 'Chats',
-                      icon: Icons.chat_bubble_rounded,
-                      active: currentIndex == 3,
-                      onTap: () => onSelect(3),
-                    ),
-                  ],
-                ),
+    return SizedBox(
+      height: 62,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.topCenter,
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              height: 62,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.shadow.withValues(alpha: 0.10),
+                    blurRadius: 14,
+                    offset: const Offset(0, -3),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _GlassBottomNavItem(
+                    label: 'Home',
+                    icon: Icons.home_rounded,
+                    active: currentIndex == 0,
+                    onTap: () => onSelect(0),
+                  ),
+                  _GlassBottomNavItem(
+                    label: 'Train',
+                    icon: Icons.fitness_center_rounded,
+                    active: currentIndex == 1,
+                    onTap: () => onSelect(1),
+                  ),
+                  const SizedBox(width: 58),
+                  _GlassBottomNavItem(
+                    label: 'Body',
+                    icon: Icons.monitor_weight_rounded,
+                    active: currentIndex == 2,
+                    onTap: () => onSelect(2),
+                  ),
+                  _GlassBottomNavItem(
+                    label: 'Chats',
+                    icon: Icons.chat_bubble_rounded,
+                    active: currentIndex == 3,
+                    onTap: () => onSelect(3),
+                  ),
+                ],
               ),
             ),
-            _MemberCenterAction(
+          ),
+          Positioned(
+            top: -26,
+            child: _MemberCenterAction(
               active: currentIndex == 4,
               onTap: () => onSelect(4),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1577,7 +1607,7 @@ class _DashboardPage extends StatelessWidget {
   final VoidCallback onOpenProfile;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenLogbook;
-  final VoidCallback onOpenWorkout;
+  final ValueChanged<Map<String, dynamic>> onOpenWorkout;
   final List<Map<String, dynamic>> gymRelationships;
   final int? selectedGymId;
   final VoidCallback onSwitchGym;
@@ -1731,7 +1761,7 @@ class _DashboardPage extends StatelessWidget {
             label: 'Open workout',
             icon: Icons.fitness_center_rounded,
             color: AppColors.primaryBright,
-            onTap: onOpenWorkout,
+            onTap: () => onOpenWorkout(todayWorkout),
           )
         : hasTrainer
         ? _DashboardFocusBannerData(
@@ -2738,11 +2768,15 @@ class _HeroChip extends StatelessWidget {
         children: [
           Icon(data.icon, size: 14, color: AppColors.primary),
           const SizedBox(width: 6),
-          Text(
-            data.label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w800,
+          Flexible(
+            child: Text(
+              data.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],
@@ -2875,6 +2909,7 @@ class _DashboardFocusBanner extends StatelessWidget {
           ],
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               width: 52,
@@ -2918,27 +2953,31 @@ class _DashboardFocusBanner extends StatelessWidget {
                       height: 1.35,
                     ),
                   ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Flexible(
+                        child: Text(
+                          data.label,
+                          maxLines: 2,
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(
+                                color: AppColors.primaryBright,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(
+                        Icons.arrow_forward_rounded,
+                        color: AppColors.primaryBright,
+                        size: 18,
+                      ),
+                    ],
+                  ),
                 ],
               ),
-            ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  data.label,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: AppColors.primaryBright,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Icon(
-                  Icons.arrow_forward_rounded,
-                  color: AppColors.primaryBright,
-                  size: 18,
-                ),
-              ],
             ),
           ],
         ),
@@ -4817,6 +4856,7 @@ class _WorkoutPage extends StatefulWidget {
     required this.independentTrainers,
     required this.workoutDaySelectionEnabled,
     required this.onOpenWorkoutBook,
+    required this.restoreActiveSession,
     this.initialPlanId,
     this.onPlanConsumed,
   });
@@ -4829,6 +4869,7 @@ class _WorkoutPage extends StatefulWidget {
   final List<Map<String, dynamic>> independentTrainers;
   final bool workoutDaySelectionEnabled;
   final VoidCallback onOpenWorkoutBook;
+  final bool restoreActiveSession;
   final int? initialPlanId;
   final VoidCallback? onPlanConsumed;
 
@@ -4880,7 +4921,9 @@ class __WorkoutPageState extends State<_WorkoutPage>
     if (initialPlanId != null) {
       _planIdController.text = '$initialPlanId';
     }
-    scheduleMicrotask(_restoreActiveSessionIfAny);
+    if (widget.restoreActiveSession) {
+      scheduleMicrotask(_restoreActiveSessionIfAny);
+    }
   }
 
   @override
@@ -5016,10 +5059,12 @@ class __WorkoutPageState extends State<_WorkoutPage>
               MemberHeaderActionButton(
                 icon: Icons.history_rounded,
                 onTap: _openLogbook,
+                tooltip: 'Workout history',
               ),
               MemberHeaderActionButton(
                 icon: Icons.menu_book_rounded,
                 onTap: widget.onOpenWorkoutBook,
+                tooltip: 'Workout book',
               ),
             ],
           ),
@@ -5105,22 +5150,30 @@ class __WorkoutPageState extends State<_WorkoutPage>
                 ),
                 const SizedBox(height: 18),
               ],
-              RevealOnBuild(
-                child: _FitLifeWorkoutStats(
-                  completedExercises: completedExercises,
-                  totalExercises: _sessionExercises.length,
-                  totalVolume: _formatVolume(totalVolume),
-                  planDays: selectedPlanDays,
+              if (_activeSessionId != null) ...[
+                RevealOnBuild(
+                  child: _FitLifeWorkoutStats(
+                    completedExercises: completedExercises,
+                    totalExercises: _sessionExercises.length,
+                    totalVolume: _formatVolume(totalVolume),
+                    planDays: selectedPlanDays,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 22),
+                const SizedBox(height: 22),
+              ],
               _FitLifeSectionHeader(
                 title: _activeSessionId == null
                     ? 'Choose Workout'
                     : 'Workout Session',
-                actionLabel: visiblePlans.isEmpty ? null : 'Library',
+                actionLabel: visiblePlans.isEmpty
+                    ? null
+                    : visiblePlans.length > 1
+                    ? 'Change'
+                    : 'Library',
                 onAction: visiblePlans.isEmpty
                     ? null
+                    : visiblePlans.length > 1
+                    ? () => _openPlanPicker(visiblePlans)
                     : widget.onOpenWorkoutBook,
               ),
               const SizedBox(height: 12),
@@ -5137,50 +5190,38 @@ class __WorkoutPageState extends State<_WorkoutPage>
                   message:
                       'Start a custom workout now and add exercises from the exercise library, or open the workout book to adopt a plan.',
                   icon: Icons.fitness_center_rounded,
-                  actionLabel: 'Start Custom Workout',
-                  onAction: canStartWorkout ? _startWorkout : null,
                 )
               else
-                ...visiblePlans.asMap().entries.map((entry) {
-                  final planValue = '${entry.value['id']}';
-                  final selectedValue = _planIdController.text.trim().isEmpty
-                      ? '${visiblePlans.first['id']}'
-                      : _planIdController.text.trim();
-                  final isSelected = selectedValue == planValue;
-                  return RevealOnBuild(
-                    delay: Duration(milliseconds: 45 * entry.key),
-                    child: _FitLifeWorkoutPlanRow(
-                      plan: entry.value,
-                      selected: isSelected,
-                      onTap: () => setState(() {
-                        _planIdController.text = planValue;
-                      }),
-                    ),
-                  );
-                }),
-              const SizedBox(height: 18),
-              _FitLifePrimaryAction(
-                label: _startingWorkout
-                    ? 'Starting workout...'
-                    : _activeSessionId == null
-                    ? (hasAssignedPlans
-                          ? (selectedPlanId != null
-                                ? (widget.workoutDaySelectionEnabled &&
-                                          selectedPlanDays > 1
-                                      ? 'Choose Day & Start'
-                                      : 'Start Workout')
-                                : 'Select Workout Plan')
-                          : 'Start Custom Workout')
-                    : 'Workout Active',
-                icon: _activeSessionId == null
-                    ? Icons.play_arrow_rounded
-                    : Icons.pause_circle_filled_rounded,
-                loading: _startingWorkout,
-                enabled:
-                    canStartWorkout &&
-                    (!hasAssignedPlans || selectedPlanId != null),
-                onTap: _startWorkout,
-              ),
+                RevealOnBuild(
+                  child: _FitLifeWorkoutPlanRow(
+                    plan: selectedPlan,
+                    selected: true,
+                    onTap: visiblePlans.length > 1
+                        ? () => _openPlanPicker(visiblePlans)
+                        : null,
+                  ),
+                ),
+              if (_activeSessionId == null) ...[
+                const SizedBox(height: 18),
+                _FitLifePrimaryAction(
+                  label: _startingWorkout
+                      ? 'Starting workout...'
+                      : hasAssignedPlans
+                      ? (selectedPlanId != null
+                            ? (widget.workoutDaySelectionEnabled &&
+                                      selectedPlanDays > 1
+                                  ? 'Choose Day & Start'
+                                  : 'Start Workout')
+                            : 'Select Workout Plan')
+                      : 'Start Custom Workout',
+                  icon: Icons.play_arrow_rounded,
+                  loading: _startingWorkout,
+                  enabled:
+                      canStartWorkout &&
+                      (!hasAssignedPlans || selectedPlanId != null),
+                  onTap: _startWorkout,
+                ),
+              ],
               if (hasAssignedPlans &&
                   selectedPlan.isNotEmpty &&
                   _activeSessionId == null) ...[
@@ -5340,6 +5381,7 @@ class __WorkoutPageState extends State<_WorkoutPage>
                           entry.value['session_date']?.toString() ?? 'Session',
                       subtitle: _historySubtitle(entry.value),
                       index: entry.key,
+                      onTap: _openLogbook,
                     ),
                   ),
                 ),
@@ -6215,6 +6257,20 @@ class __WorkoutPageState extends State<_WorkoutPage>
   List<Map<String, dynamic>> _visiblePlans() =>
       workoutPlansForRelationship(widget.plans, _selectedRelationshipId);
 
+  Future<void> _openPlanPicker(List<Map<String, dynamic>> plans) async {
+    final selectedId = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _WorkoutPlanSelectionSheet(
+        plans: plans,
+        selectedPlanId: _selectedPlanId(),
+      ),
+    );
+    if (!mounted || selectedId == null) return;
+    setState(() => _planIdController.text = '$selectedId');
+  }
+
   List<Map<String, dynamic>> _planDays(Map<String, dynamic> plan) {
     return workoutPlanDays(plan);
   }
@@ -7088,7 +7144,7 @@ class _FitLifeWorkoutPlanRow extends StatelessWidget {
 
   final Map<String, dynamic> plan;
   final bool selected;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -7404,7 +7460,7 @@ class _FitLifeEmptyPanel extends StatelessWidget {
                   const SizedBox(height: 12),
                   SizedBox(
                     width: 160,
-                    height: 36,
+                    height: 44,
                     child: _FitLifeSmallGradientButton(
                       label: actionLabel!,
                       onTap: onAction!,
@@ -7525,33 +7581,70 @@ class _FitLifeHistoryRow extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.index,
+    required this.onTap,
   });
 
   final String title;
   final String subtitle;
   final int index;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.surface, AppColors.surfaceStrong],
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.stroke.withValues(alpha: 0.82)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.shadow.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 7),
+    return Semantics(
+      button: true,
+      label: '$title. $subtitle. Open workout history.',
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(18),
+            child: Ink(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [AppColors.surface, AppColors.surfaceStrong],
+                ),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: AppColors.stroke.withValues(alpha: 0.82),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.shadow.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 7),
+                  ),
+                ],
+              ),
+              child: _FitLifeHistoryRowContent(
+                title: title,
+                subtitle: subtitle,
+              ),
+            ),
           ),
-        ],
+        ),
       ),
+    );
+  }
+}
+
+class _FitLifeHistoryRowContent extends StatelessWidget {
+  const _FitLifeHistoryRowContent({
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return ExcludeSemantics(
       child: Row(
         children: [
           Container(
@@ -7597,6 +7690,89 @@ class _FitLifeHistoryRow extends StatelessWidget {
           ),
           const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
         ],
+      ),
+    );
+  }
+}
+
+class _WorkoutPlanSelectionSheet extends StatelessWidget {
+  const _WorkoutPlanSelectionSheet({
+    required this.plans,
+    required this.selectedPlanId,
+  });
+
+  final List<Map<String, dynamic>> plans;
+  final int? selectedPlanId;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.82,
+        ),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 54,
+              height: 5,
+              decoration: BoxDecoration(
+                color: AppColors.stroke,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Choose a workout plan',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Your selection will be ready to start on the Train tab.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                itemCount: plans.length,
+                itemBuilder: (context, index) {
+                  final plan = plans[index];
+                  final planId = (plan['id'] as num?)?.toInt();
+                  return _FitLifeWorkoutPlanRow(
+                    plan: plan,
+                    selected: planId == selectedPlanId,
+                    onTap: planId == null
+                        ? null
+                        : () => Navigator.of(context).pop(planId),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -8440,6 +8616,7 @@ class _WorkoutCompactAction extends StatelessWidget {
         child: Opacity(
           opacity: onTap == null ? 0.48 : 1,
           child: Container(
+            constraints: const BoxConstraints(minHeight: 44),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             decoration: BoxDecoration(
               color: selected

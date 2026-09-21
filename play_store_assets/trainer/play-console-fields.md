@@ -1,10 +1,10 @@
-# Atlas Trainer — Play Console fields
+# Gym Atlas Coach — Play Console fields
 
-Copy these values into the Atlas Trainer app in Play Console.
+Copy these values into the Gym Atlas Coach app in Play Console.
 
 ## App setup
 
-- App name: `Atlas Trainer`
+- App name: `Gym Atlas Coach`
 - Default language: `English (India) – en-IN`
 - App or game: `App`
 - Free or paid: `Free`
@@ -19,7 +19,7 @@ Copy these values into the Atlas Trainer app in Play Console.
 ### App name
 
 ```text
-Atlas Trainer
+Gym Atlas Coach
 ```
 
 ### Short description
@@ -31,9 +31,9 @@ Manage clients, plans, follow-ups, progress and coaching conversations.
 ### Full description
 
 ```text
-Atlas Trainer gives coaches a focused workspace for the clients assigned by their gym.
+Gym Atlas Coach gives coaches a focused workspace for the clients assigned by their gym.
 
-Review member context, manage workout and diet plans, organize follow-ups, monitor progress, and keep coaching conversations connected to each client. Atlas Trainer is designed for clear daily action without a noisy admin-style interface.
+Review member context, manage workout and diet plans, organize follow-ups, monitor progress, and keep coaching conversations connected to each client. Gym Atlas Coach is designed for clear daily action without a noisy admin-style interface.
 
 Key features:
 
@@ -78,18 +78,18 @@ is displayed publicly on Google Play.
 
 Screenshot alt text:
 
-1. `Atlas Trainer feature illustration showing clients, daily coaching tasks, sessions, plans and follow-ups.`
-2. `Atlas Trainer feature illustration showing workout templates, exercise library and program assignment.`
-3. `Atlas Trainer feature illustration showing client progress, attendance, workout completion and coaching notes.`
-4. `Atlas Trainer feature illustration showing member chat, coaching alerts, reports and blocking controls.`
+1. `Gym Atlas Coach feature illustration showing clients, daily coaching tasks, sessions, plans and follow-ups.`
+2. `Gym Atlas Coach feature illustration showing workout templates, exercise library and program assignment.`
+3. `Gym Atlas Coach feature illustration showing client progress, attendance, workout completion and coaching notes.`
+4. `Gym Atlas Coach feature illustration showing member chat, coaching alerts, reports and blocking controls.`
 
 ## Release
 
-- Release name: `Atlas Trainer 1.0.0 (1)`
+- Release name: `Gym Atlas Coach 1.0.0 (1)`
 - Release notes:
 
 ```text
-Initial Atlas Trainer release with assigned clients, workout and diet planning, follow-ups, progress review, coaching chat safety controls, notifications, profile uploads, privacy controls and account deletion.
+Initial Gym Atlas Coach release with assigned clients, workout and diet planning, follow-ups, progress review, coaching chat safety controls, notifications, profile uploads, privacy controls and account deletion.
 ```
 
 - App signing: `Google Play App Signing`
@@ -103,14 +103,14 @@ Select: `All or some functionality is restricted`.
 Reviewer instructions:
 
 ```text
-Atlas Trainer uses Google sign-in and requires an approved trainer account.
+Gym Atlas Coach uses Google sign-in and requires an approved trainer account.
 
 Reviewer Google account:
 Email: [CREATE REVIEWER TRAINER EMAIL]
 Password: [ENTER REVIEWER TRAINER PASSWORD IN PLAY CONSOLE ONLY]
 
 Steps:
-1. Open Atlas Trainer.
+1. Open Gym Atlas Coach.
 2. Tap Continue with Google.
 3. Sign in with the reviewer account above.
 4. The account opens directly to the trainer dashboard.

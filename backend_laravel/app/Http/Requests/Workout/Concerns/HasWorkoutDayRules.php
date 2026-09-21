@@ -13,7 +13,7 @@ trait HasWorkoutDayRules
     {
         return [
             $prefix => ['required', 'array', 'min:1'],
-            $prefix.'.*.day_number' => ['required', 'integer', 'min:1', 'max:7'],
+            $prefix.'.*.day_number' => ['required', 'integer', 'min:1', 'max:7', 'distinct'],
             $prefix.'.*.label' => ['nullable', 'string', 'max:255'],
             $prefix.'.*.focus' => ['nullable', 'string', 'max:255'],
             $prefix.'.*.notes' => ['nullable', 'string'],

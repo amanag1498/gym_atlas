@@ -109,6 +109,9 @@ class MemberGymInvitationService
             $payload = $invitation->payload ?? [];
             $payload['name'] = $member->name;
             $payload['email'] = $member->email;
+            $payload['phone'] = $member->phone;
+            $payload['gender'] = $member->gender;
+            $payload['date_of_birth'] = $member->date_of_birth?->toDateString();
 
             $this->managedUserService->upsertMember(
                 $member,

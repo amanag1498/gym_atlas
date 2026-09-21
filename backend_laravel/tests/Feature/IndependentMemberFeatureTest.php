@@ -313,6 +313,36 @@ class IndependentMemberFeatureTest extends TestCase
         ]);
     }
 
+    public function test_independent_member_can_save_account_identity_during_onboarding(): void
+    {
+        $this->seed(PermissionSeeder::class);
+
+        $member = User::factory()->create([
+            'active_role' => RoleName::Member->value,
+            'member_onboarding_step' => 1,
+            'member_onboarding_completed' => false,
+        ]);
+        $member->assignRole(RoleName::Member->value);
+
+        $this->actingAs($member, 'sanctum')
+            ->putJson('/api/member/profile', [
+                'phone' => '+91 98765 43210',
+                'gender' => 'prefer_not_to_say',
+                'date_of_birth' => '1994-09-08',
+                'member_onboarding_step' => 2,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.phone', '+91 98765 43210')
+            ->assertJsonPath('data.gender', 'prefer_not_to_say')
+            ->assertJsonPath('data.date_of_birth', '1994-09-08');
+
+        $member->refresh();
+        $this->assertSame('+91 98765 43210', $member->phone);
+        $this->assertSame('prefer_not_to_say', $member->gender);
+        $this->assertSame('1994-09-08', $member->date_of_birth?->toDateString());
+        $this->assertDatabaseMissing('member_profiles', ['user_id' => $member->id]);
+    }
+
     public function test_independent_member_can_save_multiple_profile_goals_without_gym_assignment(): void
     {
         $this->seed(PermissionSeeder::class);

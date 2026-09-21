@@ -1,8 +1,8 @@
-# Atlas Member
+# Gym Atlas
 
 ## Store listing
 
-- App name: `Atlas Member`
+- App name: `Gym Atlas`
 - Package: `com.techybugs.gymatlas.member`
 - Default language: `English (India)`
 - Category: `Health & Fitness`
@@ -14,7 +14,7 @@ Short description:
 
 Full description:
 
-> Atlas Member brings your gym journey into one calm, connected place.
+> Gym Atlas brings your gym journey into one calm, connected place.
 >
 > Follow assigned workout and diet plans, log training sessions and sets, review
 > attendance and membership details, and track body progress over time. With

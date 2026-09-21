@@ -30,11 +30,7 @@ class MemberOnboardingFlow extends StatefulWidget {
 }
 
 class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
-  static const _experienceOptions = [
-    'Beginner',
-    'Intermediate',
-    'Advanced',
-  ];
+  static const _experienceOptions = ['Beginner', 'Intermediate', 'Advanced'];
   static final List<int> _heightOptions = [
     for (int value = 120; value <= 230; value++) value,
   ];
@@ -50,6 +46,7 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
   late final FixedExtentScrollController _weightWheelController;
   late final TextEditingController _heightController;
   late final TextEditingController _weightController;
+  late final TextEditingController _phoneController;
   late final TextEditingController _injuryController;
   late final TextEditingController _medicalController;
   late final List<Map<String, dynamic>> _availableGoals;
@@ -57,6 +54,8 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
   late int _selectedHeightCm;
   late double _selectedWeightKg;
   String? _experience;
+  String? _gender;
+  DateTime? _dateOfBirth;
 
   @override
   void initState() {
@@ -64,7 +63,8 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
     _step = ((widget.profile['member_onboarding_step'] as num?)?.toInt() ?? 1)
         .clamp(1, _totalSteps);
     _availableGoals =
-        (widget.profile['available_fitness_goals'] as List<dynamic>? ?? const [])
+        (widget.profile['available_fitness_goals'] as List<dynamic>? ??
+                const [])
             .map((item) => Map<String, dynamic>.from(item as Map))
             .toList();
     _selectedGoalIds =
@@ -88,6 +88,13 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
     _weightController = TextEditingController(
       text: _formatWeight(_selectedWeightKg),
     );
+    _phoneController = TextEditingController(
+      text: widget.profile['phone']?.toString() ?? '',
+    );
+    _gender = widget.profile['gender']?.toString();
+    _dateOfBirth = DateTime.tryParse(
+      widget.profile['date_of_birth']?.toString() ?? '',
+    );
     _injuryController = TextEditingController(
       text: widget.profile['injuries_limitations']?.toString() ?? '',
     );
@@ -102,6 +109,7 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
     _weightWheelController.dispose();
     _heightController.dispose();
     _weightController.dispose();
+    _phoneController.dispose();
     _injuryController.dispose();
     _medicalController.dispose();
     super.dispose();
@@ -137,10 +145,7 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
                     constraints: const BoxConstraints(maxWidth: 760),
                     child: Column(
                       children: [
-                        _OnboardingHero(
-                          step: _step,
-                          totalSteps: _totalSteps,
-                        ),
+                        _OnboardingHero(step: _step, totalSteps: _totalSteps),
                         const SizedBox(height: AppSpacing.md),
                         AnimatedSwitcher(
                           duration: const Duration(milliseconds: 240),
@@ -188,8 +193,9 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
                                     icon: _step == _totalSteps
                                         ? Icons.check_rounded
                                         : Icons.arrow_forward_rounded,
-                                    onPressed:
-                                        _saving ? null : _handlePrimaryAction,
+                                    onPressed: _saving
+                                        ? null
+                                        : _handlePrimaryAction,
                                     loading: _saving,
                                     expanded: true,
                                   ),
@@ -200,8 +206,7 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
                                       icon: Icons.arrow_back_rounded,
                                       onPressed: _saving ? null : _goBack,
                                       expanded: true,
-                                      variant:
-                                          GradientButtonVariant.secondary,
+                                      variant: GradientButtonVariant.secondary,
                                     ),
                                   ],
                                 ],
@@ -217,8 +222,7 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
                                       icon: Icons.arrow_back_rounded,
                                       onPressed: _saving ? null : _goBack,
                                       expanded: true,
-                                      variant:
-                                          GradientButtonVariant.secondary,
+                                      variant: GradientButtonVariant.secondary,
                                     ),
                                   ),
                                 if (_step > 1)
@@ -232,8 +236,9 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
                                     icon: _step == _totalSteps
                                         ? Icons.check_rounded
                                         : Icons.arrow_forward_rounded,
-                                    onPressed:
-                                        _saving ? null : _handlePrimaryAction,
+                                    onPressed: _saving
+                                        ? null
+                                        : _handlePrimaryAction,
                                     loading: _saving,
                                     expanded: true,
                                   ),
@@ -261,12 +266,60 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
   }) {
     switch (_step) {
       case 1:
-        return const _StepShell(
+        return _StepShell(
           eyebrow: 'Welcome',
-          title: 'Set up your member profile in five focused steps.',
+          title: 'Start with your account details.',
           description:
-              'We will use your goals, baseline, and health context to make the app feel useful from day one.',
-          child: _WelcomeStepContent(),
+              'Your phone helps with gym communication. Date of birth and gender are optional and stay on your Atlas account.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextFormField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                autofillHints: const [AutofillHints.telephoneNumber],
+                decoration: const InputDecoration(
+                  labelText: 'Phone number',
+                  hintText: '+91 98765 43210',
+                  prefixIcon: Icon(Icons.phone_outlined),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              DropdownButtonFormField<String>(
+                initialValue: _genderOptions.contains(_gender) ? _gender : null,
+                decoration: const InputDecoration(
+                  labelText: 'Gender (optional)',
+                  prefixIcon: Icon(Icons.person_outline_rounded),
+                ),
+                items: _genderOptions
+                    .map(
+                      (value) => DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(_genderLabel(value)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setState(() => _gender = value),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              InkWell(
+                onTap: _pickDateOfBirth,
+                borderRadius: BorderRadius.circular(16),
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Date of birth (optional)',
+                    prefixIcon: Icon(Icons.cake_outlined),
+                    suffixIcon: Icon(Icons.calendar_month_outlined),
+                  ),
+                  child: Text(
+                    _dateOfBirth == null
+                        ? 'Choose date'
+                        : _formatDateOfBirth(_dateOfBirth!),
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       case 2:
         return _StepShell(
@@ -287,7 +340,7 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
                     final columns = constraints.maxWidth >= 560 ? 3 : 2;
                     final itemWidth =
                         (constraints.maxWidth - (spacing * (columns - 1))) /
-                            columns;
+                        columns;
                     final tileHeight = columns == 3 ? 126.0 : 132.0;
 
                     return Column(
@@ -306,21 +359,21 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
                           itemCount: _availableGoals.length,
                           gridDelegate:
                               SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: columns,
-                            crossAxisSpacing: spacing,
-                            mainAxisSpacing: spacing,
-                            mainAxisExtent: tileHeight,
-                          ),
+                                crossAxisCount: columns,
+                                crossAxisSpacing: spacing,
+                                mainAxisSpacing: spacing,
+                                mainAxisExtent: tileHeight,
+                              ),
                           itemBuilder: (context, index) {
                             final goal = _availableGoals[index];
                             return _GoalSelectionCard(
                               width: itemWidth,
                               goal: goal,
-                              selected: _selectedGoalIds
-                                  .contains((goal['id'] as num?)?.toInt()),
-                              onTap: () => _toggleGoal(
+                              selected: _selectedGoalIds.contains(
                                 (goal['id'] as num?)?.toInt(),
                               ),
+                              onTap: () =>
+                                  _toggleGoal((goal['id'] as num?)?.toInt()),
                             );
                           },
                         ),
@@ -457,7 +510,8 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
                   ),
                   _SummaryChip(
                     icon: Icons.favorite_border_rounded,
-                    label: _nullableText(_injuryController.text) == null &&
+                    label:
+                        _nullableText(_injuryController.text) == null &&
                             _nullableText(_medicalController.text) == null
                         ? 'No health notes'
                         : 'Health noted',
@@ -483,23 +537,31 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
                 Text(
                   'Suggested gyms',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                ...widget.publicGyms.take(3).map(
-                  (gym) => Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    child: _InfoSurface(
-                      icon: Icons.location_city_rounded,
-                      title: gym['name']?.toString() ?? 'Gym',
-                      subtitle: [
-                        gym['city']?.toString(),
-                        gym['state']?.toString(),
-                      ].where((value) => value != null && value.isNotEmpty).join(', '),
-                    ),
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
+                const SizedBox(height: AppSpacing.sm),
+                ...widget.publicGyms
+                    .take(3)
+                    .map(
+                      (gym) => Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: _InfoSurface(
+                          icon: Icons.location_city_rounded,
+                          title: gym['name']?.toString() ?? 'Gym',
+                          subtitle:
+                              [
+                                    gym['city']?.toString(),
+                                    gym['state']?.toString(),
+                                  ]
+                                  .where(
+                                    (value) =>
+                                        value != null && value.isNotEmpty,
+                                  )
+                                  .join(', '),
+                        ),
+                      ),
+                    ),
               ],
               const SizedBox(height: AppSpacing.lg),
               _InfoSurface(
@@ -511,7 +573,7 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
                     : 'Trainer not assigned yet',
                 subtitle: assignedTrainer.isNotEmpty
                     ? assignedTrainer['bio']?.toString() ??
-                        'Ready to guide your plan.'
+                          'Ready to guide your plan.'
                     : 'You can still use workouts, progress, and discovery while waiting for trainer assignment.',
                 highlighted: assignedTrainer.isNotEmpty,
               ),
@@ -551,7 +613,18 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
     try {
       switch (_step) {
         case 1:
-          await _persist({'member_onboarding_step': 2});
+          final phone = _phoneController.text.trim();
+          if (!_validPhone(phone)) {
+            throw Exception('Enter a valid phone number to continue.');
+          }
+          await _persist({
+            'phone': phone,
+            'gender': _gender,
+            'date_of_birth': _dateOfBirth == null
+                ? null
+                : _apiDate(_dateOfBirth!),
+            'member_onboarding_step': 2,
+          });
           break;
         case 2:
           if (_selectedGoalIds.isEmpty) {
@@ -593,9 +666,7 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
       }
     } catch (exception) {
       if (mounted) {
-        _showErrorDialog(
-          exception.toString().replaceFirst('Exception: ', ''),
-        );
+        _showErrorDialog(exception.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
       if (mounted) {
@@ -662,12 +733,15 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
                               color: AppColors.primary.withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(999),
                               border: Border.all(
-                                color: AppColors.primary.withValues(alpha: 0.14),
+                                color: AppColors.primary.withValues(
+                                  alpha: 0.14,
+                                ),
                               ),
                             ),
                             child: Text(
                               'CHECK INPUT',
-                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
                                     color: AppColors.primary,
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: 0.35,
@@ -677,16 +751,14 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
                           const SizedBox(height: 6),
                           Text(
                             'A quick fix is needed',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w800),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             'Review the detail below and try again.',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: AppColors.textSecondary),
                           ),
                         ],
                       ),
@@ -712,9 +784,9 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
                   child: Text(
                     message,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textPrimary,
-                          height: 1.4,
-                        ),
+                      color: AppColors.textPrimary,
+                      height: 1.4,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -750,6 +822,20 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
       cleaned[key] = value;
     });
     await widget.repository.updateProfile(cleaned);
+  }
+
+  Future<void> _pickDateOfBirth() async {
+    final now = DateTime.now();
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _dateOfBirth ?? DateTime(now.year - 18, now.month, now.day),
+      firstDate: DateTime(1900),
+      lastDate: DateTime(now.year, now.month, now.day),
+      helpText: 'Select date of birth',
+    );
+    if (selected != null && mounted) {
+      setState(() => _dateOfBirth = selected);
+    }
   }
 
   int _resolveInitialHeight(Object? value) {
@@ -801,18 +887,18 @@ class _StepShell extends StatelessWidget {
           child: Text(
             eyebrow.toUpperCase(),
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.45,
-                ),
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.45,
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
           title,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: AppSpacing.xs),
         ConstrainedBox(
@@ -820,9 +906,9 @@ class _StepShell extends StatelessWidget {
           child: Text(
             description,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                  height: 1.45,
-                ),
+              color: AppColors.textSecondary,
+              height: 1.45,
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.lg),
@@ -832,69 +918,8 @@ class _StepShell extends StatelessWidget {
   }
 }
 
-class _WelcomeStepContent extends StatelessWidget {
-  const _WelcomeStepContent();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppColors.primaryBright.withValues(alpha: 0.22),
-                AppColors.primary.withValues(alpha: 0.16),
-                AppColors.accentPurple.withValues(alpha: 0.10),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.58)),
-          ),
-          child: Row(
-            children: [
-              const BrandMark(size: 52),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'This takes about a minute.',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'You can update everything later from your profile.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        const _SetupHighlights(),
-      ],
-    );
-  }
-}
-
 class _SummaryChip extends StatelessWidget {
-  const _SummaryChip({
-    required this.icon,
-    required this.label,
-  });
+  const _SummaryChip({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
@@ -916,9 +941,9 @@ class _SummaryChip extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
           ),
         ],
       ),
@@ -927,10 +952,7 @@ class _SummaryChip extends StatelessWidget {
 }
 
 class _OnboardingHero extends StatelessWidget {
-  const _OnboardingHero({
-    required this.step,
-    required this.totalSteps,
-  });
+  const _OnboardingHero({required this.step, required this.totalSteps});
 
   final int step;
   final int totalSteps;
@@ -968,9 +990,7 @@ class _OnboardingHero extends StatelessWidget {
               ),
               connectorBuilder: (_, index, __) {
                 final complete = index < step - 1;
-                return _AnimatedTimelineConnector(
-                  complete: complete,
-                );
+                return _AnimatedTimelineConnector(complete: complete);
               },
               indicatorBuilder: (_, index) {
                 final itemStep = index + 1;
@@ -992,10 +1012,7 @@ class _OnboardingHero extends StatelessWidget {
 }
 
 class _AnimatedStepLabel extends StatelessWidget {
-  const _AnimatedStepLabel({
-    required this.label,
-    required this.active,
-  });
+  const _AnimatedStepLabel({required this.label, required this.active});
 
   final String label;
   final bool active;
@@ -1006,25 +1023,20 @@ class _AnimatedStepLabel extends StatelessWidget {
       duration: const Duration(milliseconds: 240),
       curve: Curves.easeOutCubic,
       textAlign: TextAlign.center,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+      style:
+          Theme.of(context).textTheme.labelSmall?.copyWith(
             color: active ? AppColors.textPrimary : AppColors.textSecondary,
             fontWeight: active ? FontWeight.w800 : FontWeight.w600,
             height: 1.15,
           ) ??
           const TextStyle(),
-      child: Text(
-        label,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      ),
+      child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis),
     );
   }
 }
 
 class _AnimatedTimelineConnector extends StatelessWidget {
-  const _AnimatedTimelineConnector({
-    required this.complete,
-  });
+  const _AnimatedTimelineConnector({required this.complete});
 
   final bool complete;
 
@@ -1094,7 +1106,9 @@ class _AnimatedStepIndicator extends StatelessWidget {
           boxShadow: highlighted
               ? [
                   BoxShadow(
-                    color: AppColors.primary.withValues(alpha: active ? 0.26 : 0.16),
+                    color: AppColors.primary.withValues(
+                      alpha: active ? 0.26 : 0.16,
+                    ),
                     blurRadius: active ? 18 : 10,
                     offset: const Offset(0, 6),
                   ),
@@ -1105,7 +1119,8 @@ class _AnimatedStepIndicator extends StatelessWidget {
         child: AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          style:
+              Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: highlighted ? Colors.white : AppColors.textSecondary,
                 fontWeight: FontWeight.w800,
               ) ??
@@ -1158,7 +1173,9 @@ class _ChoiceStep extends StatelessWidget {
                       : null,
                   color: isSelected ? null : AppColors.surfaceStrong,
                   border: Border.all(
-                    color: isSelected ? Colors.transparent : AppColors.strokeStrong,
+                    color: isSelected
+                        ? Colors.transparent
+                        : AppColors.strokeStrong,
                   ),
                 ),
                 child: Column(
@@ -1166,15 +1183,19 @@ class _ChoiceStep extends StatelessWidget {
                   children: [
                     Icon(
                       _experienceIcon(option),
-                      color: isSelected ? Colors.white : AppColors.primaryBright,
+                      color: isSelected
+                          ? Colors.white
+                          : AppColors.primaryBright,
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       option,
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: isSelected ? Colors.white : AppColors.textPrimary,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        color: isSelected
+                            ? Colors.white
+                            : AppColors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ],
                 ),
@@ -1249,16 +1270,16 @@ class _GoalSelectionCard extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      Container(
+                  Container(
                     width: compact ? 30 : 34,
                     height: compact ? 30 : 34,
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? Colors.white.withValues(alpha: 0.18)
-                              : Colors.white.withValues(alpha: 0.74),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? Colors.white.withValues(alpha: 0.18)
+                          : Colors.white.withValues(alpha: 0.74),
                       borderRadius: BorderRadius.circular(compact ? 12 : 14),
                     ),
                     alignment: Alignment.center,
@@ -1287,46 +1308,46 @@ class _GoalSelectionCard extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+              SizedBox(height: compact ? 5 : AppSpacing.sm),
+              Text(
+                goal['name']?.toString() ?? 'Goal',
+                maxLines: compact ? 2 : 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: selected ? Colors.white : AppColors.textPrimary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: compact ? 13 : null,
+                  height: compact ? 1.05 : null,
+                ),
+              ),
+              if (!compact) ...[
+                const SizedBox(height: 4),
+                Container(
+                  width: 34,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? Colors.white.withValues(alpha: 0.90)
+                        : AppColors.primaryBright,
+                    borderRadius: BorderRadius.circular(999),
                   ),
-                  SizedBox(height: compact ? 5 : AppSpacing.sm),
-                  Text(
-                    goal['name']?.toString() ?? 'Goal',
-                    maxLines: compact ? 2 : 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: selected ? Colors.white : AppColors.textPrimary,
-                          fontWeight: FontWeight.w800,
-                          fontSize: compact ? 13 : null,
-                          height: compact ? 1.05 : null,
-                        ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  goal['description']?.toString().trim().isNotEmpty == true
+                      ? goal['description'].toString()
+                      : 'Member-facing goal option',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    height: 1.1,
+                    color: selected
+                        ? Colors.white.withValues(alpha: 0.88)
+                        : AppColors.textSecondary,
                   ),
-                  if (!compact) ...[
-                    const SizedBox(height: 4),
-                    Container(
-                      width: 34,
-                      height: 3,
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? Colors.white.withValues(alpha: 0.90)
-                            : AppColors.primaryBright,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      goal['description']?.toString().trim().isNotEmpty == true
-                          ? goal['description'].toString()
-                          : 'Member-facing goal option',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            height: 1.1,
-                            color: selected
-                                ? Colors.white.withValues(alpha: 0.88)
-                                : AppColors.textSecondary,
-                          ),
-                    ),
-                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -1354,9 +1375,7 @@ class _MetricTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(24)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1377,18 +1396,18 @@ class _MetricTile extends StatelessWidget {
                 child: Text(
                   label,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                        letterSpacing: 0.1,
-                      ),
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                    letterSpacing: 0.1,
+                  ),
                 ),
               ),
               Text(
                 unit,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),
@@ -1412,9 +1431,9 @@ class _MetricTile extends StatelessWidget {
               helper,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -1495,9 +1514,12 @@ class _MetricWheelPicker<T> extends StatelessWidget {
                   child: AnimatedDefaultTextStyle(
                     duration: const Duration(milliseconds: 180),
                     curve: Curves.easeOutCubic,
-                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                    style:
+                        Theme.of(context).textTheme.displaySmall?.copyWith(
                           fontSize: active ? 30 : 24,
-                          fontWeight: active ? FontWeight.w800 : FontWeight.w700,
+                          fontWeight: active
+                              ? FontWeight.w800
+                              : FontWeight.w700,
                           letterSpacing: active ? -1.2 : -0.8,
                           color: active
                               ? AppColors.textPrimary
@@ -1513,7 +1535,8 @@ class _MetricWheelPicker<T> extends StatelessWidget {
                           padding: const EdgeInsets.only(left: 5, top: 9),
                           child: Text(
                             unit,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
                                   color: active
                                       ? AppColors.textSecondary
                                       : AppColors.textSecondary.withValues(
@@ -1569,8 +1592,8 @@ class _LabeledTextarea extends StatelessWidget {
                 child: Text(
                   title,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ],
@@ -1580,9 +1603,7 @@ class _LabeledTextarea extends StatelessWidget {
             controller: controller,
             minLines: 2,
             maxLines: 3,
-            decoration: InputDecoration(
-              hintText: hintText,
-            ),
+            decoration: InputDecoration(hintText: hintText),
           ),
         ],
       ),
@@ -1650,14 +1671,11 @@ class _InfoSurface extends StatelessWidget {
                 Text(
                   title,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+                Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
               ],
             ),
           ),
@@ -1695,9 +1713,9 @@ class _ReviewPill extends StatelessWidget {
           Flexible(
             child: Text(
               label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -1749,108 +1767,20 @@ class _GoalSelectionPromptCard extends StatelessWidget {
                 Text(
                   'Choose your focus',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   'Select one or more goals to continue with onboarding.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _SetupHighlights extends StatelessWidget {
-  const _SetupHighlights();
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const spacing = AppSpacing.sm;
-        final columns = constraints.maxWidth >= 560 ? 4 : 2;
-        final itemWidth =
-            (constraints.maxWidth - (spacing * (columns - 1))) / columns;
-
-        return Wrap(
-          alignment: WrapAlignment.center,
-          runAlignment: WrapAlignment.center,
-          spacing: spacing,
-          runSpacing: spacing,
-          children: [
-            _HighlightTile(
-              width: itemWidth,
-              icon: Icons.flag_circle_rounded,
-              title: 'Goal-driven setup',
-              subtitle: 'Select multiple results you care about.',
-            ),
-            _HighlightTile(
-              width: itemWidth,
-              icon: Icons.bar_chart_rounded,
-              title: 'Progress ready',
-              subtitle: 'Your metrics feed progress modules later.',
-            ),
-            _HighlightTile(
-              width: itemWidth,
-              icon: Icons.verified_user_rounded,
-              title: 'Safer planning',
-              subtitle: 'Health notes improve training context.',
-            ),
-            _HighlightTile(
-              width: itemWidth,
-              icon: Icons.explore_rounded,
-              title: 'Gym discovery',
-              subtitle: 'Start independent and explore gyms later.',
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _HighlightTile extends StatelessWidget {
-  const _HighlightTile({
-    required this.width,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final double width;
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: width,
-      child: PremiumCard(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: AppColors.primaryBright),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-            const SizedBox(height: 2),
-            Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
-          ],
-        ),
       ),
     );
   }
@@ -1888,7 +1818,6 @@ String _primaryLabel(int step) {
   }
 }
 
-
 IconData _goalIcon(Map<String, dynamic> goal) {
   final source = '${goal['name'] ?? ''} ${goal['icon'] ?? ''}'.toLowerCase();
 
@@ -1923,3 +1852,30 @@ String? _nullableText(String value) {
   final trimmed = value.trim();
   return trimmed.isEmpty ? null : trimmed;
 }
+
+const _genderOptions = <String>[
+  'female',
+  'male',
+  'non_binary',
+  'prefer_not_to_say',
+];
+
+String _genderLabel(String value) => switch (value) {
+  'female' => 'Female',
+  'male' => 'Male',
+  'non_binary' => 'Non-binary',
+  _ => 'Prefer not to say',
+};
+
+bool _validPhone(String value) {
+  final digitCount = value.codeUnits
+      .where((unit) => unit >= 48 && unit <= 57)
+      .length;
+  return digitCount >= 7 && digitCount <= 15;
+}
+
+String _apiDate(DateTime value) =>
+    '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+
+String _formatDateOfBirth(DateTime value) =>
+    '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';

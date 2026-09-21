@@ -23,11 +23,29 @@ void main() {
     expect(
       find.byWidgetPredicate(
         (widget) =>
-            widget is Semantics &&
-            widget.properties.label == 'Gym Atlas Member app',
+            widget is Semantics && widget.properties.label == 'Gym Atlas app',
       ),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('announces the coach product name for trainer audiences', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: AtlasBrandLockup(audience: 'Trainer')),
+      ),
+    );
+
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            widget.properties.label == 'Gym Atlas Coach app',
+      ),
+      findsOneWidget,
+    );
   });
 }

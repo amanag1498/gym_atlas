@@ -33,7 +33,7 @@
    Regenerate any visual if the released feature set changes.
 4. Complete App content: privacy policy, ads, content rating, target audience,
    app access, data safety, account deletion, and Health apps declaration for
-   Atlas Member.
+   Gym Atlas.
 5. Enroll both apps in Play App Signing and upload the `.aab`, not an APK.
 6. Upload native debug symbols and keep Dart split-debug-info artifacts for the
    exact release version if obfuscation is enabled.

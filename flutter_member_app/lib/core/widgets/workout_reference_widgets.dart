@@ -58,10 +58,7 @@ class WorkoutReferenceHeroCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
-              _WorkoutMetricOrb(
-                value: metricValue,
-                label: metricLabel,
-              ),
+              _WorkoutMetricOrb(value: metricValue, label: metricLabel),
             ],
           ),
           if (chips.isNotEmpty) ...[
@@ -228,7 +225,7 @@ class WorkoutReferenceFocusCard extends StatelessWidget {
                 if ((actionLabel ?? '').trim().isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.md),
                   SizedBox(
-                    height: 32,
+                    height: 44,
                     child: TextButton(
                       onPressed: onPressed,
                       style: TextButton.styleFrom(
@@ -322,10 +319,7 @@ class WorkoutReferenceExerciseSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return WorkoutReferenceSection(
       title: title,
-      trailing: Text(
-        countLabel,
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
+      trailing: Text(countLabel, style: Theme.of(context).textTheme.bodySmall),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: children,
@@ -335,10 +329,7 @@ class WorkoutReferenceExerciseSection extends StatelessWidget {
 }
 
 class _WorkoutMetricOrb extends StatelessWidget {
-  const _WorkoutMetricOrb({
-    required this.value,
-    required this.label,
-  });
+  const _WorkoutMetricOrb({required this.value, required this.label});
 
   final String value;
   final String label;
@@ -350,7 +341,10 @@ class _WorkoutMetricOrb extends StatelessWidget {
       height: 94,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.28), width: 8),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.28),
+          width: 8,
+        ),
       ),
       child: Center(
         child: Column(

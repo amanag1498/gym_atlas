@@ -171,7 +171,7 @@ class _TrainerAppState extends State<TrainerApp> {
       value: _sessionController,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'Atlas Trainer',
+        title: 'Gym Atlas Coach',
         theme: AppTheme.build(),
         builder: (context, child) => AppRuntimeGate(
           controller: _runtimeController,

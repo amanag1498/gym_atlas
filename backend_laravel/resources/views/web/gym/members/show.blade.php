@@ -106,7 +106,7 @@
                         <div class="panel-card-muted p-4">
                             <p class="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Body</p>
                             <p class="mt-2 font-semibold text-slate-950 dark:text-white">{{ $memberProfile->height_cm ?: 'n/a' }} cm • {{ $memberProfile->weight_kg ?: 'n/a' }} kg</p>
-                            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $memberProfile->gender ?: 'Gender not set' }}</p>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $member->gender ? str($member->gender)->replace('_', ' ')->title() : 'Gender not set' }} • {{ $member->date_of_birth?->format('d M Y') ?? 'Birth date not set' }}</p>
                         </div>
                         <div class="panel-card-muted p-4">
                             <p class="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Emergency</p>

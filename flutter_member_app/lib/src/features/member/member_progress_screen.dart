@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:gym_flutter_core/metric_trend_chart.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart' hide XFile;
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -12,6 +14,13 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/premium_card.dart';
 import '../../core/pagination.dart';
 import 'member_repository.dart';
+
+// Keep the complete progress-photo implementation available, but hide its UI.
+const bool _showProgressPhotos = false;
+
+// Keep backup/export and history-import support available for future migration
+// or support workflows, but do not expose these technical tools to members.
+const bool _showWorkoutDataTools = false;
 
 class MemberProgressScreen extends StatefulWidget {
   const MemberProgressScreen({
@@ -73,7 +82,10 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(
+      length: _showProgressPhotos ? 6 : 5,
+      vsync: this,
+    );
     _summary = widget.initialSummary;
     _load();
   }
@@ -442,77 +454,25 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
   Future<void> _exportWorkoutData() async {
     try {
       final export = await widget.repository.exportWorkoutData();
-      await Clipboard.setData(
-        ClipboardData(text: const JsonEncoder.withIndent('  ').convert(export)),
-      );
+      final contents = const JsonEncoder.withIndent('  ').convert(export);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Workout export copied as JSON.')),
-      );
-    } catch (exception) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
-    }
-  }
-
-  Future<void> _shareWorkoutPlan() async {
-    try {
-      final response = await widget.repository.fetchWorkoutPlans(perPage: 100);
-      final plans = apiPageItems(response);
-      if (!mounted) return;
-      if (plans.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Create or adopt a workout plan first.'),
-          ),
-        );
-        return;
-      }
-      final selected = await showDialog<Map<String, dynamic>>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Share workout plan'),
-          content: SizedBox(
-            width: 420,
-            child: ListView.separated(
-              shrinkWrap: true,
-              itemCount: plans.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final plan = plans[index];
-
-                return ListTile(
-                  leading: const Icon(Icons.fitness_center_rounded),
-                  title: Text(plan['name']?.toString() ?? 'Workout plan'),
-                  subtitle: Text(
-                    '${plan['total_workout_days'] ?? ((plan['days'] as List?)?.length ?? 0)} day(s)',
-                  ),
-                  onTap: () => Navigator.pop(dialogContext, plan),
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
+      final box = context.findRenderObject() as RenderBox?;
+      await SharePlus.instance.share(
+        ShareParams(
+          subject: 'My Atlas workout backup',
+          text: 'Workout data backup exported from Gym Atlas.',
+          files: [
+            XFile.fromData(
+              Uint8List.fromList(utf8.encode(contents)),
+              mimeType: 'application/json',
+              name: 'atlas-workout-backup.json',
             ),
           ],
+          fileNameOverrides: const ['atlas-workout-backup.json'],
+          sharePositionOrigin: box == null
+              ? null
+              : box.localToGlobal(Offset.zero) & box.size,
         ),
-      );
-      final planId = (selected?['id'] as num?)?.toInt();
-      if (planId == null) return;
-      final share = await widget.repository.createWorkoutPlanShare(planId, {
-        'expires_in_days': 14,
-      });
-      final data = Map<String, dynamic>.from(share['data'] as Map? ?? const {});
-      final token = data['token']?.toString() ?? '';
-      await Clipboard.setData(ClipboardData(text: token));
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Workout share token copied.')),
       );
     } catch (exception) {
       if (!mounted) return;
@@ -523,180 +483,63 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
   }
 
   Future<void> _importWorkoutHistory() async {
-    final csvController = TextEditingController();
-    var previewing = false;
     try {
-      final imported = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            title: const Text('Import workout history'),
-            content: SizedBox(
-              width: 420,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Paste CSV with Date, Exercise, Set, Reps, Weight, and Unit columns.',
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: csvController,
-                    minLines: 7,
-                    maxLines: 10,
-                    decoration: const InputDecoration(
-                      labelText: 'CSV history',
-                      alignLabelWithHint: true,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: previewing
-                    ? null
-                    : () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: previewing
-                    ? null
-                    : () async {
-                        if (csvController.text.trim().isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Paste CSV history first.'),
-                            ),
-                          );
-                          return;
-                        }
-                        setDialogState(() => previewing = true);
-                        try {
-                          final preview = await widget.repository
-                              .previewWorkoutHistoryImport({
-                                'source_format': 'generic_csv',
-                                'timezone':
-                                    _workoutPreferences['timezone']
-                                        ?.toString() ??
-                                    'Asia/Kolkata',
-                                'csv_text': csvController.text,
-                              });
-                          final batch = Map<String, dynamic>.from(
-                            preview['data'] as Map? ?? const {},
-                          );
-                          final summary = Map<String, dynamic>.from(
-                            batch['summary'] as Map? ?? const {},
-                          );
-                          if (!context.mounted) return;
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (confirmContext) => AlertDialog(
-                              title: const Text('Confirm import'),
-                              content: Text(
-                                '${summary['matched'] ?? 0} matched, '
-                                '${summary['unmatched'] ?? 0} unmatched, '
-                                '${summary['invalid'] ?? 0} invalid rows.',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(confirmContext, false),
-                                  child: const Text('Cancel'),
-                                ),
-                                FilledButton(
-                                  onPressed: () =>
-                                      Navigator.pop(confirmContext, true),
-                                  child: const Text('Import matched'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (confirm == true) {
-                            await widget.repository.confirmWorkoutHistoryImport(
-                              (batch['id'] as num).toInt(),
-                            );
-                            if (context.mounted) {
-                              Navigator.pop(dialogContext, true);
-                            }
-                          } else if (context.mounted) {
-                            Navigator.pop(dialogContext, false);
-                          }
-                        } catch (exception) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(exception.toString())),
-                            );
-                            setDialogState(() => previewing = false);
-                          }
-                        }
-                      },
-                child: Text(previewing ? 'Previewing...' : 'Preview CSV'),
-              ),
-            ],
-          ),
-        ),
+      final picked = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['csv'],
+        withData: true,
       );
-      if (imported == true) {
-        await _afterSave('Workout history imported.');
-      }
-    } finally {
-      csvController.dispose();
-    }
-  }
-
-  Future<void> _adoptSharedWorkoutPlan() async {
-    final tokenController = TextEditingController();
-    final nameController = TextEditingController();
-    try {
-      final adopt = await showDialog<bool>(
+      final file = picked == null || picked.files.isEmpty
+          ? null
+          : picked.files.single;
+      final bytes = file?.bytes;
+      if (bytes == null) return;
+      final csv = utf8.decode(bytes, allowMalformed: true);
+      final preview = await widget.repository.previewWorkoutHistoryImport({
+        'source_format': 'generic_csv',
+        'source_filename': file?.name,
+        'timezone':
+            _workoutPreferences['timezone']?.toString() ?? 'Asia/Kolkata',
+        'csv_text': csv,
+      });
+      final batch = Map<String, dynamic>.from(
+        preview['data'] as Map? ?? const {},
+      );
+      final summary = Map<String, dynamic>.from(
+        batch['summary'] as Map? ?? const {},
+      );
+      if (!mounted) return;
+      final confirm = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Adopt shared plan'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: tokenController,
-                decoration: const InputDecoration(labelText: 'Share token'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'New plan name',
-                  helperText: 'Leave blank to keep the shared name.',
-                ),
-              ),
-            ],
+          title: const Text('Review workout history'),
+          content: Text(
+            '${summary['matched'] ?? 0} workouts can be imported. '
+            '${summary['unmatched'] ?? 0} exercises need review and '
+            '${summary['invalid'] ?? 0} rows will be skipped.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
+              child: const Text('Not now'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Adopt'),
+              child: const Text('Import workouts'),
             ),
           ],
         ),
       );
-      final token = tokenController.text.trim();
-      if (adopt != true || token.isEmpty) return;
-      await widget.repository.adoptWorkoutPlanShare(
-        token,
-        name: nameController.text.trim(),
+      if (confirm != true) return;
+      await widget.repository.confirmWorkoutHistoryImport(
+        (batch['id'] as num).toInt(),
       );
-      await _afterSave('Shared workout plan added.');
+      await _afterSave('Workout history imported.');
     } catch (exception) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(exception.toString())));
-    } finally {
-      tokenController.dispose();
-      nameController.dispose();
     }
   }
 
@@ -1004,9 +847,7 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
                         analytics: _workoutAnalytics,
                         onOverrideWorkout: _overrideWorkout,
                         onExportData: _exportWorkoutData,
-                        onSharePlan: _shareWorkoutPlan,
                         onImportHistory: _importWorkoutHistory,
-                        onAdoptSharedPlan: _adoptSharedWorkoutPlan,
                       ),
                       _StepHistoryTab(stepSummary: _stepSummary),
                       _WeightLogsTab(
@@ -1043,25 +884,26 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
                         loadingMore: _loadingMoreMeasurements,
                         onLoadMore: _loadMoreMeasurements,
                       ),
-                      _ProgressPhotosTab(
-                        photos: _photos,
-                        recentPhotos: recentPhotos,
-                        selectedPhoto: _selectedPhoto,
-                        selectedPhotoBytes: _selectedPhotoBytes,
-                        notesController: _photoNotesController,
-                        selectedType: _photoType,
-                        onTypeChanged: (value) =>
-                            setState(() => _photoType = value),
-                        onChoosePhotoPressed: _showPhotoSourceSheet,
-                        onClearPhotoPressed: _selectedPhotoBytes == null
-                            ? null
-                            : _clearSelectedPhoto,
-                        saving: _savingPhoto,
-                        onSave: _savePhoto,
-                        hasMore: _photoPage.hasMore,
-                        loadingMore: _loadingMorePhotos,
-                        onLoadMore: _loadMorePhotos,
-                      ),
+                      if (_showProgressPhotos)
+                        _ProgressPhotosTab(
+                          photos: _photos,
+                          recentPhotos: recentPhotos,
+                          selectedPhoto: _selectedPhoto,
+                          selectedPhotoBytes: _selectedPhotoBytes,
+                          notesController: _photoNotesController,
+                          selectedType: _photoType,
+                          onTypeChanged: (value) =>
+                              setState(() => _photoType = value),
+                          onChoosePhotoPressed: _showPhotoSourceSheet,
+                          onClearPhotoPressed: _selectedPhotoBytes == null
+                              ? null
+                              : _clearSelectedPhoto,
+                          saving: _savingPhoto,
+                          onSave: _savePhoto,
+                          hasMore: _photoPage.hasMore,
+                          loadingMore: _loadingMorePhotos,
+                          onLoadMore: _loadMorePhotos,
+                        ),
                     ],
                   ),
                 ),
@@ -1287,7 +1129,9 @@ class _StrengthTrackingHeader extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    'Weight, measurements, steps, and progress photos in the same premium tracking flow.',
+                                    _showProgressPhotos
+                                        ? 'Weight, measurements, steps, and progress photos in one tracking flow.'
+                                        : 'Weight, measurements, and steps in one clear tracking flow.',
                                     style: Theme.of(context).textTheme.bodySmall
                                         ?.copyWith(
                                           color: AppColors.textSecondary,
@@ -1324,10 +1168,11 @@ class _StrengthTrackingHeader extends StatelessWidget {
                               icon: Icons.directions_walk_rounded,
                               label: '$stepCount step days',
                             ),
-                            _StrengthHeroChip(
-                              icon: Icons.photo_camera_back_rounded,
-                              label: '$photoCount photos',
-                            ),
+                            if (_showProgressPhotos)
+                              _StrengthHeroChip(
+                                icon: Icons.photo_camera_back_rounded,
+                                label: '$photoCount photos',
+                              ),
                           ],
                         ),
                       ],
@@ -1490,9 +1335,10 @@ class _StrengthTabSliderState extends State<_StrengthTabSlider> {
     (label: 'Steps', icon: Icons.directions_walk_rounded),
     (label: 'Weight', icon: Icons.monitor_weight_rounded),
     (label: 'Measurements', icon: Icons.straighten_rounded),
-    (label: 'Photos', icon: Icons.photo_camera_back_rounded),
+    if (_showProgressPhotos)
+      (label: 'Photos', icon: Icons.photo_camera_back_rounded),
   ];
-  final _tabKeys = List<GlobalKey>.generate(6, (_) => GlobalKey());
+  final _tabKeys = List<GlobalKey>.generate(_items.length, (_) => GlobalKey());
 
   @override
   void initState() {
@@ -1643,14 +1489,15 @@ class _ProgressOverviewTab extends StatelessWidget {
   Widget build(BuildContext context) {
     if (weightLogs.isEmpty &&
         bodyMeasurements.isEmpty &&
-        photos.isEmpty &&
+        (!_showProgressPhotos || photos.isEmpty) &&
         stepSummary.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(AppSpacing.lg),
         child: _StrengthEmptyPanel(
           title: 'Start your strength profile',
-          message:
-              'Add weight, measurements, or progress photos to build a clear body timeline.',
+          message: _showProgressPhotos
+              ? 'Add weight, measurements, or progress photos to build a clear body timeline.'
+              : 'Add weight or measurements to build a clear body timeline.',
           icon: Icons.insights_rounded,
         ),
       );
@@ -1666,36 +1513,38 @@ class _ProgressOverviewTab extends StatelessWidget {
           accentColor: const Color(0xFF92A3FD),
           unit: ' kg',
         ),
-        const SizedBox(height: 18),
-        _StrengthInsightPanel(
-          title: 'Transformation timeline',
-          subtitle: recentPhotos.length >= 2
-              ? 'Compare your earliest and latest visual checkpoints.'
-              : 'Add two progress photos to unlock a before and after view.',
-          icon: Icons.compare_rounded,
-          child: recentPhotos.length >= 2
-              ? Row(
-                  children: [
-                    Expanded(
-                      child: _PhotoFrame(
-                        label: 'Before',
-                        photo: recentPhotos.last,
+        if (_showProgressPhotos) ...[
+          const SizedBox(height: 18),
+          _StrengthInsightPanel(
+            title: 'Transformation timeline',
+            subtitle: recentPhotos.length >= 2
+                ? 'Compare your earliest and latest visual checkpoints.'
+                : 'Add two progress photos to unlock a before and after view.',
+            icon: Icons.compare_rounded,
+            child: recentPhotos.length >= 2
+                ? Row(
+                    children: [
+                      Expanded(
+                        child: _PhotoFrame(
+                          label: 'Before',
+                          photo: recentPhotos.last,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: _PhotoFrame(
-                        label: 'Latest',
-                        photo: recentPhotos.first,
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: _PhotoFrame(
+                          label: 'Latest',
+                          photo: recentPhotos.first,
+                        ),
                       ),
-                    ),
-                  ],
-                )
-              : const _StrengthMiniEmpty(
-                  icon: Icons.add_a_photo_rounded,
-                  text: 'Your visual compare view will appear here.',
-                ),
-        ),
+                    ],
+                  )
+                : const _StrengthMiniEmpty(
+                    icon: Icons.add_a_photo_rounded,
+                    text: 'Your visual compare view will appear here.',
+                  ),
+          ),
+        ],
         const SizedBox(height: 18),
         _StrengthSectionTitle(
           title: 'Latest body snapshot',
@@ -1738,17 +1587,13 @@ class _WorkoutAnalyticsTab extends StatelessWidget {
     required this.analytics,
     required this.onOverrideWorkout,
     required this.onExportData,
-    required this.onSharePlan,
     required this.onImportHistory,
-    required this.onAdoptSharedPlan,
   });
 
   final Map<String, dynamic> analytics;
   final Future<void> Function(Map<String, dynamic>) onOverrideWorkout;
   final VoidCallback onExportData;
-  final VoidCallback onSharePlan;
   final VoidCallback onImportHistory;
-  final VoidCallback onAdoptSharedPlan;
 
   @override
   Widget build(BuildContext context) {
@@ -1796,38 +1641,33 @@ class _WorkoutAnalyticsTab extends StatelessWidget {
           title: 'Training analytics',
           action: '${adherence['percentage'] ?? '--'}% adherence',
         ),
-        const SizedBox(height: 10),
-        _StrengthInsightPanel(
-          title: 'Data portability',
-          subtitle: 'Export your data, import history, or adopt a shared plan.',
-          icon: Icons.import_export_rounded,
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton.icon(
-                onPressed: onExportData,
-                icon: const Icon(Icons.content_copy_rounded),
-                label: const Text('Copy export'),
-              ),
-              OutlinedButton.icon(
-                onPressed: onSharePlan,
-                icon: const Icon(Icons.ios_share_rounded),
-                label: const Text('Share plan'),
-              ),
-              OutlinedButton.icon(
-                onPressed: onImportHistory,
-                icon: const Icon(Icons.upload_file_rounded),
-                label: const Text('Import CSV'),
-              ),
-              OutlinedButton.icon(
-                onPressed: onAdoptSharedPlan,
-                icon: const Icon(Icons.link_rounded),
-                label: const Text('Adopt share'),
-              ),
-            ],
+        if (_showWorkoutDataTools) ...[
+          const SizedBox(height: 10),
+          _StrengthInsightPanel(
+            title: 'Backup and import',
+            subtitle: 'For moving your own workout history.',
+            icon: Icons.folder_copy_outlined,
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onExportData,
+                    icon: const Icon(Icons.download_rounded),
+                    label: const Text('Export backup'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onImportHistory,
+                    icon: const Icon(Icons.upload_file_rounded),
+                    label: const Text('Choose CSV'),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
         const SizedBox(height: 14),
         MetricTrendChart(
           title: 'Weight toward your goal',

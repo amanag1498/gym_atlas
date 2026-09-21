@@ -129,6 +129,9 @@ class TrainerManagementFeatureTest extends TestCase
         $owner = $this->makeUser(RoleName::GymOwner->value, 'owner-existing-trainer@example.com');
         $existingUser = User::factory()->create([
             'email' => 'existing-trainer@example.com',
+            'phone' => '+91 90000 22222',
+            'gender' => 'male',
+            'date_of_birth' => '1988-06-20',
             'password' => 'secret123',
             'is_active' => true,
         ]);
@@ -154,6 +157,9 @@ class TrainerManagementFeatureTest extends TestCase
 
         $this->post(route('web.gym.trainers.store', ['gym' => $gym->id]), [
             'existing_user_id' => $existingUser->id,
+            'phone' => '+91 00000 00000',
+            'gender' => 'female',
+            'date_of_birth' => '2002-02-02',
             'branch_id' => $branch->id,
             'specialization' => 'Mobility',
             'status' => 'active',
@@ -174,6 +180,9 @@ class TrainerManagementFeatureTest extends TestCase
 
         $existingUser->refresh();
         $this->assertTrue($existingUser->hasRole(RoleName::Trainer->value));
+        $this->assertSame('+91 90000 22222', $existingUser->phone);
+        $this->assertSame('male', $existingUser->gender);
+        $this->assertSame('1988-06-20', $existingUser->date_of_birth?->toDateString());
         $this->assertDatabaseHas('trainer_profiles', [
             'user_id' => $existingUser->id,
             'gym_id' => $gym->id,

@@ -1,6 +1,6 @@
 {
-    "name": "flutter_trainer_app",
-    "short_name": "flutter_trainer_app",
+    "name": "Gym Atlas Coach",
+    "short_name": "Gym Atlas Coach",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

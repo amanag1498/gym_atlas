@@ -24,7 +24,7 @@ For each collected type below, select purposes only from:
 `App functionality`, `Account management`, `Developer communications`,
 `Personalization`, and `Fraud prevention, security and compliance`, as mapped.
 
-## Atlas Member
+## Gym Atlas
 
 | Play data type | Collected | Required? | Purpose |
 |---|---:|---|---|
@@ -57,7 +57,7 @@ Collection notes:
   app.
 - Health, location, photos, phone and messages are optional/user initiated.
 
-## Atlas Trainer
+## Gym Atlas Coach
 
 | Play data type | Collected | Required? | Purpose |
 |---|---:|---|---|

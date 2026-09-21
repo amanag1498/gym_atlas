@@ -1,8 +1,8 @@
-# Gym Atlas Trainer
+# Gym Atlas Coach
 
 ## App information
 
-- Name: `Gym Atlas Trainer`
+- Name: `Gym Atlas Coach`
 - Subtitle: `Coach clients with clarity`
 - Primary category: `Health & Fitness`
 - Secondary category: `Productivity`
@@ -20,7 +20,7 @@ and coaching conversations from one focused workspace.
 
 ## Description
 
-Gym Atlas Trainer gives coaches a focused workspace for the members assigned by
+Gym Atlas Coach gives coaches a focused workspace for the members assigned by
 their gym.
 
 Review member context, build and assign workouts, create flexible meal-based
@@ -39,7 +39,7 @@ Key features:
 - Trainer profile and user-selected certification uploads
 - Privacy, support and account-deletion controls
 
-Access requires an active Gym Atlas trainer account and permissions assigned by
+Access requires an active Gym Atlas Coach account and permissions assigned by
 a participating gym.
 
 ## URLs

@@ -48,7 +48,7 @@ class WorkoutPortabilityController extends Controller
             'id' => $created['share']->id,
             'token' => $created['token'],
             'expires_at' => $created['share']->expires_at?->toIso8601String(),
-            'share_url' => url('/api/member/workout-plan-shares/'.$created['token']),
+            'share_url' => route('public.workout-plans.shared', $created['token']),
         ], 'Workout plan share created successfully.', 201);
     }
 

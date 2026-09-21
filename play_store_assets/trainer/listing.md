@@ -1,8 +1,8 @@
-# Atlas Trainer
+# Gym Atlas Coach
 
 ## Store listing
 
-- App name: `Atlas Trainer`
+- App name: `Gym Atlas Coach`
 - Package: `com.techybugs.gymatlas.trainer`
 - Default language: `English (India)`
 - Category: `Health & Fitness`
@@ -14,12 +14,12 @@ Short description:
 
 Full description:
 
-> Atlas Trainer gives coaches a focused workspace for the clients assigned by
+> Gym Atlas Coach gives coaches a focused workspace for the clients assigned by
 > their gym.
 >
 > Review member context, manage workout and diet plans, organize follow-ups,
 > monitor progress, and keep coaching conversations connected to each client.
-> Atlas Trainer is designed for clear daily action without a noisy admin-style
+> Gym Atlas Coach is designed for clear daily action without a noisy admin-style
 > interface.
 >
 > Key features:

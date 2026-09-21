@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
-        android:label="Atlas Member"
+        android:label="Gym Atlas"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round">
@@ -46,8 +46,10 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="gymatlas.in" android:pathPrefix="/join/" />
                 <data android:scheme="https" android:host="gymatlas.in" android:pathPrefix="/events/" />
+                <data android:scheme="https" android:host="gymatlas.in" android:pathPrefix="/workouts/shared/" />
                 <data android:scheme="https" android:host="www.gymatlas.in" android:pathPrefix="/join/" />
                 <data android:scheme="https" android:host="www.gymatlas.in" android:pathPrefix="/events/" />
+                <data android:scheme="https" android:host="www.gymatlas.in" android:pathPrefix="/workouts/shared/" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

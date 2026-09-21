@@ -148,15 +148,17 @@ class MemberHeaderActionButton extends StatelessWidget {
     required this.icon,
     required this.onTap,
     this.count = 0,
+    this.tooltip,
   });
 
   final IconData icon;
   final VoidCallback onTap;
   final int count;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
+    final button = Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
@@ -209,6 +211,16 @@ class MemberHeaderActionButton extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+    final message = tooltip?.trim();
+    if (message == null || message.isEmpty) return button;
+    return Tooltip(
+      message: message,
+      child: Semantics(
+        button: true,
+        label: message,
+        child: ExcludeSemantics(child: button),
       ),
     );
   }

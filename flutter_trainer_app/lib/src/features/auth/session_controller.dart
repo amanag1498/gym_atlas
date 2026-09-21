@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase;
 import 'package:flutter/foundation.dart';
@@ -65,7 +67,7 @@ class TrainerSessionController extends ChangeNotifier {
       _ensureEligibleTrainer(me);
       user = me;
       await _storage.saveSession(token: storedToken, user: me);
-      await _registerFcmToken();
+      _registerFcmToken();
     } on DioException catch (exception) {
       if (exception.response?.statusCode == 401) {
         await _clearLocalState(notify: false);
@@ -214,7 +216,7 @@ class TrainerSessionController extends ChangeNotifier {
     token = session.token;
     user = me;
     await _storage.saveSession(token: session.token, user: me);
-    await _registerFcmToken();
+    _registerFcmToken();
   }
 
   Future<void> logout({bool remote = true}) async {
@@ -248,14 +250,17 @@ class TrainerSessionController extends ChangeNotifier {
     user = updated;
     await _storage.saveSession(token: token!, user: updated);
     notifyListeners();
-    await _registerFcmToken();
+    _registerFcmToken();
   }
 
-  Future<void> _registerFcmToken() async {
+  void _registerFcmToken() {
     if (token == null || token!.isEmpty) {
       return;
     }
-    await _fcmTokenService?.registerToken(appRole: 'trainer');
+    final service = _fcmTokenService;
+    if (service != null) {
+      unawaited(service.registerToken(appRole: 'trainer'));
+    }
   }
 
   Future<TrainerUser> _ensureTrainerRole(TrainerUser currentUser) async {
@@ -285,6 +290,7 @@ class TrainerSessionController extends ChangeNotifier {
   }
 
   Future<void> _clearLocalState({required bool notify}) async {
+    await _fcmTokenService?.stop(deleteNativeToken: true);
     await _storage.clear();
     _apiClient.clearBearerToken();
     token = null;
@@ -305,6 +311,12 @@ class TrainerSessionController extends ChangeNotifier {
     } catch (_) {
       // Ignore Firebase sign-out failures during local cleanup.
     }
+  }
+
+  @override
+  void dispose() {
+    _fcmTokenService?.dispose();
+    super.dispose();
   }
 
   String _mapAuthError(DioException exception) {

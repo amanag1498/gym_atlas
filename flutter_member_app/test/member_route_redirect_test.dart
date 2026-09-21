@@ -126,6 +126,38 @@ void main() {
       );
     });
 
+    test('preserves a workout share link through login', () {
+      const token = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+      expect(token.length, 48);
+      expect(
+        memberRouteRedirect(
+          uri: Uri.parse('/workouts/shared/$token'),
+          initializing: false,
+          isAuthenticated: false,
+        ),
+        '/login?continue=%2Fworkouts%2Fshared%2F$token',
+      );
+      expect(
+        memberRouteRedirect(
+          uri: Uri.parse('/login?continue=%2Fworkouts%2Fshared%2F$token'),
+          initializing: false,
+          isAuthenticated: true,
+        ),
+        '/workouts/shared/$token',
+      );
+    });
+
+    test('rejects malformed workout share links', () {
+      expect(
+        memberRouteRedirect(
+          uri: Uri.parse('/workouts/shared/too-short'),
+          initializing: false,
+          isAuthenticated: false,
+        ),
+        '/login',
+      );
+    });
+
     test('does not accept an external continuation', () {
       expect(
         memberRouteRedirect(

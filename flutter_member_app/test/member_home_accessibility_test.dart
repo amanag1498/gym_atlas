@@ -161,6 +161,72 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('home opens the active workout in the shared preview sheet', (
+    tester,
+  ) async {
+    final client = MemberApiClient();
+    final session =
+        MemberSessionController(
+            storage: const SecureStorageService(),
+            apiClient: client,
+            authService: AuthService(client),
+          )
+          ..user = const MemberUser(
+            id: 7,
+            name: 'Preview Member',
+            email: 'preview@example.com',
+            activeRole: 'member',
+            isActive: true,
+            roles: ['member'],
+          )
+          ..token = 'preview-token';
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<MemberSessionController>.value(
+        value: session,
+        child: MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(375, 812),
+              textScaler: TextScaler.linear(1.2),
+              disableAnimations: true,
+            ),
+            child: const MemberHomeScreen(
+              storePreviewData: {
+                'context': {
+                  'user_state': 'gym_member',
+                  'member_profile': {'member_onboarding_completed': true},
+                  'user': {'member_onboarding_completed': true},
+                  'capabilities': <String, dynamic>{},
+                  'gym_relationships': <Map<String, dynamic>>[],
+                },
+                'plans': [
+                  {
+                    'name': 'Assigned Plan Only',
+                    'status': 'active',
+                    'goal': 'Strength',
+                  },
+                ],
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Open workout'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open workout'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('PLAN PREVIEW'), findsOneWidget);
+    expect(find.text('Assigned Plan Only'), findsWidgets);
+    expect(find.text('Continue to workout'), findsOneWidget);
+    expect(find.text('Schedule details unavailable'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('independent member gets a purposeful personal workspace', (
     tester,
   ) async {
@@ -217,6 +283,115 @@ void main() {
     expect(find.text('Your personal fitness space'), findsOneWidget);
     expect(find.text('ACTIVE GYM'), findsNothing);
     expect(find.text('Switch gym'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('train tab keeps the workout decision focused and accessible', (
+    tester,
+  ) async {
+    final client = MemberApiClient();
+    final session =
+        MemberSessionController(
+            storage: const SecureStorageService(),
+            apiClient: client,
+            authService: AuthService(client),
+          )
+          ..user = const MemberUser(
+            id: 3,
+            name: 'Train Member',
+            email: 'train@example.com',
+            activeRole: 'member',
+            isActive: true,
+            roles: ['member'],
+          )
+          ..token = 'preview-token';
+
+    Widget buildTrain(Size size) {
+      return ChangeNotifierProvider<MemberSessionController>.value(
+        value: session,
+        child: MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(
+              size: size,
+              textScaler: TextScaler.linear(2),
+              disableAnimations: true,
+            ),
+            child: const MemberHomeScreen(
+              initialIndex: 1,
+              storePreviewData: {
+                'context': {
+                  'user_state': 'gym_member',
+                  'member_profile': {'member_onboarding_completed': true},
+                  'user': {'member_onboarding_completed': true},
+                  'capabilities': {'workout_day_selection': true},
+                  'selected_gym_id': 11,
+                },
+                'plans': [
+                  {
+                    'id': 101,
+                    'name': 'Strength Foundation',
+                    'status': 'active',
+                    'goal': 'Build strength',
+                    'estimated_session_minutes': 45,
+                    'days': [
+                      {'id': 1001, 'day_number': 1, 'label': 'Upper body'},
+                      {'id': 1002, 'day_number': 2, 'label': 'Lower body'},
+                    ],
+                  },
+                  {
+                    'id': 102,
+                    'name': 'Mobility Reset',
+                    'status': 'active',
+                    'goal': 'Move better',
+                    'estimated_session_minutes': 25,
+                    'days': [
+                      {'id': 1003, 'day_number': 1, 'label': 'Full body'},
+                    ],
+                  },
+                ],
+                'history': [
+                  {
+                    'id': 501,
+                    'session_date': '2026-09-19',
+                    'plan_name': 'Strength Foundation',
+                    'duration_minutes': 45,
+                    'status': 'completed',
+                  },
+                ],
+              },
+            ),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildTrain(const Size(375, 812)));
+    await tester.pump();
+
+    expect(find.text('Strength Foundation'), findsOneWidget);
+    expect(find.text('Mobility Reset'), findsNothing);
+    expect(find.text('Logged'), findsNothing);
+    expect(find.bySemanticsLabel('Workout history'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel(RegExp('Open workout history')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Change'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a workout plan'), findsOneWidget);
+    expect(find.text('Strength Foundation'), findsWidgets);
+    expect(find.text('Mobility Reset'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Mobility Reset'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mobility Reset'), findsOneWidget);
+    expect(find.text('Strength Foundation'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(buildTrain(const Size(812, 375)));
+    await tester.pump();
     expect(tester.takeException(), isNull);
   });
 }

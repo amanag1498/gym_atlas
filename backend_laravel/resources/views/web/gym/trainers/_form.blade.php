@@ -33,6 +33,18 @@
                     <x-form-input name="phone" label="Phone Number" type="tel" inputmode="tel" autocomplete="tel" :value="$trainer?->phone" />
                 </div>
                 <div data-existing-account-field>
+                    <x-form-input name="date_of_birth" label="Date of Birth" type="date" max="{{ now()->toDateString() }}" autocomplete="bday" :value="$trainer?->date_of_birth?->toDateString()" />
+                </div>
+                <div data-existing-account-field>
+                    <label for="gender" class="panel-label">Gender</label>
+                    <select id="gender" name="gender" class="panel-select">
+                        <option value="">Choose an option</option>
+                        @foreach (['female' => 'Female', 'male' => 'Male', 'non_binary' => 'Non-binary', 'prefer_not_to_say' => 'Prefer not to say'] as $value => $label)
+                            <option value="{{ $value }}" @selected(old('gender', $trainer?->gender) === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div data-existing-account-field>
                     <x-profile-photo-upload :current-url="$trainerProfile?->profile_photo_url ?: $trainer?->avatar" />
                 </div>
             </div>
@@ -129,7 +141,7 @@
 
                 picker.addEventListener('remote-user-selected', (event) => {
                     applyExistingUserState(true);
-                    ['name', 'email', 'phone'].forEach((fieldName) => {
+                    ['name', 'email', 'phone', 'gender', 'date_of_birth'].forEach((fieldName) => {
                         const input = document.querySelector(`[name="${fieldName}"]`);
                         if (input && event.detail[fieldName] !== undefined) {
                             input.value = event.detail[fieldName] ?? '';

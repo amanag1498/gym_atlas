@@ -153,6 +153,9 @@ class MemberManagementFeatureTest extends TestCase
         $trainer = $this->makeUser(RoleName::Trainer->value, 'trainer-existing-member@example.com');
         $existingUser = User::factory()->create([
             'email' => 'existing-member@example.com',
+            'phone' => '+91 90000 11111',
+            'gender' => 'female',
+            'date_of_birth' => '1992-03-14',
             'password' => 'secret123',
             'is_active' => true,
             'active_role' => RoleName::Member->value,
@@ -236,6 +239,9 @@ class MemberManagementFeatureTest extends TestCase
 
         $this->post(route('web.gym.members.store', ['gym' => $gym->id]), [
             'existing_user_id' => $existingUser->id,
+            'phone' => '+91 00000 00000',
+            'gender' => 'male',
+            'date_of_birth' => '2001-01-01',
             'branch_id' => $branch->id,
             'assigned_trainer_user_id' => $trainer->id,
             'status' => 'active',
@@ -299,6 +305,10 @@ class MemberManagementFeatureTest extends TestCase
             ->where('type', 'trainer_assignment')
             ->where('data->member_user_id', $existingUser->id)
             ->count(), 'The assigned trainer must still receive the new-member notification.');
+        $existingUser->refresh();
+        $this->assertSame('+91 90000 11111', $existingUser->phone);
+        $this->assertSame('female', $existingUser->gender);
+        $this->assertSame('1992-03-14', $existingUser->date_of_birth?->toDateString());
 
         $this->assertDatabaseHas('member_profiles', [
             'user_id' => $existingUser->id,

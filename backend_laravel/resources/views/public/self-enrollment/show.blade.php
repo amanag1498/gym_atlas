@@ -85,7 +85,11 @@
                                 </div>
 
                                 <div class="enroll-step space-y-5" data-step="3" hidden>
-                                    <h3 class="text-xl font-semibold text-slate-950">Current profile</h3>
+                                    <div><h3 class="text-xl font-semibold text-slate-950">Current profile</h3><p class="mt-1 text-sm text-slate-500">Date of birth and gender are optional and saved to your private Atlas account.</p></div>
+                                    <div class="grid gap-4 sm:grid-cols-2">
+                                        <div><label class="mb-2 block text-sm font-semibold">Date of birth <span class="font-normal text-slate-400">optional</span></label><input name="date_of_birth" type="date" max="{{ now()->toDateString() }}" value="{{ old('date_of_birth') }}" class="form-control" autocomplete="bday"></div>
+                                        <div><label class="mb-2 block text-sm font-semibold">Gender <span class="font-normal text-slate-400">optional</span></label><select name="gender" class="form-control"><option value="">Choose an option</option><option value="female" @selected(old('gender') === 'female')>Female</option><option value="male" @selected(old('gender') === 'male')>Male</option><option value="non_binary" @selected(old('gender') === 'non_binary')>Non-binary</option><option value="prefer_not_to_say" @selected(old('gender') === 'prefer_not_to_say')>Prefer not to say</option></select></div>
+                                    </div>
                                     <div><label class="mb-2 block text-sm font-semibold">Experience</label><div class="grid grid-cols-3 gap-2">@foreach(['beginner','intermediate','advanced'] as $level)<label class="cursor-pointer rounded-xl border border-slate-200 px-2 py-3 text-center text-sm capitalize has-[:checked]:border-teal-500 has-[:checked]:bg-teal-50"><input type="radio" name="experience_level" value="{{ $level }}" class="sr-only" @checked(old('experience_level') === $level) required><span>{{ $level }}</span></label>@endforeach</div></div>
                                     <div class="grid grid-cols-2 gap-4"><div><label class="mb-2 block text-sm font-semibold">Height <span class="font-normal text-slate-400">cm</span></label><input name="height_cm" type="number" min="120" max="230" value="{{ old('height_cm', 173) }}" class="form-control" inputmode="decimal" required></div><div><label class="mb-2 block text-sm font-semibold">Weight <span class="font-normal text-slate-400">kg</span></label><input name="weight_kg" type="number" min="30" max="180" step="0.5" value="{{ old('weight_kg', 80) }}" class="form-control" inputmode="decimal" required></div></div>
                                 </div>
@@ -165,7 +169,9 @@
             const updateActions = () => { back.hidden = current === 1; next.hidden = current === totalSteps; submit.hidden = current !== totalSteps; next.disabled = !stepComplete(current); submit.disabled = submitting || !stepComplete(totalSteps); next.textContent = current === totalSteps - 1 ? 'Review details' : 'Continue'; };
             const buildReview = () => {
                 const data = new FormData(form); const goals = [...form.querySelectorAll('input[name="fitness_goal_ids[]"]:checked')].map(el => el.closest('label').querySelector('strong').textContent).join(', '); const branch = form.querySelector('[name="branch_id"] option:checked')?.textContent || @json($link->branch?->name ?? 'Gym branch');
-                const entries = [['Name', data.get('name')], ['Branch', branch], ['Goals', goals], ['Profile', String(data.get('experience_level')) + ' · ' + data.get('height_cm') + ' cm · ' + data.get('weight_kg') + ' kg']];
+                const genderLabels = {female: 'Female', male: 'Male', non_binary: 'Non-binary', prefer_not_to_say: 'Prefer not to say'};
+                const identity = [data.get('date_of_birth'), genderLabels[data.get('gender')] || null].filter(Boolean).join(' · ') || 'Optional details skipped';
+                const entries = [['Name', data.get('name')], ['Branch', branch], ['Goals', goals], ['Identity', identity], ['Profile', String(data.get('experience_level')) + ' · ' + data.get('height_cm') + ' cm · ' + data.get('weight_kg') + ' kg']];
                 const review = document.getElementById('new-review'); review.innerHTML = '';
                 entries.forEach(entry => { const item = document.createElement('div'); const label = document.createElement('span'); const value = document.createElement('strong'); label.className = 'text-slate-400'; label.textContent = entry[0]; value.className = 'block'; value.textContent = entry[1]; item.append(label, value); review.appendChild(item); });
             };

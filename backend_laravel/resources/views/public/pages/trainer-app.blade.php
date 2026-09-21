@@ -38,13 +38,13 @@
     ];
 @endphp
 
-<x-public.layouts.app page-title="Atlas Trainer App" page-description="Explore the Atlas Trainer App for assigned clients, workout and diet plans, follow-ups, trial leads, messaging, and alerts.">
+<x-public.layouts.app page-title="Gym Atlas Coach" page-description="Explore Gym Atlas Coach for assigned clients, workout and diet plans, follow-ups, trial leads, messaging, and alerts.">
     <div class="atlas-app-story atlas-trainer-story">
     <section class="atlas-app-hero relative overflow-hidden bg-slate-950 py-20 text-white sm:py-24 lg:py-32">
             <div class="absolute inset-0 bg-[radial-gradient(circle_at_16%_18%,rgba(70,95,255,0.34),transparent_30rem),radial-gradient(circle_at_92%_75%,rgba(34,211,238,0.15),transparent_25rem)]" aria-hidden="true"></div>
             <div class="public-container relative grid items-center gap-14 lg:grid-cols-[1.05fr_0.95fr]">
                 <div>
-                    <p class="mb-5 text-sm font-semibold uppercase tracking-[0.24em] text-cyan-300">Atlas Trainer App</p>
+                    <p class="mb-5 text-sm font-semibold uppercase tracking-[0.24em] text-cyan-300">Gym Atlas Coach</p>
                     <h1 class="max-w-3xl text-4xl font-bold leading-[1.02] tracking-[-0.045em] text-white sm:text-5xl lg:text-7xl">Coach with the client context already in view.</h1>
                     <p class="mt-7 max-w-2xl text-lg leading-8 text-slate-300">Atlas gives independent and gym-connected trainers a focused workspace for members, daily follow-ups, workout and diet plans, announcements, messaging and alerts.</p>
                     <div class="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -54,7 +54,7 @@
                     <p class="mt-5 text-sm leading-6 text-slate-400">Every trainer can use gym-assigned features. Platform verification separately unlocks personal member invitations and plans, even while the trainer remains connected to a gym.</p>
                 </div>
                 <figure class="atlas-app-hero-device mx-auto w-full max-w-[28rem] public-media-frame bg-white/5 p-3 sm:p-4">
-                    <img src="{{ asset('images/product/trainer/dashboard-720.webp') }}" alt="Atlas Trainer dashboard showing the daily coaching workspace." class="public-app-shot rounded-[1.4rem]" width="720" height="1280" fetchpriority="high">
+                    <img src="{{ asset('images/product/trainer/dashboard-720.webp') }}" alt="Gym Atlas Coach dashboard showing the daily coaching workspace." class="public-app-shot rounded-[1.4rem]" width="720" height="1280" fetchpriority="high">
                 </figure>
             </div>
         </section>
@@ -75,7 +75,7 @@
                     </ol>
                 </div>
                 <figure class="atlas-coaching-roster public-media-frame p-3">
-                    <img src="{{ asset('images/product/trainer/clients-720.webp') }}" alt="Atlas Trainer client roster showing assigned members." class="public-app-shot rounded-[1.25rem]" width="720" height="1280" loading="lazy" decoding="async">
+                    <img src="{{ asset('images/product/trainer/clients-720.webp') }}" alt="Gym Atlas Coach client roster showing assigned members." class="public-app-shot rounded-[1.25rem]" width="720" height="1280" loading="lazy" decoding="async">
                 </figure>
             </div>
         </section>
@@ -89,9 +89,9 @@
                 </div>
                 <div class="atlas-screen-stage mt-12 grid gap-6 md:grid-cols-3">
                     @foreach ([
-                        ['image' => 'clients-720.webp', 'title' => 'Assigned clients', 'alt' => 'Atlas Trainer client roster showing assigned members.'],
-                        ['image' => 'workout-builder-720.webp', 'title' => 'Workout builder', 'alt' => 'Atlas Trainer workout builder showing a structured member program.'],
-                        ['image' => 'notifications-720.webp', 'title' => 'Alerts and updates', 'alt' => 'Atlas Trainer notifications screen showing coaching alerts.'],
+                        ['image' => 'clients-720.webp', 'title' => 'Assigned clients', 'alt' => 'Gym Atlas Coach client roster showing assigned members.'],
+                        ['image' => 'workout-builder-720.webp', 'title' => 'Workout builder', 'alt' => 'Gym Atlas Coach workout builder showing a structured member program.'],
+                        ['image' => 'notifications-720.webp', 'title' => 'Alerts and updates', 'alt' => 'Gym Atlas Coach notifications screen showing coaching alerts.'],
                     ] as $screen)
                         <figure class="atlas-screen-card public-surface-premium overflow-hidden p-3">
                             <div class="public-media-frame border-0 shadow-none">

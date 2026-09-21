@@ -55,12 +55,12 @@
                     </div>
                 </div>
 
-                <div class="atlas-product-devices grid grid-cols-2 gap-3 sm:gap-5" aria-label="Atlas Member and Trainer product previews">
+                <div class="atlas-product-devices grid grid-cols-2 gap-3 sm:gap-5" aria-label="Gym Atlas and Gym Atlas Coach product previews">
                     <figure class="public-media-frame mt-10 rotate-[-2deg] bg-white/5 p-2 sm:p-3">
-                        <img src="{{ asset('images/product/member/dashboard-720.webp') }}" alt="Atlas Member dashboard showing connected training and membership information." class="public-app-shot rounded-[1.1rem]" width="720" height="1280" fetchpriority="high">
+                        <img src="{{ asset('images/product/member/dashboard-720.webp') }}" alt="Gym Atlas dashboard showing connected training and membership information." class="public-app-shot rounded-[1.1rem]" width="720" height="1280" fetchpriority="high">
                     </figure>
                     <figure class="public-media-frame rotate-[2deg] bg-white/5 p-2 sm:p-3">
-                        <img src="{{ asset('images/product/trainer/dashboard-720.webp') }}" alt="Atlas Trainer dashboard showing the coach's daily workspace." class="public-app-shot rounded-[1.1rem]" width="720" height="1280">
+                        <img src="{{ asset('images/product/trainer/dashboard-720.webp') }}" alt="Gym Atlas Coach dashboard showing the coach's daily workspace." class="public-app-shot rounded-[1.1rem]" width="720" height="1280">
                     </figure>
                 </div>
             </div>
@@ -151,10 +151,10 @@
                 </div>
                 <div class="atlas-loop-devices grid grid-cols-2 gap-4">
                     <figure class="public-media-frame p-2">
-                        <img src="{{ asset('images/product/member/workouts-720.webp') }}" alt="Member workout plans in the Atlas Member App." class="public-app-shot rounded-2xl" width="720" height="1280" loading="lazy" decoding="async">
+                        <img src="{{ asset('images/product/member/workouts-720.webp') }}" alt="Member workout plans in Gym Atlas." class="public-app-shot rounded-2xl" width="720" height="1280" loading="lazy" decoding="async">
                     </figure>
                     <figure class="public-media-frame mt-8 p-2">
-                        <img src="{{ asset('images/product/trainer/workout-builder-720.webp') }}" alt="Workout plan builder in the Atlas Trainer App." class="public-app-shot rounded-2xl" width="720" height="1280" loading="lazy" decoding="async">
+                        <img src="{{ asset('images/product/trainer/workout-builder-720.webp') }}" alt="Workout plan builder in Gym Atlas Coach." class="public-app-shot rounded-2xl" width="720" height="1280" loading="lazy" decoding="async">
                     </figure>
                 </div>
             </div>

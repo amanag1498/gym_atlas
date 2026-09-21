@@ -1,11 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/workout_builder_validation.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
-import '../../../core/widgets/loading_state.dart';
 import '../../../core/widgets/premium_card.dart';
 import '../../core/pagination.dart';
 import 'member_repository.dart';
@@ -59,7 +60,12 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       TextEditingController();
   bool _loading = true;
   bool _saving = false;
-  bool _loadingMore = false;
+  bool _loadingMoreBooks = false;
+  bool _loadingMorePlans = false;
+  bool _loadingExercises = false;
+  int _exerciseSearchGeneration = 0;
+  int _activeTabIndex = 0;
+  int? _sharingPlanId;
   String? _error;
   List<Map<String, dynamic>> _books = const [];
   List<Map<String, dynamic>> _recommendedBooks = const [];
@@ -101,11 +107,32 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   final _speedKphController = TextEditingController();
   final _paceSecondsController = TextEditingController();
   final _exerciseNotesController = TextEditingController();
+  final _groupKeyController = TextEditingController();
+  final _groupRoundsController = TextEditingController(text: '3');
+  final _transitionSecondsController = TextEditingController(text: '15');
+  String _groupType = 'superset';
+  String _exerciseProgressionPolicy = 'off';
+  final _exerciseProgressionMinRepsController = TextEditingController(
+    text: '8',
+  );
+  final _exerciseProgressionMaxRepsController = TextEditingController(
+    text: '12',
+  );
+  final _exerciseProgressionIncrementController = TextEditingController(
+    text: '2.5',
+  );
+  final _exerciseProgressionDeloadAfterController = TextEditingController(
+    text: '3',
+  );
+  final _exerciseProgressionDeloadPercentController = TextEditingController(
+    text: '10',
+  );
   String _trackingMode = 'reps';
   String _difficulty = 'intermediate';
   final List<_PlanDayDraft> _dayDrafts = <_PlanDayDraft>[];
   int _selectedBuilderDayIndex = 0;
   int? _selectedBuilderExerciseId;
+  static const int _loadMoreExercisePickerValue = -1;
 
   static const Map<int, String> _builderWeekdays = <int, String>{
     1: 'Mon',
@@ -121,6 +148,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(_handleTabChange);
     _initializeDefaultBuilderDays();
     _exerciseSearchController.addListener(_scheduleExerciseSearch);
     _load();
@@ -151,6 +179,14 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     _speedKphController.dispose();
     _paceSecondsController.dispose();
     _exerciseNotesController.dispose();
+    _groupKeyController.dispose();
+    _groupRoundsController.dispose();
+    _transitionSecondsController.dispose();
+    _exerciseProgressionMinRepsController.dispose();
+    _exerciseProgressionMaxRepsController.dispose();
+    _exerciseProgressionIncrementController.dispose();
+    _exerciseProgressionDeloadAfterController.dispose();
+    _exerciseProgressionDeloadPercentController.dispose();
     for (final day in _dayDrafts) {
       day.dispose();
     }
@@ -228,7 +264,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
             : (_exercises.first['id'] as num?)?.toInt();
       }
     } catch (exception) {
-      _error = exception.toString();
+      _error = _friendlyError(exception);
     }
 
     if (mounted) {
@@ -237,8 +273,8 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   }
 
   Future<void> _loadMoreBooks() async {
-    if (_loadingMore || !_bookPage.hasMore) return;
-    setState(() => _loadingMore = true);
+    if (_loadingMoreBooks || !_bookPage.hasMore) return;
+    setState(() => _loadingMoreBooks = true);
     try {
       final catalogQuery = <String, dynamic>{
         if (_catalogSearchController.text.trim().isNotEmpty)
@@ -255,13 +291,13 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     } catch (exception) {
       _showLoadMoreError(exception);
     } finally {
-      if (mounted) setState(() => _loadingMore = false);
+      if (mounted) setState(() => _loadingMoreBooks = false);
     }
   }
 
   Future<void> _loadMorePlans() async {
-    if (_loadingMore || !_planPage.hasMore) return;
-    setState(() => _loadingMore = true);
+    if (_loadingMorePlans || !_planPage.hasMore) return;
+    setState(() => _loadingMorePlans = true);
     try {
       final response = await widget.repository.fetchWorkoutPlans(
         page: _planPage.nextPage,
@@ -271,23 +307,26 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     } catch (exception) {
       _showLoadMoreError(exception);
     } finally {
-      if (mounted) setState(() => _loadingMore = false);
+      if (mounted) setState(() => _loadingMorePlans = false);
     }
   }
 
   Future<void> _loadMoreExercises() async {
-    if (_loadingMore || !_exercisePage.hasMore) return;
-    setState(() => _loadingMore = true);
+    if (_loadingExercises || !_exercisePage.hasMore) return;
+    setState(() => _loadingExercises = true);
     try {
       final response = await widget.repository.fetchWorkoutExercises(
         queryParameters: {..._exerciseQuery(), 'page': _exercisePage.nextPage},
       );
-      _exercises = mergeApiPageItems(_exercises, apiPageItems(response));
-      _exercisePage = ApiPagination.fromResponse(response);
+      if (!mounted) return;
+      setState(() {
+        _exercises = mergeApiPageItems(_exercises, apiPageItems(response));
+        _exercisePage = ApiPagination.fromResponse(response);
+      });
     } catch (exception) {
       _showLoadMoreError(exception);
     } finally {
-      if (mounted) setState(() => _loadingMore = false);
+      if (mounted) setState(() => _loadingExercises = false);
     }
   }
 
@@ -295,22 +334,39 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(exception.toString())));
+    ).showSnackBar(SnackBar(content: Text(_friendlyError(exception))));
   }
+
+  void _resetCatalogFilters() {
+    setState(() {
+      _catalogSearchController.clear();
+      _catalogDifficulty = null;
+      _catalogProgramType = null;
+      _featuredOnly = false;
+    });
+    _load();
+  }
+
+  bool get _catalogHasFilters =>
+      _catalogSearchController.text.trim().isNotEmpty ||
+      _catalogDifficulty != null ||
+      _catalogProgramType != null ||
+      _featuredOnly;
 
   Widget _loadMoreButton({
     required String label,
+    required bool loading,
     required VoidCallback onPressed,
   }) => Center(
     child: OutlinedButton.icon(
-      onPressed: _loadingMore ? null : onPressed,
-      icon: _loadingMore
+      onPressed: loading ? null : onPressed,
+      icon: loading
           ? const SizedBox.square(
               dimension: 16,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           : const Icon(Icons.expand_more_rounded),
-      label: Text(_loadingMore ? 'Loading...' : label),
+      label: Text(loading ? 'Loading...' : label),
     ),
   );
 
@@ -323,11 +379,13 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   }
 
   Future<void> _searchExercises() async {
+    final requestGeneration = ++_exerciseSearchGeneration;
+    setState(() => _loadingExercises = true);
     try {
       final response = await widget.repository.fetchWorkoutExercises(
         queryParameters: _exerciseQuery(),
       );
-      if (!mounted) return;
+      if (!mounted || requestGeneration != _exerciseSearchGeneration) return;
 
       setState(() {
         _exercises = apiPageItems(response);
@@ -343,8 +401,17 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(_friendlyError(exception))));
+    } finally {
+      if (mounted && requestGeneration == _exerciseSearchGeneration) {
+        setState(() => _loadingExercises = false);
+      }
     }
+  }
+
+  void _handleTabChange() {
+    if (!mounted || _activeTabIndex == _tabController.index) return;
+    setState(() => _activeTabIndex = _tabController.index);
   }
 
   Map<String, dynamic> _exerciseQuery() => <String, dynamic>{
@@ -497,6 +564,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
+                    isExpanded: true,
                     initialValue: presetKey,
                     decoration: _memberWorkoutInputDecoration(
                       'Setup',
@@ -715,6 +783,12 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     return null;
   }
 
+  String _exercisePickerLabelForSelection() {
+    final exercise = _exerciseById(_selectedBuilderExerciseId);
+    if (exercise == null) return 'Choose an exercise';
+    return '${_exerciseDisplayName(exercise)} • ${_bodyPartLabel(_bodyPartKeyForExercise(exercise))}';
+  }
+
   String _repPresetFor(String value) {
     final trimmed = value.trim();
     return _repRangeOptions.containsKey(trimmed) ? trimmed : 'custom';
@@ -779,6 +853,16 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       return;
     }
 
+    final groupKey = _groupKeyController.text.trim().isEmpty
+        ? null
+        : _groupKeyController.text.trim();
+    final groupOrder = groupKey == null
+        ? null
+        : _selectedBuilderDay.exercises
+                  .where((item) => item.groupKey == groupKey)
+                  .length +
+              1;
+
     final draft = _PlanExerciseDraft();
     draft.exerciseId = (selectedExercise['id'] as num?)?.toInt();
     draft.bodyPart = _bodyPartKeyForExercise(selectedExercise);
@@ -795,6 +879,33 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     draft.paceSecondsController.text = _paceSecondsController.text.trim();
     draft.isPerSide = selectedExercise['is_per_side'] == true;
     draft.isBodyweight = selectedExercise['is_bodyweight'] == true;
+    draft.groupKey = groupKey;
+    draft.groupType = groupKey == null ? null : _groupType;
+    draft.groupOrder = groupOrder;
+    draft.groupRounds = groupKey == null
+        ? null
+        : int.tryParse(_groupRoundsController.text.trim()) ?? 1;
+    draft.transitionSeconds = groupKey == null
+        ? null
+        : int.tryParse(_transitionSecondsController.text.trim()) ?? 0;
+    draft.progressionPolicy = _trackingMode == 'reps'
+        ? _exerciseProgressionPolicy
+        : 'off';
+    draft.progressionMinReps = int.tryParse(
+      _exerciseProgressionMinRepsController.text.trim(),
+    );
+    draft.progressionMaxReps = int.tryParse(
+      _exerciseProgressionMaxRepsController.text.trim(),
+    );
+    draft.progressionIncrementKg = double.tryParse(
+      _exerciseProgressionIncrementController.text.trim(),
+    );
+    draft.progressionDeloadAfterMisses = int.tryParse(
+      _exerciseProgressionDeloadAfterController.text.trim(),
+    );
+    draft.progressionDeloadPercent = double.tryParse(
+      _exerciseProgressionDeloadPercentController.text.trim(),
+    );
     draft.notesController.text = _exerciseNotesController.text.trim();
 
     setState(() {
@@ -802,6 +913,84 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       _targetWeightController.clear();
       _exerciseNotesController.clear();
     });
+  }
+
+  void _moveBuilderExercise(_PlanDayDraft day, int index, int delta) {
+    final nextIndex = (index + delta).clamp(0, day.exercises.length - 1);
+    if (nextIndex == index) return;
+    setState(() {
+      final exercise = day.exercises.removeAt(index);
+      day.exercises.insert(nextIndex, exercise);
+      _renumberBuilderGroups(day);
+    });
+  }
+
+  void _removeBuilderExercise(_PlanDayDraft day, int index) {
+    setState(() {
+      day.exercises.removeAt(index).dispose();
+      _renumberBuilderGroups(day);
+    });
+  }
+
+  Future<void> _editOrRemoveBuilderExercise(
+    _PlanDayDraft day,
+    int index,
+  ) async {
+    final exercise = day.exercises[index];
+    if (exercise.groupKey == null) {
+      _removeBuilderExercise(day, index);
+      return;
+    }
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.link_off_rounded),
+              title: Text('Ungroup ${exercise.groupKey}'),
+              subtitle: const Text(
+                'Keep the exercises and remove this superset or circuit.',
+              ),
+              onTap: () => Navigator.pop(context, 'ungroup'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded),
+              title: const Text('Remove exercise'),
+              onTap: () => Navigator.pop(context, 'remove'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'remove') {
+      _removeBuilderExercise(day, index);
+      return;
+    }
+    final groupKey = exercise.groupKey;
+    setState(() {
+      for (final item in day.exercises.where(
+        (item) => item.groupKey == groupKey,
+      )) {
+        item.groupKey = null;
+        item.groupType = null;
+        item.groupOrder = null;
+        item.groupRounds = null;
+        item.transitionSeconds = null;
+      }
+    });
+  }
+
+  void _renumberBuilderGroups(_PlanDayDraft day) {
+    final nextOrders = <String, int>{};
+    for (final exercise in day.exercises) {
+      final key = exercise.groupKey;
+      if (key == null) continue;
+      final next = (nextOrders[key] ?? 0) + 1;
+      nextOrders[key] = next;
+      exercise.groupOrder = next;
+    }
   }
 
   Widget _buildExerciseBookOverview(BuildContext context) {
@@ -897,6 +1086,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     final selectedExercise = _exerciseById(_selectedBuilderExerciseId);
 
     return ListView(
+      key: const ValueKey('workout-builder-scroll'),
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.lg,
@@ -950,6 +1140,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                       ),
                     ),
                     DropdownButtonFormField<String>(
+                      isExpanded: true,
                       initialValue: _difficulty,
                       decoration: _memberWorkoutInputDecoration(
                         'Difficulty',
@@ -1037,6 +1228,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
+                isExpanded: true,
                 initialValue: _planProgressionPolicy,
                 decoration: _memberWorkoutInputDecoration(
                   'Automatic progression',
@@ -1163,7 +1355,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
               const _BuilderSectionHeading(
                 title: 'Day builder',
                 subtitle:
-                    'Build one training day at a time, just like the Trainer workout builder.',
+                    'Choose each day, add exercises, and set the work and recovery targets.',
               ),
               const SizedBox(height: 14),
               Wrap(
@@ -1231,85 +1423,121 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                 ),
               ),
               const SizedBox(height: 10),
-              if (_exercises.isEmpty)
-                const EmptyStateView(
-                  title: 'Exercise library is empty',
-                  message:
-                      'Exercises added by Atlas or your gym will appear here.',
-                  icon: Icons.fitness_center_outlined,
+              TextField(
+                controller: _exerciseSearchController,
+                onChanged: (_) => setState(() {}),
+                decoration:
+                    _memberWorkoutInputDecoration(
+                      'Search exercises',
+                      icon: Icons.search_rounded,
+                    ).copyWith(
+                      suffixIcon: _exerciseSearchController.text.trim().isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Clear exercise search',
+                              onPressed: () {
+                                _exerciseSearchController.clear();
+                                _searchExercises();
+                              },
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                      helperText: 'Search by exercise, muscle, or body part.',
+                    ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children:
+                    <(String, String, IconData)>[
+                      ('all', 'All', Icons.grid_view_rounded),
+                      ('favourites', 'Favourites', Icons.favorite_rounded),
+                      ('recent', 'Recent', Icons.history_rounded),
+                    ].map((option) {
+                      return ChoiceChip(
+                        avatar:
+                            _loadingExercises &&
+                                _exerciseCatalogView == option.$1
+                            ? const SizedBox.square(
+                                dimension: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Icon(option.$3, size: 16),
+                        label: Text(option.$2),
+                        selected: _exerciseCatalogView == option.$1,
+                        onSelected: _loadingExercises
+                            ? null
+                            : (_) {
+                                setState(
+                                  () => _exerciseCatalogView = option.$1,
+                                );
+                                _searchExercises();
+                              },
+                      );
+                    }).toList(),
+              ),
+              if (_equipmentProfiles.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int?>(
+                  isExpanded: true,
+                  initialValue: _selectedEquipmentProfileId,
+                  decoration: _memberWorkoutInputDecoration(
+                    'Available equipment',
+                    icon: Icons.home_repair_service_outlined,
+                  ),
+                  items: <DropdownMenuItem<int?>>[
+                    const DropdownMenuItem<int?>(
+                      value: null,
+                      child: Text('Any equipment'),
+                    ),
+                    ..._equipmentProfiles.map(
+                      (profile) => DropdownMenuItem<int?>(
+                        value: (profile['id'] as num?)?.toInt(),
+                        child: Text(profile['name']?.toString() ?? 'Profile'),
+                      ),
+                    ),
+                  ],
+                  onChanged: _loadingExercises
+                      ? null
+                      : (value) {
+                          setState(() => _selectedEquipmentProfileId = value);
+                          _searchExercises();
+                        },
+                ),
+              ],
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: _loadingExercises
+                      ? null
+                      : _showEquipmentProfileSheet,
+                  icon: const Icon(Icons.tune_rounded),
+                  label: Text(
+                    _equipmentProfiles.isEmpty
+                        ? 'Set available equipment'
+                        : 'Add equipment profile',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (filteredExercises.isEmpty)
+                EmptyStateView(
+                  title: _loadingExercises
+                      ? 'Finding exercises...'
+                      : 'No exercises found',
+                  message: _loadingExercises
+                      ? 'Checking the exercise library for matching results.'
+                      : 'Try another search, choose All, or change your equipment profile.',
+                  icon: _loadingExercises
+                      ? Icons.hourglass_top_rounded
+                      : Icons.search_off_rounded,
                 )
               else ...[
-                TextField(
-                  controller: _exerciseSearchController,
-                  onChanged: (_) => setState(() {}),
-                  decoration: _memberWorkoutInputDecoration(
-                    'Search exercise',
-                    icon: Icons.search_rounded,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children:
-                      <(String, String, IconData)>[
-                        ('all', 'All', Icons.grid_view_rounded),
-                        ('favourites', 'Favourites', Icons.favorite_rounded),
-                        ('recent', 'Recent', Icons.history_rounded),
-                      ].map((option) {
-                        return ChoiceChip(
-                          avatar: Icon(option.$3, size: 16),
-                          label: Text(option.$2),
-                          selected: _exerciseCatalogView == option.$1,
-                          onSelected: (_) {
-                            setState(() => _exerciseCatalogView = option.$1);
-                            _searchExercises();
-                          },
-                        );
-                      }).toList(),
-                ),
-                if (_equipmentProfiles.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<int?>(
-                    initialValue: _selectedEquipmentProfileId,
-                    decoration: _memberWorkoutInputDecoration(
-                      'Available equipment',
-                      icon: Icons.home_repair_service_outlined,
-                    ),
-                    items: <DropdownMenuItem<int?>>[
-                      const DropdownMenuItem<int?>(
-                        value: null,
-                        child: Text('Any equipment'),
-                      ),
-                      ..._equipmentProfiles.map(
-                        (profile) => DropdownMenuItem<int?>(
-                          value: (profile['id'] as num?)?.toInt(),
-                          child: Text(profile['name']?.toString() ?? 'Profile'),
-                        ),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      setState(() => _selectedEquipmentProfileId = value);
-                      _searchExercises();
-                    },
-                  ),
-                ],
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: _showEquipmentProfileSheet,
-                    icon: const Icon(Icons.tune_rounded),
-                    label: Text(
-                      _equipmentProfiles.isEmpty
-                          ? 'Set available equipment'
-                          : 'Add equipment profile',
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
                   key: ValueKey(
-                    'member-builder-exercise-$_selectedBuilderExerciseId-$query',
+                    'member-builder-exercise-$_selectedBuilderExerciseId-$query-${_exercises.length}',
                   ),
                   initialValue:
                       filteredExercises.any(
@@ -1320,48 +1548,110 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                       ? _selectedBuilderExerciseId
                       : null,
                   isExpanded: true,
-                  items: filteredExercises.map((exercise) {
-                    final id = (exercise['id'] as num?)?.toInt();
-                    return DropdownMenuItem<int>(
-                      value: id,
-                      child: Text(
-                        '${_exerciseDisplayName(exercise)} • ${_bodyPartLabel(_bodyPartKeyForExercise(exercise))}',
-                        overflow: TextOverflow.ellipsis,
+                  selectedItemBuilder: (context) => [
+                    ...filteredExercises
+                        .where((exercise) => exercise['id'] is num)
+                        .map(
+                          (exercise) => Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              '${_exerciseDisplayName(exercise)} • ${_bodyPartLabel(_bodyPartKeyForExercise(exercise))}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                    if (_exercisePage.hasMore)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _exercisePickerLabelForSelection(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    );
-                  }).toList(),
-                  onChanged: (value) => setState(() {
-                    _selectedBuilderExerciseId = value;
-                    final selected = _exerciseById(value);
-                    final suggested =
-                        selected?['default_tracking_mode']?.toString() ??
-                        'reps';
-                    _trackingMode =
-                        const {
-                          'reps',
-                          'timed',
-                          'cardio',
-                          'distance',
-                        }.contains(suggested)
-                        ? suggested
-                        : 'reps';
-                  }),
-                  decoration: _memberWorkoutInputDecoration(
-                    'Exercise picker',
-                    icon: Icons.fitness_center_rounded,
-                  ),
+                  ],
+                  items: [
+                    ...filteredExercises
+                        .where((exercise) => exercise['id'] is num)
+                        .map(
+                          (exercise) => DropdownMenuItem<int>(
+                            value: (exercise['id'] as num).toInt(),
+                            child: Text(
+                              '${_exerciseDisplayName(exercise)} • ${_bodyPartLabel(_bodyPartKeyForExercise(exercise))}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                    if (_exercisePage.hasMore)
+                      DropdownMenuItem<int>(
+                        value: _loadMoreExercisePickerValue,
+                        enabled: !_loadingExercises,
+                        child: Row(
+                          children: [
+                            if (_loadingExercises)
+                              const SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            else
+                              const Icon(Icons.expand_more_rounded, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _loadingExercises
+                                    ? 'Loading exercises...'
+                                    : 'Load more exercise results',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value == _loadMoreExercisePickerValue) {
+                      unawaited(_loadMoreExercises());
+                      return;
+                    }
+                    setState(() {
+                      _selectedBuilderExerciseId = value;
+                      final selected = _exerciseById(value);
+                      final suggested =
+                          selected?['default_tracking_mode']?.toString() ??
+                          'reps';
+                      _trackingMode =
+                          const {
+                            'reps',
+                            'timed',
+                            'cardio',
+                            'distance',
+                          }.contains(suggested)
+                          ? suggested
+                          : 'reps';
+                      if (_trackingMode != 'reps') {
+                        _exerciseProgressionPolicy = 'off';
+                      }
+                    });
+                  },
+                  decoration:
+                      _memberWorkoutInputDecoration(
+                        'Exercise picker',
+                        icon: Icons.fitness_center_rounded,
+                      ).copyWith(
+                        helperText: _exercisePage.hasMore
+                            ? 'More results are available at the end of this list.'
+                            : '${filteredExercises.length} exercises available',
+                      ),
                 ),
-                if (_exercisePage.hasMore) ...[
-                  const SizedBox(height: 12),
-                  _loadMoreButton(
-                    label: 'Load more exercises',
-                    onPressed: _loadMoreExercises,
-                  ),
-                ],
                 const SizedBox(height: 12),
                 _buildExerciseMetaPanel(context, selectedExercise),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
+                  isExpanded: true,
                   key: ValueKey('member-tracking-mode-$_trackingMode'),
                   initialValue: _trackingMode,
                   decoration: _memberWorkoutInputDecoration(
@@ -1377,8 +1667,12 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                       child: Text('Distance'),
                     ),
                   ],
-                  onChanged: (value) =>
-                      setState(() => _trackingMode = value ?? 'reps'),
+                  onChanged: (value) => setState(() {
+                    _trackingMode = value ?? 'reps';
+                    if (_trackingMode != 'reps') {
+                      _exerciseProgressionPolicy = 'off';
+                    }
+                  }),
                 ),
                 const SizedBox(height: 12),
                 LayoutBuilder(
@@ -1422,6 +1716,8 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                     );
                   },
                 ),
+                const SizedBox(height: 12),
+                _buildAdvancedExerciseOptions(context),
                 const SizedBox(height: 12),
                 if (_trackingMode != 'reps') ...[
                   Wrap(
@@ -1546,37 +1842,30 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                     child: _MemberBuilderExerciseTile(
                       title: meta?['name']?.toString() ?? 'Exercise',
                       subtitle:
-                          '${exercise.sets} sets • ${exercise.reps} • ${exercise.restSeconds} sec rest',
+                          '${exercise.sets} sets • ${exercise.reps} • ${exercise.restSeconds} sec rest${exercise.groupKey == null ? '' : ' • ${exercise.groupKey}${exercise.groupOrder} ${exercise.groupType}'}${exercise.progressionPolicy == 'off' ? '' : ' • progression'}',
                       badge: meta == null
                           ? null
                           : _bodyPartLabel(_bodyPartKeyForExercise(meta)),
-                      onRemove: () => setState(
-                        () =>
-                            selectedDay.exercises.removeAt(entry.key).dispose(),
-                      ),
+                      moveLabel: entry.key == 0 ? 'Move down' : 'Move up',
+                      onMove: selectedDay.exercises.length < 2
+                          ? null
+                          : () => _moveBuilderExercise(
+                              selectedDay,
+                              entry.key,
+                              entry.key == 0 ? 1 : -1,
+                            ),
+                      removeLabel: exercise.groupKey == null
+                          ? 'Remove'
+                          : 'Group / Remove',
+                      onRemove: () =>
+                          _editOrRemoveBuilderExercise(selectedDay, entry.key),
                     ),
                   );
                 }),
             ],
           ),
         ),
-        const SizedBox(height: 12),
-        _WorkoutBuilderPanel(
-          gradient: const [Color(0xFFF8FBFF), Color(0xFFFFFFFF)],
-          child: GradientButton(
-            label: _saving
-                ? (_editingPlanId == null
-                      ? 'Saving workout...'
-                      : 'Updating workout...')
-                : (_editingPlanId == null
-                      ? 'Save workout to my library'
-                      : 'Update workout plan'),
-            icon: Icons.library_add_check_rounded,
-            expanded: true,
-            loading: _saving,
-            onPressed: _saving ? null : _savePlan,
-          ),
-        ),
+        const SizedBox(height: AppSpacing.lg),
       ],
     );
   }
@@ -1590,6 +1879,177 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       draft.exerciseId = (firstExercise?['id'] as num?)?.toInt();
     }
     return draft;
+  }
+
+  Widget _buildAdvancedExerciseOptions(BuildContext context) {
+    final hasGroup = _groupKeyController.text.trim().isNotEmpty;
+    return Material(
+      color: AppColors.surfaceSoft,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.stroke),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+        leading: const Icon(Icons.tune_rounded, color: AppColors.primary),
+        title: const Text('Advanced exercise options'),
+        subtitle: const Text('Supersets, circuits, and progression'),
+        children: [
+          TextField(
+            controller: _groupKeyController,
+            onChanged: (_) => setState(() {}),
+            textCapitalization: TextCapitalization.characters,
+            decoration:
+                _memberWorkoutInputDecoration(
+                  'Group label (optional)',
+                  icon: Icons.link_rounded,
+                ).copyWith(
+                  hintText: 'A, B, or Circuit 1',
+                  helperText:
+                      'Use the same label on two or more exercises to group them.',
+                ),
+          ),
+          if (hasGroup) ...[
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 520;
+                final type = DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  initialValue: _groupType,
+                  decoration: _memberWorkoutInputDecoration('Group type'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'superset',
+                      child: Text('Superset'),
+                    ),
+                    DropdownMenuItem(value: 'circuit', child: Text('Circuit')),
+                  ],
+                  onChanged: (value) =>
+                      setState(() => _groupType = value ?? 'superset'),
+                );
+                final rounds = TextField(
+                  controller: _groupRoundsController,
+                  keyboardType: TextInputType.number,
+                  decoration: _memberWorkoutInputDecoration('Rounds'),
+                );
+                final transition = TextField(
+                  controller: _transitionSecondsController,
+                  keyboardType: TextInputType.number,
+                  decoration: _memberWorkoutInputDecoration('Transition sec'),
+                );
+                if (compact) {
+                  return Column(
+                    children: [
+                      type,
+                      const SizedBox(height: 10),
+                      rounds,
+                      const SizedBox(height: 10),
+                      transition,
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(child: type),
+                    const SizedBox(width: 10),
+                    Expanded(child: rounds),
+                    const SizedBox(width: 10),
+                    Expanded(child: transition),
+                  ],
+                );
+              },
+            ),
+          ],
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            isExpanded: true,
+            initialValue: _exerciseProgressionPolicy,
+            decoration: _memberWorkoutInputDecoration(
+              'Progression policy',
+              icon: Icons.trending_up_rounded,
+            ),
+            items: const [
+              DropdownMenuItem(value: 'off', child: Text('Manual / off')),
+              DropdownMenuItem(
+                value: 'linear_load',
+                child: Text('Linear load'),
+              ),
+              DropdownMenuItem(
+                value: 'double_progression',
+                child: Text('Double progression'),
+              ),
+            ],
+            onChanged: _trackingMode == 'reps'
+                ? (value) => setState(
+                    () => _exerciseProgressionPolicy = value ?? 'off',
+                  )
+                : null,
+          ),
+          if (_exerciseProgressionPolicy != 'off') ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                if (_exerciseProgressionPolicy == 'double_progression') ...[
+                  SizedBox(
+                    width: 138,
+                    child: TextField(
+                      controller: _exerciseProgressionMinRepsController,
+                      keyboardType: TextInputType.number,
+                      decoration: _memberWorkoutInputDecoration('Min reps'),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 138,
+                    child: TextField(
+                      controller: _exerciseProgressionMaxRepsController,
+                      keyboardType: TextInputType.number,
+                      decoration: _memberWorkoutInputDecoration('Max reps'),
+                    ),
+                  ),
+                ],
+                SizedBox(
+                  width: 168,
+                  child: TextField(
+                    controller: _exerciseProgressionIncrementController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: _memberWorkoutInputDecoration(
+                      'Load increase kg',
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 168,
+                  child: TextField(
+                    controller: _exerciseProgressionDeloadAfterController,
+                    keyboardType: TextInputType.number,
+                    decoration: _memberWorkoutInputDecoration(
+                      'Deload after misses',
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 168,
+                  child: TextField(
+                    controller: _exerciseProgressionDeloadPercentController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: _memberWorkoutInputDecoration('Deload percent'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _buildExerciseMetaPanel(
@@ -1820,6 +2280,49 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     }
   }
 
+  Future<void> _sharePlan(Map<String, dynamic> plan) async {
+    final id = (plan['id'] as num?)?.toInt();
+    if (id == null || _sharingPlanId != null) {
+      return;
+    }
+
+    setState(() => _sharingPlanId = id);
+    try {
+      final response = await widget.repository.createWorkoutPlanShare(id, {
+        'expires_in_days': 14,
+      });
+      final data = Map<String, dynamic>.from(
+        response['data'] as Map? ?? const {},
+      );
+      final shareUrl = data['share_url']?.toString() ?? '';
+      if (shareUrl.isEmpty) {
+        throw StateError('The workout link could not be created.');
+      }
+      if (!mounted) return;
+      final planName = plan['name']?.toString() ?? 'Workout plan';
+      final box = context.findRenderObject() as RenderBox?;
+      await SharePlus.instance.share(
+        ShareParams(
+          subject: '$planName on Atlas',
+          text:
+              'I shared "$planName" with you. Open it in Gym Atlas to review and save your own copy:\n$shareUrl',
+          sharePositionOrigin: box == null
+              ? null
+              : box.localToGlobal(Offset.zero) & box.size,
+        ),
+      );
+    } catch (exception) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_friendlyError(exception))));
+    } finally {
+      if (mounted) {
+        setState(() => _sharingPlanId = null);
+      }
+    }
+  }
+
   Future<void> _deletePlan(Map<String, dynamic> plan) async {
     final id = (plan['id'] as num?)?.toInt();
     if (id == null) {
@@ -1840,6 +2343,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text('Delete'),
           ),
         ],
@@ -1959,6 +2463,27 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
             exercise['planned_pace_seconds_per_km']?.toString() ?? '';
         exerciseDraft.isPerSide = exercise['is_per_side'] == true;
         exerciseDraft.isBodyweight = exercise['is_bodyweight'] == true;
+        exerciseDraft.groupKey = exercise['group_key']?.toString();
+        exerciseDraft.groupType = exercise['group_type']?.toString();
+        exerciseDraft.groupOrder = (exercise['group_order'] as num?)?.toInt();
+        exerciseDraft.groupRounds = (exercise['group_rounds'] as num?)?.toInt();
+        exerciseDraft.transitionSeconds =
+            (exercise['transition_seconds'] as num?)?.toInt();
+        exerciseDraft.progressionPolicy =
+            exercise['progression_policy']?.toString() ?? 'off';
+        final exerciseProgression = Map<String, dynamic>.from(
+          exercise['progression_config'] as Map? ?? const {},
+        );
+        exerciseDraft.progressionMinReps =
+            (exerciseProgression['min_reps'] as num?)?.toInt();
+        exerciseDraft.progressionMaxReps =
+            (exerciseProgression['max_reps'] as num?)?.toInt();
+        exerciseDraft.progressionIncrementKg =
+            (exerciseProgression['load_increment_kg'] as num?)?.toDouble();
+        exerciseDraft.progressionDeloadAfterMisses =
+            (exerciseProgression['deload_after_misses'] as num?)?.toInt();
+        exerciseDraft.progressionDeloadPercent =
+            (exerciseProgression['deload_percent'] as num?)?.toDouble();
         exerciseDraft.targetWeightController.text =
             exercise['target_weight']?.toString() ?? '';
         exerciseDraft.notesController.text =
@@ -2014,6 +2539,28 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
         ),
       );
       return;
+    }
+    for (final day in _dayDrafts) {
+      final groupedCounts = <String, int>{};
+      for (final exercise in day.exercises) {
+        final key = exercise.groupKey;
+        if (key != null && key.isNotEmpty) {
+          groupedCounts[key] = (groupedCounts[key] ?? 0) + 1;
+        }
+      }
+      final invalidGroup = groupedCounts.entries
+          .where((entry) => entry.value < 2)
+          .firstOrNull;
+      if (invalidGroup != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Group ${invalidGroup.key} on ${_weekdayLabel(day.weekday ?? 1)} needs at least two exercises.',
+            ),
+          ),
+        );
+        return;
+      }
     }
 
     final payload = <String, dynamic>{
@@ -2083,14 +2630,43 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
               'target_weight': item.targetWeight,
               'is_per_side': item.isPerSide,
               'is_bodyweight': item.isBodyweight,
-              if (item.trackingMode != 'reps') 'progression_policy': 'off',
               'rest_seconds': item.restSeconds,
+              'group_key': item.groupKey,
+              'group_type': item.groupType,
+              'group_order': item.groupOrder,
+              'group_rounds': item.groupRounds,
+              'transition_seconds': item.transitionSeconds,
+              'rest_after': item.groupKey == null ? 'exercise' : 'group',
+              'progression_policy': item.trackingMode == 'reps'
+                  ? item.progressionPolicy
+                  : 'off',
+              'progression_config':
+                  item.trackingMode != 'reps' || item.progressionPolicy == 'off'
+                  ? null
+                  : {
+                      'load_increment_kg': item.progressionIncrementKg ?? 2.5,
+                      'deload_after_misses':
+                          item.progressionDeloadAfterMisses ?? 3,
+                      'deload_percent': item.progressionDeloadPercent ?? 10,
+                      if (item.progressionPolicy == 'double_progression')
+                        'min_reps': item.progressionMinReps ?? 8,
+                      if (item.progressionPolicy == 'double_progression')
+                        'max_reps': item.progressionMaxReps ?? 12,
+                    },
               'notes': item.notes,
             };
           }).toList(),
         };
       }).toList(),
     };
+
+    final validationError = validateWorkoutBuilderPayload(payload);
+    if (validationError != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(validationError)));
+      return;
+    }
 
     setState(() => _saving = true);
     try {
@@ -2153,6 +2729,16 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     _paceSecondsController.clear();
     _trackingMode = 'reps';
     _exerciseNotesController.clear();
+    _groupKeyController.clear();
+    _groupRoundsController.text = '3';
+    _transitionSecondsController.text = '15';
+    _groupType = 'superset';
+    _exerciseProgressionPolicy = 'off';
+    _exerciseProgressionMinRepsController.text = '8';
+    _exerciseProgressionMaxRepsController.text = '12';
+    _exerciseProgressionIncrementController.text = '2.5';
+    _exerciseProgressionDeloadAfterController.text = '3';
+    _exerciseProgressionDeloadPercentController.text = '10';
     _difficulty = 'intermediate';
     for (final day in _dayDrafts) {
       day.dispose();
@@ -2197,7 +2783,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _WorkoutBookPreviewSheet(
+      builder: (context) => WorkoutBookPreviewSheet(
         title: title,
         planDetail: planDetail,
         days: days,
@@ -2211,13 +2797,20 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   Widget build(BuildContext context) {
     return AppGradientScaffold(
       title: 'Workout Book',
+      bottomNavigationBar: _activeTabIndex == 2
+          ? _WorkoutBuilderSaveBar(
+              saving: _saving,
+              editing: _editingPlanId != null,
+              onSave: _saving ? null : _savePlan,
+            )
+          : null,
       body: SafeArea(
         bottom: false,
         child: Column(
           children: [
             _WorkoutBookTopBar(
               title: 'Workout Book',
-              subtitle: 'Plans, catalog picks, and custom splits.',
+              subtitle: 'Choose a plan, discover one, or build your own.',
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(
@@ -2228,9 +2821,21 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
               ),
               child: _WorkoutBookTabSlider(controller: _tabController),
             ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: _loading && (_books.isNotEmpty || _plans.isNotEmpty)
+                  ? const LinearProgressIndicator(
+                      key: ValueKey('workout-book-refreshing'),
+                      minHeight: 2,
+                    )
+                  : const SizedBox(
+                      key: ValueKey('workout-book-not-refreshing'),
+                      height: 2,
+                    ),
+            ),
             Expanded(
               child: _loading && _books.isEmpty && _plans.isEmpty
-                  ? const LoadingState(label: 'Loading workout book...')
+                  ? const _WorkoutBookLoadingState()
                   : _error != null && _books.isEmpty && _plans.isEmpty
                   ? ErrorStateView(message: _error!, onRetry: _load)
                   : TabBarView(
@@ -2250,72 +2855,85 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
 
   Widget _buildLibraryTab(BuildContext context) {
     if (_plans.isEmpty) {
-      return Center(
-        child: _WorkoutBookEmptyStatePanel(
-          title: 'No plans in your library',
-          message: 'Choose a catalog plan or build your own split.',
-          icon: Icons.menu_book_rounded,
-          actionLabel: 'Explore catalog',
-          onAction: () => _tabController.animateTo(1),
-        ),
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          _WorkoutBookEmptyStatePanel(
+            title: 'Your library is ready for its first plan',
+            message:
+                'Add a ready-made program from the catalog or create a plan around your own schedule.',
+            icon: Icons.menu_book_rounded,
+            actionLabel: 'Explore catalog',
+            onAction: () => _tabController.animateTo(1),
+            secondaryActionLabel: 'Build my own',
+            onSecondaryAction: () => _tabController.animateTo(2),
+          ),
+        ],
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.md,
-        AppSpacing.lg,
-        AppSpacing.xl,
-      ),
-      itemCount: _plans.length + 1 + (_planPage.hasMore ? 1 : 0),
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return _WorkoutBookSectionIntro(
-            title: 'Your training shelf',
-            subtitle:
-                'Start a plan, preview the structure, or tune custom splits.',
-            icon: Icons.bookmark_added_rounded,
-            gradient: const [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
-          );
-        }
-        if (index > _plans.length) {
-          return Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.xs),
-            child: _loadMoreButton(
-              label: 'Load more plans',
-              onPressed: _loadMorePlans,
-            ),
-          );
-        }
-        final plan = _plans[index - 1];
-        final origin = plan['plan_origin']?.toString() ?? 'trainer_assigned';
-        final editable = plan['is_member_editable'] == true;
-        final focusAreas = (plan['focus_areas'] as List<dynamic>? ?? const [])
-            .map((item) => item.toString())
-            .toList();
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.lg,
+          AppSpacing.xl,
+        ),
+        itemCount: _plans.length + 1 + (_planPage.hasMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return _WorkoutBookSectionIntro(
+              title: 'Your training plans',
+              subtitle:
+                  'Start, preview, share, or update the plans available to you.',
+              icon: Icons.bookmark_added_rounded,
+              gradient: const [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
+            );
+          }
+          if (index > _plans.length) {
+            return Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xs),
+              child: _loadMoreButton(
+                label: 'Load more plans',
+                loading: _loadingMorePlans,
+                onPressed: _loadMorePlans,
+              ),
+            );
+          }
+          final plan = _plans[index - 1];
+          final origin = plan['plan_origin']?.toString() ?? 'trainer_assigned';
+          final editable = plan['is_member_editable'] == true;
+          final focusAreas = (plan['focus_areas'] as List<dynamic>? ?? const [])
+              .map((item) => item.toString())
+              .toList();
 
-        return _WorkoutBookPlanCard(
-          plan: plan,
-          originLabel: _originLabel(origin),
-          originColor: _originColor(origin),
-          editable: editable,
-          focusAreas: focusAreas,
-          saving: _saving,
-          onStart: () => widget.onStartPlan((plan['id'] as num?)?.toInt()),
-          onPreview: () => _showPlanPreview(
-            title: plan['name']?.toString() ?? 'Workout plan',
+          return _WorkoutBookPlanCard(
             plan: plan,
-            primaryAction: () =>
-                widget.onStartPlan((plan['id'] as num?)?.toInt()),
-            primaryLabel: 'Start with this plan',
-          ),
-          onDuplicate: () => _duplicatePlan(plan),
-          onEdit: () => _beginEditPlan(plan),
-          onDelete: () => _deletePlan(plan),
-        );
-      },
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
+            originLabel: _originLabel(origin),
+            originColor: _originColor(origin),
+            editable: editable,
+            focusAreas: focusAreas,
+            saving: _saving,
+            onStart: () => widget.onStartPlan((plan['id'] as num?)?.toInt()),
+            onPreview: () => _showPlanPreview(
+              title: plan['name']?.toString() ?? 'Workout plan',
+              plan: plan,
+              primaryAction: () =>
+                  widget.onStartPlan((plan['id'] as num?)?.toInt()),
+              primaryLabel: 'Start with this plan',
+            ),
+            sharing: _sharingPlanId == (plan['id'] as num?)?.toInt(),
+            onShare: () => _sharePlan(plan),
+            onDuplicate: () => _duplicatePlan(plan),
+            onEdit: () => _beginEditPlan(plan),
+            onDelete: () => _deletePlan(plan),
+          );
+        },
+        separatorBuilder: (_, _) => const SizedBox(height: 12),
+      ),
     );
   }
 
@@ -2328,92 +2946,52 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
             ? (constraints.maxWidth - AppSpacing.md) / 2
             : (constraints.maxWidth < 380 ? constraints.maxWidth - 8 : 280.0);
 
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.md,
-            AppSpacing.lg,
-            AppSpacing.xl,
-          ),
-          children: [
-            _WorkoutBookFilterPanel(
-              searchController: _catalogSearchController,
-              difficulty: _catalogDifficulty,
-              programType: _catalogProgramType,
-              featuredOnly: _featuredOnly,
-              onSearch: _load,
-              onDifficultyChanged: (value) =>
-                  setState(() => _catalogDifficulty = value),
-              onProgramTypeChanged: (value) =>
-                  setState(() => _catalogProgramType = value),
-              onFeaturedChanged: (value) =>
-                  setState(() => _featuredOnly = value),
-              onApply: _load,
-              onReset: () {
-                setState(() {
-                  _catalogSearchController.clear();
-                  _catalogDifficulty = null;
-                  _catalogProgramType = null;
-                  _featuredOnly = false;
-                });
-                _load();
-              },
+        return RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.md,
+              AppSpacing.lg,
+              AppSpacing.xl,
             ),
-            if (_recommendedBooks.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.lg),
-              _CatalogSectionHeader(
-                title: 'Recommended',
-                subtitle: 'Fast-start programs matched to likely goals.',
-                actionLabel: '${_recommendedBooks.length} picks',
+            children: [
+              _WorkoutBookFilterPanel(
+                searchController: _catalogSearchController,
+                difficulty: _catalogDifficulty,
+                programType: _catalogProgramType,
+                featuredOnly: _featuredOnly,
+                onSearch: _load,
+                onDifficultyChanged: (value) =>
+                    setState(() => _catalogDifficulty = value),
+                onProgramTypeChanged: (value) =>
+                    setState(() => _catalogProgramType = value),
+                onFeaturedChanged: (value) =>
+                    setState(() => _featuredOnly = value),
+                onApply: _load,
+                onReset: _resetCatalogFilters,
               ),
-              const SizedBox(height: AppSpacing.sm),
-              if (isWide)
-                Wrap(
-                  spacing: AppSpacing.md,
-                  runSpacing: AppSpacing.md,
-                  children: _recommendedBooks.map((book) {
-                    final firstPlan =
-                        (book['plans'] as List<dynamic>? ?? const []).isEmpty
-                        ? const <String, dynamic>{}
-                        : Map<String, dynamic>.from(
-                            (book['plans'] as List).first as Map,
-                          );
-
-                    return SizedBox(
-                      width: recommendedCardWidth,
-                      child: _WorkoutBookRecommendationCard(
-                        book: book,
-                        enabled: firstPlan.isNotEmpty,
-                        onPreview: firstPlan.isEmpty
-                            ? null
-                            : () => _showPlanPreview(
-                                title:
-                                    firstPlan['name']?.toString() ??
-                                    'Recommended plan',
-                                plan: firstPlan,
-                                primaryAction: () => _adoptPlan(firstPlan),
-                                primaryLabel: 'Add to library',
-                              ),
-                      ),
-                    );
-                  }).toList(),
-                )
-              else
-                SizedBox(
-                  height: 112,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _recommendedBooks.length,
-                    separatorBuilder: (_, _) =>
-                        const SizedBox(width: AppSpacing.md),
-                    itemBuilder: (context, index) {
-                      final book = _recommendedBooks[index];
+              if (_recommendedBooks.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.lg),
+                _CatalogSectionHeader(
+                  title: 'Recommended',
+                  subtitle: 'Ready-made programs selected for common goals.',
+                  actionLabel: '${_recommendedBooks.length} picks',
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                if (isWide)
+                  Wrap(
+                    spacing: AppSpacing.md,
+                    runSpacing: AppSpacing.md,
+                    children: _recommendedBooks.map((book) {
                       final firstPlan =
                           (book['plans'] as List<dynamic>? ?? const []).isEmpty
                           ? const <String, dynamic>{}
                           : Map<String, dynamic>.from(
                               (book['plans'] as List).first as Map,
                             );
+
                       return SizedBox(
                         width: recommendedCardWidth,
                         child: _WorkoutBookRecommendationCard(
@@ -2431,59 +3009,103 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                                 ),
                         ),
                       );
-                    },
-                  ),
-                ),
-            ],
-            const SizedBox(height: AppSpacing.lg),
-            if (_books.isEmpty)
-              const _WorkoutBookEmptyStatePanel(
-                title: 'Catalog not available',
-                message: 'No platform workout books are published yet.',
-                icon: Icons.auto_stories_rounded,
-              )
-            else ...[
-              _CatalogSectionHeader(
-                title: 'Program Catalog',
-                subtitle:
-                    'Structured books with ready-to-preview weekly plans.',
-                actionLabel: '${_books.length} books',
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              ..._books.map((book) {
-                final plans = (book['plans'] as List<dynamic>? ?? const [])
-                    .map((item) => Map<String, dynamic>.from(item as Map))
-                    .toList();
-                final focusAreas =
-                    (book['focus_areas'] as List<dynamic>? ?? const [])
-                        .map((item) => item.toString())
-                        .toList();
-
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                  child: _WorkoutBookCatalogCard(
-                    book: book,
-                    plans: plans,
-                    focusAreas: focusAreas,
-                    compact: !isMedium,
-                    onPreview: (plan) => _showPlanPreview(
-                      title: plan['name']?.toString() ?? 'Workout plan',
-                      plan: plan,
-                      primaryAction: () => _adoptPlan(plan),
-                      primaryLabel: 'Add to library',
+                    }).toList(),
+                  )
+                else
+                  SizedBox(
+                    height: 112,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _recommendedBooks.length,
+                      separatorBuilder: (_, _) =>
+                          const SizedBox(width: AppSpacing.md),
+                      itemBuilder: (context, index) {
+                        final book = _recommendedBooks[index];
+                        final firstPlan =
+                            (book['plans'] as List<dynamic>? ?? const [])
+                                .isEmpty
+                            ? const <String, dynamic>{}
+                            : Map<String, dynamic>.from(
+                                (book['plans'] as List).first as Map,
+                              );
+                        return SizedBox(
+                          width: recommendedCardWidth,
+                          child: _WorkoutBookRecommendationCard(
+                            book: book,
+                            enabled: firstPlan.isNotEmpty,
+                            onPreview: firstPlan.isEmpty
+                                ? null
+                                : () => _showPlanPreview(
+                                    title:
+                                        firstPlan['name']?.toString() ??
+                                        'Recommended plan',
+                                    plan: firstPlan,
+                                    primaryAction: () => _adoptPlan(firstPlan),
+                                    primaryLabel: 'Add to library',
+                                  ),
+                          ),
+                        );
+                      },
                     ),
                   ),
-                );
-              }),
-              if (_bookPage.hasMore) ...[
-                const SizedBox(height: AppSpacing.xs),
-                _loadMoreButton(
-                  label: 'Load more workout books',
-                  onPressed: _loadMoreBooks,
+              ],
+              const SizedBox(height: AppSpacing.lg),
+              if (_books.isEmpty)
+                _WorkoutBookEmptyStatePanel(
+                  title: _catalogHasFilters
+                      ? 'No programs match these filters'
+                      : 'No programs are available yet',
+                  message: _catalogHasFilters
+                      ? 'Clear a filter or try a broader search.'
+                      : 'Published workout programs will appear here when they are ready.',
+                  icon: Icons.auto_stories_rounded,
+                  actionLabel: _catalogHasFilters ? 'Clear filters' : null,
+                  onAction: _catalogHasFilters ? _resetCatalogFilters : null,
+                )
+              else ...[
+                _CatalogSectionHeader(
+                  title: 'Program Catalog',
+                  subtitle:
+                      'Structured books with ready-to-preview weekly plans.',
+                  actionLabel: '${_books.length} books',
                 ),
+                const SizedBox(height: AppSpacing.sm),
+                ..._books.map((book) {
+                  final plans = (book['plans'] as List<dynamic>? ?? const [])
+                      .map((item) => Map<String, dynamic>.from(item as Map))
+                      .toList();
+                  final focusAreas =
+                      (book['focus_areas'] as List<dynamic>? ?? const [])
+                          .map((item) => item.toString())
+                          .toList();
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                    child: _WorkoutBookCatalogCard(
+                      book: book,
+                      plans: plans,
+                      focusAreas: focusAreas,
+                      compact: !isMedium,
+                      onPreview: (plan) => _showPlanPreview(
+                        title: plan['name']?.toString() ?? 'Workout plan',
+                        plan: plan,
+                        primaryAction: () => _adoptPlan(plan),
+                        primaryLabel: 'Add to library',
+                      ),
+                    ),
+                  );
+                }),
+                if (_bookPage.hasMore) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  _loadMoreButton(
+                    label: 'Load more workout books',
+                    loading: _loadingMoreBooks,
+                    onPressed: _loadMoreBooks,
+                  ),
+                ],
               ],
             ],
-          ],
+          ),
         );
       },
     );
@@ -2573,6 +3195,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                         final compact = constraints.maxWidth < 680;
                         final fields = [
                           DropdownButtonFormField<String>(
+                            isExpanded: true,
                             initialValue: _difficulty,
                             decoration: const InputDecoration(
                               labelText: 'Difficulty',
@@ -2704,6 +3327,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                           builder: (context, constraints) {
                             final compact = constraints.maxWidth < 520;
                             final weekdayField = DropdownButtonFormField<int>(
+                              isExpanded: true,
                               initialValue: day.weekday,
                               decoration: const InputDecoration(
                                 labelText: 'Day of week',
@@ -2828,6 +3452,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                                           constraints.maxWidth < 720;
                                       final bodyPartField =
                                           DropdownButtonFormField<String>(
+                                            isExpanded: true,
                                             initialValue: currentBodyPart,
                                             decoration: const InputDecoration(
                                               labelText: 'Body part',
@@ -2861,6 +3486,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                                           );
                                       final exerciseField =
                                           DropdownButtonFormField<int>(
+                                            isExpanded: true,
                                             initialValue:
                                                 exerciseDraft.exerciseId,
                                             decoration: const InputDecoration(
@@ -2940,6 +3566,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                                       );
                                       final rangeField =
                                           DropdownButtonFormField<String>(
+                                            isExpanded: true,
                                             initialValue:
                                                 exerciseDraft.repPreset,
                                             decoration: const InputDecoration(
@@ -3151,6 +3778,27 @@ class _WorkoutBookSectionIntro extends StatelessWidget {
   }
 }
 
+class _WorkoutBookLoadingState extends StatelessWidget {
+  const _WorkoutBookLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: AppSpacing.md),
+            Text('Loading your workout book...', textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _WorkoutBookEmptyStatePanel extends StatelessWidget {
   const _WorkoutBookEmptyStatePanel({
     required this.title,
@@ -3158,6 +3806,8 @@ class _WorkoutBookEmptyStatePanel extends StatelessWidget {
     required this.icon,
     this.actionLabel,
     this.onAction,
+    this.secondaryActionLabel,
+    this.onSecondaryAction,
   });
 
   final String title;
@@ -3165,6 +3815,8 @@ class _WorkoutBookEmptyStatePanel extends StatelessWidget {
   final IconData icon;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final String? secondaryActionLabel;
+  final VoidCallback? onSecondaryAction;
 
   @override
   Widget build(BuildContext context) {
@@ -3210,7 +3862,57 @@ class _WorkoutBookEmptyStatePanel extends StatelessWidget {
                 onPressed: onAction,
               ),
             ],
+            if (secondaryActionLabel != null && onSecondaryAction != null) ...[
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: onSecondaryAction,
+                icon: const Icon(Icons.add_task_rounded),
+                label: Text(secondaryActionLabel!),
+              ),
+            ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkoutBuilderSaveBar extends StatelessWidget {
+  const _WorkoutBuilderSaveBar({
+    required this.saving,
+    required this.editing,
+    required this.onSave,
+  });
+
+  final bool saving;
+  final bool editing;
+  final VoidCallback? onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.sm,
+          AppSpacing.lg,
+          AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.surface.withValues(alpha: 0.97),
+          border: const Border(top: BorderSide(color: AppColors.stroke)),
+        ),
+        child: GradientButton(
+          label: saving
+              ? (editing ? 'Updating workout...' : 'Saving workout...')
+              : (editing ? 'Update workout plan' : 'Save to My Plans'),
+          icon: editing
+              ? Icons.save_as_outlined
+              : Icons.library_add_check_rounded,
+          expanded: true,
+          loading: saving,
+          onPressed: onSave,
         ),
       ),
     );
@@ -3243,12 +3945,18 @@ class _MemberBuilderExerciseTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.badge,
+    required this.moveLabel,
+    required this.onMove,
+    required this.removeLabel,
     required this.onRemove,
   });
 
   final String title;
   final String subtitle;
   final String? badge;
+  final String moveLabel;
+  final VoidCallback? onMove;
+  final String removeLabel;
   final VoidCallback onRemove;
 
   @override
@@ -3260,58 +3968,81 @@ class _MemberBuilderExerciseTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.stroke),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(
-              Icons.fitness_center_rounded,
-              color: AppColors.primary,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.fitness_center_rounded,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w800,
-                        ),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     if (badge != null && badge!.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      _FocusChip(label: badge!),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: _FocusChip(label: badge!),
+                      ),
                     ],
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          TextButton(onPressed: onRemove, child: const Text('Remove')),
+          const SizedBox(height: 8),
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 4,
+            children: [
+              TextButton.icon(
+                onPressed: onMove,
+                icon: Icon(
+                  moveLabel == 'Move up'
+                      ? Icons.arrow_upward_rounded
+                      : Icons.arrow_downward_rounded,
+                  size: 18,
+                ),
+                label: Text(moveLabel),
+              ),
+              TextButton.icon(
+                onPressed: onRemove,
+                icon: const Icon(Icons.remove_circle_outline_rounded, size: 18),
+                label: Text(removeLabel),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -3555,8 +4286,10 @@ class _WorkoutBookPlanCard extends StatelessWidget {
     required this.editable,
     required this.focusAreas,
     required this.saving,
+    required this.sharing,
     required this.onStart,
     required this.onPreview,
+    required this.onShare,
     required this.onDuplicate,
     required this.onEdit,
     required this.onDelete,
@@ -3568,8 +4301,10 @@ class _WorkoutBookPlanCard extends StatelessWidget {
   final bool editable;
   final List<String> focusAreas;
   final bool saving;
+  final bool sharing;
   final VoidCallback onStart;
   final VoidCallback onPreview;
+  final VoidCallback onShare;
   final VoidCallback onDuplicate;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -3692,6 +4427,11 @@ class _WorkoutBookPlanCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               _WorkoutBookActionChip(
+                label: sharing ? 'Sharing...' : 'Share',
+                icon: Icons.ios_share_rounded,
+                onTap: saving || sharing ? null : onShare,
+              ),
+              _WorkoutBookActionChip(
                 label: 'Duplicate',
                 icon: Icons.copy_rounded,
                 onTap: saving ? null : onDuplicate,
@@ -3774,33 +4514,37 @@ class _WorkoutBookActionChip extends StatelessWidget {
     final color = danger ? AppColors.error : AppColors.primaryBright;
     return Opacity(
       opacity: onTap == null ? 0.48 : 1,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceSoft,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: danger
-                  ? AppColors.error.withValues(alpha: 0.22)
-                  : AppColors.strokeStrong,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 16, color: color),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w800,
-                ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(999),
+          child: Container(
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceSoft,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: danger
+                    ? AppColors.error.withValues(alpha: 0.22)
+                    : AppColors.strokeStrong,
               ),
-            ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 16, color: color),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -3885,6 +4629,7 @@ class _WorkoutBookFilterPanel extends StatelessWidget {
               final compact = constraints.maxWidth < 560;
               final fields = <Widget>[
                 DropdownButtonFormField<String?>(
+                  isExpanded: true,
                   initialValue: difficulty,
                   decoration: const InputDecoration(labelText: 'Difficulty'),
                   items: const [
@@ -3905,6 +4650,7 @@ class _WorkoutBookFilterPanel extends StatelessWidget {
                   onChanged: onDifficultyChanged,
                 ),
                 DropdownButtonFormField<String?>(
+                  isExpanded: true,
                   initialValue: programType,
                   decoration: const InputDecoration(labelText: 'Program type'),
                   items: const [
@@ -3948,27 +4694,36 @@ class _WorkoutBookFilterPanel extends StatelessWidget {
             },
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: SwitchListTile.adaptive(
-                  value: featuredOnly,
-                  onChanged: onFeaturedChanged,
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: const Text('Featured only'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 132,
-                child: GradientButton(
-                  label: 'Apply',
-                  icon: Icons.tune_rounded,
-                  onPressed: onApply,
-                ),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 420;
+              final featuredSwitch = SwitchListTile.adaptive(
+                value: featuredOnly,
+                onChanged: onFeaturedChanged,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('Featured only'),
+              );
+              final apply = GradientButton(
+                label: 'Show programs',
+                icon: Icons.tune_rounded,
+                expanded: compact,
+                onPressed: onApply,
+              );
+              if (compact) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [featuredSwitch, const SizedBox(height: 8), apply],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: featuredSwitch),
+                  const SizedBox(width: 12),
+                  SizedBox(width: 220, child: apply),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -4153,7 +4908,7 @@ class _WorkoutBookCatalogCard extends StatelessWidget {
                   TextButton(
                     onPressed: () => onPreview(plan),
                     style: TextButton.styleFrom(
-                      minimumSize: const Size(0, 36),
+                      minimumSize: const Size(0, 44),
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                     ),
                     child: const Text('Preview'),
@@ -4194,6 +4949,17 @@ class _PlanExerciseDraft {
   String trackingMode = 'reps';
   bool isPerSide = false;
   bool isBodyweight = false;
+  String? groupKey;
+  String? groupType;
+  int? groupOrder;
+  int? groupRounds;
+  int? transitionSeconds;
+  String progressionPolicy = 'off';
+  int? progressionMinReps;
+  int? progressionMaxReps;
+  double? progressionIncrementKg;
+  int? progressionDeloadAfterMisses;
+  double? progressionDeloadPercent;
   final TextEditingController setsController = TextEditingController(text: '3');
   final TextEditingController repsController = TextEditingController(
     text: '8-12',
@@ -4258,28 +5024,35 @@ class _WorkoutBookTopBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          InkWell(
-            onTap: () => Navigator.of(context).maybePop(),
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.stroke),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 10,
-                    offset: const Offset(0, 6),
+          Semantics(
+            button: true,
+            label: 'Back to training',
+            child: Tooltip(
+              message: 'Back to training',
+              child: InkWell(
+                onTap: () => Navigator.of(context).maybePop(),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.stroke),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 10,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: const Icon(
-                Icons.arrow_back_rounded,
-                color: AppColors.textPrimary,
-                size: 20,
+                  child: const Icon(
+                    Icons.arrow_back_rounded,
+                    color: AppColors.textPrimary,
+                    size: 20,
+                  ),
+                ),
               ),
             ),
           ),
@@ -4311,8 +5084,9 @@ class _WorkoutBookTopBar extends StatelessWidget {
   }
 }
 
-class _WorkoutBookPreviewSheet extends StatelessWidget {
-  const _WorkoutBookPreviewSheet({
+class WorkoutBookPreviewSheet extends StatelessWidget {
+  const WorkoutBookPreviewSheet({
+    super.key,
     required this.title,
     required this.planDetail,
     required this.days,
@@ -4385,6 +5159,7 @@ class _WorkoutBookPreviewSheet extends StatelessWidget {
                         MemberHeaderActionButton(
                           icon: Icons.close_rounded,
                           onTap: () => Navigator.of(context).pop(),
+                          tooltip: 'Close preview',
                         ),
                       ],
                     ),
@@ -4426,7 +5201,7 @@ class _WorkoutBookPreviewSheet extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'A cleaner preview of the weekly split, exercise order, and session workload before you start.',
+                            'Review the weekly schedule, exercise order, and session workload before you add or start this plan.',
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
                                   color: AppColors.textSecondary,
@@ -4462,16 +5237,56 @@ class _WorkoutBookPreviewSheet extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
-                    ...days.asMap().entries.map((entry) {
-                      return Padding(
-                        padding: EdgeInsets.only(
-                          bottom: entry.key == days.length - 1
-                              ? 0
-                              : AppSpacing.md,
+                    if (days.isEmpty)
+                      PremiumCard(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            const Icon(
+                              Icons.calendar_view_week_outlined,
+                              color: AppColors.primaryBright,
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Text(
+                                    'Schedule details unavailable',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(
+                                          color: AppColors.textPrimary,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'You can still continue to the workout and review the available plan details there.',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: AppColors.textSecondary,
+                                          height: 1.4,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        child: _WorkoutBookPreviewDayCard(day: entry.value),
-                      );
-                    }),
+                      )
+                    else
+                      ...days.asMap().entries.map((entry) {
+                        return Padding(
+                          padding: EdgeInsets.only(
+                            bottom: entry.key == days.length - 1
+                                ? 0
+                                : AppSpacing.md,
+                          ),
+                          child: _WorkoutBookPreviewDayCard(day: entry.value),
+                        );
+                      }),
                   ],
                 ),
               ),
@@ -4488,7 +5303,9 @@ class _WorkoutBookPreviewSheet extends StatelessWidget {
                 ),
                 child: GradientButton(
                   label: primaryLabel,
-                  icon: Icons.play_arrow_rounded,
+                  icon: primaryLabel.toLowerCase().contains('add')
+                      ? Icons.library_add_rounded
+                      : Icons.play_arrow_rounded,
                   expanded: true,
                   onPressed: () {
                     Navigator.of(context).pop();
@@ -4524,11 +5341,15 @@ class _WorkoutBookPreviewChip extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: AppColors.primaryBright),
           const SizedBox(width: 8),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w800,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],
@@ -4822,45 +5643,53 @@ class _WorkoutBookTabPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-        margin: const EdgeInsets.symmetric(horizontal: 2),
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 8 : 12,
-          vertical: 11,
-        ),
-        decoration: BoxDecoration(
+    return Semantics(
+      button: true,
+      selected: active,
+      label: label,
+      child: Tooltip(
+        message: label,
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(999),
-          color: active ? AppColors.primary : Colors.transparent,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: compact ? 16 : 18,
-              color: active ? Colors.white : AppColors.textSecondary,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 8 : 12,
+              vertical: 11,
             ),
-            if (!compact || active) ...[
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: active ? Colors.white : AppColors.textSecondary,
-                    fontWeight: active ? FontWeight.w800 : FontWeight.w700,
-                  ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              color: active ? AppColors.primary : Colors.transparent,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: compact ? 18 : 18,
+                  color: active ? Colors.white : AppColors.textSecondary,
                 ),
-              ),
-            ],
-          ],
+                if (!compact) ...[
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: active ? Colors.white : AppColors.textSecondary,
+                        fontWeight: active ? FontWeight.w800 : FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );

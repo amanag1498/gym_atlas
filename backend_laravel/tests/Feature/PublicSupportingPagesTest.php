@@ -12,8 +12,8 @@ class PublicSupportingPagesTest extends TestCase
     public function test_supporting_public_pages_load(): void
     {
         $this->get('/product')->assertOk()->assertSee('One connected ecosystem');
-        $this->get('/member-app')->assertOk()->assertSee('Atlas Member App');
-        $this->get('/trainer-app')->assertOk()->assertSee('Atlas Trainer App');
+        $this->get('/member-app')->assertOk()->assertSee('Gym Atlas');
+        $this->get('/trainer-app')->assertOk()->assertSee('Gym Atlas Coach');
         $this->get('/gym-management')->assertOk()->assertSee('Gym management');
         $this->get('/platform-administration')
             ->assertStatus(301)
@@ -28,8 +28,8 @@ class PublicSupportingPagesTest extends TestCase
             ->assertSee('Data retention schedule')
             ->assertSee('within 30 calendar days')
             ->assertSee('within 90 days')
-            ->assertSee('Atlas Member deletion page')
-            ->assertSee('Atlas Trainer deletion page');
+            ->assertSee('Gym Atlas deletion page')
+            ->assertSee('Gym Atlas Coach deletion page');
         $this->get('/account-deletion')
             ->assertOk()
             ->assertSee('Delete your Atlas account')

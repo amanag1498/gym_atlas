@@ -7,7 +7,7 @@
 - [x] Automatic signing with Apple Developer Team `9BQZB27JWV`
 - [x] iPhone-only release targets
 - [x] Push Notifications and Sign in with Apple capabilities
-- [x] HealthKit capability and usage descriptions for Gym Atlas Member
+- [x] HealthKit capability and usage descriptions for Gym Atlas
 - [x] Camera, photo-library, location, and health permission text where used
 - [x] Remote-notification background mode; unused background fetch removed
 - [x] Non-exempt encryption declaration set to false
@@ -21,7 +21,7 @@
 
 - [ ] Accept current agreements and verify paid Apple Developer membership.
 - [ ] Create or confirm App Store Connect records for both bundle IDs.
-- [ ] Confirm the names `Gym Atlas Member` and `Gym Atlas Trainer` are available.
+- [ ] Confirm the names `Gym Atlas` and `Gym Atlas Coach` are available.
 - [ ] Enable Push Notifications and Sign in with Apple for both identifiers;
       enable HealthKit for the member identifier.
 - [ ] Create APNs authentication key or production APNs certificates and upload

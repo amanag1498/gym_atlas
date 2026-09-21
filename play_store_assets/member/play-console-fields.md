@@ -1,10 +1,10 @@
-# Atlas Member — Play Console fields
+# Gym Atlas — Play Console fields
 
-Copy these values into the Atlas Member app in Play Console.
+Copy these values into the Gym Atlas app in Play Console.
 
 ## App setup
 
-- App name: `Atlas Member`
+- App name: `Gym Atlas`
 - Default language: `English (India) – en-IN`
 - App or game: `App`
 - Free or paid: `Free`
@@ -22,7 +22,7 @@ offer gym-managed memberships outside the downloaded app.
 ### App name
 
 ```text
-Atlas Member
+Gym Atlas
 ```
 
 ### Short description
@@ -34,7 +34,7 @@ Train smarter with workouts, progress, gym discovery and coach support.
 ### Full description
 
 ```text
-Atlas Member brings your gym journey into one calm, connected place.
+Gym Atlas brings your gym journey into one calm, connected place.
 
 Follow assigned workout and diet plans, log training sessions and sets, review attendance and membership details, and track body progress over time. With your permission, Atlas can also show daily steps, distance and active calories from supported health services.
 
@@ -82,14 +82,14 @@ is displayed publicly on Google Play.
 
 Screenshot alt text:
 
-1. `Atlas Member feature illustration showing connected workouts, daily steps, progress and membership access.`
-2. `Atlas Member feature illustration showing assigned workout plans, set logging and training history.`
-3. `Atlas Member feature illustration showing body progress, attendance milestones, membership and gym access.`
-4. `Atlas Member feature illustration showing trainer chat, diet plans, alerts and chat safety controls.`
+1. `Gym Atlas feature illustration showing connected workouts, daily steps, progress and membership access.`
+2. `Gym Atlas feature illustration showing assigned workout plans, set logging and training history.`
+3. `Gym Atlas feature illustration showing body progress, attendance milestones, membership and gym access.`
+4. `Gym Atlas feature illustration showing trainer chat, diet plans, alerts and chat safety controls.`
 
 ## Release
 
-- Release name: `Atlas Member 1.0.2 (12)`
+- Release name: `Gym Atlas 1.0.2 (12)`
 - Release notes:
 
 ```text
@@ -107,14 +107,14 @@ Select: `All or some functionality is restricted`.
 Reviewer instructions:
 
 ```text
-Atlas Member uses Google sign-in and requires an approved member account.
+Gym Atlas uses Google sign-in and requires an approved member account.
 
 Reviewer Google account:
 Email: [CREATE REVIEWER MEMBER EMAIL]
 Password: [ENTER REVIEWER MEMBER PASSWORD IN PLAY CONSOLE ONLY]
 
 Steps:
-1. Open Atlas Member.
+1. Open Gym Atlas.
 2. Tap Continue with Google.
 3. Sign in with the reviewer account above.
 4. The account opens directly to the member dashboard.

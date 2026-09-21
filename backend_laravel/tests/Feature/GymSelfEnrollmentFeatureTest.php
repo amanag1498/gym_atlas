@@ -91,6 +91,8 @@ class GymSelfEnrollmentFeatureTest extends TestCase
             'name' => 'New Atlas Member',
             'email' => 'new-atlas@example.com',
             'phone' => '+91 90000 00000',
+            'gender' => 'non_binary',
+            'date_of_birth' => '1996-04-12',
             'branch_id' => $branch->id,
             'fitness_goal_ids' => [$goal->id],
             'experience_level' => 'beginner',
@@ -116,6 +118,9 @@ class GymSelfEnrollmentFeatureTest extends TestCase
         $this->assertTrue($member->hasRole(RoleName::Member->value));
         $this->assertTrue($member->member_onboarding_completed);
         $this->assertSame(8, $member->member_onboarding_step);
+        $this->assertSame('+91 90000 00000', $member->phone);
+        $this->assertSame('non_binary', $member->gender);
+        $this->assertSame('1996-04-12', $member->date_of_birth?->toDateString());
         $this->assertDatabaseHas('member_profiles', [
             'user_id' => $member->id,
             'gym_id' => $gym->id,
@@ -124,6 +129,7 @@ class GymSelfEnrollmentFeatureTest extends TestCase
             'is_active' => true,
             'fitness_goal' => 'Build Strength',
             'experience_level' => 'beginner',
+            'gender' => 'non_binary',
         ]);
         $this->assertDatabaseHas('gym_self_enrollment_submissions', [
             'user_id' => $member->id,

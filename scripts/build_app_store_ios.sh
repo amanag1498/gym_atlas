@@ -63,7 +63,7 @@ build_app() {
 }
 
 verify_realtime_endpoint
-build_app flutter_member_app "Gym Atlas Member"
-build_app flutter_trainer_app "Gym Atlas Trainer"
+build_app flutter_member_app "Gym Atlas"
+build_app flutter_trainer_app "Gym Atlas Coach"
 
 echo "IPAs are available under each app's build/ios/ipa directory."

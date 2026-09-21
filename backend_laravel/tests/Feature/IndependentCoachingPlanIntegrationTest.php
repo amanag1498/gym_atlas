@@ -489,6 +489,68 @@ class IndependentCoachingPlanIntegrationTest extends TestCase
             ->assertUnprocessable();
     }
 
+    public function test_independent_trainer_can_save_then_assign_a_reusable_workout(): void
+    {
+        [$member, , $trainer, , , $relationship] = $this->coexistingPair();
+        $exercise = Exercise::query()->create([
+            'name' => 'Independent squat',
+            'muscle_group' => 'quads',
+            'is_global' => true,
+            'status' => 'approved',
+            'is_active' => true,
+        ]);
+
+        $day = [
+            'day_number' => 1,
+            'label' => 'Monday',
+            'exercises' => [[
+                'exercise_id' => $exercise->id,
+                'sets' => 3,
+                'tracking_mode' => 'reps',
+                'reps' => '8-10',
+            ]],
+        ];
+
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/trainer/workout-templates', [
+                'name' => 'Duplicate weekdays',
+                'duration_weeks' => 4,
+                'days' => [$day, $day],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['days.0.day_number', 'days.1.day_number']);
+
+        $templateId = $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/trainer/workout-templates', [
+                'name' => 'Independent strength',
+                'duration_weeks' => 4,
+                'estimated_session_minutes' => 45,
+                'weekly_schedule' => ['Mon'],
+                'days' => [$day],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.gym_id', null)
+            ->assertJsonPath('data.estimated_session_minutes', 45)
+            ->assertJsonPath('data.days.0.exercises.0.exercise_id', $exercise->id)
+            ->json('data.id');
+
+        $this->assertDatabaseMissing('workout_plans', ['trainer_id' => $trainer->id]);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->postJson('/api/trainer/workout-templates/'.$templateId.'/assign', [
+                'member_ids' => [$member->id],
+                'independent_trainer_member_relationship_id' => $relationship->id,
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('workout_plans', [
+            'trainer_id' => $trainer->id,
+            'member_id' => $member->id,
+            'workout_template_id' => $templateId,
+            'independent_trainer_member_relationship_id' => $relationship->id,
+        ]);
+    }
+
     public function test_personal_records_are_isolated_between_independent_trainer_relationships(): void
     {
         [$member, , $firstTrainer, , , $firstRelationship] = $this->coexistingPair();

@@ -19,6 +19,8 @@ class UserResource extends JsonResource
             'name' => $this->name,
             'email' => $this->email,
             'phone' => $this->when(isset($this->phone), $this->phone),
+            'gender' => $this->gender,
+            'date_of_birth' => $this->date_of_birth?->toDateString(),
             'google_id' => $this->google_id,
             'avatar' => $this->avatar,
             'auth_provider' => $this->auth_provider,

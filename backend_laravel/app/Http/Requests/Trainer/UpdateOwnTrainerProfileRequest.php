@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Trainer;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateOwnTrainerProfileRequest extends FormRequest
 {
@@ -14,6 +15,10 @@ class UpdateOwnTrainerProfileRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'name' => ['sometimes', 'string', 'max:160'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:30', 'regex:/^\+?[0-9() -]{7,30}$/'],
+            'gender' => ['sometimes', 'nullable', Rule::in(['male', 'female', 'non_binary', 'prefer_not_to_say'])],
+            'date_of_birth' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'before_or_equal:today', 'after_or_equal:1900-01-01'],
             'profile_photo_url' => ['nullable', 'url', 'max:2048'],
             'bio' => ['nullable', 'string', 'max:5000'],
             'specializations' => ['nullable', 'array'],

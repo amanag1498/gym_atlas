@@ -474,11 +474,17 @@ class MemberRepository {
     String token, {
     int? branchId,
     bool reuseProfile = true,
+    String? phone,
+    String? gender,
+    String? dateOfBirth,
   }) => _client.post(
     '/member/self-enrollment/$token',
     data: {
       'branch_id': branchId,
       'reuse_profile': reuseProfile,
+      'phone': phone,
+      'gender': gender,
+      'date_of_birth': dateOfBirth,
       'consent': true,
     },
   );

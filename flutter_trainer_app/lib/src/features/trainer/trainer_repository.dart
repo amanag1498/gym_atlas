@@ -681,6 +681,9 @@ class TrainerRepository {
     }
   }
 
+  Future<Map<String, dynamic>> markNotificationUnread(int notificationId) =>
+      _client.post('/notifications/$notificationId/unread');
+
   Future<Map<String, dynamic>> markAllNotificationsRead() async {
     try {
       return await _client.post('/notifications/read-all');

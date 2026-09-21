@@ -47,11 +47,27 @@ class TrainerProfileController extends Controller
 
         $profile = $this->trainerScopeService->resolveTrainerProfile($request)
             ->loadMissing(['user', 'gym', 'branch', 'assignedMembers']);
-        $oldValues = $profile->toArray();
+        $oldValues = [
+            'user' => $profile->user->only(['name', 'phone', 'gender', 'date_of_birth']),
+            'trainer_profile' => $profile->toArray(),
+        ];
+        $request->user()->update($request->safe()->only([
+            'name',
+            'phone',
+            'gender',
+            'date_of_birth',
+        ]));
         $profile->update($request->safe()->except([
+            'name',
+            'phone',
+            'gender',
+            'date_of_birth',
             'trainer_onboarding_step',
             'trainer_onboarding_completed',
         ]));
+        if ($request->exists('profile_photo_url')) {
+            $profile->user->update(['avatar' => $profile->profile_photo_url]);
+        }
         $materialReviewChanges = collect(self::INDEPENDENT_REVIEW_FIELDS)
             ->filter(fn (string $field): bool => $profile->wasChanged($field))
             ->values()
@@ -91,7 +107,10 @@ class TrainerProfileController extends Controller
             gym: $profile->gym,
             branch: $profile->branch,
             oldValues: $oldValues,
-            newValues: $profile->fresh()->toArray(),
+            newValues: [
+                'user' => $freshUser->only(['name', 'phone', 'gender', 'date_of_birth']),
+                'trainer_profile' => $profile->fresh()->toArray(),
+            ],
         );
 
         return $this->success([

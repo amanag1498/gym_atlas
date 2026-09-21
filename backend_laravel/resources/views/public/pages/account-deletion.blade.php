@@ -1,6 +1,6 @@
 @php
     $supportEmail = $settings['support_email'] ?? null;
-    $accountLabel = match ($appType ?? 'account') { 'member' => 'Atlas Member', 'trainer' => 'Atlas Trainer', default => 'Atlas' };
+    $accountLabel = match ($appType ?? 'account') { 'member' => 'Gym Atlas', 'trainer' => 'Gym Atlas Coach', default => 'Atlas' };
     $steps = [
         ['Submit the request', 'Use the email connected to the account. The submitted details are recorded as a deletion support request.'],
         ['Verify ownership', 'Support may reply to that email for information reasonably necessary to identify the account and prevent an unauthorized deletion.'],
@@ -9,7 +9,7 @@
     ];
 @endphp
 
-<x-public.layouts.app page-title="Delete Atlas Account" page-description="Request deletion of an Atlas Member or Atlas Trainer account and associated personal data.">
+<x-public.layouts.app page-title="Delete Atlas Account" page-description="Request deletion of a Gym Atlas or Gym Atlas Coach account and associated personal data.">
     <section class="atlas-editorial-hero pb-20 pt-36 sm:pb-24 sm:pt-44">
         <div class="public-container grid items-end gap-10 lg:grid-cols-[1fr_.55fr]">
             <div><p class="public-eyebrow">Account controls</p><h1 class="mt-6 max-w-4xl text-4xl font-semibold leading-[.98] tracking-[-.055em] text-white sm:text-6xl">Delete your Atlas account.</h1><p class="mt-6 max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">Request deletion of your {{ $accountLabel }} account and associated personal data without signing in.</p></div>

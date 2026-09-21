@@ -3,7 +3,7 @@
 Member release built and verified on 22 August 2026. Trainer release last
 verified on 28 July 2026.
 
-## Atlas Member
+## Gym Atlas
 
 - Version: `1.0.2+12`
 - Package: `com.techybugs.gymatlas.member`
@@ -19,7 +19,7 @@ verified on 28 July 2026.
 - Upload certificate SHA-256:
   `AD:C5:B6:44:9E:5E:A9:72:54:75:30:54:5F:AA:B6:79:8B:0A:F8:D0:09:6A:EB:73:45:46:DA:5C:E6:DB:57:4A`
 
-## Atlas Trainer
+## Gym Atlas Coach
 
 - Version: `1.0.0+1`
 - Package: `com.techybugs.gymatlas.trainer`

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase;
 import 'package:flutter/foundation.dart';
@@ -66,7 +68,7 @@ class MemberSessionController extends ChangeNotifier {
       _ensureEligibleMember(me);
       user = me;
       await _storage.saveSession(token: storedToken, user: me);
-      await _registerFcmToken();
+      _registerFcmToken();
     } on DioException catch (exception) {
       if (exception.response?.statusCode == 401) {
         await _clearLocalState(notify: false);
@@ -236,7 +238,7 @@ class MemberSessionController extends ChangeNotifier {
     token = session.token;
     user = me;
     await _storage.saveSession(token: session.token, user: me);
-    await _registerFcmToken();
+    _registerFcmToken();
   }
 
   Future<void> logout({bool remote = true}) async {
@@ -288,11 +290,14 @@ class MemberSessionController extends ChangeNotifier {
     return currentUser;
   }
 
-  Future<void> _registerFcmToken() async {
+  void _registerFcmToken() {
     if (token == null || token!.isEmpty) {
       return;
     }
-    await _fcmTokenService?.registerToken(appRole: 'member');
+    final service = _fcmTokenService;
+    if (service != null) {
+      unawaited(service.registerToken(appRole: 'member'));
+    }
   }
 
   void _ensureEligibleMember(MemberUser currentUser) {
@@ -307,6 +312,7 @@ class MemberSessionController extends ChangeNotifier {
   }
 
   Future<void> _clearLocalState({required bool notify}) async {
+    await _fcmTokenService?.stop(deleteNativeToken: true);
     await _storage.clear();
     _apiClient.clearBearerToken();
     _apiClient.setGymContext(null);
@@ -328,6 +334,12 @@ class MemberSessionController extends ChangeNotifier {
     } catch (_) {
       // Ignore Firebase sign-out failures during local cleanup.
     }
+  }
+
+  @override
+  void dispose() {
+    _fcmTokenService?.dispose();
+    super.dispose();
   }
 
   String _mapAuthError(DioException exception) {
