@@ -99,6 +99,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   final _exerciseSearchController = TextEditingController();
   final _exercisePickerTextController = TextEditingController();
   final _exercisePickerMenuController = MenuController();
+  final _exercisePickerAnchorKey = GlobalKey();
   final Map<int, Map<String, dynamic>> _savedExerciseMetadata = {};
   Timer? _exerciseSearchDebounce;
   final _setsController = TextEditingController(text: '4');
@@ -309,16 +310,20 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     final generation = _exerciseSearchGeneration;
     final page = _exercisePage.nextPage;
     final query = _exerciseQuery();
+    final pickerWasOpen = _exercisePickerMenuController.isOpen;
     setState(() => _loadingExercises = true);
+    _restoreExercisePickerAfterFrame(pickerWasOpen);
     try {
       final response = await widget.repository.fetchWorkoutExercises(
         queryParameters: {...query, 'page': page},
       );
       if (!mounted || generation != _exerciseSearchGeneration) return;
+      final pickerStillOpen = _exercisePickerMenuController.isOpen;
       setState(() {
         _exercises = mergeApiPageItems(_exercises, apiPageItems(response));
         _exercisePage = ApiPagination.fromResponse(response);
       });
+      _restoreExercisePickerAfterFrame(pickerStillOpen);
     } catch (exception) {
       if (generation == _exerciseSearchGeneration) {
         _showLoadMoreError(exception);
@@ -328,6 +333,19 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
         setState(() => _loadingExercises = false);
       }
     }
+  }
+
+  void _restoreExercisePickerAfterFrame(bool shouldStayOpen) {
+    if (!shouldStayOpen) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _activeTabIndex != 2 ||
+          _exercisePickerAnchorKey.currentContext == null ||
+          _exercisePickerMenuController.isOpen) {
+        return;
+      }
+      _exercisePickerMenuController.open();
+    });
   }
 
   void _showLoadMoreError(Object exception) {
@@ -854,6 +872,24 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     final groupKey = _groupKeyController.text.trim().isEmpty
         ? null
         : _groupKeyController.text.trim();
+    final groupRounds = int.tryParse(_groupRoundsController.text.trim());
+    final transitionSeconds = int.tryParse(
+      _transitionSecondsController.text.trim(),
+    );
+    if (groupKey != null &&
+        (groupRounds == null ||
+            groupRounds < 1 ||
+            groupRounds > 20 ||
+            transitionSeconds == null ||
+            transitionSeconds < 0 ||
+            transitionSeconds > 3600)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter 1–20 rounds and 0–3600 transition seconds.'),
+        ),
+      );
+      return;
+    }
     final groupOrder = groupKey == null
         ? null
         : _selectedBuilderDay.exercises
@@ -880,12 +916,8 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     draft.groupKey = groupKey;
     draft.groupType = groupKey == null ? null : _groupType;
     draft.groupOrder = groupOrder;
-    draft.groupRounds = groupKey == null
-        ? null
-        : int.tryParse(_groupRoundsController.text.trim()) ?? 1;
-    draft.transitionSeconds = groupKey == null
-        ? null
-        : int.tryParse(_transitionSecondsController.text.trim()) ?? 0;
+    draft.groupRounds = groupKey == null ? null : groupRounds;
+    draft.transitionSeconds = groupKey == null ? null : transitionSeconds;
     draft.progressionPolicy = _trackingMode == 'reps'
         ? _exerciseProgressionPolicy
         : 'off';
@@ -1534,7 +1566,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                 )
               else ...[
                 DropdownMenu<int>(
-                  key: const ValueKey('member-builder-exercise-picker'),
+                  key: _exercisePickerAnchorKey,
                   controller: _exercisePickerTextController,
                   menuController: _exercisePickerMenuController,
                   initialSelection: _selectedBuilderExerciseId,
@@ -1583,6 +1615,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                           ? ''
                           : _exercisePickerLabelForSelection();
                       unawaited(_loadMoreExercises());
+                      _restoreExercisePickerAfterFrame(true);
                       return;
                     }
                     setState(() {
@@ -1685,6 +1718,8 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                     );
                   },
                 ),
+                const SizedBox(height: 12),
+                _buildGroupingOptions(context),
                 const SizedBox(height: 12),
                 _buildAdvancedExerciseOptions(context),
                 const SizedBox(height: 12),
@@ -1811,7 +1846,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                     child: _MemberBuilderExerciseTile(
                       title: meta?['name']?.toString() ?? 'Exercise',
                       subtitle:
-                          '${exercise.sets} sets • ${exercise.reps} • ${exercise.restSeconds} sec rest${exercise.groupKey == null ? '' : ' • ${exercise.groupKey}${exercise.groupOrder} ${exercise.groupType}'}${exercise.progressionPolicy == 'off' ? '' : ' • progression'}',
+                          '${exercise.sets} sets • ${exercise.reps} • ${exercise.restSeconds} sec rest${exercise.groupKey == null ? '' : ' • ${exercise.groupKey}${exercise.groupOrder} ${exercise.groupType} • ${exercise.groupRounds} rounds • ${exercise.transitionSeconds}s transition'}${exercise.progressionPolicy == 'off' ? '' : ' • progression'}',
                       badge: meta == null
                           ? null
                           : _bodyPartLabel(_bodyPartKeyForExercise(meta)),
@@ -1847,37 +1882,38 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     return draft;
   }
 
-  Widget _buildAdvancedExerciseOptions(BuildContext context) {
-    final hasGroup = _groupKeyController.text.trim().isNotEmpty;
+  Widget _buildGroupingOptions(BuildContext context) {
     return Material(
       color: AppColors.surfaceSoft,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: const BorderSide(color: AppColors.stroke),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-        leading: const Icon(Icons.tune_rounded, color: AppColors.primary),
-        title: const Text('Advanced exercise options'),
-        subtitle: const Text('Supersets, circuits, and progression'),
-        children: [
-          TextField(
-            controller: _groupKeyController,
-            onChanged: (_) => setState(() {}),
-            textCapitalization: TextCapitalization.characters,
-            decoration:
-                _memberWorkoutInputDecoration(
-                  'Group label (optional)',
-                  icon: Icons.link_rounded,
-                ).copyWith(
-                  hintText: 'A, B, or Circuit 1',
-                  helperText:
-                      'Use the same label on two or more exercises to group them.',
-                ),
-          ),
-          if (hasGroup) ...[
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Exercise group (optional)',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _groupKeyController,
+              textCapitalization: TextCapitalization.characters,
+              decoration:
+                  _memberWorkoutInputDecoration(
+                    'Group label (optional)',
+                    icon: Icons.link_rounded,
+                  ).copyWith(
+                    hintText: 'A, B, or Circuit 1',
+                    helperText: 'Use the same label on two or more exercises.',
+                  ),
+            ),
             const SizedBox(height: 12),
             LayoutBuilder(
               builder: (context, constraints) {
@@ -1929,7 +1965,26 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
               },
             ),
           ],
-          const SizedBox(height: 12),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAdvancedExerciseOptions(BuildContext context) {
+    return Material(
+      color: AppColors.surfaceSoft,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.stroke),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+        leading: const Icon(Icons.tune_rounded, color: AppColors.primary),
+        title: const Text('Advanced exercise options'),
+        subtitle: const Text('Exercise progression settings'),
+        children: [
           DropdownButtonFormField<String>(
             isExpanded: true,
             initialValue: _exerciseProgressionPolicy,

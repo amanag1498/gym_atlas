@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_member_app/src/core/api_client.dart';
 import 'package:flutter_member_app/src/features/member/member_repository.dart';
@@ -8,7 +10,8 @@ void main() {
   testWidgets('builder loads the next exercise page from the picker', (
     tester,
   ) async {
-    final repository = _WorkoutBuilderRepository();
+    final pageTwoGate = Completer<void>();
+    final repository = _WorkoutBuilderRepository(pageTwoGate: pageTwoGate);
     tester.view.physicalSize = const Size(375, 812);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -31,16 +34,35 @@ void main() {
       );
       await tester.pumpAndSettle();
     }
-    final picker = find.byKey(const ValueKey('member-builder-exercise-picker'));
+    final picker = find.byType(DropdownMenu<int>);
     expect(picker, findsOneWidget);
     await tester.ensureVisible(picker);
     await tester.pumpAndSettle();
     await tester.tap(picker);
     await tester.pumpAndSettle();
+    expect(
+      tester.widget<DropdownMenu<int>>(picker).menuController!.isOpen,
+      isTrue,
+    );
     expect(find.text('Load more exercise results'), findsOneWidget);
 
     await tester.tap(find.text('Load more exercise results'));
+    // Reproduce a menu dismissal during the pagination rebuild.
+    tester.widget<DropdownMenu<int>>(picker).menuController!.close();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(
+      tester.widget<DropdownMenu<int>>(picker).menuController!.isOpen,
+      isTrue,
+    );
+    expect(find.text('Bench Press • Chest'), findsOneWidget);
+    pageTwoGate.complete();
     await tester.pumpAndSettle();
+    expect(
+      tester.widget<DropdownMenu<int>>(picker).menuController!.isOpen,
+      isTrue,
+    );
     expect(repository.exercisePages, contains(2));
 
     // Pagination must leave the picker open so the next result is selectable.
@@ -48,7 +70,84 @@ void main() {
     await tester.tap(find.text('Back Squat • Quads'));
     await tester.pumpAndSettle();
     expect(find.text('Back Squat • Quads'), findsOneWidget);
+    expect(
+      tester.widget<DropdownMenu<int>>(picker).menuController!.isOpen,
+      isFalse,
+    );
   });
+
+  testWidgets(
+    'group type, rounds, and transition are visible before grouping',
+    (tester) async {
+      final repository = _WorkoutBuilderRepository();
+      tester.view.physicalSize = const Size(375, 812);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_buildScreen(repository));
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Builder'));
+      await tester.pumpAndSettle();
+
+      final picker = find.byType(DropdownMenu<int>);
+      for (var index = 0; index < 8 && picker.evaluate().isEmpty; index++) {
+        await tester.drag(
+          find.byKey(const ValueKey('workout-builder-scroll')),
+          const Offset(0, -420),
+        );
+        await tester.pumpAndSettle();
+      }
+      await tester.ensureVisible(picker);
+      await tester.pumpAndSettle();
+      await tester.tap(picker);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bench Press • Chest').last);
+      await tester.pumpAndSettle();
+
+      final groupType = find.byWidgetPredicate(
+        (widget) =>
+            widget is DropdownButtonFormField<String> &&
+            widget.decoration.labelText == 'Group type',
+      );
+      for (var index = 0; index < 12 && groupType.evaluate().isEmpty; index++) {
+        await tester.drag(
+          find.byKey(const ValueKey('workout-builder-scroll')),
+          const Offset(0, -420),
+        );
+        await tester.pumpAndSettle();
+      }
+      expect(groupType, findsOneWidget);
+      expect(find.widgetWithText(TextField, 'Rounds'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'Transition sec'), findsOneWidget);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Group label (optional)'),
+        'A',
+      );
+      await tester.enterText(find.widgetWithText(TextField, 'Rounds'), '4');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Transition sec'),
+        '25',
+      );
+      tester.testTextInput.hide();
+      await tester.ensureVisible(groupType);
+      await tester.pumpAndSettle();
+      await tester.tap(groupType);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Circuit').last);
+      await tester.pumpAndSettle();
+
+      final addExercise = find.textContaining('Add exercise to');
+      await tester.ensureVisible(addExercise);
+      await tester.tap(addExercise);
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('A1 circuit • 4 rounds • 25s transition'),
+        findsOneWidget,
+      );
+      _expectNoFlutterException(tester);
+    },
+  );
 
   testWidgets(
     'editing keeps a saved exercise outside the loaded catalog page',
@@ -77,6 +176,7 @@ void main() {
         await tester.pumpAndSettle();
       }
       expect(find.text('Back Squat'), findsWidgets);
+      expect(find.textContaining('4 rounds • 25s transition'), findsOneWidget);
       _expectNoFlutterException(tester);
     },
   );
@@ -113,6 +213,18 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Builder'));
       await tester.pumpAndSettle();
       expect(find.text('Save to My Plans'), findsOneWidget);
+      for (
+        var index = 0;
+        index < 12 && find.text('Exercise group (optional)').evaluate().isEmpty;
+        index++
+      ) {
+        await tester.drag(
+          find.byKey(const ValueKey('workout-builder-scroll')),
+          const Offset(0, -420),
+        );
+        await tester.pumpAndSettle();
+      }
+      expect(find.text('Exercise group (optional)'), findsOneWidget);
       _expectNoFlutterException(tester);
     },
   );
@@ -148,10 +260,13 @@ Widget _buildScreen(
 }
 
 class _WorkoutBuilderRepository extends MemberRepository {
-  _WorkoutBuilderRepository({this.includeSavedExercise = false})
-    : super(MemberApiClient());
+  _WorkoutBuilderRepository({
+    this.includeSavedExercise = false,
+    this.pageTwoGate,
+  }) : super(MemberApiClient());
 
   final bool includeSavedExercise;
+  final Completer<void>? pageTwoGate;
 
   final List<int> exercisePages = <int>[];
 
@@ -194,6 +309,11 @@ class _WorkoutBuilderRepository extends MemberRepository {
                 'exercise_id': 2,
                 'sets': 3,
                 'reps': '10',
+                'group_key': 'A',
+                'group_type': 'circuit',
+                'group_order': 1,
+                'group_rounds': 4,
+                'transition_seconds': 25,
                 'exercise': {
                   'id': 2,
                   'name': 'Back Squat',
@@ -216,6 +336,7 @@ class _WorkoutBuilderRepository extends MemberRepository {
     final page = (queryParameters?['page'] as num?)?.toInt() ?? 1;
     exercisePages.add(page);
     if (page == 2) {
+      await pageTwoGate?.future;
       return _page(
         const [
           {
