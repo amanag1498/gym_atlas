@@ -31,10 +31,11 @@ void main() {
       );
       await tester.pumpAndSettle();
     }
-    expect(find.text('Bench Press • Chest'), findsOneWidget);
-    await tester.ensureVisible(find.text('Bench Press • Chest'));
+    final picker = find.byKey(const ValueKey('member-builder-exercise-picker'));
+    expect(picker, findsOneWidget);
+    await tester.ensureVisible(picker);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Bench Press • Chest'));
+    await tester.tap(picker);
     await tester.pumpAndSettle();
     expect(find.text('Load more exercise results'), findsOneWidget);
 
@@ -42,12 +43,43 @@ void main() {
     await tester.pumpAndSettle();
     expect(repository.exercisePages, contains(2));
 
-    await tester.ensureVisible(find.text('Bench Press • Chest'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Bench Press • Chest'));
+    // Pagination must leave the picker open so the next result is selectable.
+    expect(find.text('Back Squat • Quads'), findsOneWidget);
+    await tester.tap(find.text('Back Squat • Quads'));
     await tester.pumpAndSettle();
     expect(find.text('Back Squat • Quads'), findsOneWidget);
   });
+
+  testWidgets(
+    'editing keeps a saved exercise outside the loaded catalog page',
+    (tester) async {
+      final repository = _WorkoutBuilderRepository(includeSavedExercise: true);
+      tester.view.physicalSize = const Size(375, 812);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_buildScreen(repository));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Edit').first);
+      await tester.tap(find.text('Edit').first);
+      await tester.pumpAndSettle();
+
+      for (
+        var index = 0;
+        index < 12 && find.text('Back Squat').evaluate().isEmpty;
+        index++
+      ) {
+        await tester.drag(
+          find.byKey(const ValueKey('workout-builder-scroll')),
+          const Offset(0, -420),
+        );
+        await tester.pumpAndSettle();
+      }
+      expect(find.text('Back Squat'), findsWidgets);
+      _expectNoFlutterException(tester);
+    },
+  );
 
   testWidgets(
     'workout book tabs remain usable on a compact large-text screen',
@@ -116,7 +148,10 @@ Widget _buildScreen(
 }
 
 class _WorkoutBuilderRepository extends MemberRepository {
-  _WorkoutBuilderRepository() : super(MemberApiClient());
+  _WorkoutBuilderRepository({this.includeSavedExercise = false})
+    : super(MemberApiClient());
+
+  final bool includeSavedExercise;
 
   final List<int> exercisePages = <int>[];
 
@@ -146,7 +181,33 @@ class _WorkoutBuilderRepository extends MemberRepository {
     int? relationshipId,
     int page = 1,
     int perPage = 15,
-  }) async => _page(const [_plan]);
+  }) async => _page([
+    if (includeSavedExercise)
+      {
+        ..._plan,
+        'days': const [
+          {
+            'day_number': 1,
+            'label': 'Leg day',
+            'exercises': [
+              {
+                'exercise_id': 2,
+                'sets': 3,
+                'reps': '10',
+                'exercise': {
+                  'id': 2,
+                  'name': 'Back Squat',
+                  'body_part': 'quads',
+                  'body_part_label': 'Quads',
+                },
+              },
+            ],
+          },
+        ],
+      }
+    else
+      _plan,
+  ]);
 
   @override
   Future<Map<String, dynamic>> fetchWorkoutExercises({

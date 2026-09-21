@@ -5750,8 +5750,6 @@ class __WorkoutPageState extends State<_WorkoutPage> {
             : _assignmentKey(widget.members.first));
     _selectedTemplateId = (widget.templates.firstOrNull?['id'] as num?)
         ?.toInt();
-    _selectedExerciseId = (widget.exercises.firstOrNull?['id'] as num?)
-        ?.toInt();
     _syncExercisePickerText();
     for (final day in _selectedWeekDays) {
       _dayDrafts[day] = _WorkoutDayDraft(
@@ -5863,8 +5861,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         _recentExercisesOnly = false;
         _catalogExercises = widget.exercises;
         _catalogExercisePage = const ApiPagination.singlePage();
-        _selectedExerciseId = (_catalogExercises.firstOrNull?['id'] as num?)
-            ?.toInt();
+        _selectedExerciseId = null;
       });
       _syncExercisePickerText();
       return;
@@ -5900,7 +5897,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
           (exercise) =>
               (exercise['id'] as num?)?.toInt() == _selectedExerciseId,
         )) {
-          _selectedExerciseId = (exercises.firstOrNull?['id'] as num?)?.toInt();
+          _selectedExerciseId = null;
         }
       });
       _syncExercisePickerText();
@@ -5919,16 +5916,20 @@ class __WorkoutPageState extends State<_WorkoutPage> {
 
   Future<void> _loadMoreExercises() async {
     if (_loadingExerciseCatalog || !_catalogExercisePage.hasMore) return;
+    final generation = _exerciseSearchGeneration;
+    final page = _catalogExercisePage.nextPage;
+    final search = _exerciseSearchController.text.trim();
+    final recent = _recentExercisesOnly;
     setState(() => _loadingExerciseCatalog = true);
     try {
       final response = await widget.repository.fetchExercises(
-        page: _catalogExercisePage.nextPage,
-        search: _exerciseSearchController.text.trim(),
-        recent: _recentExercisesOnly,
+        page: page,
+        search: search,
+        recent: recent,
         perPage: 100,
         locale: WidgetsBinding.instance.platformDispatcher.locale.languageCode,
       );
-      if (!mounted) return;
+      if (!mounted || generation != _exerciseSearchGeneration) return;
       setState(() {
         _catalogExercises = mergeApiPageItems(
           _catalogExercises,
@@ -5937,13 +5938,15 @@ class __WorkoutPageState extends State<_WorkoutPage> {
         _catalogExercisePage = ApiPagination.fromResponse(response);
       });
     } catch (exception) {
-      if (mounted) {
+      if (mounted && generation == _exerciseSearchGeneration) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(exception.toString())));
       }
     } finally {
-      if (mounted) setState(() => _loadingExerciseCatalog = false);
+      if (mounted && generation == _exerciseSearchGeneration) {
+        setState(() => _loadingExerciseCatalog = false);
+      }
     }
   }
 
@@ -6276,8 +6279,12 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                                 icon: Icons.date_range_rounded,
                               ),
                               validator: (value) {
-                                final parsed = int.tryParse(value?.trim() ?? '');
-                                if (parsed == null || parsed < 1 || parsed > 52) {
+                                final parsed = int.tryParse(
+                                  value?.trim() ?? '',
+                                );
+                                if (parsed == null ||
+                                    parsed < 1 ||
+                                    parsed > 52) {
                                   return 'Use 1 to 52 weeks';
                                 }
                                 return null;
@@ -6291,8 +6298,12 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                                 icon: Icons.timer_outlined,
                               ),
                               validator: (value) {
-                                final parsed = int.tryParse(value?.trim() ?? '');
-                                if (parsed == null || parsed < 10 || parsed > 240) {
+                                final parsed = int.tryParse(
+                                  value?.trim() ?? '',
+                                );
+                                if (parsed == null ||
+                                    parsed < 10 ||
+                                    parsed > 240) {
                                   return 'Use 10 to 240 minutes';
                                 }
                                 return null;
@@ -6426,7 +6437,9 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                           ],
                         ),
                         const SizedBox(height: 10),
-                        if (widget.exercises.isEmpty)
+                        if (widget.exercises.isEmpty &&
+                            _exerciseSearchController.text.trim().isEmpty &&
+                            !_recentExercisesOnly)
                           EmptyStateView(
                             title: 'Exercise library is empty',
                             message:
@@ -6476,6 +6489,18 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                             ],
                           ),
                           const SizedBox(height: 14),
+                          if (filteredExercises.isEmpty)
+                            EmptyStateView(
+                              title: _loadingExerciseCatalog
+                                  ? 'Finding exercises...'
+                                  : 'No exercises found',
+                              message: _loadingExerciseCatalog
+                                  ? 'Checking the exercise library.'
+                                  : 'Try another search or choose All exercises.',
+                              icon: _loadingExerciseCatalog
+                                  ? Icons.hourglass_top_rounded
+                                  : Icons.search_off_rounded,
+                            ),
                           DropdownMenu<int>(
                             controller: _exercisePickerTextController,
                             menuController: _exercisePickerMenuController,
@@ -6883,20 +6908,15 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                                     '${entry.value.sets} sets • ${entry.value.trackingMode} • ${entry.value.restSeconds} sec rest${entry.value.groupKey == null ? '' : ' • ${entry.value.groupKey}${entry.value.groupOrder} ${entry.value.groupType}'}${entry.value.progressionPolicy == 'off' ? '' : ' • progression'}',
                                 badge: entry.value.bodyPartLabel,
                                 icon: Icons.fitness_center_rounded,
-                                actionLabel: entry.key == 0
-                                    ? 'Move down'
-                                    : 'Move up',
-                                onAction: selectedDayDraft.exercises.length < 2
-                                    ? null
-                                    : () => _moveExercise(
-                                        selectedDayDraft,
-                                        entry.key,
-                                        entry.key == 0 ? 1 : -1,
-                                      ),
+                                actionLabel: 'Edit',
+                                onAction: () => _editExercisePrescription(
+                                  selectedDayDraft,
+                                  entry.key,
+                                ),
                                 secondaryActionLabel:
                                     entry.value.groupKey == null
-                                    ? 'Remove'
-                                    : 'Group / Remove',
+                                    ? 'More'
+                                    : 'Group / More',
                                 onSecondaryAction: () => _editOrRemoveExercise(
                                   selectedDayDraft,
                                   entry.key,
@@ -7408,25 +7428,139 @@ class __WorkoutPageState extends State<_WorkoutPage> {
     });
   }
 
+  Future<void> _editExercisePrescription(
+    _WorkoutDayDraft day,
+    int index,
+  ) async {
+    final exercise = day.exercises[index];
+    final sets = TextEditingController(text: '${exercise.sets}');
+    final reps = TextEditingController(text: exercise.reps);
+    final rest = TextEditingController(text: '${exercise.restSeconds}');
+    final weight = TextEditingController(
+      text: exercise.targetWeight?.toString() ?? '',
+    );
+    final formKey = GlobalKey<FormState>();
+    try {
+      final saved = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('Edit ${exercise.exerciseName}'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: sets,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Sets'),
+                    validator: (value) {
+                      final parsed = int.tryParse(value?.trim() ?? '');
+                      return parsed == null || parsed < 1
+                          ? 'Enter at least 1 set.'
+                          : null;
+                    },
+                  ),
+                  TextField(
+                    controller: reps,
+                    decoration: const InputDecoration(labelText: 'Reps'),
+                  ),
+                  TextFormField(
+                    controller: rest,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Rest (seconds)',
+                    ),
+                    validator: (value) {
+                      final parsed = int.tryParse(value?.trim() ?? '');
+                      return parsed == null || parsed < 0
+                          ? 'Enter 0 or more seconds.'
+                          : null;
+                    },
+                  ),
+                  TextFormField(
+                    controller: weight,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Target weight (kg)',
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) return null;
+                      final parsed = double.tryParse(value.trim());
+                      return parsed == null || parsed < 0
+                          ? 'Enter a valid weight.'
+                          : null;
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState?.validate() ?? false) {
+                  Navigator.pop(dialogContext, true);
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || saved != true) return;
+      final parsedSets = int.tryParse(sets.text.trim());
+      final parsedRest = int.tryParse(rest.text.trim());
+      final parsedWeight = weight.text.trim().isEmpty
+          ? null
+          : double.tryParse(weight.text.trim());
+      setState(() {
+        exercise.sets = parsedSets!;
+        exercise.reps = reps.text.trim();
+        exercise.restSeconds = parsedRest!;
+        exercise.targetWeight = parsedWeight;
+      });
+    } finally {
+      sets.dispose();
+      reps.dispose();
+      rest.dispose();
+      weight.dispose();
+    }
+  }
+
   Future<void> _editOrRemoveExercise(_WorkoutDayDraft day, int index) async {
     final exercise = day.exercises[index];
-    if (exercise.groupKey == null) {
-      _removeExercise(day, index);
-      return;
-    }
     final action = await showModalBottomSheet<String>(
       context: context,
       builder: (context) => SafeArea(
         child: Wrap(
           children: [
-            ListTile(
-              leading: const Icon(Icons.link_off_rounded),
-              title: Text('Ungroup ${exercise.groupKey}'),
-              subtitle: const Text(
-                'Keeps every exercise and removes the structural group.',
+            if (index > 0)
+              ListTile(
+                leading: const Icon(Icons.arrow_upward_rounded),
+                title: const Text('Move up'),
+                onTap: () => Navigator.pop(context, 'up'),
               ),
-              onTap: () => Navigator.pop(context, 'ungroup'),
-            ),
+            if (index < day.exercises.length - 1)
+              ListTile(
+                leading: const Icon(Icons.arrow_downward_rounded),
+                title: const Text('Move down'),
+                onTap: () => Navigator.pop(context, 'down'),
+              ),
+            if (exercise.groupKey != null)
+              ListTile(
+                leading: const Icon(Icons.link_off_rounded),
+                title: Text('Ungroup ${exercise.groupKey}'),
+                subtitle: const Text(
+                  'Keeps every exercise and removes the structural group.',
+                ),
+                onTap: () => Navigator.pop(context, 'ungroup'),
+              ),
             ListTile(
               leading: const Icon(Icons.delete_outline_rounded),
               title: const Text('Remove exercise'),
@@ -7437,6 +7571,10 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       ),
     );
     if (!mounted || action == null) return;
+    if (action == 'up' || action == 'down') {
+      _moveExercise(day, index, action == 'up' ? -1 : 1);
+      return;
+    }
     if (action == 'remove') {
       _removeExercise(day, index);
       return;
@@ -8680,15 +8818,15 @@ class _WorkoutExerciseDraft {
   final String bodyPartLabel;
   final String targetMuscle;
   final List<String> secondaryMuscles;
-  final int sets;
+  int sets;
   final String trackingMode;
-  final String reps;
+  String reps;
   final int? plannedDurationSeconds;
   final double? plannedDistanceMeters;
   final double? plannedSpeedKph;
   final int? plannedPaceSecondsPerKm;
-  final double? targetWeight;
-  final int restSeconds;
+  double? targetWeight;
+  int restSeconds;
   final bool isPerSide;
   final bool isBodyweight;
   String? groupKey;

@@ -25,6 +25,74 @@ class WorkoutScopeTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_member_builder_rejects_exercises_outside_the_visible_catalog_and_preserves_existing_rows(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch] = $this->makeGymContext();
+        [$otherGym, $otherBranch] = $this->makeGymContext();
+        $trainer = $this->makeTrainer($gym, $branch);
+        $member = $this->makeMember($gym, $branch, $trainer->id);
+        $available = Exercise::query()->create([
+            'gym_id' => $gym->id, 'branch_id' => $branch->id,
+            'created_by_user_id' => $trainer->id, 'name' => 'Available Squat',
+            'muscle_group' => 'legs', 'is_global' => false,
+            'status' => 'approved', 'is_active' => true,
+        ]);
+        $foreign = Exercise::query()->create([
+            'gym_id' => $otherGym->id, 'branch_id' => $otherBranch->id,
+            'created_by_user_id' => $trainer->id, 'name' => 'Foreign Squat',
+            'muscle_group' => 'legs', 'is_global' => false,
+            'status' => 'approved', 'is_active' => true,
+        ]);
+        $payload = fn (int $exerciseId): array => [
+            'name' => 'My plan', 'duration_weeks' => 4,
+            'days' => [['day_number' => 1, 'exercises' => [
+                ['exercise_id' => $exerciseId, 'sets' => 3],
+            ]]],
+        ];
+
+        $this->actingAs($member, 'sanctum')->postJson('/api/member/workout-plans', $payload($foreign->id))
+            ->assertUnprocessable()->assertJsonValidationErrors('days.0.exercises.0.exercise_id');
+        $planId = $this->actingAs($member, 'sanctum')->postJson('/api/member/workout-plans', $payload($available->id))
+            ->assertCreated()->json('data.id');
+        $available->update(['is_active' => false]);
+        $this->actingAs($member, 'sanctum')->putJson('/api/member/workout-plans/'.$planId, $payload($available->id))
+            ->assertOk();
+    }
+
+    public function test_trainer_builder_accepts_own_pending_exercise_but_rejects_foreign_pending_exercise(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch] = $this->makeGymContext();
+        $trainer = $this->makeTrainer($gym, $branch);
+        $otherTrainer = $this->makeTrainer($gym, $branch, 'pending-owner@example.com');
+        $member = $this->makeMember($gym, $branch, $trainer->id);
+        $own = Exercise::query()->create([
+            'gym_id' => $gym->id, 'branch_id' => $branch->id,
+            'created_by_user_id' => $trainer->id, 'name' => 'Own Pending Press',
+            'muscle_group' => 'chest', 'is_global' => false,
+            'status' => 'pending', 'is_active' => true,
+        ]);
+        $foreign = Exercise::query()->create([
+            'gym_id' => $gym->id, 'branch_id' => $branch->id,
+            'created_by_user_id' => $otherTrainer->id, 'name' => 'Foreign Pending Press',
+            'muscle_group' => 'chest', 'is_global' => false,
+            'status' => 'pending', 'is_active' => true,
+        ]);
+        $payload = fn (int $exerciseId): array => [
+            'gym_id' => $gym->id, 'branch_id' => $branch->id,
+            'member_ids' => [$member->id], 'name' => 'Pending test', 'duration_weeks' => 4,
+            'days' => [['day_number' => 1, 'exercises' => [
+                ['exercise_id' => $exerciseId, 'sets' => 3],
+            ]]],
+        ];
+
+        $this->actingAs($trainer, 'sanctum')->postJson('/api/trainer/workout-plans', $payload($foreign->id))
+            ->assertUnprocessable()->assertJsonValidationErrors('days.0.exercises.0.exercise_id');
+        $this->actingAs($trainer, 'sanctum')->postJson('/api/trainer/workout-plans', $payload($own->id))
+            ->assertCreated();
+    }
+
     public function test_member_sees_trainer_assignment_from_current_profile_when_an_older_profile_exists(): void
     {
         $this->seed(PermissionSeeder::class);

@@ -3,12 +3,18 @@
 namespace App\Http\Requests\Workout;
 
 use App\Http\Requests\Workout\Concerns\HasWorkoutDayRules;
+use App\Http\Requests\Workout\Concerns\ValidatesSelectableExercises;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StoreWorkoutPlanRequest extends FormRequest
 {
-    use HasWorkoutDayRules;
+    use HasWorkoutDayRules, ValidatesSelectableExercises;
+
+    protected function selectableExerciseAudience(): string
+    {
+        return 'trainer';
+    }
 
     public function authorize(): bool
     {

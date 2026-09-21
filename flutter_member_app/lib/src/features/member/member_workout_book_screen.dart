@@ -97,6 +97,9 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   final _planDeloadAfterController = TextEditingController(text: '3');
   final _planDeloadPercentController = TextEditingController(text: '10');
   final _exerciseSearchController = TextEditingController();
+  final _exercisePickerTextController = TextEditingController();
+  final _exercisePickerMenuController = MenuController();
+  final Map<int, Map<String, dynamic>> _savedExerciseMetadata = {};
   Timer? _exerciseSearchDebounce;
   final _setsController = TextEditingController(text: '4');
   final _repsController = TextEditingController(text: '10');
@@ -169,6 +172,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     _planDeloadAfterController.dispose();
     _planDeloadPercentController.dispose();
     _exerciseSearchController.dispose();
+    _exercisePickerTextController.dispose();
     _exerciseSearchDebounce?.cancel();
     _setsController.dispose();
     _repsController.dispose();
@@ -249,19 +253,8 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
           exercise.bodyPart ??= _exerciseGroups.isEmpty
               ? null
               : _exerciseGroups.keys.first;
-          exercise.exerciseId ??=
-              (_exercisesForBodyPart(exercise.bodyPart).isEmpty
-              ? null
-              : (_exercisesForBodyPart(exercise.bodyPart).first['id'] as num?)
-                    ?.toInt());
           exercise.repPreset = _repPresetFor(exercise.repsController.text);
         }
-      }
-      if (_selectedBuilderExerciseId == null ||
-          _exerciseById(_selectedBuilderExerciseId) == null) {
-        _selectedBuilderExerciseId = _exercises.isEmpty
-            ? null
-            : (_exercises.first['id'] as num?)?.toInt();
       }
     } catch (exception) {
       _error = _friendlyError(exception);
@@ -313,20 +306,27 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
 
   Future<void> _loadMoreExercises() async {
     if (_loadingExercises || !_exercisePage.hasMore) return;
+    final generation = _exerciseSearchGeneration;
+    final page = _exercisePage.nextPage;
+    final query = _exerciseQuery();
     setState(() => _loadingExercises = true);
     try {
       final response = await widget.repository.fetchWorkoutExercises(
-        queryParameters: {..._exerciseQuery(), 'page': _exercisePage.nextPage},
+        queryParameters: {...query, 'page': page},
       );
-      if (!mounted) return;
+      if (!mounted || generation != _exerciseSearchGeneration) return;
       setState(() {
         _exercises = mergeApiPageItems(_exercises, apiPageItems(response));
         _exercisePage = ApiPagination.fromResponse(response);
       });
     } catch (exception) {
-      _showLoadMoreError(exception);
+      if (generation == _exerciseSearchGeneration) {
+        _showLoadMoreError(exception);
+      }
     } finally {
-      if (mounted) setState(() => _loadingExercises = false);
+      if (mounted && generation == _exerciseSearchGeneration) {
+        setState(() => _loadingExercises = false);
+      }
     }
   }
 
@@ -390,11 +390,9 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       setState(() {
         _exercises = apiPageItems(response);
         _exercisePage = ApiPagination.fromResponse(response);
-        if (_selectedBuilderExerciseId != null &&
-            _exerciseById(_selectedBuilderExerciseId) == null) {
-          _selectedBuilderExerciseId = _exercises.isEmpty
-              ? null
-              : (_exercises.first['id'] as num?)?.toInt();
+        if (_exerciseById(_selectedBuilderExerciseId) == null) {
+          _selectedBuilderExerciseId = null;
+          _exercisePickerTextController.clear();
         }
       });
     } catch (exception) {
@@ -780,7 +778,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
         return exercise;
       }
     }
-    return null;
+    return _savedExerciseMetadata[id];
   }
 
   String _exercisePickerLabelForSelection() {
@@ -1535,85 +1533,55 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                       : Icons.search_off_rounded,
                 )
               else ...[
-                DropdownButtonFormField<int>(
-                  key: ValueKey(
-                    'member-builder-exercise-$_selectedBuilderExerciseId-$query-${_exercises.length}',
-                  ),
-                  initialValue:
-                      filteredExercises.any(
-                        (exercise) =>
-                            (exercise['id'] as num?)?.toInt() ==
-                            _selectedBuilderExerciseId,
-                      )
-                      ? _selectedBuilderExerciseId
-                      : null,
-                  isExpanded: true,
-                  selectedItemBuilder: (context) => [
+                DropdownMenu<int>(
+                  key: const ValueKey('member-builder-exercise-picker'),
+                  controller: _exercisePickerTextController,
+                  menuController: _exercisePickerMenuController,
+                  initialSelection: _selectedBuilderExerciseId,
+                  expandedInsets: EdgeInsets.zero,
+                  selectOnly: true,
+                  requestFocusOnTap: false,
+                  enableFilter: false,
+                  enableSearch: false,
+                  closeBehavior: DropdownMenuCloseBehavior.none,
+                  dropdownMenuEntries: [
                     ...filteredExercises
                         .where((exercise) => exercise['id'] is num)
                         .map(
-                          (exercise) => Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              '${_exerciseDisplayName(exercise)} • ${_bodyPartLabel(_bodyPartKeyForExercise(exercise))}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                    if (_exercisePage.hasMore)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          _exercisePickerLabelForSelection(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
-                  items: [
-                    ...filteredExercises
-                        .where((exercise) => exercise['id'] is num)
-                        .map(
-                          (exercise) => DropdownMenuItem<int>(
+                          (exercise) => DropdownMenuEntry<int>(
                             value: (exercise['id'] as num).toInt(),
-                            child: Text(
+                            label:
+                                '${_exerciseDisplayName(exercise)} • ${_bodyPartLabel(_bodyPartKeyForExercise(exercise))}',
+                            labelWidget: Text(
                               '${_exerciseDisplayName(exercise)} • ${_bodyPartLabel(_bodyPartKeyForExercise(exercise))}',
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ),
                     if (_exercisePage.hasMore)
-                      DropdownMenuItem<int>(
+                      DropdownMenuEntry<int>(
                         value: _loadMoreExercisePickerValue,
+                        label: _loadingExercises
+                            ? 'Loading exercises...'
+                            : 'Load more exercise results',
                         enabled: !_loadingExercises,
-                        child: Row(
-                          children: [
-                            if (_loadingExercises)
-                              const SizedBox.square(
+                        leadingIcon: _loadingExercises
+                            ? const SizedBox.square(
                                 dimension: 16,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
                                 ),
                               )
-                            else
-                              const Icon(Icons.expand_more_rounded, size: 20),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                _loadingExercises
-                                    ? 'Loading exercises...'
-                                    : 'Load more exercise results',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
+                            : const Icon(Icons.expand_more_rounded, size: 20),
                       ),
                   ],
-                  onChanged: (value) {
+                  onSelected: (value) {
                     if (value == _loadMoreExercisePickerValue) {
+                      _exercisePickerTextController.text =
+                          _exercisePickerLabelForSelection() ==
+                              'Choose an exercise'
+                          ? ''
+                          : _exercisePickerLabelForSelection();
                       unawaited(_loadMoreExercises());
                       return;
                     }
@@ -1636,8 +1604,9 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                         _exerciseProgressionPolicy = 'off';
                       }
                     });
+                    _exercisePickerMenuController.close();
                   },
-                  decoration:
+                  decorationBuilder: (context, controller) =>
                       _memberWorkoutInputDecoration(
                         'Exercise picker',
                         icon: Icons.fitness_center_rounded,
@@ -1874,9 +1843,6 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     final draft = _PlanExerciseDraft();
     if (_exerciseGroups.isNotEmpty) {
       draft.bodyPart = _exerciseGroups.keys.first;
-      final options = _exercisesForBodyPart(draft.bodyPart);
-      final firstExercise = options.isEmpty ? null : options.first;
-      draft.exerciseId = (firstExercise?['id'] as num?)?.toInt();
     }
     return draft;
   }
@@ -2441,6 +2407,12 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
         final exerciseMeta = Map<String, dynamic>.from(
           exercise['exercise'] as Map? ?? const {},
         );
+        if (exerciseDraft.exerciseId != null && exerciseMeta.isNotEmpty) {
+          _savedExerciseMetadata[exerciseDraft.exerciseId!] = {
+            ...exerciseMeta,
+            'id': exerciseDraft.exerciseId,
+          };
+        }
         exerciseDraft.bodyPart = exerciseMeta.isEmpty
             ? null
             : _bodyPartKeyForExercise(exerciseMeta);
@@ -3419,9 +3391,30 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                               (_exerciseGroups.isEmpty
                                   ? null
                                   : _exerciseGroups.keys.first);
-                          final currentExerciseOptions = _exercisesForBodyPart(
-                            currentBodyPart,
+                          final bodyPartOptions = [
+                            ..._exerciseGroups.keys,
+                            if (currentBodyPart != null &&
+                                !_exerciseGroups.containsKey(currentBodyPart))
+                              currentBodyPart,
+                          ];
+                          final savedExercise = _exerciseById(
+                            exerciseDraft.exerciseId,
                           );
+                          final currentExerciseOptions = [
+                            ..._exercisesForBodyPart(currentBodyPart),
+                            if (exerciseDraft.exerciseId != null &&
+                                !_exercisesForBodyPart(currentBodyPart).any(
+                                  (item) =>
+                                      (item['id'] as num?)?.toInt() ==
+                                      exerciseDraft.exerciseId,
+                                ))
+                              savedExercise ??
+                                  {
+                                    'id': exerciseDraft.exerciseId,
+                                    'name':
+                                        'Saved exercise #${exerciseDraft.exerciseId}',
+                                  },
+                          ];
                           final selectedExerciseMeta = _exerciseById(
                             exerciseDraft.exerciseId,
                           );
@@ -3457,7 +3450,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                                             decoration: const InputDecoration(
                                               labelText: 'Body part',
                                             ),
-                                            items: _exerciseGroups.keys
+                                            items: bodyPartOptions
                                                 .map(
                                                   (group) =>
                                                       DropdownMenuItem<String>(
@@ -3471,16 +3464,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                                             onChanged: (value) {
                                               setState(() {
                                                 exerciseDraft.bodyPart = value;
-                                                final nextOptions =
-                                                    _exercisesForBodyPart(
-                                                      value,
-                                                    );
-                                                exerciseDraft.exerciseId =
-                                                    nextOptions.isEmpty
-                                                    ? null
-                                                    : (nextOptions.first['id']
-                                                              as num?)
-                                                          ?.toInt();
+                                                exerciseDraft.exerciseId = null;
                                               });
                                             },
                                           );
