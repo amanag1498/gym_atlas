@@ -16982,6 +16982,13 @@ class _PlatformUserDetailSheet extends StatelessWidget {
     final permissions = (user['permissions'] as List<dynamic>? ?? const [])
         .map((entry) => entry.toString())
         .toList();
+    final consents = (user['consents'] as List<dynamic>? ?? const [])
+        .map((entry) => _recordMap(entry))
+        .toList();
+    final whatsappConsents =
+        (user['whatsapp_consents'] as List<dynamic>? ?? const [])
+            .map((entry) => _recordMap(entry))
+            .toList();
     final gyms = (user['gyms'] as List<dynamic>? ?? const [])
         .map((entry) => _recordMap(entry))
         .toList();
@@ -17240,6 +17247,49 @@ class _PlatformUserDetailSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
+            if (isMember)
+              PremiumCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Consent & app access',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Review what the member has enabled. The member controls these choices from the app.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 12),
+                    if (consents.isEmpty && whatsappConsents.isEmpty)
+                      const Text('No consent choices recorded yet.')
+                    else ...[
+                      ...consents.map(
+                        (consent) => _InfoRow(
+                          label:
+                              consent['title']?.toString() ??
+                              consent['purpose']?.toString() ??
+                              'Consent',
+                          value: consent['granted'] == true
+                              ? 'Enabled'
+                              : 'Not enabled',
+                        ),
+                      ),
+                      ...whatsappConsents.map(
+                        (consent) => _InfoRow(
+                          label:
+                              'WhatsApp ${consent['purpose']?.toString() ?? 'choice'}',
+                          value: consent['granted'] == true
+                              ? 'Enabled'
+                              : 'Not enabled',
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            if (isMember) const SizedBox(height: 16),
             PremiumCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

@@ -95,6 +95,11 @@ class User extends Authenticatable
         return $this->hasMany(ConsentRecord::class);
     }
 
+    public function whatsappConsents(): HasMany
+    {
+        return $this->hasMany(WhatsAppConsent::class);
+    }
+
     public function managedTrainerProfile(): HasOne
     {
         return $this->hasOne(TrainerProfile::class);

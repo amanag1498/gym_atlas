@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\RoleName;
 use App\Models\Branch;
+use App\Models\ConsentRecord;
 use App\Models\Gym;
 use App\Models\MemberEmailInvitation;
 use App\Models\MemberGymInvitation;
@@ -13,8 +14,10 @@ use App\Models\MembershipPlan;
 use App\Models\Payment;
 use App\Models\TrainerProfile;
 use App\Models\User;
+use App\Models\WhatsAppConsent;
 use App\Models\WorkoutSession;
 use App\Services\Members\MemberEmailInvitationService;
+use App\Services\Privacy\ConsentService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -600,11 +603,32 @@ class MemberManagementFeatureTest extends TestCase
             'started_at' => now()->subHour(),
             'completed_at' => now(),
         ]);
+        ConsentRecord::query()->create([
+            'user_id' => $member->id,
+            'purpose' => 'health_and_fitness_data',
+            'policy_version' => ConsentService::POLICY_VERSION,
+            'source' => 'member_app',
+            'consented_at' => now(),
+        ]);
+        WhatsAppConsent::query()->create([
+            'user_id' => $member->id,
+            'gym_id' => $gym->id,
+            'purpose' => 'utility',
+            'status' => 'granted',
+            'phone_e164' => '+919900001111',
+            'source' => 'member_app',
+            'wording_version' => 'whatsapp-consent-v1',
+            'granted_at' => now(),
+        ]);
 
         $this->loginGymUser($owner);
         $this->get(route('web.gym.members.show', ['gym' => $gym->id, 'member' => $member->id]))
             ->assertOk()
             ->assertSee('Member Detail Monthly')
+            ->assertSee('Consent &amp; App Access', false)
+            ->assertSee('Health and fitness data')
+            ->assertSee('WhatsApp choices for this gym')
+            ->assertSee('Member permissions')
             ->assertSee('Recent Workouts')
             ->assertSee('Day 2 — Pull')
             ->assertSee('Invoice PDF');

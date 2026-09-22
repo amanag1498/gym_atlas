@@ -4,6 +4,7 @@ namespace App\Http\Resources\User;
 
 use App\Http\Resources\Gym\BranchResource;
 use App\Http\Resources\Gym\GymResource;
+use App\Services\Privacy\ConsentService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -32,6 +33,35 @@ class UserResource extends JsonResource
             'trainer_onboarding_step' => (int) ($this->trainer_onboarding_step ?? 1),
             'roles' => $this->getRoleNames()->values()->all(),
             'permissions' => $this->getAllPermissions()->pluck('name')->values()->all(),
+            'consents' => $this->whenLoaded('consentRecords', function (): array {
+                $records = $this->consentRecords
+                    ->sortByDesc('id')
+                    ->unique('purpose')
+                    ->keyBy('purpose');
+
+                return collect(ConsentService::PURPOSES)->map(function (array $definition, string $purpose) use ($records): array {
+                    $record = $records->get($purpose);
+                    $granted = $record !== null && $record->consented_at !== null && $record->withdrawn_at === null;
+
+                    return [
+                        'purpose' => $purpose,
+                        'title' => $definition['title'],
+                        'required' => $definition['required'],
+                        'policy_version' => $record?->policy_version ?? ConsentService::POLICY_VERSION,
+                        'granted' => $granted,
+                        'consented_at' => $granted ? $record->consented_at?->toIso8601String() : null,
+                        'withdrawn_at' => $record?->withdrawn_at?->toIso8601String(),
+                    ];
+                })->values()->all();
+            }),
+            'whatsapp_consents' => $this->whenLoaded('whatsappConsents', fn () => $this->whatsappConsents->map(fn ($consent): array => [
+                'gym_id' => $consent->gym_id,
+                'purpose' => $consent->purpose,
+                'status' => $consent->status,
+                'granted' => $consent->granted_at !== null && $consent->revoked_at === null && $consent->status === 'granted',
+                'granted_at' => $consent->granted_at?->toIso8601String(),
+                'revoked_at' => $consent->revoked_at?->toIso8601String(),
+            ])->values()->all()),
             'gyms' => GymResource::collection($this->whenLoaded('gyms')),
             'branches' => BranchResource::collection($this->whenLoaded('branches')),
             'trainer_profile' => $this->when(

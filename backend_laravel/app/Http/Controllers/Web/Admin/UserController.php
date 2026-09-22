@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Audit\AdminActivityFeedService;
 use App\Services\Audit\AuditLogService;
 use App\Services\Platform\PlatformAuditLogService;
+use App\Services\Privacy\ConsentService;
 use App\Services\Users\ManagedUserService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -24,6 +25,7 @@ class UserController extends Controller
         private readonly AdminActivityFeedService $adminActivityFeedService,
         private readonly PlatformAuditLogService $platformAuditLogService,
         private readonly ManagedUserService $managedUserService,
+        private readonly ConsentService $consentService,
     ) {}
 
     public function index(Request $request): View
@@ -45,6 +47,9 @@ class UserController extends Controller
     {
         $user->load([
             'roles',
+            'permissions',
+            'consentRecords',
+            'whatsappConsents',
             'gyms.currentPlatformSubscription.plan',
             'branches',
             'managedTrainerProfile.gym',
@@ -143,6 +148,8 @@ class UserController extends Controller
             'activityRows' => $activityFeed['rows'],
             'activityLatestLabel' => $activityFeed['latest_label'],
             'hasPhoneColumn' => Schema::hasColumn('users', 'phone'),
+            'consentState' => $this->consentService->state($user),
+            'whatsappConsents' => $user->whatsappConsents,
         ]);
     }
 

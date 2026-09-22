@@ -4,11 +4,14 @@ namespace Tests\Feature\PlatformAdmin;
 
 use App\Enums\RoleName;
 use App\Models\Branch;
+use App\Models\ConsentRecord;
 use App\Models\Gym;
 use App\Models\GymStaff;
 use App\Models\MemberProfile;
 use App\Models\TrainerProfile;
 use App\Models\User;
+use App\Models\WhatsAppConsent;
+use App\Services\Privacy\ConsentService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
@@ -107,6 +110,23 @@ class PlatformUserManagementTest extends TestCase
             'status' => 'active',
             'is_active' => true,
         ]);
+        ConsentRecord::query()->create([
+            'user_id' => $member->id,
+            'purpose' => 'core_account',
+            'policy_version' => ConsentService::POLICY_VERSION,
+            'source' => 'member_app',
+            'consented_at' => now(),
+        ]);
+        WhatsAppConsent::query()->create([
+            'user_id' => $member->id,
+            'gym_id' => $gym->id,
+            'purpose' => 'utility',
+            'status' => 'granted',
+            'phone_e164' => '+919988776655',
+            'granted_at' => now(),
+            'source' => 'member_app',
+            'wording_version' => 'whatsapp-consent-v1',
+        ]);
 
         $secondGym = Gym::query()->create([
             'owner_user_id' => $gymOwner->id,
@@ -193,6 +213,13 @@ class PlatformUserManagementTest extends TestCase
             ->assertJsonPath('data.member_profiles.0.gym_name', 'Owner Gym')
             ->assertJsonPath('data.member_profiles.0.fitness_goal', 'Build strength')
             ->assertJsonPath('data.member_profiles.1.gym_id', $secondGym->id);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/platform-admin/users/'.$member->id)
+            ->assertJsonPath('data.consents.0.purpose', 'core_account')
+            ->assertJsonPath('data.consents.0.granted', true)
+            ->assertJsonPath('data.whatsapp_consents.0.gym_id', $gym->id)
+            ->assertJsonPath('data.whatsapp_consents.0.granted', true);
     }
 
     public function test_platform_admin_can_activate_deactivate_users_but_not_self(): void

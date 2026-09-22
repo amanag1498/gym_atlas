@@ -134,6 +134,47 @@
                 <x-premium-card class="p-6">
                     <div class="flex flex-wrap items-center justify-between gap-3">
                         <div>
+                            <h3 class="panel-section-title">Consent &amp; App Access</h3>
+                            <p class="panel-section-copy">Review what the member has enabled. The member controls these choices from the app.</p>
+                        </div>
+                        <x-status-badge :label="($consentState['policy_version'] ?? 'Current policy')" tone="neutral" />
+                    </div>
+                    <div class="mt-5 grid gap-3 md:grid-cols-2">
+                        @foreach (($consentState['items'] ?? []) as $consent)
+                            <div class="panel-card-muted flex items-center justify-between gap-4 p-4">
+                                <div>
+                                    <p class="font-semibold text-slate-950 dark:text-white">{{ $consent['title'] }}</p>
+                                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $consent['required'] ? 'Required for the account' : 'Optional feature' }}</p>
+                                </div>
+                                <x-status-badge :label="$consent['granted'] ? 'Enabled' : 'Not enabled'" :tone="$consent['granted'] ? 'success' : 'warning'" />
+                            </div>
+                        @endforeach
+                    </div>
+                    @if ($whatsappConsents->isNotEmpty())
+                        <div class="mt-5 border-t border-slate-200 pt-4 dark:border-slate-800">
+                            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">WhatsApp choices for this gym</p>
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                @foreach ($whatsappConsents as $whatsappConsent)
+                                    <x-status-badge :label="str($whatsappConsent->purpose)->replace('_', ' ')->title().' · '.($whatsappConsent->status === 'granted' ? 'Enabled' : 'Not enabled')" :tone="$whatsappConsent->status === 'granted' ? 'success' : 'warning'" />
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+                    <div class="mt-5 border-t border-slate-200 pt-4 dark:border-slate-800">
+                        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Member permissions</p>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            @forelse ($member->getAllPermissions()->pluck('name') as $permission)
+                                <x-status-badge :label="str($permission)->replace('_', ' ')->title()" tone="info" />
+                            @empty
+                                <span class="text-sm text-slate-500 dark:text-slate-400">No direct permissions; access comes from the member role.</span>
+                            @endforelse
+                        </div>
+                    </div>
+                </x-premium-card>
+
+                <x-premium-card class="p-6">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
                             <h3 class="panel-section-title">Membership Summary</h3>
                             <p class="panel-section-copy">Current plan first, followed by only the most recent membership records.</p>
                         </div>

@@ -53,6 +53,8 @@ class UserController extends Controller
         $user->load([
             'roles',
             'permissions',
+            'consentRecords',
+            'whatsappConsents',
             'gyms',
             'branches',
             'managedTrainerProfile.gym',
