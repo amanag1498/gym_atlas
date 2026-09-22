@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/models/session_models.dart';
@@ -78,7 +79,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
         session.user?.activeRole ?? '',
       );
     } catch (exception) {
-      _error = exception.toString();
+      _error = userFacingError(exception);
     }
     if (mounted) {
       setState(() => _loading = false);
@@ -695,7 +696,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                   icon: Icons.lock_outline_rounded,
                 )
               : ErrorState(
-                  message: exception.toString(),
+                  message: userFacingError(exception),
                   onRetry: () {
                     Navigator.of(context).pop();
                     _openMemberDetail(item);
@@ -1055,7 +1056,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
         _state.lastPage = response.lastPage;
       });
     } catch (exception) {
-      setState(() => _state.error = exception.toString());
+      setState(() => _state.error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _state.loading = false);
@@ -1089,7 +1090,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
       );
       trainers = response.items;
     } catch (exception) {
-      loadError = exception.toString();
+      loadError = userFacingError(exception);
     }
 
     if (!mounted) {
@@ -1190,7 +1191,9 @@ class __CollectionSectionState extends State<_CollectionSection> {
                         } catch (exception) {
                           if (mounted) {
                             messenger.showSnackBar(
-                              SnackBar(content: Text(exception.toString())),
+                              SnackBar(
+                                content: Text(userFacingError(exception)),
+                              ),
                             );
                             setModalState(() => busy = false);
                           }
@@ -1325,7 +1328,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
       );
       members = response.items;
     } catch (exception) {
-      loadError = exception.toString();
+      loadError = userFacingError(exception);
     }
 
     if (!mounted) {
@@ -1448,7 +1451,9 @@ class __CollectionSectionState extends State<_CollectionSection> {
                         } catch (exception) {
                           if (mounted) {
                             messenger.showSnackBar(
-                              SnackBar(content: Text(exception.toString())),
+                              SnackBar(
+                                content: Text(userFacingError(exception)),
+                              ),
                             );
                             setModalState(() => busy = false);
                           }
@@ -1486,7 +1491,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
             return SizedBox(
               height: 360,
               child: ErrorState(
-                message: snapshot.error.toString(),
+                message: userFacingError(snapshot.error!),
                 onRetry: () {
                   Navigator.of(context).pop();
                   _showTrainerPerformanceSheet(item);
@@ -1569,7 +1574,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     }
   }
 
@@ -1614,7 +1619,9 @@ class __CollectionSectionState extends State<_CollectionSection> {
       if (!mounted) {
         return;
       }
-      messenger.showSnackBar(SnackBar(content: Text(exception.toString())));
+      messenger.showSnackBar(
+        SnackBar(content: Text(userFacingError(exception))),
+      );
     }
   }
 
@@ -1726,7 +1733,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
             return SizedBox(
               height: 360,
               child: ErrorState(
-                message: snapshot.error.toString(),
+                message: userFacingError(snapshot.error!),
                 onRetry: () {
                   Navigator.of(context).pop();
                   _showMembershipDetail(item);
@@ -1810,7 +1817,9 @@ class __CollectionSectionState extends State<_CollectionSection> {
       if (!mounted) {
         return;
       }
-      messenger.showSnackBar(SnackBar(content: Text(exception.toString())));
+      messenger.showSnackBar(
+        SnackBar(content: Text(userFacingError(exception))),
+      );
     }
   }
 
@@ -1894,7 +1903,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
                   } catch (exception) {
                     if (mounted) {
                       messenger.showSnackBar(
-                        SnackBar(content: Text(exception.toString())),
+                        SnackBar(content: Text(userFacingError(exception))),
                       );
                       setModalState(() => busy = false);
                     }
@@ -1978,7 +1987,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
                   } catch (exception) {
                     if (mounted) {
                       messenger.showSnackBar(
-                        SnackBar(content: Text(exception.toString())),
+                        SnackBar(content: Text(userFacingError(exception))),
                       );
                       setModalState(() => busy = false);
                     }
@@ -2014,7 +2023,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
             return SizedBox(
               height: 360,
               child: ErrorState(
-                message: snapshot.error.toString(),
+                message: userFacingError(snapshot.error!),
                 onRetry: () {
                   Navigator.of(context).pop();
                   _showPlatformGymDetail(item);
@@ -2178,7 +2187,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     }
   }
 
@@ -2204,7 +2213,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
             return SizedBox(
               height: 360,
               child: ErrorState(
-                message: snapshot.error.toString(),
+                message: userFacingError(snapshot.error!),
                 onRetry: () {
                   Navigator.of(context).pop();
                   _showPlatformUserDetail(item);
@@ -2247,7 +2256,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
             return SizedBox(
               height: 360,
               child: ErrorState(
-                message: snapshot.error.toString(),
+                message: userFacingError(snapshot.error!),
                 onRetry: () {
                   Navigator.of(context).pop();
                   _showPlatformGymOwnerDetail(item);
@@ -2310,7 +2319,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     }
   }
 
@@ -2356,7 +2365,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     }
   }
 
@@ -2382,7 +2391,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
             return SizedBox(
               height: 320,
               child: ErrorState(
-                message: snapshot.error.toString(),
+                message: userFacingError(snapshot.error!),
                 onRetry: () {
                   Navigator.of(context).pop();
                   _showPlatformFacilityDetail(item);
@@ -2452,7 +2461,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     }
   }
 
@@ -2492,7 +2501,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     }
   }
 
@@ -2518,7 +2527,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
             return SizedBox(
               height: 320,
               child: ErrorState(
-                message: snapshot.error.toString(),
+                message: userFacingError(snapshot.error!),
                 onRetry: () {
                   Navigator.of(context).pop();
                   _showBranchDetail(item);
@@ -2586,7 +2595,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     }
   }
 
@@ -2626,7 +2635,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     }
   }
 
@@ -2652,7 +2661,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
             return SizedBox(
               height: 360,
               child: ErrorState(
-                message: snapshot.error.toString(),
+                message: userFacingError(snapshot.error!),
                 onRetry: () {
                   Navigator.of(context).pop();
                   _showStaffDetail(item);
@@ -2722,7 +2731,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     }
   }
 
@@ -2761,7 +2770,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     }
   }
 
@@ -3693,7 +3702,7 @@ class _AdminFormSheetState extends State<_AdminFormSheet> {
       if (!mounted) {
         return;
       }
-      setState(() => _submitError = exception.toString());
+      setState(() => _submitError = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _optionsLoading = false);
@@ -3793,7 +3802,7 @@ class _AdminFormSheetState extends State<_AdminFormSheet> {
       if (!mounted) {
         return;
       }
-      setState(() => _submitError = exception.toString());
+      setState(() => _submitError = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _optionsLoading = false);
@@ -3867,7 +3876,7 @@ class _AdminFormSheetState extends State<_AdminFormSheet> {
       if (!mounted) {
         return;
       }
-      setState(() => _submitError = exception.toString());
+      setState(() => _submitError = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _optionsLoading = false);
@@ -3955,7 +3964,7 @@ class _AdminFormSheetState extends State<_AdminFormSheet> {
       if (!mounted) {
         return;
       }
-      setState(() => _submitError = exception.toString());
+      setState(() => _submitError = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _optionsLoading = false);
@@ -4039,7 +4048,7 @@ class _AdminFormSheetState extends State<_AdminFormSheet> {
       if (!mounted) {
         return;
       }
-      setState(() => _submitError = exception.toString());
+      setState(() => _submitError = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _optionsLoading = false);
@@ -4090,7 +4099,7 @@ class _AdminFormSheetState extends State<_AdminFormSheet> {
       if (!mounted) {
         return;
       }
-      setState(() => _submitError = exception.toString());
+      setState(() => _submitError = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _optionsLoading = false);
@@ -4165,7 +4174,7 @@ class _AdminFormSheetState extends State<_AdminFormSheet> {
       if (!mounted) {
         return;
       }
-      setState(() => _submitError = exception.toString());
+      setState(() => _submitError = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _optionsLoading = false);
@@ -4232,7 +4241,7 @@ class _AdminFormSheetState extends State<_AdminFormSheet> {
       if (!mounted) {
         return;
       }
-      setState(() => _submitError = exception.toString());
+      setState(() => _submitError = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _optionsLoading = false);
@@ -4280,7 +4289,7 @@ class _AdminFormSheetState extends State<_AdminFormSheet> {
       if (!mounted) {
         return;
       }
-      setState(() => _submitError = exception.toString());
+      setState(() => _submitError = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _detailLoading = false);
@@ -4757,7 +4766,7 @@ class _AdminFormSheetState extends State<_AdminFormSheet> {
                   child: SizedBox(
                     height: 360,
                     child: ErrorState(
-                      message: snapshot.error.toString(),
+                      message: userFacingError(snapshot.error!),
                       onRetry: () => Navigator.of(context).pop(),
                     ),
                   ),
@@ -4772,10 +4781,10 @@ class _AdminFormSheetState extends State<_AdminFormSheet> {
       }
     } catch (exception) {
       if (mounted) {
-        setState(() => _submitError = exception.toString());
+        setState(() => _submitError = userFacingError(exception));
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     } finally {
       if (mounted) {
@@ -8678,7 +8687,7 @@ class _PaymentsAndDuesSectionState extends State<_PaymentsAndDuesSection> {
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -9103,7 +9112,7 @@ class _BillingCollectPaymentTabState extends State<_BillingCollectPaymentTab> {
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -9143,7 +9152,7 @@ class _BillingCollectPaymentTabState extends State<_BillingCollectPaymentTab> {
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     }
   }
 
@@ -9200,7 +9209,7 @@ class _BillingCollectPaymentTabState extends State<_BillingCollectPaymentTab> {
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -9873,7 +9882,7 @@ class _AttendanceWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _loadingOptions = false);
@@ -9936,7 +9945,7 @@ class _AttendanceWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() {
@@ -9988,7 +9997,7 @@ class _AttendanceWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _loadingHistory = false);
@@ -10058,7 +10067,7 @@ class _AttendanceWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -10120,7 +10129,7 @@ class _AttendanceWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -10186,7 +10195,7 @@ class _AttendanceWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -11014,7 +11023,7 @@ class _TrialRequestsWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -11058,7 +11067,7 @@ class _TrialRequestsWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -11106,7 +11115,9 @@ class _TrialRequestsWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      messenger.showSnackBar(SnackBar(content: Text(exception.toString())));
+      messenger.showSnackBar(
+        SnackBar(content: Text(userFacingError(exception))),
+      );
     }
   }
 
@@ -11280,7 +11291,7 @@ class _TrialRequestsWorkspaceSectionState
                   } catch (exception) {
                     if (mounted) {
                       messenger.showSnackBar(
-                        SnackBar(content: Text(exception.toString())),
+                        SnackBar(content: Text(userFacingError(exception))),
                       );
                       setModalState(() => busy = false);
                     }
@@ -11446,7 +11457,7 @@ class _TrialRequestsWorkspaceSectionState
                   } catch (exception) {
                     if (mounted) {
                       messenger.showSnackBar(
-                        SnackBar(content: Text(exception.toString())),
+                        SnackBar(content: Text(userFacingError(exception))),
                       );
                       setModalState(() => busy = false);
                     }
@@ -11487,7 +11498,7 @@ class _TrialRequestsWorkspaceSectionState
             return SizedBox(
               height: 360,
               child: ErrorState(
-                message: snapshot.error.toString(),
+                message: userFacingError(snapshot.error!),
                 onRetry: () {
                   Navigator.of(context).pop();
                   _showTrialDetail(trial);
@@ -11671,7 +11682,7 @@ class _TrialRequestsWorkspaceSectionState
                                       try {
                                         await _fetchTrials(reset: false);
                                       } catch (exception) {
-                                        _error = exception.toString();
+                                        _error = userFacingError(exception);
                                       }
                                       if (mounted) {
                                         setState(() => _loading = false);
@@ -12142,7 +12153,7 @@ class _AnnouncementsWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -12182,7 +12193,7 @@ class _AnnouncementsWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -12275,7 +12286,9 @@ class _AnnouncementsWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      messenger.showSnackBar(SnackBar(content: Text(exception.toString())));
+      messenger.showSnackBar(
+        SnackBar(content: Text(userFacingError(exception))),
+      );
     } finally {
       if (mounted) {
         setState(() => _sending = false);
@@ -12829,7 +12842,7 @@ class _NotificationsWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -12876,7 +12889,9 @@ class _NotificationsWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      messenger.showSnackBar(SnackBar(content: Text(exception.toString())));
+      messenger.showSnackBar(
+        SnackBar(content: Text(userFacingError(exception))),
+      );
     }
   }
 
@@ -12904,7 +12919,9 @@ class _NotificationsWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      messenger.showSnackBar(SnackBar(content: Text(exception.toString())));
+      messenger.showSnackBar(
+        SnackBar(content: Text(userFacingError(exception))),
+      );
     } finally {
       if (mounted) {
         setState(() => _markingAll = false);
@@ -13337,7 +13354,7 @@ class _GymReportsWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -13780,7 +13797,7 @@ class _GymSettingsWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -13813,7 +13830,9 @@ class _GymSettingsWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      messenger.showSnackBar(SnackBar(content: Text(exception.toString())));
+      messenger.showSnackBar(
+        SnackBar(content: Text(userFacingError(exception))),
+      );
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -14067,7 +14086,7 @@ class _PlatformSettingsWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -14110,7 +14129,9 @@ class _PlatformSettingsWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      messenger.showSnackBar(SnackBar(content: Text(exception.toString())));
+      messenger.showSnackBar(
+        SnackBar(content: Text(userFacingError(exception))),
+      );
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -14392,7 +14413,7 @@ class _GymAuditLogsWorkspaceSectionState
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -17530,7 +17551,7 @@ class _GymProfileWorkspaceState extends State<_GymProfileWorkspace> {
     try {
       _profile = await widget.repository.fetchGymProfile();
     } catch (exception) {
-      _error = exception.toString();
+      _error = userFacingError(exception);
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -17766,7 +17787,7 @@ class _GymPublicListingWorkspaceState
     try {
       _settings = await widget.repository.fetchGymPublicListingSettings();
     } catch (exception) {
-      _error = exception.toString();
+      _error = userFacingError(exception);
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -18579,7 +18600,7 @@ class _PlatformReportsWorkspaceState extends State<_PlatformReportsWorkspace> {
       if (!mounted) {
         return;
       }
-      setState(() => _error = exception.toString());
+      setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -19485,7 +19506,7 @@ class _MemberDetailAsyncHistorySection extends StatelessWidget {
         if (snapshot.hasError) {
           return PremiumCard(
             child: ErrorState(
-              message: snapshot.error.toString(),
+              message: userFacingError(snapshot.error!),
               onRetry: () {},
             ),
           );
@@ -20133,7 +20154,7 @@ class _WorkoutBookWorkspaceSectionState
       );
       _books = response.items;
     } catch (exception) {
-      _error = exception.toString();
+      _error = userFacingError(exception);
     }
 
     if (mounted) {
@@ -20285,7 +20306,7 @@ class _WorkoutBookWorkspaceSectionState
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     }
   }
 
@@ -20646,7 +20667,7 @@ class _WorkoutBookFormSheetState extends State<_WorkoutBookFormSheet> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       setState(() => _saving = false);
     }
   }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
+import '../../core/user_facing_error.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -277,7 +278,7 @@ class _MemberAssignedTrainerScreenState
         await _loadChat(trainerId);
       }
     } catch (exception) {
-      _error = exception.toString();
+      _error = userFacingError(exception);
     }
 
     if (mounted) {
@@ -356,7 +357,7 @@ class _MemberAssignedTrainerScreenState
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     } finally {
       if (mounted) setState(() => _loadingMoreCoaching = false);
@@ -393,7 +394,7 @@ class _MemberAssignedTrainerScreenState
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     }
   }
@@ -452,7 +453,7 @@ class _MemberAssignedTrainerScreenState
         setState(() => _loading = false);
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     }
   }
@@ -501,7 +502,7 @@ class _MemberAssignedTrainerScreenState
         setState(() => _loading = false);
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     }
   }
@@ -588,7 +589,7 @@ class _MemberAssignedTrainerScreenState
       }
     } catch (exception) {
       if (mounted) {
-        setState(() => _chatError = exception.toString());
+        setState(() => _chatError = userFacingError(exception));
       }
     } finally {
       if (mounted) {
@@ -1508,7 +1509,7 @@ class _MemberTrainerChatThreadScreenState
       widget.repository.markChatRead(widget.trainerId);
     } catch (exception) {
       if (mounted) {
-        setState(() => _error = exception.toString());
+        setState(() => _error = userFacingError(exception));
       }
     } finally {
       if (mounted) {
@@ -1550,7 +1551,7 @@ class _MemberTrainerChatThreadScreenState
       }
     } catch (exception) {
       if (mounted) {
-        setState(() => _error = exception.toString());
+        setState(() => _error = userFacingError(exception));
       }
     } finally {
       if (mounted) {
@@ -1612,7 +1613,7 @@ class _MemberTrainerChatThreadScreenState
     } catch (exception) {
       _upsert({...optimistic, 'pending': false, 'failed': true});
       if (mounted) {
-        setState(() => _error = exception.toString());
+        setState(() => _error = userFacingError(exception));
       }
     } finally {
       if (mounted) {
@@ -1651,7 +1652,7 @@ class _MemberTrainerChatThreadScreenState
       await widget.repository.acceptChatTerms();
       if (mounted) setState(() => _termsAccepted = true);
     } catch (exception) {
-      if (mounted) setState(() => _error = exception.toString());
+      if (mounted) setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) setState(() => _safetyBusy = false);
     }
@@ -1697,7 +1698,7 @@ class _MemberTrainerChatThreadScreenState
         );
       }
     } catch (exception) {
-      if (mounted) setState(() => _error = exception.toString());
+      if (mounted) setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) setState(() => _safetyBusy = false);
     }
@@ -1714,7 +1715,7 @@ class _MemberTrainerChatThreadScreenState
       }
       if (mounted) setState(() => _blockedByMe = !_blockedByMe);
     } catch (exception) {
-      if (mounted) setState(() => _error = exception.toString());
+      if (mounted) setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) setState(() => _safetyBusy = false);
     }

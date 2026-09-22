@@ -1,10 +1,7 @@
 import '../../core/models.dart';
 
 class AuthSessionModel {
-  const AuthSessionModel({
-    required this.token,
-    required this.user,
-  });
+  const AuthSessionModel({required this.token, required this.user});
 
   final String token;
   final MemberUser user;

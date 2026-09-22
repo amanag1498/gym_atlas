@@ -191,58 +191,42 @@ class TrainerApiClient {
 }
 
 class TrainerApiException implements Exception {
-  const TrainerApiException({required this.message, this.statusCode});
+  const TrainerApiException({
+    required this.message,
+    this.statusCode,
+    this.isConnectionError = false,
+  });
 
   factory TrainerApiException.fromDio(DioException error) {
-    final responseBody = error.response?.data;
-    final body = responseBody is Map
-        ? responseBody.map((key, value) => MapEntry(key.toString(), value))
-        : const <String, dynamic>{};
-    final validationMessages = _flattenApiMessages(body['errors']);
-    final responseMessage = body['message']?.toString().trim() ?? '';
-    final dioMessage = error.message?.trim() ?? '';
-
     return TrainerApiException(
-      message: validationMessages.isNotEmpty
-          ? validationMessages.join('\n')
-          : responseMessage.isNotEmpty
-          ? responseMessage
-          : dioMessage.isNotEmpty
-          ? dioMessage
-          : 'Network request failed. Please try again.',
+      message: switch (error.response?.statusCode) {
+        401 => 'Please sign in again to continue.',
+        403 => "You don't have access to this right now.",
+        404 => 'This is no longer available. Please refresh and try again.',
+        422 => 'Please check your details and try again.',
+        429 => 'Too many attempts. Please wait a moment and try again.',
+        _ => switch (error.type) {
+          DioExceptionType.connectionError ||
+          DioExceptionType.connectionTimeout ||
+          DioExceptionType.receiveTimeout ||
+          DioExceptionType.sendTimeout =>
+            'Check your internet connection and try again.',
+          _ => 'Something went wrong. Please try again.',
+        },
+      },
       statusCode: error.response?.statusCode,
+      isConnectionError:
+          error.type == DioExceptionType.connectionError ||
+          error.type == DioExceptionType.connectionTimeout ||
+          error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.sendTimeout,
     );
   }
 
   final String message;
   final int? statusCode;
+  final bool isConnectionError;
 
   @override
   String toString() => message;
-}
-
-List<String> _flattenApiMessages(dynamic value) {
-  final messages = <String>[];
-
-  void collect(dynamic item) {
-    if (item is Map) {
-      for (final nested in item.values) {
-        collect(nested);
-      }
-      return;
-    }
-    if (item is Iterable) {
-      for (final nested in item) {
-        collect(nested);
-      }
-      return;
-    }
-    final message = item?.toString().trim() ?? '';
-    if (message.isNotEmpty && !messages.contains(message)) {
-      messages.add(message);
-    }
-  }
-
-  collect(value);
-  return messages;
 }

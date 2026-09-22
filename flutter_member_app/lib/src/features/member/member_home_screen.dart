@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -341,6 +342,11 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
 
   Future<void> _syncStepsIfNeeded({bool force = false}) async {
     _ensureRepository();
+    if (!context.read<MemberSessionController>().hasConsent(
+      'health_and_fitness_data',
+    )) {
+      return;
+    }
     if (_stepSyncInFlight) {
       return;
     }
@@ -370,6 +376,19 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
 
   Future<void> _handleStepPermissionRequest() async {
     _ensureRepository();
+    final session = context.read<MemberSessionController>();
+    if (!session.hasConsent('health_and_fitness_data')) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Turn on Health and fitness data in Settings > Privacy & consent to use steps.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
     if (mounted) {
       setState(() => _stepSyncLoading = true);
     }
@@ -5540,7 +5559,9 @@ class __WorkoutPageState extends State<_WorkoutPage>
       if (!mounted) {
         return;
       }
-      messenger.showSnackBar(SnackBar(content: Text(exception.toString())));
+      messenger.showSnackBar(
+        SnackBar(content: Text(userFacingError(exception))),
+      );
     } finally {
       if (mounted) {
         setState(() => _startingWorkout = false);
@@ -5616,7 +5637,9 @@ class __WorkoutPageState extends State<_WorkoutPage>
       if (!mounted) {
         return;
       }
-      messenger.showSnackBar(SnackBar(content: Text(exception.toString())));
+      messenger.showSnackBar(
+        SnackBar(content: Text(userFacingError(exception))),
+      );
     } finally {
       if (mounted) {
         setState(() => _completingWorkout = false);
@@ -5840,7 +5863,7 @@ class __WorkoutPageState extends State<_WorkoutPage>
         return;
       }
       setState(() {
-        _exerciseHistoryError[exerciseId] = exception.toString();
+        _exerciseHistoryError[exerciseId] = userFacingError(exception);
       });
     } finally {
       if (mounted) {
@@ -6350,7 +6373,7 @@ class __WorkoutPageState extends State<_WorkoutPage>
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     } finally {
       if (mounted) {
         setState(() => _customExerciseLibraryLoading = false);
@@ -6645,7 +6668,7 @@ class __WorkoutPageState extends State<_WorkoutPage>
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     } finally {
       if (mounted) {
         setState(() => _addingExercise = false);

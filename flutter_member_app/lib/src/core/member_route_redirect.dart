@@ -7,6 +7,7 @@ String? memberRouteRedirect({
   required Uri uri,
   required bool initializing,
   required bool isAuthenticated,
+  bool requiresConsent = false,
 }) {
   final path = uri.path.isEmpty ? '/' : uri.path;
   final requestedDestination = _supportedDestination(uri);
@@ -28,6 +29,9 @@ String? memberRouteRedirect({
     }
     return '/login';
   }
+
+  if (requiresConsent && path != '/consent') return '/consent';
+  if (!requiresConsent && path == '/consent') return '/home';
 
   if (path == '/' || path == '/login') {
     return destination ?? '/home';

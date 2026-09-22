@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -41,7 +42,7 @@ class _TrainerProfileOverviewScreenState
       _profile = _map(data['trainer_profile']);
       _user = _map(data['trainer_user']);
     } catch (error) {
-      _error = error.toString();
+      _error = userFacingError(error);
     }
     if (mounted) setState(() => _loading = false);
   }

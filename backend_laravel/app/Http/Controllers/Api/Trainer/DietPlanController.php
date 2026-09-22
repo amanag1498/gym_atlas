@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Diet\DietPlanService;
 use App\Services\Diet\DietPlanTemplateService;
+use App\Services\Privacy\ConsentService;
 use App\Services\Trainer\IndependentCoachingAccessService;
 use App\Services\Trainer\TrainerScopeService;
 use Illuminate\Http\Request;
@@ -64,7 +65,7 @@ class DietPlanController extends Controller
             }
         }
 
-        $paginator = DietPlan::query()
+        $query = DietPlan::query()
             ->with(['member', 'trainer', 'meals.items'])
             ->where('trainer_id', $request->user()->id)
             ->where('status', 'active')
@@ -82,8 +83,10 @@ class DietPlanController extends Controller
             })
             ->when($memberId, fn ($query, int $id) => $query->where('member_id', $id))
             ->when($relationshipId, fn ($query, int $id) => $query->where('independent_trainer_member_relationship_id', $id))
-            ->latest()
-            ->paginate(min(max($request->integer('per_page', 50), 1), 100));
+            ->latest();
+        app(ConsentService::class)->scopeGrantedUsers($query, 'diet_plans.member_id', 'trainer_member_sharing');
+        app(ConsentService::class)->scopeGrantedUsers($query, 'diet_plans.member_id', 'health_and_fitness_data');
+        $paginator = $query->paginate(min(max($request->integer('per_page', 50), 1), 100));
 
         return $this->paginated($paginator, DietPlanResource::collection($paginator->getCollection()), 'Diet plans fetched successfully.');
     }
@@ -92,6 +95,9 @@ class DietPlanController extends Controller
     {
         $profile = $this->trainerScopeService->resolveTrainerProfile($request);
         $data = $request->validated();
+        foreach ($data['member_ids'] as $memberId) {
+            $this->assertMemberDietSharing(User::query()->findOrFail($memberId));
+        }
         $personalCoaching = $profile->gym_id === null || ! empty($data['independent_trainer_member_relationship_id']);
         if (! $personalCoaching) {
             foreach ($request->validated('member_ids') as $id) {
@@ -241,6 +247,9 @@ class DietPlanController extends Controller
             'starts_on' => ['nullable', 'date'],
             'ends_on' => ['nullable', 'date', 'after_or_equal:starts_on'],
         ]);
+        foreach ($data['member_ids'] as $memberId) {
+            $this->assertMemberDietSharing(User::query()->findOrFail($memberId));
+        }
         if ($profile->gym_id !== null) {
             foreach ($data['member_ids'] as $memberId) {
                 $this->trainerScopeService->resolveAssignedMember(
@@ -326,6 +335,7 @@ class DietPlanController extends Controller
 
     private function assertAccess(Request $request, DietPlan $plan): void
     {
+        $this->assertMemberDietSharing($plan->member);
         $profile = $this->trainerScopeService->resolveTrainerProfile($request);
         if ($plan->independent_trainer_member_relationship_id !== null) {
             if ((int) $plan->trainer_id !== (int) $request->user()->id) {
@@ -349,6 +359,13 @@ class DietPlanController extends Controller
         if ((int) $plan->trainer_id !== (int) $request->user()->id || (int) $plan->gym_id !== (int) $profile->gym_id || ($profile->branch_id && (int) $plan->branch_id !== (int) $profile->branch_id)) {
             throw ValidationException::withMessages(['diet_plan_id' => ['You do not have access to this diet plan.']]);
         }
+    }
+
+    private function assertMemberDietSharing(User $member): void
+    {
+        $consents = app(ConsentService::class);
+        $consents->assertGranted($member, 'trainer_member_sharing');
+        $consents->assertGranted($member, 'health_and_fitness_data');
     }
 
     private function assertTemplateOwnership(

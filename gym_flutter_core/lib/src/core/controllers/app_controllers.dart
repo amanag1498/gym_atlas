@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../config/app_environment.dart';
 import '../models/app_models.dart';
 import '../network/api_exception.dart';
+import '../network/user_facing_error.dart';
 import '../repositories/auth_repository.dart';
 import '../services/google_auth_service.dart';
 import '../services/realtime_service.dart';
@@ -55,7 +56,7 @@ class AuthController extends ChangeNotifier {
       final user = await authRepository.me();
       _setUser(user, reconnectSocket: true);
     } on ApiException catch (error) {
-      _error = error.message;
+      _error = userFacingError(error);
       _user = null;
       await authRepository.logout();
     } finally {
@@ -77,7 +78,7 @@ class AuthController extends ChangeNotifier {
       );
       _setUser(session.user, reconnectSocket: true);
     } catch (error) {
-      _error = error is ApiException ? error.message : error.toString();
+      _error = userFacingError(error);
     } finally {
       _loggingIn = false;
       _initializing = false;
@@ -93,7 +94,7 @@ class AuthController extends ChangeNotifier {
       _setUser(user, reconnectSocket: true);
       notifyListeners();
     } on ApiException catch (error) {
-      _error = error.message;
+      _error = userFacingError(error);
       notifyListeners();
     }
   }
@@ -115,7 +116,8 @@ class AuthController extends ChangeNotifier {
 
   void _setUser(SessionUser user, {required bool reconnectSocket}) {
     _user = user;
-    if (reconnectSocket && (user.activeRole == 'member' || user.activeRole == 'trainer')) {
+    if (reconnectSocket &&
+        (user.activeRole == 'member' || user.activeRole == 'trainer')) {
       final tokenFuture = authRepository.readStoredToken();
       tokenFuture.then((token) {
         if (token != null && token.isNotEmpty) {
@@ -142,7 +144,7 @@ class AsyncValueController<T> extends ChangeNotifier {
     try {
       value = await _loader();
     } catch (exception) {
-      error = exception is ApiException ? exception.message : exception.toString();
+      error = userFacingError(exception);
     } finally {
       loading = false;
       notifyListeners();
@@ -170,7 +172,7 @@ class PaginatedListController<T> extends ChangeNotifier {
       items = result.items;
       pagination = result.pagination;
     } catch (exception) {
-      error = exception is ApiException ? exception.message : exception.toString();
+      error = userFacingError(exception);
     } finally {
       loading = false;
       notifyListeners();
@@ -186,7 +188,7 @@ class PaginatedListController<T> extends ChangeNotifier {
       pagination = result.pagination;
       error = null;
     } catch (exception) {
-      error = exception is ApiException ? exception.message : exception.toString();
+      error = userFacingError(exception);
     } finally {
       refreshing = false;
       notifyListeners();
@@ -203,7 +205,7 @@ class PaginatedListController<T> extends ChangeNotifier {
       items = <T>[...items, ...result.items];
       pagination = result.pagination;
     } catch (exception) {
-      error = exception is ApiException ? exception.message : exception.toString();
+      error = userFacingError(exception);
     } finally {
       loading = false;
       notifyListeners();

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:gym_flutter_core/gym_flutter_core.dart'
+    show PrivacyRequestsDialog;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -14,6 +16,32 @@ class TrainerSettingsScreen extends StatelessWidget {
   const TrainerSettingsScreen({super.key, required this.onViewProfile});
 
   final Future<void> Function() onViewProfile;
+
+  static Future<void> openPrivacyPolicy(BuildContext context) async {
+    final baseUri = Uri.tryParse(TrainerConfig.apiBaseUrl);
+    final uri = baseUri == null
+        ? Uri.parse('/privacy-policy')
+        : Uri(
+            scheme: baseUri.scheme,
+            host: baseUri.host,
+            port: baseUri.hasPort ? baseUri.port : null,
+            path: '/privacy-policy',
+          );
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  static Future<void> openTermsOfService(BuildContext context) async {
+    final baseUri = Uri.tryParse(TrainerConfig.apiBaseUrl);
+    final uri = baseUri == null
+        ? Uri.parse('/terms')
+        : Uri(
+            scheme: baseUri.scheme,
+            host: baseUri.host,
+            port: baseUri.hasPort ? baseUri.port : null,
+            path: '/terms',
+          );
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -106,6 +134,18 @@ class TrainerSettingsScreen extends StatelessWidget {
                         _webUrl(webBase, '/terms'),
                         'Terms',
                       ),
+                    ),
+                    _SettingsRow(
+                      icon: Icons.tune_rounded,
+                      title: 'Privacy & consent',
+                      subtitle: 'Manage the information choices you have made',
+                      onPressed: () => _openConsentManager(context, session),
+                    ),
+                    _SettingsRow(
+                      icon: Icons.manage_accounts_outlined,
+                      title: 'Your privacy requests',
+                      subtitle: 'Ask for access, correction or deletion',
+                      onPressed: () => _openPrivacyRequests(context, session),
                     ),
                   ],
                 ),
@@ -227,6 +267,135 @@ class TrainerSettingsScreen extends StatelessWidget {
       Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
+}
+
+Future<void> _openConsentManager(
+  BuildContext context,
+  TrainerSessionController session,
+) async {
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setState) {
+        final items =
+            (session.consentState['items'] as List<dynamic>? ?? const [])
+                .whereType<Map>()
+                .map((value) => Map<String, dynamic>.from(value))
+                .where(
+                  (item) =>
+                      item['required'] == true ||
+                      const {
+                        'photos',
+                        'notifications',
+                        'whatsapp',
+                      }.contains(item['purpose']),
+                )
+                .toList();
+        return AlertDialog(
+          title: const Text('Privacy & consent'),
+          content: SizedBox(
+            width: 420,
+            child: ListView(
+              shrinkWrap: true,
+              children: items.map((item) {
+                final required = item['required'] == true;
+                return SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(item['title']?.toString() ?? 'Data use'),
+                  subtitle: Text(item['description']?.toString() ?? ''),
+                  value: item['granted'] == true,
+                  onChanged: required && item['granted'] != true
+                      ? null
+                      : (value) async {
+                          if (required && !value) {
+                            final confirmed = await showDialog<bool>(
+                              context: dialogContext,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Withdraw account consent?'),
+                                content: const Text(
+                                  'Gym Atlas Coach will stop access to your account features. You can review and agree again to resume using the app.',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, false),
+                                    child: const Text('Keep using app'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    child: const Text('Withdraw'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirmed != true) return;
+                          }
+                          try {
+                            if (value) {
+                              await session.grantConsent(
+                                item['purpose'].toString(),
+                              );
+                            } else {
+                              await session.withdrawConsent(
+                                item['purpose'].toString(),
+                              );
+                            }
+                          } catch (_) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Could not save your choice. Please try again.',
+                                  ),
+                                ),
+                              );
+                            }
+                            return;
+                          }
+                          if (required && !value && dialogContext.mounted) {
+                            Navigator.pop(dialogContext);
+                          }
+                          if (dialogContext.mounted) setState(() {});
+                        },
+                );
+              }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Done'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+Future<void> _openPrivacyRequests(
+  BuildContext context,
+  TrainerSessionController session,
+) async {
+  await showDialog<void>(
+    context: context,
+    builder: (_) => PrivacyRequestsDialog(
+      fetchRequests: () async {
+        final response = await session.client.get('/public/privacy/requests');
+        return (response['data'] as List<dynamic>? ?? const [])
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+      },
+      submitRequest: (type, details) async {
+        await session.client.post(
+          '/public/privacy/requests',
+          data: {'type': type, if (details != null) 'details': details},
+        );
+      },
+    ),
+  );
 }
 
 class _SettingsTopBar extends StatelessWidget {

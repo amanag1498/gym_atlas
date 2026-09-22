@@ -1,15 +1,17 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/error_state.dart';
 import '../../../core/widgets/premium_card.dart';
 import 'member_repository.dart';
+import '../auth/session_controller.dart';
 
 class MemberProfileScreen extends StatefulWidget {
   const MemberProfileScreen({
@@ -67,7 +69,7 @@ class _MemberProfileScreenState extends State<MemberProfileScreen> {
           (membership['status'] == 'active' ||
               membership['status'] == 'frozen');
     } catch (exception) {
-      _error = exception.toString();
+      _error = userFacingError(exception);
     }
 
     if (mounted) {
@@ -183,7 +185,7 @@ class _MemberProfileScreenState extends State<MemberProfileScreen> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     } finally {
       if (mounted) {
         setState(() => _leavingGym = false);
@@ -817,6 +819,16 @@ class _MemberProfileEditScreenState extends State<_MemberProfileEditScreen> {
 
   Future<void> _pickAndUploadPhoto(ImageSource source) async {
     try {
+      final session = context.read<MemberSessionController>();
+      if (!session.hasConsent('photos')) {
+        if (mounted) {
+          setState(
+            () => _photoError =
+                'Turn on Photos in Settings > Privacy & consent to upload a photo.',
+          );
+        }
+        return;
+      }
       final file = await _imagePicker.pickImage(
         source: source,
         imageQuality: 88,
@@ -2524,36 +2536,7 @@ String? _metricValidation(
 }
 
 String _profileSaveError(Object exception) {
-  if (exception is DioException) {
-    final data = exception.response?.data;
-    if (data is Map) {
-      final errors = data['errors'];
-      if (errors is Map && errors.isNotEmpty) {
-        final first = errors.values.first;
-        if (first is List && first.isNotEmpty) {
-          return first.first.toString();
-        }
-        return first.toString();
-      }
-
-      final message = data['message']?.toString();
-      if (message != null && message.trim().isNotEmpty) {
-        return message;
-      }
-    }
-
-    switch (exception.type) {
-      case DioExceptionType.connectionError:
-      case DioExceptionType.connectionTimeout:
-      case DioExceptionType.receiveTimeout:
-      case DioExceptionType.sendTimeout:
-        return 'Network error. Please check your connection and try again.';
-      default:
-        return 'Profile update failed. Please check the details and try again.';
-    }
-  }
-
-  return exception.toString().replaceFirst('Exception: ', '');
+  return userFacingError(exception);
 }
 
 String _experienceLabel(String value) {

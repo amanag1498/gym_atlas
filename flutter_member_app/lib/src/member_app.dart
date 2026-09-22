@@ -15,6 +15,7 @@ import 'core/secure_storage_service.dart';
 import 'features/auth/auth_gate.dart';
 import 'features/auth/auth_service.dart';
 import 'features/auth/login_screen.dart';
+import 'features/auth/member_consent_screen.dart';
 import 'features/auth/session_controller.dart';
 import 'features/member/member_home_screen.dart';
 import 'features/member/member_events_screen.dart';
@@ -86,6 +87,13 @@ class _MemberAppState extends State<MemberApp> {
               _buildPage(state, const MemberLoginScreen()),
         ),
         GoRoute(
+          path: '/consent',
+          pageBuilder: (context, state) => _buildPage(
+            state,
+            MemberConsentScreen(session: sessionController),
+          ),
+        ),
+        GoRoute(
           path: '/home',
           pageBuilder: (context, state) => _buildPage(
             state,
@@ -153,6 +161,9 @@ class _MemberAppState extends State<MemberApp> {
           uri: state.uri,
           initializing: sessionController.initializing,
           isAuthenticated: sessionController.isAuthenticated,
+          requiresConsent:
+              sessionController.isAuthenticated &&
+              !sessionController.hasRequiredConsent,
         );
       },
     );

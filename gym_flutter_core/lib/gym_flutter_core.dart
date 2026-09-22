@@ -20,6 +20,7 @@ export 'src/core/widgets/branded_startup_loader.dart';
 export 'src/core/widgets/atlas_brand_lockup.dart';
 export 'src/core/widgets/app_runtime_gate.dart';
 export 'src/core/widgets/metric_trend_chart.dart';
+export 'src/core/widgets/privacy_requests_dialog.dart';
 export 'src/core/widgets/diet_plan_meals_editor.dart';
 export 'src/core/widgets/diet_plan_summary_view.dart';
 export 'src/core/widgets/workout_plan_summary_view.dart';

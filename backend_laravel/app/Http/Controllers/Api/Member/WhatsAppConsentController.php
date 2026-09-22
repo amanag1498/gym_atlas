@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Gym;
 use App\Models\WhatsAppConsent;
 use App\Services\Authorization\ScopeResolver;
+use App\Services\Privacy\ConsentService;
 use App\Services\WhatsApp\WhatsAppConsentService;
 use Illuminate\Http\Request;
 
@@ -35,6 +36,13 @@ class WhatsAppConsentController extends Controller
         $gym = isset($validated['gym_id'])
             ? $this->scopeResolver->resolveGym($request->merge(['gym_id' => $validated['gym_id']]))
             : null;
+        if ($validated['granted']) {
+            $privacy = app(ConsentService::class);
+            $privacy->assertGranted($request->user(), 'core_account');
+            if (! $privacy->granted($request->user(), 'whatsapp')) {
+                $privacy->record($request->user(), 'whatsapp', $request);
+            }
+        }
         $consent = $this->consents->set(
             $request->user(),
             $gym instanceof Gym ? $gym : null,

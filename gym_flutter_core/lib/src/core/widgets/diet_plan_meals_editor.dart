@@ -580,11 +580,12 @@ class _DietPlanMealsEditorState extends State<DietPlanMealsEditor> {
 
   Widget _itemCard(_MealDraft meal, int index, _FoodDraft item) {
     final colors = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surface,
+    return Material(
+      color: colors.surface,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.outlineVariant),
+        side: BorderSide(color: colors.outlineVariant),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),

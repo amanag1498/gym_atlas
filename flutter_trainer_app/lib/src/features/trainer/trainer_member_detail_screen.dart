@@ -3,6 +3,7 @@ import 'package:gym_flutter_core/metric_trend_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:gym_flutter_core/diet_plan_summary_view.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/premium_card.dart';
@@ -196,7 +197,7 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
     } catch (exception) {
       setState(() {
         _loading = false;
-        _error = exception.toString();
+        _error = userFacingError(exception);
       });
     }
   }
@@ -338,7 +339,7 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = exception.toString();
+        _error = userFacingError(exception);
       });
     }
   }
@@ -479,7 +480,7 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
@@ -660,7 +661,7 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     } finally {
       if (mounted) setState(() => _loadingMore = false);

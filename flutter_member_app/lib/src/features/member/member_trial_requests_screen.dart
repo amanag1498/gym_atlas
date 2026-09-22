@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../core/models.dart';
 import '../../core/secure_storage_service.dart';
 import '../../core/pagination.dart';
@@ -150,7 +151,7 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
         _tabController.index = 1;
       }
     } catch (exception) {
-      _error = exception.toString();
+      _error = userFacingError(exception);
     }
 
     if (mounted) {
@@ -313,7 +314,7 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
       if (!mounted) {
         return;
       }
-      _showMessage(exception.toString());
+      _showMessage(userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _submitting = false);

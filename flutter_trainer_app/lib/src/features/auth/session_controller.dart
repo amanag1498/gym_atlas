@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart' as firebase;
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../core/api_client.dart';
 import '../../core/fcm_token_service.dart';
 import '../../core/models.dart';
@@ -39,8 +40,16 @@ class TrainerSessionController extends ChangeNotifier {
   bool busy = false;
   bool initializing = true;
   String? error;
+  Map<String, dynamic> consentState = const <String, dynamic>{};
 
   bool get isAuthenticated => user != null && token != null;
+  bool get hasRequiredConsent =>
+      consentState['items'] is List &&
+      (consentState['missing_required'] as List<dynamic>? ?? const []).isEmpty;
+  bool hasConsent(String purpose) =>
+      (consentState['items'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .any((item) => item['purpose'] == purpose && item['granted'] == true);
   TrainerApiClient get client => _apiClient;
 
   Future<void> bootstrap() async {
@@ -66,6 +75,7 @@ class TrainerSessionController extends ChangeNotifier {
       me = await _ensureTrainerRole(me);
       _ensureEligibleTrainer(me);
       user = me;
+      consentState = await _authService.fetchConsentState();
       await _storage.saveSession(token: storedToken, user: me);
       _registerFcmToken();
     } on DioException catch (exception) {
@@ -76,7 +86,7 @@ class TrainerSessionController extends ChangeNotifier {
       }
     } catch (exception) {
       await _clearLocalState(notify: false);
-      error = exception.toString().replaceFirst('Exception: ', '');
+      error = userFacingError(exception).replaceFirst('Exception: ', '');
     }
 
     initializing = false;
@@ -109,7 +119,7 @@ class TrainerSessionController extends ChangeNotifier {
     } catch (exception) {
       await _googleSafeSignOut();
       await _clearLocalState(notify: false);
-      error = exception.toString().replaceFirst('Exception: ', '');
+      error = userFacingError(exception).replaceFirst('Exception: ', '');
     }
 
     busy = false;
@@ -145,7 +155,7 @@ class TrainerSessionController extends ChangeNotifier {
     } catch (exception) {
       await _googleSafeSignOut();
       await _clearLocalState(notify: false);
-      error = exception.toString().replaceFirst('Exception: ', '');
+      error = userFacingError(exception).replaceFirst('Exception: ', '');
     }
 
     busy = false;
@@ -180,7 +190,7 @@ class TrainerSessionController extends ChangeNotifier {
       error = _mapAuthError(exception);
     } catch (exception) {
       await _clearLocalState(notify: false);
-      error = exception.toString().replaceFirst('Exception: ', '');
+      error = userFacingError(exception).replaceFirst('Exception: ', '');
     }
 
     busy = false;
@@ -215,6 +225,7 @@ class TrainerSessionController extends ChangeNotifier {
 
     token = session.token;
     user = me;
+    consentState = await _authService.fetchConsentState();
     await _storage.saveSession(token: session.token, user: me);
     _registerFcmToken();
   }
@@ -253,8 +264,27 @@ class TrainerSessionController extends ChangeNotifier {
     _registerFcmToken();
   }
 
+  Future<void> grantConsent(String purpose) async {
+    consentState = await _authService.grantConsent(purpose);
+    notifyListeners();
+    if (purpose == 'notifications' || purpose == 'core_account') {
+      _registerFcmToken();
+    }
+  }
+
+  Future<void> withdrawConsent(String purpose) async {
+    consentState = await _authService.withdrawConsent(purpose);
+    notifyListeners();
+    if (purpose == 'notifications' || purpose == 'core_account') {
+      await _fcmTokenService?.stop(deleteNativeToken: true);
+    }
+  }
+
   void _registerFcmToken() {
-    if (token == null || token!.isEmpty) {
+    if (token == null ||
+        token!.isEmpty ||
+        !hasRequiredConsent ||
+        !hasConsent('notifications')) {
       return;
     }
     final service = _fcmTokenService;
@@ -295,6 +325,7 @@ class TrainerSessionController extends ChangeNotifier {
     _apiClient.clearBearerToken();
     token = null;
     user = null;
+    consentState = const <String, dynamic>{};
     if (notify) {
       notifyListeners();
     }
@@ -320,38 +351,7 @@ class TrainerSessionController extends ChangeNotifier {
   }
 
   String _mapAuthError(DioException exception) {
-    final response = exception.response;
-    final data = response?.data;
-
-    if (response?.statusCode == 401) {
-      return 'Your session is invalid or expired. Please sign in again.';
-    }
-
-    if (response?.statusCode == 403) {
-      return 'This Google account is not allowed in the Trainer App.';
-    }
-
-    if (data is Map<String, dynamic>) {
-      final message = data['message']?.toString();
-      if (message != null && message.isNotEmpty) {
-        return message;
-      }
-    } else if (data is Map) {
-      final message = data['message']?.toString();
-      if (message != null && message.isNotEmpty) {
-        return message;
-      }
-    }
-
-    switch (exception.type) {
-      case DioExceptionType.connectionError:
-      case DioExceptionType.connectionTimeout:
-      case DioExceptionType.receiveTimeout:
-      case DioExceptionType.sendTimeout:
-        return 'Network error. Please check your connection and try again.';
-      default:
-        return 'Trainer sign-in failed. Please try again.';
-    }
+    return userFacingError(exception);
   }
 
   String _mapAppleAuthError(firebase.FirebaseAuthException exception) {
@@ -367,7 +367,7 @@ class TrainerSessionController extends ChangeNotifier {
       case 'network-request-failed':
         return 'Network error. Please check your connection and try again.';
       default:
-        return exception.message ?? 'Apple sign-in failed. Please try again.';
+        return 'Apple sign-in failed. Please try again.';
     }
   }
 }

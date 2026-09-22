@@ -72,6 +72,30 @@ class TrainerAuthService {
     return TrainerUser.fromJson(data);
   }
 
+  Future<Map<String, dynamic>> fetchConsentState() async {
+    final response = await _client.get('/public/privacy/consents');
+    return Map<String, dynamic>.from(
+      response['data'] as Map? ?? const <String, dynamic>{},
+    );
+  }
+
+  Future<Map<String, dynamic>> grantConsent(String purpose) async {
+    final response = await _client.post(
+      '/public/privacy/consents',
+      data: <String, dynamic>{'purpose': purpose, 'source': 'trainer_app'},
+    );
+    return Map<String, dynamic>.from(
+      response['data'] as Map? ?? const <String, dynamic>{},
+    );
+  }
+
+  Future<Map<String, dynamic>> withdrawConsent(String purpose) async {
+    final response = await _client.delete('/public/privacy/consents/$purpose');
+    return Map<String, dynamic>.from(
+      response['data'] as Map? ?? const <String, dynamic>{},
+    );
+  }
+
   Future<TrainerUser> switchToTrainerRole() async {
     final response = await _client.post(
       '/public/auth/active-role',

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -71,7 +72,9 @@ class _GymSelfEnrollmentScreenState extends State<GymSelfEnrollmentScreen> {
     } catch (exception) {
       if (mounted) {
         setState(
-          () => _error = exception.toString().replaceFirst('Exception: ', ''),
+          () => _error = userFacingError(
+            exception,
+          ).replaceFirst('Exception: ', ''),
         );
       }
     } finally {
@@ -131,7 +134,9 @@ class _GymSelfEnrollmentScreenState extends State<GymSelfEnrollmentScreen> {
     } catch (exception) {
       if (mounted) {
         setState(
-          () => _error = exception.toString().replaceFirst('Exception: ', ''),
+          () => _error = userFacingError(
+            exception,
+          ).replaceFirst('Exception: ', ''),
         );
       }
     } finally {

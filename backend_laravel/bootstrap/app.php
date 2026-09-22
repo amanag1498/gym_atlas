@@ -1,12 +1,15 @@
 <?php
 
 use App\Enums\RoleName;
+use App\Http\Middleware\EnforceMobileAppAvailability;
 use App\Http\Middleware\EnsureActiveAccount;
 use App\Http\Middleware\EnsureActiveRole;
-use App\Http\Middleware\EnforceMobileAppAvailability;
 use App\Http\Middleware\EnsureBranchScope;
+use App\Http\Middleware\EnsureCoreConsent;
 use App\Http\Middleware\EnsureGymScope;
+use App\Http\Middleware\EnsureMemberSharingConsent;
 use App\Http\Middleware\EnsurePermission;
+use App\Http\Middleware\EnsurePurposeConsent;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureWebGymPanelAccess;
 use App\Http\Middleware\EnsureWebPlatformAdmin;
@@ -81,6 +84,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'active_account' => EnsureActiveAccount::class,
+            'core_consent' => EnsureCoreConsent::class,
+            'member_sharing_consent' => EnsureMemberSharingConsent::class,
+            'consent' => EnsurePurposeConsent::class,
             'active_role' => EnsureActiveRole::class,
             'branch_scope' => EnsureBranchScope::class,
             'gym_scope' => EnsureGymScope::class,

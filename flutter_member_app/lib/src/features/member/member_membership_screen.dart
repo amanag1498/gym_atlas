@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -46,7 +47,7 @@ class _MemberMembershipScreenState extends State<MemberMembershipScreen> {
       final data = response['data'];
       _membership = data is Map ? Map<String, dynamic>.from(data) : null;
     } catch (exception) {
-      _error = exception.toString();
+      _error = userFacingError(exception);
     }
 
     if (mounted) {

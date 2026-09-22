@@ -1,8 +1,10 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:timelines_plus/timelines_plus.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -10,6 +12,7 @@ import '../../../core/widgets/premium_card.dart';
 import 'trainer_certification_builder.dart';
 import 'trainer_photo_picker.dart';
 import 'trainer_repository.dart';
+import '../auth/session_controller.dart';
 
 class TrainerOnboardingFlow extends StatefulWidget {
   const TrainerOnboardingFlow({
@@ -493,7 +496,9 @@ class _TrainerOnboardingFlowState extends State<TrainerOnboardingFlow> {
       }
     } catch (exception) {
       if (mounted) {
-        final message = exception.toString().replaceFirst('Exception: ', '');
+        final message = userFacingError(
+          exception,
+        ).replaceFirst('Exception: ', '');
         await _showErrorDialog(message);
       }
     } finally {
@@ -532,6 +537,20 @@ class _TrainerOnboardingFlowState extends State<TrainerOnboardingFlow> {
 
   Future<void> _pickAndUploadPhoto() async {
     if (_uploadingPhoto) {
+      return;
+    }
+
+    final session = context.read<TrainerSessionController>();
+    if (!session.hasConsent('photos')) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Turn on Photos in Settings > Privacy & consent to upload a photo.',
+            ),
+          ),
+        );
+      }
       return;
     }
 
@@ -578,7 +597,7 @@ class _TrainerOnboardingFlowState extends State<TrainerOnboardingFlow> {
         return;
       }
       await _showErrorDialog(
-        exception.toString().replaceFirst('Exception: ', ''),
+        userFacingError(exception).replaceFirst('Exception: ', ''),
       );
     } finally {
       if (mounted) {
@@ -632,7 +651,7 @@ class _TrainerOnboardingFlowState extends State<TrainerOnboardingFlow> {
         return;
       }
       await _showErrorDialog(
-        exception.toString().replaceFirst('Exception: ', ''),
+        userFacingError(exception).replaceFirst('Exception: ', ''),
       );
     } finally {
       if (mounted) {

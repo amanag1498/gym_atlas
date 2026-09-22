@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../core/models.dart';
 import '../../core/pagination.dart';
 import '../../../core/theme/app_colors.dart';
@@ -10,6 +12,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/premium_card.dart';
 import 'member_repository.dart';
+import '../auth/session_controller.dart';
 import 'member_trial_requests_screen.dart';
 import 'discovery_media.dart';
 
@@ -84,7 +87,7 @@ class _MemberGymDiscoveryScreenState extends State<MemberGymDiscoveryScreen> {
       _gymPage = ApiPagination.fromResponse(results[0]);
       _savedGymPage = ApiPagination.fromResponse(results[1]);
     } catch (exception) {
-      _error = exception.toString();
+      _error = userFacingError(exception);
     }
 
     if (mounted) {
@@ -126,7 +129,7 @@ class _MemberGymDiscoveryScreenState extends State<MemberGymDiscoveryScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
@@ -135,6 +138,17 @@ class _MemberGymDiscoveryScreenState extends State<MemberGymDiscoveryScreen> {
 
   Future<void> _useCurrentLocation() async {
     if (_locationLoading) {
+      return;
+    }
+
+    final session = context.read<MemberSessionController>();
+    if (!session.hasConsent('location_data')) {
+      if (mounted) {
+        setState(
+          () => _locationError =
+              'Turn on Location in Settings > Privacy & consent to find nearby gyms.',
+        );
+      }
       return;
     }
 
@@ -182,7 +196,9 @@ class _MemberGymDiscoveryScreenState extends State<MemberGymDiscoveryScreen> {
       if (!mounted) {
         return;
       }
-      final message = exception.toString().replaceFirst('Exception: ', '');
+      final message = userFacingError(
+        exception,
+      ).replaceFirst('Exception: ', '');
       setState(() {
         _locationError = message;
         _locationLoading = false;
@@ -322,7 +338,7 @@ class _MemberGymDiscoveryScreenState extends State<MemberGymDiscoveryScreen> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     }
   }
 
@@ -364,7 +380,7 @@ class _MemberGymDiscoveryScreenState extends State<MemberGymDiscoveryScreen> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     } finally {
       if (mounted) {
         setState(() => _savingGym = false);
@@ -1315,7 +1331,7 @@ class _MemberGymDetailScreenState extends State<MemberGymDetailScreen> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     } finally {
       if (mounted) {
         setState(() => _savingGym = false);

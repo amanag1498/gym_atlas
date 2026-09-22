@@ -15,6 +15,7 @@ import 'core/fcm_token_service.dart';
 import '../core/theme/app_theme.dart';
 import 'features/auth/auth_service.dart';
 import 'features/auth/login_screen.dart';
+import 'features/auth/trainer_consent_screen.dart';
 import 'features/auth/session_controller.dart';
 import 'features/trainer/trainer_home_screen.dart';
 import 'core/token_storage.dart';
@@ -185,14 +186,16 @@ class _TrainerAppState extends State<TrainerApp> {
             }
 
             return session.isAuthenticated
-                ? TrainerHomeScreen(
-                    initialChatMemberId: _pendingChatMemberId,
-                    chatLaunchVersion: _chatLaunchVersion,
-                    initialEventId: _pendingEventId,
-                    eventLaunchVersion: _eventLaunchVersion,
-                    initialTrialRequestId: _pendingTrialRequestId,
-                    trialLaunchVersion: _trialLaunchVersion,
-                  )
+                ? (!session.hasRequiredConsent
+                      ? TrainerConsentScreen(session: session)
+                      : TrainerHomeScreen(
+                          initialChatMemberId: _pendingChatMemberId,
+                          chatLaunchVersion: _chatLaunchVersion,
+                          initialEventId: _pendingEventId,
+                          eventLaunchVersion: _eventLaunchVersion,
+                          initialTrialRequestId: _pendingTrialRequestId,
+                          trialLaunchVersion: _trialLaunchVersion,
+                        ))
                 : const TrainerLoginScreen();
           },
         ),

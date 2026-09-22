@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api\Public;
 
 use App\Http\Controllers\Controller;
 use App\Models\UserFcmToken;
+use App\Services\Privacy\ConsentService;
 use Illuminate\Http\Request;
 
 class FcmTokenController extends Controller
 {
     public function store(Request $request)
     {
+        app(ConsentService::class)->assertGranted($request->user(), 'notifications');
         $validated = $request->validate([
             'token' => ['required', 'string', 'max:512'],
             'platform' => ['nullable', 'string', 'max:40'],

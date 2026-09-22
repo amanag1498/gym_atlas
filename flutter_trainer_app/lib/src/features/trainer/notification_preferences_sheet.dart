@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/common_widgets.dart';
 
@@ -44,7 +45,7 @@ class _TrainerNotificationPreferencesSheetState
       }
     } catch (exception) {
       if (mounted) {
-        setState(() => _error = exception.toString());
+        setState(() => _error = userFacingError(exception));
       }
     } finally {
       if (mounted) {
@@ -69,7 +70,7 @@ class _TrainerNotificationPreferencesSheetState
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     } finally {
       if (mounted) {

@@ -2,7 +2,9 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -10,6 +12,7 @@ import '../../../core/widgets/premium_card.dart';
 import 'trainer_certification_builder.dart';
 import 'trainer_photo_picker.dart';
 import 'trainer_repository.dart';
+import '../auth/session_controller.dart';
 import 'trainer_verification_requirements.dart';
 
 class TrainerProfileScreen extends StatefulWidget {
@@ -126,7 +129,7 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
           _map(profile['assigned_branch'])['name']?.toString() ??
           'Not assigned';
     } catch (exception) {
-      _error = exception.toString();
+      _error = userFacingError(exception);
     }
 
     if (mounted) {
@@ -171,7 +174,7 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
       setState(() => _saving = false);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     }
   }
 
@@ -229,7 +232,7 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     } finally {
       if (mounted) setState(() => _submittingVerification = false);
     }
@@ -301,6 +304,17 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
       return;
     }
 
+    final session = context.read<TrainerSessionController>();
+    if (!session.hasConsent('photos')) {
+      if (mounted) {
+        setState(
+          () => _photoError =
+              'Turn on Photos in Settings > Privacy & consent to upload a photo.',
+        );
+      }
+      return;
+    }
+
     setState(() {
       _uploadingPhoto = true;
       _photoError = null;
@@ -338,7 +352,7 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
       if (!mounted) {
         return;
       }
-      setState(() => _photoError = exception.toString());
+      setState(() => _photoError = userFacingError(exception));
     } finally {
       if (mounted) {
         setState(() => _uploadingPhoto = false);
@@ -394,7 +408,7 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     } finally {
       if (mounted) setState(() => _uploadingCertification = false);
     }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_gradients.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -70,7 +71,7 @@ class _TrainerTrialLeadsScreenState extends State<TrainerTrialLeadsScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = error.toString();
+        _error = userFacingError(error);
       });
     }
   }
@@ -93,7 +94,7 @@ class _TrainerTrialLeadsScreenState extends State<TrainerTrialLeadsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(error.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
       }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
@@ -480,7 +481,7 @@ class _TrialLeadDetailSheetState extends State<_TrialLeadDetailSheet> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(error.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
         setState(() => _saving = false);
       }
     }

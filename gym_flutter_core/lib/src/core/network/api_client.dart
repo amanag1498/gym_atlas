@@ -10,19 +10,19 @@ class ApiClient {
     required AppEnvironment environment,
     required SecureTokenStorage storage,
     void Function()? onUnauthorized,
-  })  : _storage = storage,
-        _onUnauthorized = onUnauthorized,
-        dio = Dio(
-          BaseOptions(
-            baseUrl: environment.apiBaseUrl,
-            connectTimeout: const Duration(seconds: 20),
-            receiveTimeout: const Duration(seconds: 20),
-            headers: const {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-            },
-          ),
-        ) {
+  }) : _storage = storage,
+       _onUnauthorized = onUnauthorized,
+       dio = Dio(
+         BaseOptions(
+           baseUrl: environment.apiBaseUrl,
+           connectTimeout: const Duration(seconds: 20),
+           receiveTimeout: const Duration(seconds: 20),
+           headers: const {
+             'Accept': 'application/json',
+             'Content-Type': 'application/json',
+           },
+         ),
+       ) {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -131,21 +131,34 @@ class ApiClient {
         message: body['message']?.toString() ?? 'Request successful.',
         data: data,
         errors: (body['errors'] as Map?)?.cast<String, dynamic>(),
-        pagination: paginationJson is JsonMap ? PaginationMeta.fromJson(paginationJson) : null,
+        pagination: paginationJson is JsonMap
+            ? PaginationMeta.fromJson(paginationJson)
+            : null,
       );
     } on DioException catch (error) {
       final body = error.response?.data;
       if (body is Map<String, dynamic>) {
         throw ApiException(
-          message: body['message']?.toString() ?? error.message ?? 'Network request failed.',
+          message:
+              body['message']?.toString() ??
+              error.message ??
+              'Network request failed.',
           statusCode: error.response?.statusCode,
           errors: (body['errors'] as Map?)?.cast<String, dynamic>(),
+          isConnectionError: _isConnectionError(error),
         );
       }
       throw ApiException(
         message: error.message ?? 'Network request failed.',
         statusCode: error.response?.statusCode,
+        isConnectionError: _isConnectionError(error),
       );
     }
   }
 }
+
+bool _isConnectionError(DioException error) =>
+    error.type == DioExceptionType.connectionError ||
+    error.type == DioExceptionType.connectionTimeout ||
+    error.type == DioExceptionType.receiveTimeout ||
+    error.type == DioExceptionType.sendTimeout;

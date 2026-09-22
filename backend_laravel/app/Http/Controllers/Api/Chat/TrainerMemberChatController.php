@@ -17,6 +17,7 @@ use App\Services\Firebase\FcmNotificationService;
 use App\Services\Member\MemberAppService;
 use App\Services\Members\GymMemberAccessService;
 use App\Services\Notification\NotificationService;
+use App\Services\Privacy\ConsentService;
 use App\Services\Realtime\RealtimePublisher;
 use App\Services\Trainer\IndependentCoachingAccessService;
 use Carbon\CarbonInterface;
@@ -62,6 +63,7 @@ class TrainerMemberChatController extends Controller
                 ->unique()
                 ->values()
                 ->all();
+            $memberIds = app(ConsentService::class)->grantedUserIds($memberIds, 'trainer_member_sharing');
             $this->ensureTrainerConversations($user->id, $memberIds);
 
             $paginator = ChatConversation::query()
@@ -76,6 +78,11 @@ class TrainerMemberChatController extends Controller
         }
 
         if ($user->active_role === RoleName::Member->value) {
+            if (! app(ConsentService::class)->granted($user, 'trainer_member_sharing')) {
+                $paginator = ChatConversation::query()->whereRaw('1 = 0')->paginate($request->integer('per_page', 50));
+
+                return $this->paginated($paginator, ChatConversationResource::collection($paginator->getCollection()), 'No trainer conversation is available.');
+            }
             $profile = $this->memberAppService->memberProfileForChat($user);
 
             $trainerIds = collect([$profile?->assigned_trainer_user_id])
@@ -652,6 +659,8 @@ class TrainerMemberChatController extends Controller
                 throw ValidationException::withMessages(['recipient_id' => ['Trainer can chat only with assigned members.']]);
             }
 
+            app(ConsentService::class)->assertGranted(User::query()->findOrFail($recipientId), 'trainer_member_sharing');
+
             return [$user->id, $recipientId];
         }
 
@@ -664,6 +673,8 @@ class TrainerMemberChatController extends Controller
             if (! $gymAssignment && ! $independentAssignment) {
                 throw ValidationException::withMessages(['recipient_id' => ['Member can chat only with the assigned trainer.']]);
             }
+
+            app(ConsentService::class)->assertGranted($user, 'trainer_member_sharing');
 
             return [$recipientId, $user->id];
         }
@@ -719,6 +730,7 @@ class TrainerMemberChatController extends Controller
     {
         $member = User::query()->find($memberId);
         abort_unless($member, 422, 'Member account is not available.');
+        app(ConsentService::class)->assertGranted($member, 'trainer_member_sharing');
         $memberProfile = $this->memberAppService->gymProfileForTrainer($member, $trainerId);
         $gymAssignment = $memberProfile && (int) $memberProfile->assigned_trainer_user_id === $trainerId;
         $trainer = User::query()->find($trainerId);

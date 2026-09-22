@@ -14,10 +14,12 @@ use App\Models\WorkoutPlan;
 use App\Models\WorkoutProgressionRecommendation;
 use App\Models\WorkoutSession;
 use App\Services\Notification\ReminderService;
+use App\Services\Privacy\ConsentService;
 use App\Services\Workout\WorkoutPlanService;
 use Carbon\CarbonImmutable;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -1283,6 +1285,30 @@ class WorkoutScopeTest extends TestCase
     /**
      * @return array{0: Gym, 1: Branch}
      */
+    public function test_member_sharing_withdrawal_blocks_trainer_member_detail(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch] = $this->makeGymContext();
+        $trainer = $this->makeTrainer($gym, $branch);
+        $member = $this->makeMember($gym, $branch, $trainer->id);
+
+        $this->actingAs($trainer, 'sanctum')
+            ->getJson('/api/trainer/assigned-members/'.$member->id)
+            ->assertOk();
+
+        app(ConsentService::class)->withdraw($member, 'trainer_member_sharing', Request::create('/test', 'DELETE'));
+
+        $this->actingAs($trainer, 'sanctum')
+            ->getJson('/api/trainer/assigned-members/'.$member->id)
+            ->assertForbidden();
+
+        app(ConsentService::class)->record($member, 'trainer_member_sharing', Request::create('/test', 'POST'));
+        app(ConsentService::class)->withdraw($member, 'health_and_fitness_data', Request::create('/test', 'DELETE'));
+        $this->actingAs($trainer, 'sanctum')
+            ->getJson('/api/trainer/assigned-members/'.$member->id.'/progress')
+            ->assertForbidden();
+    }
+
     private function makeGymContext(): array
     {
         $owner = User::factory()->create();

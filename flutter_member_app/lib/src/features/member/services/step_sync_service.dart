@@ -1,6 +1,6 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../core/user_facing_error.dart';
 import '../health/step_health_service.dart';
 import '../health/step_health_types.dart';
 import '../member_repository.dart';
@@ -22,7 +22,8 @@ class StepSyncService {
       return StepSyncResult(
         synced: false,
         throttled: true,
-        snapshot: _lastSnapshot ??
+        snapshot:
+            _lastSnapshot ??
             const StepHealthSnapshot(
               steps: 0,
               distanceMeters: 0,
@@ -79,27 +80,11 @@ class StepSyncService {
       return false;
     }
 
-    return DateTime.now().difference(lastSyncedAt) < const Duration(minutes: 15);
+    return DateTime.now().difference(lastSyncedAt) <
+        const Duration(minutes: 15);
   }
 
   String? _resolveErrorMessage(Object exception) {
-    if (exception is DioException) {
-      final response = exception.response?.data;
-      if (response is Map<String, dynamic>) {
-        final message = response['message']?.toString();
-        final errors = response['errors'];
-
-        if (errors is Map && errors.isNotEmpty) {
-          final firstGroup = errors.values.first;
-          if (firstGroup is List && firstGroup.isNotEmpty) {
-            return firstGroup.first?.toString() ?? message;
-          }
-        }
-
-        return message;
-      }
-    }
-
-    return null;
+    return userFacingError(exception);
   }
 }

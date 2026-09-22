@@ -64,12 +64,15 @@ use App\Http\Controllers\Api\PlatformAdmin\GymOwnerController as PlatformGymOwne
 use App\Http\Controllers\Api\PlatformAdmin\IndependentTrainerVerificationController as PlatformIndependentTrainerVerificationController;
 use App\Http\Controllers\Api\PlatformAdmin\ListingController as PlatformListingController;
 use App\Http\Controllers\Api\PlatformAdmin\PlatformAdminContextController;
+use App\Http\Controllers\Api\PlatformAdmin\PrivacyRequestAdminController;
 use App\Http\Controllers\Api\PlatformAdmin\ReportController as PlatformReportController;
 use App\Http\Controllers\Api\PlatformAdmin\SettingController as PlatformSettingController;
 use App\Http\Controllers\Api\PlatformAdmin\UserController as PlatformUserController;
 use App\Http\Controllers\Api\PlatformAdmin\WhatsAppConnectionController as PlatformWhatsAppConnectionController;
 use App\Http\Controllers\Api\PlatformAdmin\WhatsAppInboxController as PlatformWhatsAppInboxController;
 use App\Http\Controllers\Api\PlatformAdmin\WorkoutBookController as PlatformWorkoutBookController;
+use App\Http\Controllers\Api\PrivacyConsentController;
+use App\Http\Controllers\Api\PrivacyRequestController;
 use App\Http\Controllers\Api\Public\AppConfigController;
 use App\Http\Controllers\Api\Public\AuthController;
 use App\Http\Controllers\Api\Public\DemoAuthController;
@@ -131,24 +134,29 @@ Route::prefix('public')->group(function (): void {
         Route::get('realtime/context', RealtimeContextController::class)->middleware('throttle:60,1');
         Route::post('auth/logout', [AuthController::class, 'logout']);
         Route::post('auth/active-role', [AuthController::class, 'switchActiveRole']);
-        Route::get('notifications', [PublicNotificationController::class, 'index']);
-        Route::post('notifications/{notification}/read', [PublicNotificationController::class, 'markRead']);
-        Route::post('notifications/{notification}/unread', [PublicNotificationController::class, 'markUnread']);
-        Route::post('notifications/read-all', [PublicNotificationController::class, 'markAllRead']);
-        Route::get('notification-preferences', [PublicNotificationController::class, 'preferences']);
-        Route::put('notification-preferences', [PublicNotificationController::class, 'updatePreferences']);
-        Route::post('fcm-tokens', [FcmTokenController::class, 'store']);
+        Route::get('notifications', [PublicNotificationController::class, 'index'])->middleware('core_consent');
+        Route::post('notifications/{notification}/read', [PublicNotificationController::class, 'markRead'])->middleware('core_consent');
+        Route::post('notifications/{notification}/unread', [PublicNotificationController::class, 'markUnread'])->middleware('core_consent');
+        Route::post('notifications/read-all', [PublicNotificationController::class, 'markAllRead'])->middleware('core_consent');
+        Route::get('notification-preferences', [PublicNotificationController::class, 'preferences'])->middleware('core_consent');
+        Route::put('notification-preferences', [PublicNotificationController::class, 'updatePreferences'])->middleware('core_consent');
+        Route::post('fcm-tokens', [FcmTokenController::class, 'store'])->middleware(['core_consent', 'consent:notifications']);
         Route::delete('fcm-tokens', [FcmTokenController::class, 'destroy']);
+        Route::get('privacy/consents', [PrivacyConsentController::class, 'index']);
+        Route::post('privacy/consents', [PrivacyConsentController::class, 'grant']);
+        Route::delete('privacy/consents/{purpose}', [PrivacyConsentController::class, 'withdraw']);
+        Route::get('privacy/requests', [PrivacyRequestController::class, 'index']);
+        Route::post('privacy/requests', [PrivacyRequestController::class, 'store'])->middleware('throttle:5,1');
     });
 });
 
-Route::middleware(['auth:sanctum', 'active_account'])->group(function (): void {
+Route::middleware(['auth:sanctum', 'active_account', 'core_consent'])->group(function (): void {
     Route::get('notifications', [PublicNotificationController::class, 'index']);
     Route::post('notifications/{notification}/read', [PublicNotificationController::class, 'markRead']);
     Route::post('notifications/read-all', [PublicNotificationController::class, 'markAllRead']);
     Route::get('notification-preferences', [PublicNotificationController::class, 'preferences']);
     Route::put('notification-preferences', [PublicNotificationController::class, 'updatePreferences']);
-    Route::post('fcm-tokens', [FcmTokenController::class, 'store']);
+    Route::post('fcm-tokens', [FcmTokenController::class, 'store'])->middleware('consent:notifications');
     Route::delete('fcm-tokens', [FcmTokenController::class, 'destroy']);
     Route::get('chat/conversations', [TrainerMemberChatController::class, 'conversations']);
     Route::get('chat/messages', [TrainerMemberChatController::class, 'index']);
@@ -289,6 +297,10 @@ Route::prefix('platform-admin')
         Route::post('gym-owners/{user}/deactivate', [PlatformGymOwnerController::class, 'deactivate'])
             ->middleware('permission:platform.users.view');
         Route::get('users', [PlatformUserController::class, 'index'])
+            ->middleware('permission:platform.users.view');
+        Route::get('privacy-requests', [PrivacyRequestAdminController::class, 'index'])
+            ->middleware('permission:platform.users.view');
+        Route::patch('privacy-requests/{privacyRequest}', [PrivacyRequestAdminController::class, 'update'])
             ->middleware('permission:platform.users.view');
         Route::get('trainer-verifications', [PlatformIndependentTrainerVerificationController::class, 'index'])
             ->middleware('permission:platform.users.view');
@@ -693,6 +705,7 @@ Route::prefix('trainer')
         'active_account',
         'role:platform_admin|gym_owner|branch_manager|trainer',
         'active_role:platform_admin,gym_owner,branch_manager,trainer',
+        'core_consent',
         'permission:trainer.view',
         'gym_scope',
         'branch_scope',
@@ -704,7 +717,7 @@ Route::prefix('trainer')
         Route::put('profile', [TrainerProfileController::class, 'update'])
             ->middleware('permission:trainer.self.manage|trainer.manage');
         Route::post('profile/photo', [TrainerProfileController::class, 'uploadPhoto'])
-            ->middleware('permission:trainer.self.manage|trainer.manage');
+            ->middleware(['permission:trainer.self.manage|trainer.manage', 'consent:photos']);
         Route::post('profile/certifications/upload', [TrainerProfileController::class, 'uploadCertificationFile'])
             ->middleware('permission:trainer.self.manage|trainer.manage');
         Route::post('profile/verification/submit', [TrainerProfileController::class, 'submitVerification'])
@@ -723,31 +736,31 @@ Route::prefix('trainer')
         Route::post('independent-members/{relationship}/revoke', [IndependentMemberController::class, 'revoke'])
             ->middleware('permission:trainer.self.manage');
         Route::get('independent-members/{relationship}', [IndependentMemberCoachingController::class, 'show'])
-            ->middleware('permission:trainer.view|member.view');
+            ->middleware(['permission:trainer.view|member.view', 'member_sharing_consent']);
         Route::get('independent-members/{relationship}/progress', [IndependentMemberCoachingController::class, 'progress'])
-            ->middleware('permission:progress.view|member.view');
+            ->middleware(['permission:progress.view|member.view', 'member_sharing_consent:health_and_fitness_data']);
         Route::get('independent-members/{relationship}/notes', [IndependentMemberCoachingController::class, 'notes'])
-            ->middleware('permission:trainer.view|member.view');
+            ->middleware(['permission:trainer.view|member.view', 'member_sharing_consent']);
         Route::post('independent-members/{relationship}/notes', [IndependentMemberCoachingController::class, 'storeNote'])
-            ->middleware('permission:trainer.self.manage');
+            ->middleware(['permission:trainer.self.manage', 'member_sharing_consent']);
         Route::get('independent-members/{relationship}/workout-plans', [IndependentMemberCoachingController::class, 'workoutPlans'])
-            ->middleware('permission:workout_plan.view|workout_plan.manage');
+            ->middleware(['permission:workout_plan.view|workout_plan.manage', 'member_sharing_consent:health_and_fitness_data']);
         Route::get('independent-members/{relationship}/workout-logbook', [IndependentMemberCoachingController::class, 'workoutLogbook'])
-            ->middleware('permission:workout_session.view|progress.view');
+            ->middleware(['permission:workout_session.view|progress.view', 'member_sharing_consent:health_and_fitness_data']);
         Route::get('independent-members/{relationship}/workout-analytics', [IndependentMemberCoachingController::class, 'workoutAnalytics'])
-            ->middleware('permission:workout_session.view|progress.view');
+            ->middleware(['permission:workout_session.view|progress.view', 'member_sharing_consent:health_and_fitness_data']);
         Route::post('independent-members/{relationship}/workout-schedule-overrides', [IndependentMemberCoachingController::class, 'storeWorkoutScheduleOverride'])
-            ->middleware('permission:workout_plan.manage');
+            ->middleware(['permission:workout_plan.manage', 'member_sharing_consent:health_and_fitness_data']);
         Route::get('assigned-members/{member}', [TrainerAssignedMemberController::class, 'show'])
-            ->middleware('permission:trainer.view|member.view');
+            ->middleware(['permission:trainer.view|member.view', 'member_sharing_consent']);
         Route::get('assigned-members/{member}/attendance', [TrainerAssignedMemberController::class, 'attendance'])
-            ->middleware('permission:trainer.view|attendance.view');
+            ->middleware(['permission:trainer.view|attendance.view', 'member_sharing_consent']);
         Route::get('assigned-members/{member}/progress', [TrainerAssignedMemberController::class, 'progress'])
-            ->middleware('permission:trainer.view|member.view');
+            ->middleware(['permission:trainer.view|member.view', 'member_sharing_consent:health_and_fitness_data']);
         Route::get('assigned-members/{member}/notes', [TrainerMemberNoteController::class, 'index'])
-            ->middleware('permission:trainer.view|member.view');
+            ->middleware(['permission:trainer.view|member.view', 'member_sharing_consent']);
         Route::post('assigned-members/{member}/notes', [TrainerMemberNoteController::class, 'store'])
-            ->middleware('permission:trainer.self.manage');
+            ->middleware(['permission:trainer.self.manage', 'member_sharing_consent']);
         Route::put('notes/{trainerMemberNote}', [TrainerMemberNoteController::class, 'update'])
             ->middleware('permission:trainer.self.manage');
         Route::post('notes/{trainerMemberNote}/complete', [TrainerMemberNoteController::class, 'complete'])
@@ -759,13 +772,13 @@ Route::prefix('trainer')
         Route::get('tasks', [TrainerTaskController::class, 'summary'])
             ->middleware('permission:trainer.view|member.view');
         Route::get('assigned-members/{member}/workout-plans', [TrainerAssignedMemberController::class, 'workoutPlans'])
-            ->middleware('permission:workout_plan.view|workout_plan.manage');
+            ->middleware(['permission:workout_plan.view|workout_plan.manage', 'member_sharing_consent:health_and_fitness_data']);
         Route::get('assigned-members/{member}/workout-logbook', [TrainerAssignedMemberController::class, 'workoutLogbook'])
-            ->middleware('permission:workout_session.view|progress.view');
+            ->middleware(['permission:workout_session.view|progress.view', 'member_sharing_consent:health_and_fitness_data']);
         Route::get('assigned-members/{member}/workout-analytics', [TrainerAssignedMemberController::class, 'workoutAnalytics'])
-            ->middleware('permission:workout_session.view|progress.view');
+            ->middleware(['permission:workout_session.view|progress.view', 'member_sharing_consent:health_and_fitness_data']);
         Route::post('assigned-members/{member}/workout-schedule-overrides', [TrainerAssignedMemberController::class, 'storeWorkoutScheduleOverride'])
-            ->middleware('permission:workout_plan.manage');
+            ->middleware(['permission:workout_plan.manage', 'member_sharing_consent:health_and_fitness_data']);
         Route::get('exercises', [TrainerExerciseController::class, 'index'])
             ->middleware('permission:exercise.view|exercise.manage');
         Route::get('exercises/{exercise}', [TrainerExerciseController::class, 'show'])
@@ -833,7 +846,7 @@ Route::prefix('trainer')
             ->middleware('permission:trial_request.manage');
     });
 
-Route::prefix('trainer-invitations')->middleware(['auth:sanctum', 'active_account', 'role:trainer', 'active_role:trainer'])->group(function (): void {
+Route::prefix('trainer-invitations')->middleware(['auth:sanctum', 'active_account', 'role:trainer', 'active_role:trainer', 'core_consent'])->group(function (): void {
     Route::post('{invitation}/respond', [TrainerGymInvitationController::class, 'respond']);
 });
 
@@ -843,6 +856,7 @@ Route::prefix('member')
         'active_account',
         'role:member',
         'active_role:member',
+        'core_consent',
         'permission:member.view',
     ])
     ->group(function (): void {
@@ -879,6 +893,7 @@ Route::prefix('member')
         'active_account',
         'role:member',
         'active_role:member',
+        'core_consent',
         'permission:member.view',
         'gym_scope',
         'branch_scope',
@@ -886,7 +901,8 @@ Route::prefix('member')
     ->group(function (): void {
         Route::get('profile', [MemberProfileController::class, 'show']);
         Route::put('profile', [MemberProfileController::class, 'update']);
-        Route::post('profile/photo', [MemberProfileController::class, 'uploadPhoto']);
+        Route::post('profile/photo', [MemberProfileController::class, 'uploadPhoto'])
+            ->middleware('consent:photos');
         Route::get('favorite-gyms', [FavoriteGymController::class, 'index']);
         Route::post('favorite-gyms/{publicGym}', [FavoriteGymController::class, 'store']);
         Route::delete('favorite-gyms/{publicGym}', [FavoriteGymController::class, 'destroy']);
@@ -894,21 +910,25 @@ Route::prefix('member')
         Route::post('membership/leave', [MemberAppMembershipController::class, 'leave']);
         Route::get('trainer', [MemberTrainerController::class, 'show']);
         Route::delete('trainer-assignment', [MemberTrainerController::class, 'destroy']);
-        Route::get('attendance/biometric-profile', [MemberAttendanceController::class, 'biometricProfile']);
-        Route::get('attendance', [MemberAttendanceController::class, 'history']);
-        Route::get('attendance/status', [MemberAttendanceController::class, 'status']);
-        Route::get('attendance/history', [MemberAttendanceController::class, 'history']);
+        Route::get('attendance/biometric-profile', [MemberAttendanceController::class, 'biometricProfile'])
+            ->middleware('consent:biometric_attendance');
+        Route::get('attendance', [MemberAttendanceController::class, 'history'])
+            ->middleware('consent:biometric_attendance');
+        Route::get('attendance/status', [MemberAttendanceController::class, 'status'])
+            ->middleware('consent:biometric_attendance');
+        Route::get('attendance/history', [MemberAttendanceController::class, 'history'])
+            ->middleware('consent:biometric_attendance');
         Route::get('workout-plans', [MemberWorkoutController::class, 'plans'])
             ->middleware('permission:workout_plan.view');
-        Route::get('diet-plans', [MemberDietPlanController::class, 'index']);
+        Route::get('diet-plans', [MemberDietPlanController::class, 'index'])->middleware('consent:health_and_fitness_data');
         Route::get('food-catalog', FoodCatalogController::class);
-        Route::post('diet-plans', [MemberDietPlanController::class, 'store']);
+        Route::post('diet-plans', [MemberDietPlanController::class, 'store'])->middleware('consent:health_and_fitness_data');
         Route::get('diet-templates', [MemberDietPlanController::class, 'templates']);
-        Route::post('diet-templates/{dietPlanTemplate}/adopt', [MemberDietPlanController::class, 'adoptTemplate']);
-        Route::get('diet-plans/{dietPlan}', [MemberDietPlanController::class, 'show']);
-        Route::put('diet-plans/{dietPlan}', [MemberDietPlanController::class, 'update']);
-        Route::delete('diet-plans/{dietPlan}', [MemberDietPlanController::class, 'destroy']);
-        Route::post('diet-plans/{dietPlan}/meals/{meal}/log', [MemberDietPlanController::class, 'logMeal']);
+        Route::post('diet-templates/{dietPlanTemplate}/adopt', [MemberDietPlanController::class, 'adoptTemplate'])->middleware('consent:health_and_fitness_data');
+        Route::get('diet-plans/{dietPlan}', [MemberDietPlanController::class, 'show'])->middleware('consent:health_and_fitness_data');
+        Route::put('diet-plans/{dietPlan}', [MemberDietPlanController::class, 'update'])->middleware('consent:health_and_fitness_data');
+        Route::delete('diet-plans/{dietPlan}', [MemberDietPlanController::class, 'destroy'])->middleware('consent:health_and_fitness_data');
+        Route::post('diet-plans/{dietPlan}/meals/{meal}/log', [MemberDietPlanController::class, 'logMeal'])->middleware('consent:health_and_fitness_data');
         Route::post('workout-plans', [MemberWorkoutController::class, 'storePlan'])
             ->middleware('permission:workout_plan.manage|workout_session.manage');
         Route::get('workout-plans/{workoutPlan}', [MemberWorkoutController::class, 'showPlan'])
@@ -958,19 +978,19 @@ Route::prefix('member')
         Route::get('workout-data/export', [MemberWorkoutPortabilityController::class, 'exportData'])
             ->middleware('permission:workout_session.view|progress.view');
         Route::post('workout-sessions/start', [MemberWorkoutController::class, 'start'])
-            ->middleware('permission:workout_session.manage');
+            ->middleware(['permission:workout_session.manage', 'consent:health_and_fitness_data']);
         Route::get('workout-sessions/active', [MemberWorkoutController::class, 'activeSession'])
-            ->middleware('permission:workout_session.view|workout_session.manage');
+            ->middleware(['permission:workout_session.view|workout_session.manage', 'consent:health_and_fitness_data']);
         Route::get('workout-sessions/{workoutSession}', [MemberWorkoutController::class, 'showSession'])
-            ->middleware('permission:workout_session.view|workout_session.manage');
+            ->middleware(['permission:workout_session.view|workout_session.manage', 'consent:health_and_fitness_data']);
         Route::put('workout-sessions/{workoutSession}/progress', [MemberWorkoutController::class, 'saveProgress'])
-            ->middleware('permission:workout_session.manage');
+            ->middleware(['permission:workout_session.manage', 'consent:health_and_fitness_data']);
         Route::post('workout-sessions/{workoutSession}/exercises', [MemberWorkoutController::class, 'addExercise'])
-            ->middleware('permission:workout_session.manage');
+            ->middleware(['permission:workout_session.manage', 'consent:health_and_fitness_data']);
         Route::post('workout-sessions/{workoutSession}/complete', [MemberWorkoutController::class, 'complete'])
-            ->middleware('permission:workout_session.manage');
+            ->middleware(['permission:workout_session.manage', 'consent:health_and_fitness_data']);
         Route::get('workout-history', [MemberWorkoutController::class, 'history'])
-            ->middleware('permission:workout_session.view');
+            ->middleware(['permission:workout_session.view', 'consent:health_and_fitness_data']);
         Route::get('exercise-history/{exerciseId}', [MemberWorkoutController::class, 'exerciseHistory'])
             ->middleware('permission:workout_session.view|progress.view');
         Route::get('logbook-summary', [MemberWorkoutController::class, 'logbookSummary'])
@@ -978,9 +998,9 @@ Route::prefix('member')
         Route::get('workout-progression-recommendations', [MemberWorkoutController::class, 'progressionRecommendations'])
             ->middleware('permission:workout_session.view|progress.view');
         Route::get('progress/summary', [MemberProgressController::class, 'summary'])
-            ->middleware('permission:progress.view');
+            ->middleware(['permission:progress.view', 'consent:health_and_fitness_data']);
         Route::get('progress/workout-analytics', [MemberProgressController::class, 'analytics'])
-            ->middleware('permission:progress.view');
+            ->middleware(['permission:progress.view', 'consent:health_and_fitness_data']);
         Route::get('workout-calendar', [MemberProgressController::class, 'calendar'])
             ->middleware('permission:workout_plan.view|workout_session.manage');
         Route::get('workout-preferences', [MemberProgressController::class, 'workoutPreferences'])
@@ -992,21 +1012,21 @@ Route::prefix('member')
         Route::delete('workout-schedule-overrides/{workoutScheduleOverride}', [MemberProgressController::class, 'cancelScheduleOverride'])
             ->middleware('permission:workout_plan.manage|workout_session.manage');
         Route::post('steps/sync', [MemberStepController::class, 'sync'])
-            ->middleware('permission:progress.manage');
+            ->middleware(['permission:progress.manage', 'consent:health_and_fitness_data']);
         Route::get('steps/today', [MemberStepController::class, 'today'])
-            ->middleware('permission:progress.view');
+            ->middleware(['permission:progress.view', 'consent:health_and_fitness_data']);
         Route::get('steps/summary', [MemberStepController::class, 'summary'])
-            ->middleware('permission:progress.view');
+            ->middleware(['permission:progress.view', 'consent:health_and_fitness_data']);
         Route::get('progress/weight-logs', [MemberProgressController::class, 'weightLogs'])
-            ->middleware('permission:progress.view');
+            ->middleware(['permission:progress.view', 'consent:health_and_fitness_data']);
         Route::post('progress/weight-logs', [MemberProgressController::class, 'storeWeightLog'])
-            ->middleware('permission:progress.manage');
+            ->middleware(['permission:progress.manage', 'consent:health_and_fitness_data']);
         Route::get('progress/body-measurements', [MemberProgressController::class, 'bodyMeasurements'])
-            ->middleware('permission:progress.view');
+            ->middleware(['permission:progress.view', 'consent:health_and_fitness_data']);
         Route::post('progress/body-measurements', [MemberProgressController::class, 'storeBodyMeasurement'])
-            ->middleware('permission:progress.manage');
+            ->middleware(['permission:progress.manage', 'consent:health_and_fitness_data']);
         Route::get('progress/photos', [MemberProgressController::class, 'photos'])
-            ->middleware('permission:progress.view');
+            ->middleware(['permission:progress.view', 'consent:photos']);
         Route::post('progress/photos', [MemberProgressController::class, 'storePhoto'])
-            ->middleware('permission:progress.manage');
+            ->middleware(['permission:progress.manage', 'consent:photos']);
     });

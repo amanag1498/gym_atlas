@@ -8,9 +8,11 @@ import 'package:gym_flutter_core/workout_plan_summary_view.dart';
 import 'package:provider/provider.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
+import '../../core/user_facing_error.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../core/config.dart';
+import '../../core/api_client.dart';
 import '../../core/pagination.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/confirmation_dialog.dart';
@@ -379,11 +381,9 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         final response = await _repository.fetchPendingFollowUps();
         followUps = _mapList(response['data']);
       } catch (exception) {
-        final message = exception.toString().toLowerCase();
         if (!isIndependent &&
-            !(message.contains('404') ||
-                message.contains('not found') ||
-                message.contains('endpoint'))) {
+            !(exception is TrainerApiException &&
+                exception.statusCode == 404)) {
           rethrow;
         }
         followUps = const [];
@@ -393,7 +393,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
         _chatError = null;
       } catch (exception) {
         chatConversations = const [];
-        _chatError = exception.toString();
+        _chatError = userFacingError(exception);
       }
       if (!mounted) {
         return;
@@ -466,7 +466,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     } finally {
       if (mounted) setState(() => _loadingMoreMembers = false);
@@ -504,7 +504,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     } finally {
       if (mounted) setState(() => _loadingMoreNotifications = false);
@@ -547,7 +547,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     } finally {
       if (mounted) setState(() => _loadingMoreWorkoutData = false);
@@ -1028,7 +1028,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       });
     } catch (exception) {
       if (mounted) {
-        setState(() => _chatError = exception.toString());
+        setState(() => _chatError = userFacingError(exception));
       }
     }
   }
@@ -1404,7 +1404,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                       } catch (exception) {
                         if (sheetContext.mounted) {
                           ScaffoldMessenger.of(sheetContext).showSnackBar(
-                            SnackBar(content: Text(exception.toString())),
+                            SnackBar(content: Text(userFacingError(exception))),
                           );
                         }
                       }
@@ -1562,7 +1562,9 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                           } catch (exception) {
                             if (modalContext.mounted) {
                               modalMessenger.showSnackBar(
-                                SnackBar(content: Text(exception.toString())),
+                                SnackBar(
+                                  content: Text(userFacingError(exception)),
+                                ),
                               );
                             }
                           } finally {
@@ -1712,7 +1714,9 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                             } catch (error) {
                               if (modalContext.mounted) {
                                 ScaffoldMessenger.of(modalContext).showSnackBar(
-                                  SnackBar(content: Text(error.toString())),
+                                  SnackBar(
+                                    content: Text(userFacingError(error)),
+                                  ),
                                 );
                               }
                             } finally {
@@ -1865,7 +1869,9 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                                           sheetContext,
                                         ).showSnackBar(
                                           SnackBar(
-                                            content: Text(exception.toString()),
+                                            content: Text(
+                                              userFacingError(exception),
+                                            ),
                                           ),
                                         );
                                       }
@@ -1912,7 +1918,9 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                                         sheetContext,
                                       ).showSnackBar(
                                         SnackBar(
-                                          content: Text(exception.toString()),
+                                          content: Text(
+                                            userFacingError(exception),
+                                          ),
                                         ),
                                       );
                                     }
@@ -2028,7 +2036,7 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
               } catch (exception) {
                 if (modalContext.mounted) {
                   modalMessenger.showSnackBar(
-                    SnackBar(content: Text(exception.toString())),
+                    SnackBar(content: Text(userFacingError(exception))),
                   );
                 }
               } finally {
@@ -5905,7 +5913,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       if (mounted && generation == _exerciseSearchGeneration) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     } finally {
       if (mounted && generation == _exerciseSearchGeneration) {
@@ -5941,7 +5949,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       if (mounted && generation == _exerciseSearchGeneration) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     } finally {
       if (mounted && generation == _exerciseSearchGeneration) {
@@ -6023,7 +6031,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     }
   }
@@ -7711,9 +7719,9 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                 }
               } catch (exception) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text(exception.toString())));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(userFacingError(exception))),
+                  );
                 }
               } finally {
                 if (mounted) {
@@ -8194,7 +8202,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     } finally {
       if (mounted) {
         setState(() => _savingPlan = false);
@@ -8268,7 +8276,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                 } catch (exception) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(exception.toString())),
+                      SnackBar(content: Text(userFacingError(exception))),
                     );
                   }
                 } finally {
@@ -8302,7 +8310,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                 } catch (exception) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(exception.toString())),
+                      SnackBar(content: Text(userFacingError(exception))),
                     );
                   }
                 } finally {
@@ -8524,7 +8532,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     } finally {
       if (mounted) {
         setState(() => _savingPlan = false);
@@ -8585,7 +8593,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     }
   }
 
@@ -8758,7 +8766,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     } finally {
       if (mounted) {
         setState(() => _savingPlan = false);
@@ -10472,7 +10480,7 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen>
       unawaited(widget.repository.markChatRead(widget.memberId));
     } catch (exception) {
       if (mounted) {
-        setState(() => _error = exception.toString());
+        setState(() => _error = userFacingError(exception));
       }
     } finally {
       if (mounted) {
@@ -10514,7 +10522,7 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen>
       }
     } catch (exception) {
       if (mounted) {
-        setState(() => _error = exception.toString());
+        setState(() => _error = userFacingError(exception));
       }
     } finally {
       if (mounted) {
@@ -10573,7 +10581,7 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen>
     } catch (exception) {
       _upsert({...optimistic, 'pending': false, 'failed': true});
       if (mounted) {
-        setState(() => _error = exception.toString());
+        setState(() => _error = userFacingError(exception));
       }
     } finally {
       if (mounted) {
@@ -10612,7 +10620,7 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen>
       await widget.repository.acceptChatTerms();
       if (mounted) setState(() => _termsAccepted = true);
     } catch (exception) {
-      if (mounted) setState(() => _error = exception.toString());
+      if (mounted) setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) setState(() => _safetyBusy = false);
     }
@@ -10658,7 +10666,7 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen>
         );
       }
     } catch (exception) {
-      if (mounted) setState(() => _error = exception.toString());
+      if (mounted) setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) setState(() => _safetyBusy = false);
     }
@@ -10675,7 +10683,7 @@ class _TrainerChatThreadScreenState extends State<_TrainerChatThreadScreen>
       }
       if (mounted) setState(() => _blockedByMe = !_blockedByMe);
     } catch (exception) {
-      if (mounted) setState(() => _error = exception.toString());
+      if (mounted) setState(() => _error = userFacingError(exception));
     } finally {
       if (mounted) setState(() => _safetyBusy = false);
     }
@@ -11405,7 +11413,7 @@ class _NotificationPage extends StatelessWidget {
                       } catch (exception) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(exception.toString())),
+                            SnackBar(content: Text(userFacingError(exception))),
                           );
                         }
                       }
@@ -11482,7 +11490,7 @@ class _NotificationPage extends StatelessWidget {
                       } catch (exception) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(exception.toString())),
+                            SnackBar(content: Text(userFacingError(exception))),
                           );
                         }
                       }
@@ -11495,7 +11503,7 @@ class _NotificationPage extends StatelessWidget {
                       } catch (exception) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(exception.toString())),
+                            SnackBar(content: Text(userFacingError(exception))),
                           );
                         }
                       }
@@ -11632,7 +11640,7 @@ class _TrainerSendUpdateSheetHostState
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
         setState(() => _saving = false);
       }
     }

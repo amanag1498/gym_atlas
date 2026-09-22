@@ -16,12 +16,14 @@ use App\Models\User;
 use App\Models\WorkoutPlan;
 use App\Models\WorkoutSession;
 use App\Services\Member\EngagementScoreService;
+use App\Services\Privacy\ConsentService;
 use App\Services\Trainer\TrainerScopeService;
 use App\Services\Workout\WorkoutAnalyticsService;
 use App\Services\Workout\WorkoutScheduleService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\ValidationException;
 
 class AssignedMemberController extends Controller
@@ -50,6 +52,7 @@ class AssignedMemberController extends Controller
                 ->whereHas('memberships', fn ($membershipQuery) => $membershipQuery->where('due_amount', '>', 0)))
             ->latest('id');
 
+        app(ConsentService::class)->scopeGrantedUsers($query, 'member_profiles.user_id', 'trainer_member_sharing');
         $paginator = $query->paginate((int) $request->integer('per_page', 15));
         $this->engagementScoreService->enrichMemberProfiles($paginator->getCollection(), true);
 
@@ -84,7 +87,9 @@ class AssignedMemberController extends Controller
             ->when($trainerProfile->branch_id, fn ($builder) => $builder->where('branch_id', $trainerProfile->branch_id));
         $weightLogs = $scope($member->weightLogs())->latest('log_date')->latest('id')->paginate($perPage, ['*'], 'weight_page');
         $measurements = $scope($member->bodyMeasurements())->latest('measured_on')->latest('id')->paginate($perPage, ['*'], 'measurement_page');
-        $photos = $scope($member->progressPhotos())->latest('captured_on')->latest('id')->paginate($perPage, ['*'], 'photo_page');
+        $photos = app(ConsentService::class)->granted($member, 'photos')
+            ? $scope($member->progressPhotos())->latest('captured_on')->latest('id')->paginate($perPage, ['*'], 'photo_page')
+            : new LengthAwarePaginator([], 0, $perPage);
         $records = $scope($member->personalRecords()->with('exercise'))->latest('best_volume')->latest('id')->paginate($perPage, ['*'], 'record_page');
         $meta = static fn ($paginator): array => [
             'current_page' => $paginator->currentPage(),

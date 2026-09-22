@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:gym_flutter_core/workout_builder_validation.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -461,7 +462,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     }
   }
@@ -540,7 +541,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     }
   }
@@ -5758,11 +5759,7 @@ Color _originColor(String origin) {
 }
 
 String _friendlyError(Object exception) {
-  final message = exception.toString();
-  if (message.contains('422')) {
-    return 'Please review the workout plan details and try again.';
-  }
-  return message;
+  return userFacingError(exception);
 }
 
 String _weekdayLabel(int value) {

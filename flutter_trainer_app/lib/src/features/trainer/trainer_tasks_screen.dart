@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/user_facing_error.dart';
+import '../../core/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/confirmation_dialog.dart';
@@ -119,7 +121,7 @@ class _TrainerTasksScreenState extends State<TrainerTasksScreen> {
         return;
       }
       setState(() {
-        _error = exception.toString();
+        _error = userFacingError(exception);
         _loading = false;
       });
     }
@@ -141,7 +143,7 @@ class _TrainerTasksScreenState extends State<TrainerTasksScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
@@ -187,7 +189,7 @@ class _TrainerTasksScreenState extends State<TrainerTasksScreen> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -244,7 +246,7 @@ class _TrainerTasksScreenState extends State<TrainerTasksScreen> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     }
   }
 
@@ -524,11 +526,13 @@ String _titleCase(String value) {
 }
 
 bool _looksLikePermissionError(Object? error) {
+  if (error is TrainerApiException) return error.statusCode == 403;
   final message = error?.toString().toLowerCase() ?? '';
   return message.contains('permission') || message.contains('403');
 }
 
 bool _looksLikeMissingEndpoint(Object? error) {
+  if (error is TrainerApiException) return error.statusCode == 404;
   final message = error?.toString().toLowerCase() ?? '';
   return message.contains('404') ||
       message.contains('not found') ||
@@ -536,6 +540,7 @@ bool _looksLikeMissingEndpoint(Object? error) {
 }
 
 bool _looksLikeMissingCompletion(Object? error) {
+  if (error is TrainerApiException) return error.statusCode == 404;
   final message = error?.toString().toLowerCase() ?? '';
   return message.contains('not available') || message.contains('404');
 }

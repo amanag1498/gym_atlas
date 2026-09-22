@@ -2,9 +2,11 @@
 
 namespace App\Services\WhatsApp;
 
+use App\Models\ConsentRecord;
 use App\Models\Gym;
 use App\Models\User;
 use App\Models\WhatsAppConsent;
+use App\Services\Privacy\ConsentService;
 use App\Support\CommunicationScope;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -73,6 +75,13 @@ class WhatsAppConsentService
      */
     public function deliveryEligibilities(Collection $users, ?int $gymId, string $purpose): array
     {
+        $privacyChoices = ConsentRecord::query()
+            ->whereIn('user_id', $users->pluck('id'))
+            ->whereIn('purpose', ['core_account', 'whatsapp'])
+            ->where('policy_version', ConsentService::POLICY_VERSION)
+            ->latest('id')
+            ->get()
+            ->groupBy('user_id');
         $preferences = WhatsAppConsent::query()
             ->whereIn('user_id', $users->pluck('id'))
             ->where('gym_id', $gymId)
@@ -80,9 +89,19 @@ class WhatsAppConsentService
             ->get()
             ->keyBy('user_id');
 
-        return $users->mapWithKeys(function (User $user) use ($preferences): array {
+        return $users->mapWithKeys(function (User $user) use ($preferences, $privacyChoices, $purpose): array {
+            $choices = $privacyChoices->get($user->id, collect())->unique('purpose')->keyBy('purpose');
+            $core = $choices->get('core_account');
+            $choice = $choices->get('whatsapp');
+            if ($core === null || $core->consented_at === null || $core->withdrawn_at !== null
+                || $choice === null || $choice->consented_at === null || $choice->withdrawn_at !== null) {
+                return [$user->id => ['phone' => null, 'exclusion_reason' => 'whatsapp_consent_required']];
+            }
             $preference = $preferences->get($user->id);
             if ($preference === null) {
+                if ($purpose !== 'utility') {
+                    return [$user->id => ['phone' => null, 'exclusion_reason' => 'whatsapp_consent_required']];
+                }
                 $phone = $this->normalizePhone($user->phone);
 
                 return [$user->id => [

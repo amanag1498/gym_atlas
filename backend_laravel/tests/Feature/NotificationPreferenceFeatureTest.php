@@ -10,9 +10,11 @@ use App\Models\Notification;
 use App\Models\NotificationPreference;
 use App\Models\User;
 use App\Services\Notification\NotificationService;
+use App\Services\Privacy\ConsentService;
 use App\Services\WhatsApp\WhatsAppConsentService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Tests\TestCase;
 
 class NotificationPreferenceFeatureTest extends TestCase
@@ -41,7 +43,7 @@ class NotificationPreferenceFeatureTest extends TestCase
             ]);
     }
 
-    public function test_member_notification_and_whatsapp_channels_default_to_enabled(): void
+    public function test_member_notification_preferences_default_to_enabled_but_whatsapp_delivery_requires_consent(): void
     {
         $this->seed(PermissionSeeder::class);
 
@@ -66,9 +68,23 @@ class NotificationPreferenceFeatureTest extends TestCase
         $whatsApp = app(WhatsAppConsentService::class);
         foreach (['utility', 'marketing'] as $purpose) {
             $eligibility = $whatsApp->deliveryEligibility($user, null, $purpose);
-            $this->assertSame('+919876543210', $eligibility['phone']);
-            $this->assertNull($eligibility['exclusion_reason']);
+            $this->assertNull($eligibility['phone']);
+            $this->assertSame('whatsapp_consent_required', $eligibility['exclusion_reason']);
         }
+    }
+
+    public function test_one_time_whatsapp_choice_enables_service_reminders_but_not_marketing(): void
+    {
+        $user = User::factory()->create(['phone' => '9876543210']);
+        app(ConsentService::class)->record($user, 'core_account', Request::create('/test', 'POST'));
+        app(ConsentService::class)->record($user, 'whatsapp', Request::create('/test', 'POST'));
+        $whatsApp = app(WhatsAppConsentService::class);
+
+        $this->assertSame('+919876543210', $whatsApp->deliveryEligibility($user, null, 'utility')['phone']);
+        $this->assertSame('whatsapp_consent_required', $whatsApp->deliveryEligibility($user, null, 'marketing')['exclusion_reason']);
+
+        $whatsApp->set($user, null, 'utility', false);
+        $this->assertSame('whatsapp_opted_out', $whatsApp->deliveryEligibility($user, null, 'utility')['exclusion_reason']);
     }
 
     public function test_global_preference_disables_non_critical_scoped_notifications(): void

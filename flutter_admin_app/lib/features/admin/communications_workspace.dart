@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../core/models/session_models.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/common_widgets.dart';
@@ -58,7 +59,7 @@ class _CommunicationsWorkspaceState extends State<CommunicationsWorkspace> {
       _notificationTypes = results[3] as List<Map<String, dynamic>>;
       _conversations = results[4] as List<Map<String, dynamic>>;
     } catch (exception) {
-      _error = exception.toString();
+      _error = userFacingError(exception);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -93,7 +94,7 @@ class _CommunicationsWorkspaceState extends State<CommunicationsWorkspace> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -272,7 +273,7 @@ class _CommunicationsWorkspaceState extends State<CommunicationsWorkspace> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     }
   }

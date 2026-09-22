@@ -19,12 +19,14 @@ use App\Models\TrainerMemberNote;
 use App\Models\WorkoutPlan;
 use App\Models\WorkoutSession;
 use App\Services\Audit\AuditLogService;
+use App\Services\Privacy\ConsentService;
 use App\Services\Trainer\IndependentCoachingAccessService;
 use App\Services\Workout\WorkoutAnalyticsService;
 use App\Services\Workout\WorkoutScheduleService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\ValidationException;
 
 class IndependentMemberCoachingController extends Controller
@@ -64,8 +66,10 @@ class IndependentMemberCoachingController extends Controller
             ->latest('log_date')->latest('id')->paginate($perPage, ['*'], 'weight_page');
         $measurements = $member->bodyMeasurements()->whereNull('gym_id')->whereNull('branch_id')
             ->latest('measured_on')->latest('id')->paginate($perPage, ['*'], 'measurement_page');
-        $photos = $member->progressPhotos()->whereNull('gym_id')->whereNull('branch_id')
-            ->latest('captured_on')->latest('id')->paginate($perPage, ['*'], 'photo_page');
+        $photos = app(ConsentService::class)->granted($member, 'photos')
+            ? $member->progressPhotos()->whereNull('gym_id')->whereNull('branch_id')
+                ->latest('captured_on')->latest('id')->paginate($perPage, ['*'], 'photo_page')
+            : new LengthAwarePaginator([], 0, $perPage);
         $records = $member->personalRecords()
             ->with('exercise')
             ->where('coaching_scope_key', PersonalRecord::coachingScopeKey(null, null, $relationship->id))

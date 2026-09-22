@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -63,7 +64,7 @@ class _MemberLogbookScreenState extends State<MemberLogbookScreen> {
           .toList();
       _recordPage = ApiPagination.fromResponse(results[1]);
     } catch (exception) {
-      _error = exception.toString();
+      _error = userFacingError(exception);
     }
 
     if (mounted) {
@@ -90,7 +91,7 @@ class _MemberLogbookScreenState extends State<MemberLogbookScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     } finally {
       if (mounted) setState(() => _loadingMoreRecords = false);
@@ -110,7 +111,7 @@ class _MemberLogbookScreenState extends State<MemberLogbookScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
@@ -1345,7 +1346,7 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
           .toList();
       _historyPage = ApiPagination.fromResponse(response);
     } catch (exception) {
-      _error = exception.toString();
+      _error = userFacingError(exception);
     }
 
     if (mounted) {
@@ -1373,7 +1374,7 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     } finally {
       if (mounted) setState(() => _loadingMore = false);

@@ -12,6 +12,7 @@ use App\Models\WorkoutTemplate;
 use App\Services\Authorization\ScopeResolver;
 use App\Services\Member\MemberAppService;
 use App\Services\Members\GymMemberAccessService;
+use App\Services\Privacy\ConsentService;
 use App\Services\Trainer\IndependentCoachingAccessService;
 use Illuminate\Validation\ValidationException;
 
@@ -26,6 +27,7 @@ class WorkoutAccessService
 
     public function assertTrainerCanAccessMember(User $trainer, User $member): MemberProfile
     {
+        $this->assertMemberWorkoutSharing($member);
         $profile = MemberProfile::query()
             ->where('user_id', $member->id)
             ->where('assigned_trainer_user_id', $trainer->id)
@@ -129,6 +131,7 @@ class WorkoutAccessService
         }
 
         if ($actor->active_role === RoleName::Trainer->value) {
+            $this->assertMemberWorkoutSharing($plan->member);
             if ($plan->independent_trainer_member_relationship_id !== null) {
                 if ((int) $plan->trainer_id !== (int) $actor->id) {
                     throw ValidationException::withMessages(['workout_plan_id' => ['You do not have access to this workout plan.']]);
@@ -174,6 +177,13 @@ class WorkoutAccessService
                 'workout_plan_id' => ['You do not have access to this workout plan.'],
             ]);
         }
+    }
+
+    private function assertMemberWorkoutSharing(User $member): void
+    {
+        $consents = app(ConsentService::class);
+        $consents->assertGranted($member, 'trainer_member_sharing');
+        $consents->assertGranted($member, 'health_and_fitness_data');
     }
 
     public function assertSessionAccess(User $actor, WorkoutSession $session): void

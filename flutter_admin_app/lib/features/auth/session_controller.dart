@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart' as firebase;
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../core/models/session_models.dart';
 import '../../core/network/api_client.dart';
 import '../../core/notifications/admin_fcm_token_service.dart';
@@ -81,7 +82,7 @@ class SessionController extends ChangeNotifier {
       }
     } catch (exception) {
       await _clearLocalState(notify: false);
-      error = exception.toString().replaceFirst('Exception: ', '');
+      error = userFacingError(exception).replaceFirst('Exception: ', '');
     }
 
     bootstrapping = false;
@@ -137,7 +138,7 @@ class SessionController extends ChangeNotifier {
     } catch (exception) {
       await _googleSafeSignOut();
       await _clearLocalState(notify: false);
-      error = exception.toString().replaceFirst('Exception: ', '');
+      error = userFacingError(exception).replaceFirst('Exception: ', '');
     }
 
     loggingIn = false;
@@ -165,7 +166,7 @@ class SessionController extends ChangeNotifier {
     } on DioException catch (exception) {
       error = _mapAuthError(exception);
     } catch (exception) {
-      error = exception.toString().replaceFirst('Exception: ', '');
+      error = userFacingError(exception).replaceFirst('Exception: ', '');
     }
 
     notifyListeners();
@@ -245,39 +246,7 @@ class SessionController extends ChangeNotifier {
   }
 
   String _mapAuthError(DioException exception) {
-    final response = exception.response;
-    final data = response?.data;
-
-    if (response?.statusCode == 401) {
-      return 'Your session is invalid or expired. Please sign in again.';
-    }
-
-    if (response?.statusCode == 403) {
-      return 'This Google account is not allowed in the Admin App.';
-    }
-
-    if (data is Map<String, dynamic>) {
-      final message = data['message']?.toString();
-      if (message != null && message.isNotEmpty) {
-        return message;
-      }
-    } else if (data is Map) {
-      final message = data['message']?.toString();
-      if (message != null && message.isNotEmpty) {
-        return message;
-      }
-    }
-
-    switch (exception.type) {
-      case DioExceptionType.connectionTimeout:
-      case DioExceptionType.receiveTimeout:
-      case DioExceptionType.sendTimeout:
-        return 'Network timeout while contacting the admin API.';
-      case DioExceptionType.connectionError:
-        return 'Unable to reach the admin API. Check your network connection.';
-      default:
-        return exception.message ?? 'Authentication failed.';
-    }
+    return userFacingError(exception);
   }
 }
 

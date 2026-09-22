@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:timelines_plus/timelines_plus.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -666,7 +667,9 @@ class _MemberOnboardingFlowState extends State<MemberOnboardingFlow> {
       }
     } catch (exception) {
       if (mounted) {
-        _showErrorDialog(exception.toString().replaceFirst('Exception: ', ''));
+        _showErrorDialog(
+          userFacingError(exception).replaceFirst('Exception: ', ''),
+        );
       }
     } finally {
       if (mounted) {

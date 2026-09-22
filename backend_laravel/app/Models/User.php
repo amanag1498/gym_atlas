@@ -90,6 +90,11 @@ class User extends Authenticatable
         return $this->hasMany(ActivityLog::class, 'actor_user_id');
     }
 
+    public function consentRecords(): HasMany
+    {
+        return $this->hasMany(ConsentRecord::class);
+    }
+
     public function managedTrainerProfile(): HasOne
     {
         return $this->hasOne(TrainerProfile::class);

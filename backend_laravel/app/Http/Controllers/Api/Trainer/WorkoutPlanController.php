@@ -13,6 +13,7 @@ use App\Models\WorkoutPlan;
 use App\Models\WorkoutPlanShare;
 use App\Models\WorkoutProgressionRecommendation;
 use App\Services\Audit\AuditLogService;
+use App\Services\Privacy\ConsentService;
 use App\Services\Trainer\IndependentCoachingAccessService;
 use App\Services\Trainer\TrainerScopeService;
 use App\Services\Workout\WorkoutAccessService;
@@ -48,7 +49,7 @@ class WorkoutPlanController extends Controller
                 ->pluck('id')
             : collect();
 
-        $paginator = WorkoutPlan::query()
+        $query = WorkoutPlan::query()
             ->with(['member', 'trainer', 'template', 'days.exercises.exercise'])
             ->where('trainer_id', $trainer->id)
             ->where('status', 'active')
@@ -65,8 +66,10 @@ class WorkoutPlanController extends Controller
                 $query->whereIn('independent_trainer_member_relationship_id', $activeRelationshipIds);
             })
             ->when($request->filled('member_id'), fn ($query) => $query->where('member_id', $request->integer('member_id')))
-            ->orderByDesc('id')
-            ->paginate((int) $request->integer('per_page', 15));
+            ->orderByDesc('id');
+        app(ConsentService::class)->scopeGrantedUsers($query, 'workout_plans.member_id', 'trainer_member_sharing');
+        app(ConsentService::class)->scopeGrantedUsers($query, 'workout_plans.member_id', 'health_and_fitness_data');
+        $paginator = $query->paginate((int) $request->integer('per_page', 15));
 
         return $this->paginated($paginator, WorkoutPlanResource::collection($paginator->getCollection()), 'Workout plans fetched successfully.');
     }
@@ -75,6 +78,12 @@ class WorkoutPlanController extends Controller
     {
         $profile = $this->trainerScopeService->resolveTrainerProfile($request);
         $data = $request->validated();
+        foreach ($data['member_ids'] as $memberId) {
+            $member = User::query()->findOrFail($memberId);
+            $consents = app(ConsentService::class);
+            $consents->assertGranted($member, 'trainer_member_sharing');
+            $consents->assertGranted($member, 'health_and_fitness_data');
+        }
         $personalCoaching = $profile->gym_id === null || ! empty($data['independent_trainer_member_relationship_id']);
         $data['gym_id'] = $personalCoaching ? null : $profile->gym_id;
         $data['branch_id'] = $personalCoaching ? null : $profile->branch_id;

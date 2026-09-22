@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gym_flutter_core/diet_plan_meals_editor.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../core/models/session_models.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -123,7 +124,7 @@ class _DietPlansWorkspaceState extends State<DietPlansWorkspace> {
         _lastPage = response.lastPage;
       });
     } catch (error) {
-      _error = error.toString();
+      _error = userFacingError(error);
     }
     if (mounted) setState(() => _loading = false);
   }
@@ -273,7 +274,9 @@ class _DietPlansWorkspaceState extends State<DietPlansWorkspace> {
                                 } catch (error) {
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text(error.toString())),
+                                      SnackBar(
+                                        content: Text(userFacingError(error)),
+                                      ),
                                     );
                                     setSheetState(() => saving = false);
                                   }

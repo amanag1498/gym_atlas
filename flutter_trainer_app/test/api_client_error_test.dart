@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_trainer_app/src/core/api_client.dart';
 
 void main() {
-  test('surfaces Laravel validation details instead of generic 422 text', () {
+  test('does not surface Laravel validation details', () {
     final request = RequestOptions(
       path: '/trainer/profile/verification/submit',
     );
@@ -28,14 +28,10 @@ void main() {
     );
 
     expect(exception.statusCode, 422);
-    expect(
-      exception.toString(),
-      'Add a professional bio before submitting verification.\n'
-      'Add at least one certification before submitting verification.',
-    );
+    expect(exception.toString(), 'Please check your details and try again.');
   });
 
-  test('falls back to the API response message', () {
+  test('does not surface the API response message', () {
     final request = RequestOptions(path: '/trainer/profile');
     final exception = TrainerApiException.fromDio(
       DioException(
@@ -49,6 +45,6 @@ void main() {
       ),
     );
 
-    expect(exception.toString(), 'Trainer account is inactive.');
+    expect(exception.toString(), "You don't have access to this right now.");
   });
 }

@@ -17,9 +17,11 @@ use App\Models\WhatsAppTemplate;
 use App\Services\Communication\CommunicationCampaignService;
 use App\Services\Firebase\FcmNotificationService;
 use App\Services\Notification\NotificationService;
+use App\Services\Privacy\ConsentService;
 use App\Services\WhatsApp\MetaWhatsAppClient;
 use App\Services\WhatsApp\WhatsAppConsentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Mockery;
@@ -70,7 +72,7 @@ class CommunicationCampaignFeatureTest extends TestCase
         ]);
     }
 
-    public function test_whatsapp_campaign_uses_member_phone_without_opt_in_and_honours_explicit_opt_out(): void
+    public function test_whatsapp_campaign_requires_privacy_consent_and_honours_explicit_opt_out(): void
     {
         Queue::fake();
         config()->set('services.meta_whatsapp', [
@@ -250,6 +252,11 @@ class CommunicationCampaignFeatureTest extends TestCase
             'status' => 'active',
         ]);
         $member = User::factory()->create(['phone' => $phone, 'active_role' => 'member', 'is_active' => true]);
+        $consents = app(ConsentService::class);
+        $consents->record($member, 'whatsapp', Request::create('/test', 'POST'));
+        if ($phone !== null) {
+            app(WhatsAppConsentService::class)->set($member, $gym, 'utility', true);
+        }
         MemberProfile::query()->create([
             'user_id' => $member->id,
             'gym_id' => $gym->id,

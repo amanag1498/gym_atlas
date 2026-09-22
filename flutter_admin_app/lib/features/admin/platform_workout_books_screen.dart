@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../core/models/session_models.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -128,7 +129,7 @@ class _PlatformWorkoutBooksWorkspaceState
         _lastPage = response.lastPage;
       });
     } catch (exception) {
-      _error = exception.toString();
+      _error = userFacingError(exception);
     }
 
     if (mounted) {
@@ -233,7 +234,7 @@ class _PlatformWorkoutBooksWorkspaceState
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
     }
   }
 
@@ -918,7 +919,7 @@ class _WorkoutBookEditorDialogState extends State<WorkoutBookEditorDialog> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(exception.toString())));
+      ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       setState(() => _saving = false);
     }
   }

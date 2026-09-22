@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/user_facing_error.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/error_state.dart';
 import '../../../core/widgets/loading_state.dart';
@@ -51,7 +52,7 @@ class _MemberWhatsAppPreferencesSheetState
         }
       }
     } catch (exception) {
-      _error = exception.toString();
+      _error = userFacingError(exception);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -70,7 +71,7 @@ class _MemberWhatsAppPreferencesSheetState
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(exception.toString())));
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
       }
     } finally {
       if (mounted) setState(() => _saving.remove(purpose));

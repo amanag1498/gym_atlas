@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
 import 'package:gym_flutter_core/diet_plan_meals_editor.dart';
 import 'package:gym_flutter_core/diet_plan_summary_view.dart';
 
@@ -9,6 +8,7 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/confirmation_dialog.dart';
 import '../../../core/widgets/loading_state.dart';
 import '../../core/pagination.dart';
+import '../../core/user_facing_error.dart';
 import 'trainer_repository.dart';
 
 class TrainerDietPlanScreen extends StatefulWidget {
@@ -1273,22 +1273,5 @@ List<Map<String, dynamic>> _mapList(dynamic value) {
 }
 
 String _dietErrorMessage(Object error) {
-  if (error is DioException) {
-    final body = error.response?.data;
-    if (body is Map) {
-      final errors = body['errors'];
-      if (errors is Map) {
-        final messages = errors.values
-            .expand((value) => value is List ? value : <dynamic>[value])
-            .map((value) => value.toString())
-            .where((value) => value.trim().isNotEmpty)
-            .toSet()
-            .toList();
-        if (messages.isNotEmpty) return messages.join('\n');
-      }
-      final message = body['message']?.toString();
-      if (message != null && message.trim().isNotEmpty) return message;
-    }
-  }
-  return 'Could not save the diet plan. Please review the meals and try again.';
+  return userFacingError(error);
 }
