@@ -125,6 +125,11 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
           endpoint: '/platform-admin/users',
         ),
         _AdminDestination(
+          'Privacy Requests',
+          Icons.privacy_tip_rounded,
+          endpoint: '/platform-admin/privacy-requests',
+        ),
+        _AdminDestination(
           'Gym Owners',
           Icons.badge_rounded,
           endpoint: '/platform-admin/gym-owners',
@@ -500,6 +505,12 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                   ? PlatformWorkoutBooksWorkspace(
                       key: ValueKey(selected.title),
                       appUser: user,
+                      repository: _repository,
+                    )
+                  : selected.title == 'Privacy Requests' &&
+                        user.activeRole == 'platform_admin'
+                  ? _PlatformPrivacyRequestsWorkspace(
+                      key: ValueKey(selected.title),
                       repository: _repository,
                     )
                   : (selected.title == 'Diet Templates' &&
@@ -20305,6 +20316,296 @@ class _CollectionState {
 
   bool get hasMore => page < lastPage;
 }
+
+class _PlatformPrivacyRequestsWorkspace extends StatefulWidget {
+  const _PlatformPrivacyRequestsWorkspace({
+    super.key,
+    required this.repository,
+  });
+
+  final AdminRepository repository;
+
+  @override
+  State<_PlatformPrivacyRequestsWorkspace> createState() =>
+      _PlatformPrivacyRequestsWorkspaceState();
+}
+
+class _PlatformPrivacyRequestsWorkspaceState
+    extends State<_PlatformPrivacyRequestsWorkspace> {
+  List<Map<String, dynamic>> _requests = const [];
+  String _statusFilter = '';
+  String? _error;
+  bool _loading = true;
+  int? _busyId;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final requests = await widget.repository.fetchPrivacyRequests(
+        status: _statusFilter,
+      );
+      if (!mounted) return;
+      setState(() => _requests = requests);
+    } catch (exception) {
+      if (mounted) setState(() => _error = userFacingError(exception));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _resolve(Map<String, dynamic> request) async {
+    final id = (request['id'] as num?)?.toInt();
+    if (id == null || ['fulfilled', 'rejected'].contains(request['status'])) {
+      return;
+    }
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) {
+        var status = request['status'] == 'in_progress'
+            ? 'in_progress'
+            : 'fulfilled';
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: Text('Update ${_privacyType(request['type'])} request'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: status,
+                  decoration: const InputDecoration(labelText: 'Status'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'in_progress',
+                      child: Text('In progress'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'fulfilled',
+                      child: Text('Fulfilled'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'rejected',
+                      child: Text('Rejected'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setDialogState(() => status = value);
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  initialValue: request['resolution_note']?.toString() ?? '',
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Resolution note',
+                    hintText: 'Required when fulfilled or rejected',
+                  ),
+                  onChanged: (value) => request['_resolution_note'] = value,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, {
+                  'status': status,
+                  'resolution_note':
+                      request['_resolution_note']?.toString() ??
+                      request['resolution_note']?.toString() ??
+                      '',
+                }),
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (result == null || !mounted) return;
+    final nextStatus = result['status'] ?? '';
+    final note = result['resolution_note'] ?? '';
+    if ((nextStatus == 'fulfilled' || nextStatus == 'rejected') &&
+        note.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add a resolution note before closing.')),
+      );
+      return;
+    }
+    setState(() => _busyId = id);
+    try {
+      await widget.repository.updatePrivacyRequest(
+        id,
+        status: nextStatus,
+        resolutionNote: note,
+      );
+      await _load();
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingError(exception))));
+      }
+    } finally {
+      if (mounted) setState(() => _busyId = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PremiumCard(
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Review member access, correction, erasure, and grievance requests.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 160,
+                child: DropdownButtonFormField<String>(
+                  initialValue: _statusFilter,
+                  decoration: const InputDecoration(labelText: 'Status'),
+                  items: const [
+                    DropdownMenuItem(value: '', child: Text('All requests')),
+                    DropdownMenuItem(value: 'pending', child: Text('Pending')),
+                    DropdownMenuItem(
+                      value: 'in_progress',
+                      child: Text('In progress'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'fulfilled',
+                      child: Text('Fulfilled'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'rejected',
+                      child: Text('Rejected'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() => _statusFilter = value ?? '');
+                    _load();
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: AsyncStateView(
+            isLoading: _loading,
+            error: _error,
+            onRetry: _load,
+            isEmpty: _requests.isEmpty && !_loading,
+            emptyTitle: 'No privacy requests',
+            emptyMessage: 'New member requests will appear here for review.',
+            emptyIcon: Icons.privacy_tip_outlined,
+            child: ListView.separated(
+              itemCount: _requests.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final request = _requests[index];
+                final user = _recordMap(request['user']);
+                final closed = [
+                  'fulfilled',
+                  'rejected',
+                ].contains(request['status']);
+                return PremiumCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              user['name']?.toString() ?? 'Member request',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                          ),
+                          StatusBadge(
+                            label: _privacyStatus(request['status']),
+                            color: _privacyStatusColor(request['status']),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${_privacyType(request['type'])} · ${user['email'] ?? 'No email'}',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      if ((request['details']?.toString() ?? '')
+                          .isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Text(request['details'].toString()),
+                      ],
+                      if ((request['resolution_note']?.toString() ?? '')
+                          .isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          'Resolution: ${request['resolution_note']}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                      if (!closed) ...[
+                        const SizedBox(height: 14),
+                        OutlinedButton.icon(
+                          onPressed: _busyId == request['id']
+                              ? null
+                              : () => _resolve(request),
+                          icon: const Icon(Icons.edit_note_rounded),
+                          label: Text(
+                            _busyId == request['id']
+                                ? 'Saving...'
+                                : 'Update request',
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+String _privacyType(Object? value) => switch (value?.toString()) {
+  'access' => 'Access',
+  'correction' => 'Correction',
+  'erasure' => 'Erasure',
+  'grievance' => 'Grievance',
+  _ => 'Privacy',
+};
+
+String _privacyStatus(Object? value) =>
+    (value?.toString() ?? 'pending').replaceAll('_', ' ').toUpperCase();
+
+Color _privacyStatusColor(Object? value) => switch (value?.toString()) {
+  'fulfilled' => AppColors.success,
+  'rejected' => AppColors.error,
+  'in_progress' => AppColors.warning,
+  _ => AppColors.info,
+};
 
 String _dashboardTitleCase(String value) {
   if (value.trim().isEmpty) {

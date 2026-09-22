@@ -121,6 +121,35 @@ class AdminRepository {
     return Map<String, dynamic>.from(response['data'] as Map? ?? const {});
   }
 
+  Future<List<Map<String, dynamic>>> fetchPrivacyRequests({
+    String? status,
+  }) async {
+    final response = await fetchCollection(
+      '/platform-admin/privacy-requests',
+      perPage: 100,
+      queryParameters: {
+        if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
+      },
+    );
+    return response.items;
+  }
+
+  Future<Map<String, dynamic>> updatePrivacyRequest(
+    int requestId, {
+    required String status,
+    String? resolutionNote,
+  }) async {
+    final response = await _apiClient.patch(
+      '/platform-admin/privacy-requests/$requestId',
+      data: {
+        'status': status,
+        if (resolutionNote != null && resolutionNote.trim().isNotEmpty)
+          'resolution_note': resolutionNote.trim(),
+      },
+    );
+    return Map<String, dynamic>.from(response['data'] as Map? ?? const {});
+  }
+
   Future<void> activatePlatformUser(int userId) =>
       _apiClient.post('/platform-admin/users/$userId/activate');
 
