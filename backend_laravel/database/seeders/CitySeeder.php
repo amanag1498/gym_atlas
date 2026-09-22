@@ -2,70 +2,112 @@
 
 namespace Database\Seeders;
 
-use App\Models\City;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
+use JsonException;
 
 class CitySeeder extends Seeder
 {
     /**
-     * Serviceable Indian urban centres, based on the Government of India's
-     * Smart Cities Mission city catalog, with additional major NCR markets.
-     *
-     * Source: https://smartcities.data.gov.in/cities
-     * License: Government Open Data License - India (GODL-India)
+     * Replace the city catalog with the supplied India city list. The source
+     * contains four duplicate name/state pairs; the first ID wins because the
+     * cities table requires each name/state/country combination to be unique.
      */
     public function run(): void
     {
-        foreach ($this->citiesByState() as $state => $cities) {
-            foreach ($cities as $name) {
-                City::query()->updateOrCreate(
-                    ['name' => $name, 'state' => $state, 'country' => 'India'],
-                    ['is_active' => true],
-                );
-            }
-        }
-    }
+        $path = database_path('data/cities.json');
+        $json = file_get_contents($path);
 
-    /** @return array<string, array<int, string>> */
-    private function citiesByState(): array
-    {
-        return [
-            'Andaman and Nicobar Islands' => ['Port Blair'],
-            'Andhra Pradesh' => ['Amaravati', 'Kakinada', 'Tirupati', 'Visakhapatnam'],
-            'Arunachal Pradesh' => ['Pasighat'],
-            'Assam' => ['Guwahati'],
-            'Bihar' => ['Bhagalpur', 'Bihar Sharif', 'Muzaffarpur', 'Patna'],
-            'Chandigarh' => ['Chandigarh'],
-            'Chhattisgarh' => ['Bilaspur', 'Nava Raipur', 'Raipur'],
-            'Dadra and Nagar Haveli and Daman and Diu' => ['Diu', 'Silvassa'],
-            'Delhi' => ['Delhi', 'New Delhi'],
-            'Goa' => ['Panaji'],
-            'Gujarat' => ['Ahmedabad', 'Dahod', 'Gandhinagar', 'Rajkot', 'Surat', 'Vadodara'],
-            'Haryana' => ['Faridabad', 'Gurugram', 'Karnal'],
-            'Himachal Pradesh' => ['Dharamshala', 'Shimla'],
-            'Jammu and Kashmir' => ['Jammu', 'Srinagar'],
-            'Jharkhand' => ['Ranchi'],
-            'Karnataka' => ['Belagavi', 'Bengaluru', 'Davanagere', 'Hubballi-Dharwad', 'Mangaluru', 'Shivamogga', 'Tumakuru'],
-            'Kerala' => ['Kochi', 'Thiruvananthapuram'],
-            'Lakshadweep' => ['Kavaratti'],
-            'Ladakh' => ['Kargil', 'Leh'],
-            'Madhya Pradesh' => ['Bhopal', 'Gwalior', 'Indore', 'Jabalpur', 'Sagar', 'Satna', 'Ujjain'],
-            'Maharashtra' => ['Chhatrapati Sambhajinagar', 'Kalyan-Dombivli', 'Mumbai', 'Nagpur', 'Nashik', 'Navi Mumbai', 'Pimpri-Chinchwad', 'Pune', 'Solapur', 'Thane'],
-            'Manipur' => ['Imphal'],
-            'Meghalaya' => ['Shillong'],
-            'Mizoram' => ['Aizawl'],
-            'Nagaland' => ['Kohima'],
-            'Odisha' => ['Bhubaneswar', 'Rourkela'],
-            'Puducherry' => ['Puducherry'],
-            'Punjab' => ['Amritsar', 'Jalandhar', 'Ludhiana'],
-            'Rajasthan' => ['Ajmer', 'Jaipur', 'Kota', 'Udaipur'],
-            'Sikkim' => ['Gangtok', 'Namchi'],
-            'Tamil Nadu' => ['Chennai', 'Coimbatore', 'Erode', 'Madurai', 'Salem', 'Thanjavur', 'Thoothukudi', 'Tiruchirappalli', 'Tirunelveli', 'Tiruppur', 'Vellore'],
-            'Telangana' => ['Hyderabad', 'Karimnagar', 'Warangal'],
-            'Tripura' => ['Agartala'],
-            'Uttar Pradesh' => ['Agra', 'Aligarh', 'Bareilly', 'Ghaziabad', 'Greater Noida', 'Jhansi', 'Kanpur', 'Lucknow', 'Moradabad', 'Noida', 'Prayagraj', 'Saharanpur', 'Varanasi'],
-            'Uttarakhand' => ['Dehradun'],
-            'West Bengal' => ['Bidhannagar', 'Durgapur', 'Haldia', 'Kolkata', 'New Town Kolkata'],
-        ];
+        if ($json === false) {
+            throw new InvalidArgumentException("Cannot read city catalog: {$path}");
+        }
+
+        try {
+            $source = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException $exception) {
+            throw new InvalidArgumentException('City catalog is not valid JSON.', previous: $exception);
+        }
+
+        if (! is_array($source) || ! array_is_list($source) || $source === []) {
+            throw new InvalidArgumentException('City catalog must be a non-empty JSON array.');
+        }
+
+        $cities = [];
+        $newIdsByPlace = [];
+        $seenIds = [];
+        $now = now();
+
+        foreach ($source as $index => $item) {
+            if (! is_array($item)
+                || ! isset($item['id'], $item['name'], $item['state'])
+                || ! is_string($item['id'])
+                || ! ctype_digit($item['id'])
+                || (int) $item['id'] < 1
+                || ! is_string($item['name'])
+                || ! is_string($item['state'])
+                || trim($item['name']) === ''
+                || trim($item['state']) === ''
+                || mb_strlen($item['name']) > 255
+                || mb_strlen($item['state']) > 255) {
+                throw new InvalidArgumentException("Invalid city catalog row at index {$index}.");
+            }
+
+            $id = (int) $item['id'];
+            if (isset($seenIds[$id])) {
+                throw new InvalidArgumentException("Duplicate city catalog ID {$id}.");
+            }
+            $seenIds[$id] = true;
+
+            $name = trim($item['name']);
+            $state = trim($item['state']);
+            $place = $name."\0".$state;
+            if (isset($newIdsByPlace[$place])) {
+                continue;
+            }
+
+            $newIdsByPlace[$place] = $id;
+            $cities[] = [
+                'id' => $id,
+                'name' => $name,
+                'state' => $state,
+                'country' => 'India',
+                'is_active' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        DB::transaction(function () use ($cities, $newIdsByPlace): void {
+            $oldPlaces = DB::table('cities')->get(['id', 'name', 'state', 'country'])
+                ->keyBy('id');
+            $references = [];
+            foreach (['gyms', 'branches'] as $table) {
+                $references[$table] = DB::table($table)
+                    ->whereNotNull('city_id')
+                    ->get(['id', 'city_id']);
+            }
+
+            // The FK's nullOnDelete action clears old references. Reattach only
+            // exact India city/state matches after inserting the new catalog.
+            DB::table('cities')->delete();
+            foreach (array_chunk($cities, 100) as $chunk) {
+                DB::table('cities')->insert($chunk);
+            }
+
+            foreach ($references as $table => $rows) {
+                foreach ($rows as $row) {
+                    $old = $oldPlaces->get($row->city_id);
+                    if ($old === null || $old->country !== 'India') {
+                        continue;
+                    }
+
+                    $newId = $newIdsByPlace[$old->name."\0".$old->state] ?? null;
+                    if ($newId !== null) {
+                        DB::table($table)->where('id', $row->id)->update(['city_id' => $newId]);
+                    }
+                }
+            }
+        });
     }
 }

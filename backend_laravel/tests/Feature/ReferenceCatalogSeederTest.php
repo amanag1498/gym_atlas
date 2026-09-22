@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\Branch;
 use App\Models\City;
 use App\Models\Facility;
 use App\Models\FoodCatalogItem;
+use App\Models\Gym;
 use App\Models\TrainerSpecialization;
 use App\Models\User;
 use Database\Seeders\CitySeeder;
@@ -38,14 +40,14 @@ class ReferenceCatalogSeederTest extends TestCase
             'foods' => FoodCatalogItem::query()->count(),
         ];
 
-        $this->assertGreaterThanOrEqual(100, $counts['cities']);
+        $this->assertSame(1217, $counts['cities']);
         $this->assertGreaterThanOrEqual(35, $counts['facilities']);
         $this->assertGreaterThanOrEqual(25, $counts['specializations']);
         $this->assertGreaterThanOrEqual(120, $counts['foods']);
 
         $this->assertDatabaseHas('cities', ['name' => 'Bengaluru', 'state' => 'Karnataka', 'country' => 'India']);
         $this->assertDatabaseHas('cities', ['name' => 'Port Blair', 'state' => 'Andaman and Nicobar Islands', 'country' => 'India']);
-        $this->assertDatabaseHas('cities', ['name' => 'Leh', 'state' => 'Ladakh', 'country' => 'India']);
+        $this->assertDatabaseHas('cities', ['name' => 'Dispur', 'state' => 'Assam', 'country' => 'India']);
         $this->assertDatabaseHas('facilities', ['slug' => 'crossfit', 'name' => 'Cross-training Zone']);
         $this->assertDatabaseHas('trainer_specializations', ['slug' => 'corrective-exercise']);
         $this->assertStringContainsString(
@@ -65,6 +67,22 @@ class ReferenceCatalogSeederTest extends TestCase
         $this->assertSame($counts['facilities'], Facility::query()->count());
         $this->assertSame($counts['specializations'], TrainerSpecialization::query()->count());
         $this->assertSame($counts['foods'], FoodCatalogItem::query()->count());
+    }
+
+    public function test_city_seeder_replaces_old_rows_and_remaps_gym_and_branch_references(): void
+    {
+        $oldMumbai = City::query()->create(['name' => 'Mumbai', 'state' => 'Maharashtra', 'country' => 'India']);
+        $obsolete = City::query()->create(['name' => 'Obsolete City', 'state' => 'Maharashtra', 'country' => 'India']);
+        $gym = Gym::query()->create(['name' => 'City Test Gym', 'slug' => 'city-test-gym', 'city_id' => $oldMumbai->id]);
+        $branch = Branch::query()->create(['gym_id' => $gym->id, 'name' => 'City Test Branch', 'slug' => 'city-test-branch', 'city_id' => $obsolete->id]);
+
+        $this->seed(CitySeeder::class);
+
+        $this->assertSame(1217, City::query()->count());
+        $this->assertDatabaseMissing('cities', ['name' => 'Obsolete City']);
+        $this->assertSame(1, $gym->fresh()->city_id);
+        $this->assertNull($branch->fresh()->city_id);
+        $this->assertDatabaseHas('cities', ['id' => 1, 'name' => 'Mumbai', 'state' => 'Maharashtra']);
     }
 
     public function test_food_seeder_updates_matching_seeded_rows_with_corrected_source_data(): void
