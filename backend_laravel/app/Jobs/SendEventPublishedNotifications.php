@@ -31,6 +31,7 @@ class SendEventPublishedNotifications implements ShouldQueue
             || ! $event->gym->is_active
             || $event->gym->status !== 'active'
             || ! $event->gym->operational_access_enabled
+            || ! $event->gym->hasPlatformAccess()
             || ($event->branch_id && (! $event->branch || ! $event->branch->is_active || $event->branch->status !== 'active')))) {
             return;
         }

@@ -31,7 +31,7 @@ class GymPlatformSubscriptionController extends Controller
         $this->platformSubscriptionLedgerService->syncInvoiceStatuses();
 
         $query = GymPlatformSubscription::query()
-            ->with(['gym.owner', 'plan', 'assignedBy', 'latestInvoice'])
+            ->with(['gym.owner', 'gym.currentPlatformSubscription', 'plan', 'assignedBy', 'latestInvoice'])
             ->latest('id');
 
         if ($request->filled('search')) {
@@ -89,6 +89,7 @@ class GymPlatformSubscriptionController extends Controller
             'breadcrumbs' => ['Platform', 'Gym Billing'],
             'subscriptions' => $query->paginate(15, ['*'], 'subscriptions_page')->withQueryString(),
             'gyms' => Gym::query()->orderBy('name')->get(['id', 'name']),
+            'accessibleGymIds' => Gym::query()->withPlatformAccess()->pluck('id')->all(),
             'totalSubscriptionsCount' => GymPlatformSubscription::query()->count(),
             'activeSubscriptionsCount' => GymPlatformSubscription::query()->where('status', 'active')->count(),
             'trialingSubscriptionsCount' => GymPlatformSubscription::query()->where('status', 'trialing')->count(),
@@ -119,7 +120,7 @@ class GymPlatformSubscriptionController extends Controller
                 'gym_id' => $selectedGym?->id,
                 'platform_subscription_plan_id' => $selectedPlan?->id,
                 'status' => ($selectedPlan?->trial_days ?? 0) > 0 ? 'trialing' : 'active',
-                'auto_renew' => true,
+                'auto_renew' => $selectedPlan?->slug !== 'complimentary',
                 'starts_at' => $startsAt,
                 'trial_ends_at' => ($selectedPlan?->trial_days ?? 0) > 0 ? now()->addDays($selectedPlan->trial_days)->toDateString() : null,
                 'renews_at' => $selectedPlan ? $this->resolveRenewalDate($startsAt, $selectedPlan)?->toDateString() : null,
@@ -332,6 +333,7 @@ class GymPlatformSubscriptionController extends Controller
      */
     private function buildPayload(array $validated, ?PlatformSubscriptionPlan $plan, ?int $actorId, ?GymPlatformSubscription $existing = null): array
     {
+        $complimentary = $plan?->slug === 'complimentary';
         $planServices = $plan?->included_services ?? [];
         $existingServices = $existing?->included_services ?? [];
         $includedServices = $validated['included_services'] ?: ($planServices ?: $existingServices);
@@ -346,12 +348,12 @@ class GymPlatformSubscriptionController extends Controller
             'assigned_by_user_id' => $actorId ?? $existing?->assigned_by_user_id,
             'status' => $validated['status'],
             'starts_at' => $startsAt,
-            'renews_at' => $resolvedRenewalDate,
+            'renews_at' => $complimentary ? $validated['ends_at'] : $resolvedRenewalDate,
             'ends_at' => $validated['ends_at'] ?? $existing?->ends_at,
             'trial_ends_at' => $validated['trial_ends_at'] ?? $existing?->trial_ends_at,
-            'billing_amount' => $validated['billing_amount'] ?? $plan?->price ?? $existing?->billing_amount ?? 0,
-            'setup_fee_amount' => $validated['setup_fee_amount'] ?? $plan?->setup_fee ?? $existing?->setup_fee_amount ?? 0,
-            'auto_renew' => $validated['auto_renew'] ?? true,
+            'billing_amount' => $complimentary ? 0 : ($validated['billing_amount'] ?? $plan?->price ?? $existing?->billing_amount ?? 0),
+            'setup_fee_amount' => $complimentary ? 0 : ($validated['setup_fee_amount'] ?? $plan?->setup_fee ?? $existing?->setup_fee_amount ?? 0),
+            'auto_renew' => $complimentary ? false : ($validated['auto_renew'] ?? true),
             'included_services' => $includedServices,
             'plan_snapshot' => $plan ? $this->makePlanSnapshot($plan) : null,
             'notes' => array_key_exists('notes', $validated) ? $validated['notes'] : ($existing?->notes),

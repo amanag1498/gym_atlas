@@ -438,6 +438,14 @@ class PlatformGymManagementService
         $planId = Arr::get($data, 'platform_subscription_plan_id');
         $plan = $planId ? PlatformSubscriptionPlan::query()->find($planId) : null;
         $subscription = $gym->currentPlatformSubscription()->first();
+        $complimentary = $plan?->slug === 'complimentary';
+        $endsAt = Arr::get($data, 'platform_subscription_ends_at') ?: $subscription?->ends_at?->toDateString();
+
+        if ($complimentary && (! $endsAt || $endsAt < now()->toDateString())) {
+            throw ValidationException::withMessages([
+                'platform_subscription_ends_at' => ['Choose an end date for complimentary access.'],
+            ]);
+        }
 
         $startsAt = Arr::get($data, 'platform_subscription_starts_at') ?: ($subscription?->starts_at?->toDateString() ?? now()->toDateString());
         $resolvedRenewalDate = Arr::get($data, 'platform_subscription_renews_at')
@@ -452,15 +460,15 @@ class PlatformGymManagementService
             'gym_id' => $gym->id,
             'platform_subscription_plan_id' => $plan?->id,
             'assigned_by_user_id' => $actorId,
-            'status' => Arr::get($data, 'platform_subscription_status', $subscription?->status ?? (($plan?->trial_days ?? 0) > 0 ? 'trialing' : 'active')),
+            'status' => $complimentary ? 'active' : Arr::get($data, 'platform_subscription_status', $subscription?->status ?? (($plan?->trial_days ?? 0) > 0 ? 'trialing' : 'active')),
             'starts_at' => $startsAt,
-            'renews_at' => $resolvedRenewalDate,
-            'ends_at' => Arr::get($data, 'platform_subscription_ends_at') ?: $subscription?->ends_at,
+            'renews_at' => $complimentary ? $endsAt : $resolvedRenewalDate,
+            'ends_at' => $endsAt,
             'trial_ends_at' => Arr::get($data, 'platform_subscription_trial_ends_at')
                 ?: (($plan?->trial_days ?? 0) > 0 && $startsAt ? now()->parse($startsAt)->addDays((int) $plan->trial_days)->toDateString() : ($subscription?->trial_ends_at?->toDateString())),
-            'billing_amount' => Arr::get($data, 'platform_subscription_billing_amount', $plan?->price ?? $subscription?->billing_amount ?? 0),
-            'setup_fee_amount' => Arr::get($data, 'platform_subscription_setup_fee_amount', $plan?->setup_fee ?? $subscription?->setup_fee_amount ?? 0),
-            'auto_renew' => Arr::get($data, 'platform_subscription_auto_renew', $subscription?->auto_renew ?? true),
+            'billing_amount' => $complimentary ? 0 : Arr::get($data, 'platform_subscription_billing_amount', $plan?->price ?? $subscription?->billing_amount ?? 0),
+            'setup_fee_amount' => $complimentary ? 0 : Arr::get($data, 'platform_subscription_setup_fee_amount', $plan?->setup_fee ?? $subscription?->setup_fee_amount ?? 0),
+            'auto_renew' => $complimentary ? false : Arr::get($data, 'platform_subscription_auto_renew', $subscription?->auto_renew ?? true),
             'included_services' => $includedServices,
             'plan_snapshot' => $plan ? $this->makePlanSnapshot($plan) : ($subscription?->plan_snapshot),
             'notes' => Arr::get($data, 'platform_subscription_notes', $subscription?->notes),

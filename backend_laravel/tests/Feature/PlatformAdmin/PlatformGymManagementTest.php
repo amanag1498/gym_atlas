@@ -185,14 +185,13 @@ class PlatformGymManagementTest extends TestCase
         $this->assertDatabaseMissing('branches', ['gym_id' => $gym->id]);
 
         $this->get(route('public.gyms.show', $gym->slug))
-            ->assertOk()
-            ->assertSee('Discovery Only Gym');
+            ->assertNotFound();
 
         $gym->forceFill(['trial_available' => true])->save();
         $this->post(route('public.gyms.trial-request', $gym->slug), [
             'name' => 'Listing Visitor',
             'phone' => '+919876543210',
-        ])->assertSessionHasErrors('gym_id');
+        ])->assertNotFound();
         $this->assertDatabaseMissing('trial_requests', ['gym_id' => $gym->id]);
 
         $staff = User::factory()->create(['is_active' => true, 'active_role' => RoleName::GymStaff->value]);

@@ -38,7 +38,8 @@ class MemberContextController extends Controller
             ->whereHas('gym', fn ($gym) => $gym
                 ->where('is_active', true)
                 ->where('status', 'active')
-                ->where('operational_access_enabled', true))
+                ->where('operational_access_enabled', true)
+                ->withPlatformAccess())
             ->latest('id')
             ->take(5)
             ->get();

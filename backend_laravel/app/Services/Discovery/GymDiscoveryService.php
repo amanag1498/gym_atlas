@@ -32,6 +32,8 @@ class GymDiscoveryService
             })
             ->where('is_active', true)
             ->where('status', 'active')
+            ->where('operational_access_enabled', true)
+            ->withPlatformAccess()
             ->get()
             ->filter(fn (Gym $gym) => $this->matchesFilters($gym, $filters, $latitude, $longitude))
             ->values()
@@ -71,6 +73,8 @@ class GymDiscoveryService
             })
             ->where('is_active', true)
             ->where('status', 'active')
+            ->where('operational_access_enabled', true)
+            ->withPlatformAccess()
             ->firstOrFail();
 
         return $this->decorateGym($gym, $latitude, $longitude);

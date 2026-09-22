@@ -12,6 +12,9 @@
         <section class="panel-hero">
             <div class="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
                 <div class="min-w-0">
+                    @if ($userDetail->hasRole(\App\Enums\RoleName::Member->value) && filled($userDetail->avatar))
+                        <img src="{{ $userDetail->avatar }}" alt="{{ $userDetail->name }}'s profile photo" class="mb-4 h-16 w-16 rounded-2xl border border-slate-200 object-cover dark:border-slate-700">
+                    @endif
                     <div class="flex flex-wrap gap-2">
                         <x-status-badge :label="$userDetail->is_active ? 'Active' : 'Inactive'" :tone="$userDetail->is_active ? 'success' : 'danger'" />
                         <x-status-badge :label="str($userDetail->active_role ?: 'none')->replace('_', ' ')->title()" tone="info" />
@@ -80,6 +83,17 @@
                                 <div class="mt-2 flex flex-wrap gap-2">
                                     <x-status-badge :label="$userDetail->managedTrainerProfile->verification_status ?: 'pending'" tone="warning" />
                                     <x-status-badge :label="$userDetail->managedTrainerProfile->is_active ? 'Profile active' : 'Profile inactive'" :tone="$userDetail->managedTrainerProfile->is_active ? 'success' : 'danger'" />
+                                </div>
+                            </div>
+                        @endif
+
+                        @if ($userDetail->hasRole(\App\Enums\RoleName::Member->value))
+                            <div class="panel-card-muted px-4 py-4">
+                                <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Member Identity</div>
+                                <div class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                                    <div><span class="font-semibold text-slate-950 dark:text-white">Gender:</span> {{ $userDetail->gender ?: $userDetail->memberProfile?->gender ?: 'Not added' }}</div>
+                                    <div><span class="font-semibold text-slate-950 dark:text-white">Date of birth:</span> {{ $userDetail->date_of_birth?->format('d M Y') ?? 'Not added' }}</div>
+                                    <div><span class="font-semibold text-slate-950 dark:text-white">Profile photo:</span> {{ filled($userDetail->avatar) ? 'Added' : 'Not added' }}</div>
                                 </div>
                             </div>
                         @endif
@@ -316,7 +330,6 @@
                                 <div class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
                                     <div><span class="font-semibold text-slate-950 dark:text-white">Goal:</span> {{ $userDetail->memberProfile->fitness_goal ?: 'N/A' }}</div>
                                     <div><span class="font-semibold text-slate-950 dark:text-white">Experience:</span> {{ $userDetail->memberProfile->experience_level ?: 'N/A' }}</div>
-                                    <div><span class="font-semibold text-slate-950 dark:text-white">Gender:</span> {{ $userDetail->memberProfile->gender ?: 'N/A' }}</div>
                                     <div><span class="font-semibold text-slate-950 dark:text-white">Height:</span> {{ $userDetail->memberProfile->height_cm ? $userDetail->memberProfile->height_cm.' cm' : 'N/A' }}</div>
                                     <div><span class="font-semibold text-slate-950 dark:text-white">Weight:</span> {{ $userDetail->memberProfile->weight_kg ? $userDetail->memberProfile->weight_kg.' kg' : 'N/A' }}</div>
                                 </div>

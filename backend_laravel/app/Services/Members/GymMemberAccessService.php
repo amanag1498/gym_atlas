@@ -15,7 +15,8 @@ class GymMemberAccessService
             ->whereHas('gym', fn (Builder $gym) => $gym
                 ->where('is_active', true)
                 ->where('status', 'active')
-                ->where('operational_access_enabled', true))
+                ->where('operational_access_enabled', true)
+                ->withPlatformAccess())
             ->where(fn (Builder $status) => $status->where('status', 'active')->orWhereNull('status'))
             ->whereIn('membership_status', ['active', 'frozen'])
             ->where(function (Builder $expiry): void {

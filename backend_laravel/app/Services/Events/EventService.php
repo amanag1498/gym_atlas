@@ -59,7 +59,7 @@ class EventService
         $profiles = TrainerProfile::query()->where('user_id', $user->id)->where('is_active', true)
             ->where(fn (Builder $query) => $query->whereNull('status')->orWhere('status', 'active'))
             ->where(fn (Builder $query) => $query->whereNull('gym_id')->orWhereHas('gym', fn (Builder $gym) => $gym
-                ->where('is_active', true)->where('status', 'active')->where('operational_access_enabled', true)))
+                ->where('is_active', true)->where('status', 'active')->where('operational_access_enabled', true)->withPlatformAccess()))
             ->get(['gym_id', 'branch_id']);
         $query = $this->baseUpcomingQuery($user);
         if ($hostedOnly) {
@@ -650,7 +650,8 @@ class EventService
                     ->whereHas('gym', fn (Builder $gym) => $gym
                         ->where('is_active', true)
                         ->where('status', 'active')
-                        ->where('operational_access_enabled', true))
+                        ->where('operational_access_enabled', true)
+                        ->withPlatformAccess())
                     ->where(function (Builder $branch): void {
                         $branch->whereNull('branch_id')->orWhereHas('branch', fn (Builder $activeBranch) => $activeBranch
                             ->where('is_active', true)

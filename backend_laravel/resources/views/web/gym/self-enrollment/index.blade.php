@@ -11,7 +11,7 @@
                     <div class="flex flex-col gap-5 sm:flex-row">
                         <x-admin.branded-qr-preview
                             class="shrink-0"
-                            :src="route('web.gym.self-enrollment.qr', ['link' => $link->id] + request()->query())"
+                            :src="route('web.gym.self-enrollment.qr', ['gym' => $gym->id, 'link' => $link->id] + request()->query())"
                             :alt="'Enrollment QR for '.$link->name"
                             eyebrow="SCAN TO JOIN"
                             :caption="'Join '.($link->branch?->name ?? $gym->name).' with GymAtlas'"
@@ -29,9 +29,9 @@
                                 <button type="button" class="panel-btn-secondary !px-3" onclick="navigator.clipboard.writeText(document.getElementById('link-{{ $link->id }}').value)">Copy</button>
                             </div>
                             <div class="mt-4 flex flex-wrap gap-2">
-                                <a href="{{ route('web.gym.self-enrollment.qr', ['link' => $link->id, 'download' => 1] + request()->query()) }}" class="panel-btn-primary"><i class="ti ti-download"></i>Print poster</a>
-                                <form method="POST" action="{{ route('web.gym.self-enrollment.toggle', ['link' => $link->id] + request()->query()) }}">@csrf<button class="panel-btn-secondary">{{ $link->is_active ? 'Disable' : 'Enable' }}</button></form>
-                                <form method="POST" action="{{ route('web.gym.self-enrollment.rotate', ['link' => $link->id] + request()->query()) }}" data-confirm-submit data-confirm-title="Replace this QR?" data-confirm-message="The printed and copied old link will stop working immediately." data-confirm-button="Generate new QR">@csrf<button class="panel-btn-secondary">Regenerate</button></form>
+                                <a href="{{ route('web.gym.self-enrollment.qr', ['gym' => $gym->id, 'link' => $link->id, 'download' => 1] + request()->query()) }}" class="panel-btn-primary"><i class="ti ti-download"></i>Print poster</a>
+                                <form method="POST" action="{{ route('web.gym.self-enrollment.toggle', ['gym' => $gym->id, 'link' => $link->id] + request()->query()) }}">@csrf<button class="panel-btn-secondary">{{ $link->is_active ? 'Disable' : 'Enable' }}</button></form>
+                                <form method="POST" action="{{ route('web.gym.self-enrollment.rotate', ['gym' => $gym->id, 'link' => $link->id] + request()->query()) }}" data-confirm-submit data-confirm-title="Replace this QR?" data-confirm-message="The printed and copied old link will stop working immediately." data-confirm-button="Generate new QR">@csrf<button class="panel-btn-secondary">Regenerate</button></form>
                             </div>
                         </div>
                     </div>

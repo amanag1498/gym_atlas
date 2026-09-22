@@ -167,7 +167,8 @@ class MemberGymInvitationService
     {
         if (! $invitation->gym->is_active
             || $invitation->gym->status !== 'active'
-            || ! $invitation->gym->operational_access_enabled) {
+            || ! $invitation->gym->operational_access_enabled
+            || ! $invitation->gym->hasPlatformAccess()) {
             throw ValidationException::withMessages([
                 'invitation' => ['This gym is not currently operational, so the invitation cannot be accepted.'],
             ]);

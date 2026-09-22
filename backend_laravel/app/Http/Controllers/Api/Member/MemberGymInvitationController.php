@@ -22,7 +22,8 @@ class MemberGymInvitationController extends Controller
             ->whereHas('gym', fn ($gym) => $gym
                 ->where('is_active', true)
                 ->where('status', 'active')
-                ->where('operational_access_enabled', true))
+                ->where('operational_access_enabled', true)
+                ->withPlatformAccess())
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->query('status')))
             ->latest('id')
             ->paginate((int) $request->integer('per_page', 15));

@@ -59,6 +59,8 @@ class UserController extends Controller
             'managedTrainerProfile.branch',
             'memberProfile.gym',
             'memberProfile.branch',
+            'memberProfile.assignedTrainer',
+            'memberProfile.fitnessGoals',
             'memberProfiles.gym',
             'memberProfiles.branch',
             'memberProfiles.assignedTrainer',

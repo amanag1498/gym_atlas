@@ -38,7 +38,7 @@ class GymSelfEnrollmentService
             ->firstOrFail();
 
         $gym = $link->gym;
-        abort_unless($gym->is_active && $gym->status === 'active' && $gym->operational_access_enabled, 404);
+        abort_unless($gym->is_active && $gym->status === 'active' && $gym->operational_access_enabled && $gym->hasPlatformAccess(), 404);
         abort_if($link->branch && (! $link->branch->is_active || $link->branch->status !== 'active'), 404);
 
         return $link;

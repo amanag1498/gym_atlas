@@ -85,6 +85,9 @@ class PlatformUserManagementTest extends TestCase
         $member = User::factory()->create([
             'name' => 'Member Search',
             'email' => 'member-search@example.com',
+            'gender' => 'female',
+            'date_of_birth' => '1998-09-10',
+            'avatar' => 'https://example.com/member-photo.jpg',
             'is_active' => true,
             'active_role' => RoleName::Member->value,
         ]);
@@ -94,6 +97,13 @@ class PlatformUserManagementTest extends TestCase
             'user_id' => $member->id,
             'gym_id' => $gym->id,
             'branch_id' => $branch->id,
+            'fitness_goal' => 'Build strength',
+            'experience_level' => 'intermediate',
+            'height_cm' => 165,
+            'weight_kg' => 62,
+            'injury_notes' => 'Avoid heavy overhead presses',
+            'emergency_contact_name' => 'Emergency Person',
+            'emergency_contact_phone' => '9988776655',
             'status' => 'active',
             'is_active' => true,
         ]);
@@ -163,14 +173,25 @@ class PlatformUserManagementTest extends TestCase
         $this->get(route('web.admin.users.show', $member))
             ->assertOk()
             ->assertSee('Member Relationships')
+            ->assertSee('Member Identity')
+            ->assertSee('10 Sep 1998')
+            ->assertSee('female')
+            ->assertSee('https://example.com/member-photo.jpg')
+            ->assertSee('Build strength')
+            ->assertSee('Avoid heavy overhead presses')
             ->assertSee('Owner Gym')
             ->assertSee('Second Owner Gym');
 
         $this->actingAs($admin, 'sanctum')
             ->getJson('/api/platform-admin/users/'.$member->id)
             ->assertOk()
+            ->assertJsonPath('data.date_of_birth', '1998-09-10')
+            ->assertJsonPath('data.gender', 'female')
+            ->assertJsonPath('data.avatar', 'https://example.com/member-photo.jpg')
             ->assertJsonCount(2, 'data.member_profiles')
             ->assertJsonPath('data.member_profiles.0.gym_id', $gym->id)
+            ->assertJsonPath('data.member_profiles.0.gym_name', 'Owner Gym')
+            ->assertJsonPath('data.member_profiles.0.fitness_goal', 'Build strength')
             ->assertJsonPath('data.member_profiles.1.gym_id', $secondGym->id);
     }
 

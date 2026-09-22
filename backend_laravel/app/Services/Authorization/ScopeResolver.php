@@ -27,6 +27,7 @@ class ScopeResolver
             ->where('operational_access_enabled', true)
             ->where('is_active', true)
             ->where('status', 'active')
+            ->withPlatformAccess()
             ->distinct();
 
         if ($user->active_role === RoleName::GymOwner->value) {
@@ -64,7 +65,8 @@ class ScopeResolver
                 $builder->where('owner_user_id', $user->id)
                     ->where('operational_access_enabled', true)
                     ->where('is_active', true)
-                    ->where('status', 'active');
+                    ->where('status', 'active')
+                    ->withPlatformAccess();
             });
         }
 
@@ -77,7 +79,8 @@ class ScopeResolver
                 ->whereHas('gym', fn (Builder $builder) => $builder
                     ->where('operational_access_enabled', true)
                     ->where('is_active', true)
-                    ->where('status', 'active'));
+                    ->where('status', 'active')
+                    ->withPlatformAccess());
         }
 
         if ($user->active_role === RoleName::Trainer->value) {
@@ -89,7 +92,8 @@ class ScopeResolver
                 ->whereHas('gym', fn (Builder $builder) => $builder
                     ->where('operational_access_enabled', true)
                     ->where('is_active', true)
-                    ->where('status', 'active'));
+                    ->where('status', 'active')
+                    ->withPlatformAccess());
         }
 
         return Branch::query()->whereHas('users', function (Builder $builder) use ($user): void {
@@ -100,7 +104,8 @@ class ScopeResolver
         })->whereHas('gym', fn (Builder $builder) => $builder
             ->where('operational_access_enabled', true)
             ->where('is_active', true)
-            ->where('status', 'active'));
+            ->where('status', 'active')
+            ->withPlatformAccess());
     }
 
     public function canAccessGym(User $user, int|string|Gym $gym): bool

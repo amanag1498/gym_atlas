@@ -59,6 +59,10 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   late final TabController _tabController;
   final TextEditingController _catalogSearchController =
       TextEditingController();
+  final TextEditingController _equipmentProfileNameController =
+      TextEditingController();
+  final TextEditingController _equipmentProfileEquipmentController =
+      TextEditingController();
   bool _loading = true;
   bool _saving = false;
   bool _loadingMoreBooks = false;
@@ -99,8 +103,6 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   final _planDeloadPercentController = TextEditingController(text: '10');
   final _exerciseSearchController = TextEditingController();
   final _exercisePickerTextController = TextEditingController();
-  final _exercisePickerMenuController = MenuController();
-  final _exercisePickerAnchorKey = GlobalKey();
   final Map<int, Map<String, dynamic>> _savedExerciseMetadata = {};
   Timer? _exerciseSearchDebounce;
   final _setsController = TextEditingController(text: '4');
@@ -163,6 +165,8 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   void dispose() {
     _tabController.dispose();
     _catalogSearchController.dispose();
+    _equipmentProfileNameController.dispose();
+    _equipmentProfileEquipmentController.dispose();
     _nameController.dispose();
     _goalController.dispose();
     _durationController.dispose();
@@ -311,20 +315,16 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     final generation = _exerciseSearchGeneration;
     final page = _exercisePage.nextPage;
     final query = _exerciseQuery();
-    final pickerWasOpen = _exercisePickerMenuController.isOpen;
     setState(() => _loadingExercises = true);
-    _restoreExercisePickerAfterFrame(pickerWasOpen);
     try {
       final response = await widget.repository.fetchWorkoutExercises(
         queryParameters: {...query, 'page': page},
       );
       if (!mounted || generation != _exerciseSearchGeneration) return;
-      final pickerStillOpen = _exercisePickerMenuController.isOpen;
       setState(() {
         _exercises = mergeApiPageItems(_exercises, apiPageItems(response));
         _exercisePage = ApiPagination.fromResponse(response);
       });
-      _restoreExercisePickerAfterFrame(pickerStillOpen);
     } catch (exception) {
       if (generation == _exerciseSearchGeneration) {
         _showLoadMoreError(exception);
@@ -334,19 +334,6 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
         setState(() => _loadingExercises = false);
       }
     }
-  }
-
-  void _restoreExercisePickerAfterFrame(bool shouldStayOpen) {
-    if (!shouldStayOpen) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted ||
-          _activeTabIndex != 2 ||
-          _exercisePickerAnchorKey.currentContext == null ||
-          _exercisePickerMenuController.isOpen) {
-        return;
-      }
-      _exercisePickerMenuController.open();
-    });
   }
 
   void _showLoadMoreError(Object exception) {
@@ -547,8 +534,8 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   }
 
   Future<void> _showEquipmentProfileSheet() async {
-    final nameController = TextEditingController();
-    final equipmentController = TextEditingController();
+    _equipmentProfileNameController.clear();
+    _equipmentProfileEquipmentController.clear();
     var presetKey = 'bodyweight_only';
     var isDefault = true;
     final saved = await showModalBottomSheet<bool>(
@@ -573,7 +560,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                   ),
                   const SizedBox(height: 16),
                   TextField(
-                    controller: nameController,
+                    controller: _equipmentProfileNameController,
                     decoration: _memberWorkoutInputDecoration(
                       'Profile name',
                       icon: Icons.badge_outlined,
@@ -616,7 +603,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                   if (presetKey == 'custom') ...[
                     const SizedBox(height: 12),
                     TextField(
-                      controller: equipmentController,
+                      controller: _equipmentProfileEquipmentController,
                       decoration: _memberWorkoutInputDecoration(
                         'Equipment, comma separated',
                         icon: Icons.edit_note_rounded,
@@ -632,21 +619,29 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                   ),
                   FilledButton.icon(
                     onPressed: () async {
-                      final name = nameController.text.trim();
+                      final name = _equipmentProfileNameController.text.trim();
                       if (name.isEmpty) return;
-                      await widget.repository.saveEquipmentProfile({
-                        'name': name,
-                        'preset_key': presetKey,
-                        'equipment': presetKey == 'custom'
-                            ? equipmentController.text
-                                  .split(',')
-                                  .map((item) => item.trim())
-                                  .where((item) => item.isNotEmpty)
-                                  .toList()
-                            : <String>[],
-                        'is_default': isDefault,
-                      });
-                      if (context.mounted) Navigator.pop(context, true);
+                      try {
+                        await widget.repository.saveEquipmentProfile({
+                          'name': name,
+                          'preset_key': presetKey,
+                          'equipment': presetKey == 'custom'
+                              ? _equipmentProfileEquipmentController.text
+                                    .split(',')
+                                    .map((item) => item.trim())
+                                    .where((item) => item.isNotEmpty)
+                                    .toList()
+                              : <String>[],
+                          'is_default': isDefault,
+                        });
+                        if (context.mounted) Navigator.pop(context, true);
+                      } catch (exception) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(userFacingError(exception))),
+                          );
+                        }
+                      }
                     },
                     icon: const Icon(Icons.save_outlined),
                     label: const Text('Save profile'),
@@ -658,8 +653,6 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
         ),
       ),
     );
-    nameController.dispose();
-    equipmentController.dispose();
     if (saved == true && mounted) {
       final response = await widget.repository.fetchEquipmentProfiles();
       final data = response['data'];
@@ -1567,16 +1560,18 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                 )
               else ...[
                 DropdownMenu<int>(
-                  key: _exercisePickerAnchorKey,
                   controller: _exercisePickerTextController,
-                  menuController: _exercisePickerMenuController,
                   initialSelection: _selectedBuilderExerciseId,
                   expandedInsets: EdgeInsets.zero,
-                  selectOnly: true,
                   requestFocusOnTap: false,
                   enableFilter: false,
                   enableSearch: false,
                   closeBehavior: DropdownMenuCloseBehavior.none,
+                  label: const Text('Exercise picker'),
+                  leadingIcon: const Icon(Icons.fitness_center_rounded),
+                  helperText: _exercisePage.hasMore
+                      ? 'More results are available at the end of this list.'
+                      : '${filteredExercises.length} exercises available',
                   dropdownMenuEntries: [
                     ...filteredExercises
                         .where((exercise) => exercise['id'] is num)
@@ -1616,7 +1611,6 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                           ? ''
                           : _exercisePickerLabelForSelection();
                       unawaited(_loadMoreExercises());
-                      _restoreExercisePickerAfterFrame(true);
                       return;
                     }
                     setState(() {
@@ -1638,17 +1632,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                         _exerciseProgressionPolicy = 'off';
                       }
                     });
-                    _exercisePickerMenuController.close();
                   },
-                  decorationBuilder: (context, controller) =>
-                      _memberWorkoutInputDecoration(
-                        'Exercise picker',
-                        icon: Icons.fitness_center_rounded,
-                      ).copyWith(
-                        helperText: _exercisePage.hasMore
-                            ? 'More results are available at the end of this list.'
-                            : '${filteredExercises.length} exercises available',
-                      ),
                 ),
                 const SizedBox(height: 12),
                 _buildExerciseMetaPanel(context, selectedExercise),
@@ -2782,10 +2766,11 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     required Map<String, dynamic> plan,
     required VoidCallback primaryAction,
     required String primaryLabel,
+    bool refreshMemberPlan = true,
   }) async {
     var planDetail = Map<String, dynamic>.from(plan);
     final planId = (planDetail['id'] as num?)?.toInt();
-    if (planId != null) {
+    if (refreshMemberPlan && planId != null) {
       try {
         final response = await widget.repository.fetchWorkoutPlan(planId);
         final data = Map<String, dynamic>.from(
@@ -3034,6 +3019,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                                   plan: firstPlan,
                                   primaryAction: () => _adoptPlan(firstPlan),
                                   primaryLabel: 'Add to library',
+                                  refreshMemberPlan: false,
                                 ),
                         ),
                       );
@@ -3070,6 +3056,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                                     plan: firstPlan,
                                     primaryAction: () => _adoptPlan(firstPlan),
                                     primaryLabel: 'Add to library',
+                                    refreshMemberPlan: false,
                                   ),
                           ),
                         );
@@ -3119,6 +3106,7 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                         plan: plan,
                         primaryAction: () => _adoptPlan(plan),
                         primaryLabel: 'Add to library',
+                        refreshMemberPlan: false,
                       ),
                     ),
                   );

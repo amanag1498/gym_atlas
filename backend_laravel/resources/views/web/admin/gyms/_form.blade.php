@@ -256,6 +256,7 @@
                                     </option>
                                 @endforeach
                             </select>
+                            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Choose Complimentary for free, time-limited access. Set an Ends At date below; access pauses automatically after it.</p>
                         </div>
                         <x-form-select
                             name="platform_subscription_status"

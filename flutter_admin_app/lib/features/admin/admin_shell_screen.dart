@@ -16991,6 +16991,13 @@ class _PlatformUserDetailSheet extends StatelessWidget {
     final activityLogs = (user['activity_logs'] as List<dynamic>? ?? const [])
         .map((entry) => _recordMap(entry))
         .toList();
+    final isMember =
+        roles.contains('member') || user['active_role'] == 'member';
+    final memberProfiles =
+        (user['member_profiles'] as List<dynamic>? ?? const [])
+            .map((entry) => _recordMap(entry))
+            .toList();
+    final photo = user['avatar']?.toString().trim() ?? '';
 
     return SafeArea(
       child: Padding(
@@ -16998,14 +17005,32 @@ class _PlatformUserDetailSheet extends StatelessWidget {
         child: ListView(
           shrinkWrap: true,
           children: [
-            Text(
-              user['name']?.toString() ?? 'User detail',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              user['email']?.toString() ?? '--',
-              style: Theme.of(context).textTheme.bodyMedium,
+            Row(
+              children: [
+                if (isMember && photo.isNotEmpty) ...[
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundImage: NetworkImage(photo),
+                  ),
+                  const SizedBox(width: 14),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user['name']?.toString() ?? 'User detail',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        user['email']?.toString() ?? '--',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             Wrap(
@@ -17037,6 +17062,25 @@ class _PlatformUserDetailSheet extends StatelessWidget {
                     label: 'Phone',
                     value: user['phone']?.toString() ?? '--',
                   ),
+                  if (isMember) ...[
+                    _InfoRow(
+                      label: 'Date of birth',
+                      value: _formatDate(user['date_of_birth']),
+                    ),
+                    _InfoRow(
+                      label: 'Gender',
+                      value: user['gender']?.toString().isNotEmpty == true
+                          ? user['gender'].toString().replaceAll('_', ' ')
+                          : (memberProfiles.isNotEmpty
+                                ? memberProfiles.first['gender']?.toString() ??
+                                      'Not added'
+                                : 'Not added'),
+                    ),
+                    _InfoRow(
+                      label: 'Profile photo',
+                      value: photo.isNotEmpty ? 'Added' : 'Not added',
+                    ),
+                  ],
                   _InfoRow(
                     label: 'Auth Provider',
                     value: user['auth_provider']?.toString() ?? '--',
@@ -17055,6 +17099,122 @@ class _PlatformUserDetailSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
+            if (isMember) ...[
+              if (memberProfiles.isEmpty)
+                const PremiumCard(
+                  child: EmptyState(
+                    title: 'No member profile yet',
+                    message:
+                        'Fitness and gym details will appear after onboarding.',
+                    icon: Icons.person_outline_rounded,
+                  ),
+                )
+              else
+                ...memberProfiles.map((profile) {
+                  final goals =
+                      (profile['fitness_goals'] as List<dynamic>? ?? const [])
+                          .map(
+                            (goal) =>
+                                _recordMap(goal)['name']?.toString() ?? '',
+                          )
+                          .where((name) => name.isNotEmpty)
+                          .toList();
+                  final goalLabel = goals.isNotEmpty
+                      ? goals.join(', ')
+                      : (profile['fitness_goal']?.toString().isNotEmpty == true
+                            ? profile['fitness_goal'].toString()
+                            : 'Not added');
+                  final gymName = profile['gym_name']?.toString();
+                  final branchName = profile['branch_name']?.toString();
+                  final location = gymName?.isNotEmpty == true
+                      ? gymName!
+                      : 'Independent member';
+                  final emergencyContact =
+                      [
+                            profile['emergency_contact_name'],
+                            profile['emergency_contact_phone'],
+                          ]
+                          .where(
+                            (value) =>
+                                value != null &&
+                                value.toString().trim().isNotEmpty,
+                          )
+                          .join(' · ');
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: PremiumCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            location,
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          if (branchName?.isNotEmpty == true) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              branchName!,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          _InfoRow(label: 'Fitness goals', value: goalLabel),
+                          _InfoRow(
+                            label: 'Experience',
+                            value:
+                                profile['experience_level']?.toString() ??
+                                'Not added',
+                          ),
+                          _InfoRow(
+                            label: 'Height',
+                            value: profile['height_cm'] == null
+                                ? 'Not added'
+                                : '${profile['height_cm']} cm',
+                          ),
+                          _InfoRow(
+                            label: 'Weight',
+                            value: profile['weight_kg'] == null
+                                ? 'Not added'
+                                : '${profile['weight_kg']} kg',
+                          ),
+                          _InfoRow(
+                            label: 'Trainer',
+                            value:
+                                profile['assigned_trainer_name']?.toString() ??
+                                'Not assigned',
+                          ),
+                          _InfoRow(
+                            label: 'Medical notes',
+                            value:
+                                profile['medical_notes']?.toString() ??
+                                'None recorded',
+                          ),
+                          _InfoRow(
+                            label: 'Injury notes',
+                            value:
+                                profile['injury_notes']?.toString() ??
+                                'None recorded',
+                          ),
+                          _InfoRow(
+                            label: 'Emergency contact',
+                            value: emergencyContact.isEmpty
+                                ? 'Not added'
+                                : emergencyContact,
+                          ),
+                          _InfoRow(
+                            label: 'Membership',
+                            value:
+                                profile['membership_status']?.toString() ??
+                                'Not active',
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              const SizedBox(height: 16),
+            ],
             PremiumCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -19910,6 +20070,15 @@ String _formatDateTime(dynamic raw) {
     return value;
   }
   return DateFormat('dd MMM, hh:mm a').format(parsed);
+}
+
+String _formatDate(dynamic raw) {
+  final value = raw?.toString();
+  if (value == null || value.isEmpty) {
+    return 'Not added';
+  }
+  final parsed = DateTime.tryParse(value);
+  return parsed == null ? value : DateFormat('dd MMM yyyy').format(parsed);
 }
 
 Color _badgeColorForLabel(String label) {

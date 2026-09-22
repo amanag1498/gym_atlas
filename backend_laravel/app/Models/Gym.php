@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Media\StoredImage;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,6 +15,36 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class Gym extends Model
 {
     use HasFactory;
+
+    public function scopeWithPlatformAccess(Builder $query): Builder
+    {
+        $today = now()->toDateString();
+
+        return $query->whereHas('platformSubscriptions', function (Builder $subscription) use ($today): void {
+            $subscription
+                ->whereDate('starts_at', '<=', $today)
+                ->where(function (Builder $access) use ($today): void {
+                    $access->where(function (Builder $trial) use ($today): void {
+                        $trial->where('status', 'trialing')
+                            ->whereDate('trial_ends_at', '>=', $today);
+                    })->orWhere(function (Builder $active) use ($today): void {
+                        $active->where('status', 'active')
+                            ->where(function (Builder $window) use ($today): void {
+                                $window->whereDate('ends_at', '>=', $today)
+                                    ->orWhere(function (Builder $renewal) use ($today): void {
+                                        $renewal->whereNull('ends_at')
+                                            ->whereDate('renews_at', '>=', $today);
+                                    });
+                            });
+                    });
+                });
+        });
+    }
+
+    public function hasPlatformAccess(): bool
+    {
+        return static::query()->whereKey($this->getKey())->withPlatformAccess()->exists();
+    }
 
     protected $fillable = [
         'owner_user_id',

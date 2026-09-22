@@ -40,6 +40,13 @@ class EnsureWebGymPanelAccess
         $freshUser = $user->fresh(['roles', 'gyms', 'branches']);
         $request->setUserResolver(static fn () => $freshUser);
 
+        abort_if(
+            ! $freshUser->hasRole(RoleName::PlatformAdmin->value)
+                && $this->webPanelContext->accessibleGyms($freshUser)->isEmpty(),
+            403,
+            'Gym access is paused. Please contact the platform team about the gym subscription.',
+        );
+
         view()->share($this->webPanelContext->buildSharedViewData($request, $freshUser, 'gym'));
 
         return $next($request);

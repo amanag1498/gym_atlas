@@ -42,6 +42,10 @@ class GymSelfEnrollmentFeatureTest extends TestCase
             'password' => 'secret123',
         ])->assertRedirect(route('web.gym.dashboard'));
 
+        $this->get(route('web.gym.self-enrollment.index', ['gym' => $gym->id]))
+            ->assertOk()
+            ->assertSee(route('web.gym.self-enrollment.qr', ['gym' => $gym->id, 'link' => $link]), false);
+
         $route = route('web.gym.self-enrollment.qr', ['gym' => $gym->id, 'link' => $link]);
         $this->get($route)
             ->assertOk()

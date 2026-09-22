@@ -30,6 +30,7 @@
                         <option value="{{ $plan->id }}" @selected((string) old('platform_subscription_plan_id', $subscription->platform_subscription_plan_id) === (string) $plan->id)>{{ $plan->name }} • {{ $plan->price_label }}</option>
                     @endforeach
                 </select>
+                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">For free access, choose Complimentary and set an Ends At date. Gym access pauses automatically after that date.</p>
                 @error('platform_subscription_plan_id') <div class="mt-2 text-sm text-rose-600">{{ $message }}</div> @enderror
             </div>
 

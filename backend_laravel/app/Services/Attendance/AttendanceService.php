@@ -105,7 +105,7 @@ class AttendanceService
                 ]);
             }
 
-            if (! $gym->is_active || $gym->status !== 'active' || ! $gym->operational_access_enabled) {
+            if (! $gym->is_active || $gym->status !== 'active' || ! $gym->operational_access_enabled || ! $gym->hasPlatformAccess()) {
                 throw ValidationException::withMessages([
                     'gym_id' => ['Attendance is unavailable while this gym is inactive or operational access is disabled.'],
                 ]);

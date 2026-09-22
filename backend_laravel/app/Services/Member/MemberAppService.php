@@ -254,7 +254,8 @@ class MemberAppService
             ->whereHas('gym', fn ($gym) => $gym
                 ->where('is_active', true)
                 ->where('status', 'active')
-                ->where('operational_access_enabled', true))
+                ->where('operational_access_enabled', true)
+                ->withPlatformAccess())
             ->where(function ($query): void {
                 $query->where('status', 'frozen')
                     ->orWhere(function ($active): void {
@@ -642,7 +643,7 @@ class MemberAppService
     public function hasActiveMembership(?MemberMembership $membership, ?MemberProfile $profile = null): bool
     {
         $gym = $membership?->gym ?? $profile?->gym;
-        if ($gym !== null && (! $gym->is_active || $gym->status !== 'active' || ! $gym->operational_access_enabled)) {
+        if ($gym !== null && (! $gym->is_active || $gym->status !== 'active' || ! $gym->operational_access_enabled || ! $gym->hasPlatformAccess())) {
             return false;
         }
 
@@ -719,6 +720,7 @@ class MemberAppService
             && $gym?->is_active
             && $gym?->status === 'active'
             && $gym?->operational_access_enabled
+            && $gym?->hasPlatformAccess()
             && $branch !== null
             && $branch->is_active
             && $branch->status === 'active';

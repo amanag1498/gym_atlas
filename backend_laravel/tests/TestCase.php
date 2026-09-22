@@ -2,6 +2,8 @@
 
 namespace Tests;
 
+use App\Models\Gym;
+use App\Models\GymPlatformSubscription;
 use App\Models\User;
 use App\Services\Privacy\ConsentService;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
@@ -11,9 +13,28 @@ abstract class TestCase extends BaseTestCase
 {
     protected bool $seedPrivacyConsentsForFixtureUsers = true;
 
+    protected bool $seedPlatformSubscriptionsForFixtureGyms = true;
+
     protected function setUp(): void
     {
         parent::setUp();
+
+        if ($this->seedPlatformSubscriptionsForFixtureGyms) {
+            // Existing feature fixtures represent operating gyms. Billing
+            // access tests disable this to cover unassigned and expired gyms.
+            Gym::created(static function (Gym $gym): void {
+                GymPlatformSubscription::query()->create([
+                    'gym_id' => $gym->id,
+                    'status' => 'active',
+                    'starts_at' => now()->toDateString(),
+                    'renews_at' => now()->addYear()->toDateString(),
+                    'ends_at' => now()->addYear()->toDateString(),
+                    'billing_amount' => 0,
+                    'setup_fee_amount' => 0,
+                    'auto_renew' => false,
+                ]);
+            });
+        }
 
         if (! $this->seedPrivacyConsentsForFixtureUsers) {
             return;

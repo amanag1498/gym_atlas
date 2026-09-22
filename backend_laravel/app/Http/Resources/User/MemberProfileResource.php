@@ -16,8 +16,11 @@ class MemberProfileResource extends JsonResource
         return [
             'id' => $this->id,
             'gym_id' => $this->gym_id,
+            'gym_name' => $this->whenLoaded('gym', fn () => $this->gym?->name),
             'branch_id' => $this->branch_id,
+            'branch_name' => $this->whenLoaded('branch', fn () => $this->branch?->name),
             'assigned_trainer_user_id' => $this->assigned_trainer_user_id,
+            'assigned_trainer_name' => $this->whenLoaded('assignedTrainer', fn () => $this->assignedTrainer?->name),
             'fitness_goal' => $this->fitness_goal,
             'fitness_goals' => FitnessGoalResource::collection($this->whenLoaded('fitnessGoals')),
             'gender' => $this->gender,

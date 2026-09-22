@@ -136,7 +136,7 @@ class TrainerEmailInvitationService
 
             if ($accept) {
                 $gym = Gym::query()->findOrFail($invitation->gym_id);
-                if (! $gym->is_active || $gym->status !== 'active' || ! $gym->operational_access_enabled) {
+                if (! $gym->is_active || $gym->status !== 'active' || ! $gym->operational_access_enabled || ! $gym->hasPlatformAccess()) {
                     throw ValidationException::withMessages([
                         'invitation' => ['This gym is not currently operational, so the invitation cannot be accepted.'],
                     ]);

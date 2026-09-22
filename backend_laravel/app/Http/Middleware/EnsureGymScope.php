@@ -31,6 +31,13 @@ class EnsureGymScope
 
         $gymId = $scopedGymId ?? $bodyGymId;
 
+        if (! $gymId
+            && ! $request->is('api/gym/context')
+            && in_array($request->user()?->active_role, ['gym_owner', 'branch_manager', 'gym_staff'], true)
+            && ! $this->scopeResolver->gymsQuery($request->user())->exists()) {
+            return ApiResponse::error('Gym access is paused. Please contact the platform team.', 403);
+        }
+
         if ($gymId && $request->user() && ! $this->scopeResolver->canAccessGym($request->user(), $gymId)) {
             return ApiResponse::error('You do not have access to this gym scope.', 403);
         }

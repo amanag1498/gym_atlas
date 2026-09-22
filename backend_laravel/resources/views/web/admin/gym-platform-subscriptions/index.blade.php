@@ -256,6 +256,9 @@
                                         <div class="flex flex-col gap-2">
                                             <div class="flex flex-wrap gap-2">
                                                 <x-status-badge :label="$subscription->status" />
+                                                @if ($subscription->gym && $subscription->gym->currentPlatformSubscription?->id === $subscription->id)
+                                                    <x-status-badge :label="in_array($subscription->gym_id, $accessibleGymIds, true) ? 'Access available' : 'Access paused'" :tone="in_array($subscription->gym_id, $accessibleGymIds, true) ? 'success' : 'danger'" />
+                                                @endif
                                                 @if ($subscription->trial_ends_at)
                                                     <x-status-badge :label="'Trial until '.$subscription->trial_ends_at->format('d M Y')" tone="warning" />
                                                 @endif

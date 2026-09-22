@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Web\Platform;
 
 use App\Models\GymPlatformSubscription;
+use App\Models\PlatformSubscriptionPlan;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -59,6 +60,17 @@ class StoreGymPlatformSubscriptionRequest extends FormRequest
 
                 if ($startsAt && $endsAt && $endsAt < $startsAt) {
                     $validator->errors()->add('ends_at', 'End date must be on or after the start date.');
+                }
+
+                $complimentary = PlatformSubscriptionPlan::query()
+                    ->whereKey($this->input('platform_subscription_plan_id'))
+                    ->where('slug', 'complimentary')
+                    ->exists();
+                if ($complimentary && (! $endsAt || $endsAt < now()->toDateString())) {
+                    $validator->errors()->add('ends_at', 'Choose a future end date for complimentary access.');
+                }
+                if ($complimentary && $this->input('status') !== 'active') {
+                    $validator->errors()->add('status', 'Complimentary access must be active while its dates are valid.');
                 }
             },
         ];

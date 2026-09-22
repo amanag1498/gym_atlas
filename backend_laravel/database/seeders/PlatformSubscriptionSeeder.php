@@ -11,6 +11,25 @@ class PlatformSubscriptionSeeder extends Seeder
     {
         $plans = collect([
             [
+                'name' => 'Complimentary',
+                'slug' => 'complimentary',
+                'description' => 'Time-limited platform access granted by a platform admin at no charge.',
+                'status' => 'active',
+                'billing_period' => 'day',
+                'billing_interval_count' => 1,
+                'price' => 0,
+                'setup_fee' => 0,
+                'trial_days' => 0,
+                'is_default' => false,
+                'sort_order' => 5,
+                'included_services' => [
+                    'Gym operations',
+                    'Member and trainer access',
+                    'Public discovery when approved',
+                ],
+                'feature_highlights' => ['Access ends on the assigned date'],
+            ],
+            [
                 'name' => 'Starter',
                 'slug' => 'starter',
                 'description' => 'Core platform presence, admin operations, and discovery eligibility for independent gyms.',

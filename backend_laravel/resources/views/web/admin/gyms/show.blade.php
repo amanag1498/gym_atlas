@@ -275,6 +275,7 @@
                             <div class="panel-card-muted px-4 py-4">
                                 <div class="flex flex-wrap gap-2">
                                     <x-status-badge :label="$gym->currentPlatformSubscription->status" />
+                                    <x-status-badge :label="$gym->hasPlatformAccess() ? 'Access available' : 'Access paused'" :tone="$gym->hasPlatformAccess() ? 'success' : 'danger'" />
                                     <x-status-badge :label="$gym->currentPlatformSubscription->auto_renew ? 'Auto Renew' : 'Manual Renew'" tone="verified" />
                                 </div>
                                 <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">

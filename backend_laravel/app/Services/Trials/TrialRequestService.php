@@ -43,6 +43,7 @@ class TrialRequestService
         if (! $gym->public_listing_enabled
             || $gym->public_listing_approval_status !== 'approved'
             || ! $gym->operational_access_enabled
+            || ! $gym->hasPlatformAccess()
             || ! $gym->trial_available
             || ! $gym->is_active
             || $gym->status !== 'active'
