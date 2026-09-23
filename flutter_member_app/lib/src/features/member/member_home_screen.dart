@@ -6689,68 +6689,10 @@ class __WorkoutPageState extends State<_WorkoutPage>
   }
 
   Future<Map<String, dynamic>?> _askPreWorkoutWeight() async {
-    final controller = TextEditingController();
-    var saveToProgress = false;
-    final result = await showDialog<Map<String, dynamic>>(
+    return showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Pre-workout check-in'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: controller,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Weight in kg (optional)',
-                  hintText: 'Skip if you do not want to log it',
-                ),
-              ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                value: saveToProgress,
-                title: const Text('Save to progress history'),
-                onChanged: (value) =>
-                    setDialogState(() => saveToProgress = value == true),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, const {}),
-              child: const Text('Skip'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final weight = double.tryParse(controller.text.trim());
-                if (weight == null || weight < 20 || weight > 500) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Enter a weight from 20–500 kg.'),
-                    ),
-                  );
-                  return;
-                }
-                Navigator.pop(dialogContext, {
-                  'pre_workout_weight_kg': weight,
-                  'save_pre_workout_weight': saveToProgress,
-                });
-              },
-              child: const Text('Continue'),
-            ),
-          ],
-        ),
-      ),
+      builder: (_) => const _PreWorkoutWeightDialog(),
     );
-    controller.dispose();
-    return result;
   }
 
   Future<void> _showWorkoutSummary(Map<String, dynamic> summary) {
@@ -8133,6 +8075,84 @@ class _WorkoutGroupHeader extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _PreWorkoutWeightDialog extends StatefulWidget {
+  const _PreWorkoutWeightDialog();
+
+  @override
+  State<_PreWorkoutWeightDialog> createState() =>
+      _PreWorkoutWeightDialogState();
+}
+
+class _PreWorkoutWeightDialogState extends State<_PreWorkoutWeightDialog> {
+  late final TextEditingController _controller;
+  bool _saveToProgress = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _continue() {
+    final weight = double.tryParse(_controller.text.trim());
+    if (weight == null || weight < 20 || weight > 500) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a weight from 20–500 kg.')),
+      );
+      return;
+    }
+    Navigator.of(context).pop(<String, dynamic>{
+      'pre_workout_weight_kg': weight,
+      'save_pre_workout_weight': _saveToProgress,
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      scrollable: true,
+      title: const Text('Pre-workout check-in'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _controller,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: 'Weight in kg (optional)',
+              hintText: 'Skip if you do not want to log it',
+            ),
+          ),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _saveToProgress,
+            title: const Text('Save to progress history'),
+            onChanged: (value) =>
+                setState(() => _saveToProgress = value == true),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(const {}),
+          child: const Text('Skip'),
+        ),
+        FilledButton(onPressed: _continue, child: const Text('Continue')),
+      ],
     );
   }
 }

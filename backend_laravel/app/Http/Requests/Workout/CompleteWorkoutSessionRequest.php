@@ -21,13 +21,16 @@ class CompleteWorkoutSessionRequest extends FormRequest
             'exercises.*.id' => ['nullable', 'integer', 'exists:workout_session_exercises,id'],
             'exercises.*.exercise_id' => ['nullable', 'required_without:exercises.*.id', 'integer', 'exists:exercises,id'],
             'exercises.*.sort_order' => ['nullable', 'integer', 'min:1'],
-            'exercises.*.planned_sets' => ['nullable', 'integer', 'min:1'],
+            // Planned values describe the prescription, not actual completion.
+            // A member may finish a session without logging any sets, so zero
+            // is valid for these optional fields.
+            'exercises.*.planned_sets' => ['nullable', 'integer', 'min:0'],
             'exercises.*.tracking_mode' => ['nullable', Rule::in(['reps', 'timed', 'cardio', 'distance'])],
             'exercises.*.planned_reps' => ['nullable', 'string', 'max:100'],
-            'exercises.*.planned_duration_seconds' => ['nullable', 'integer', 'min:1', 'max:86400'],
+            'exercises.*.planned_duration_seconds' => ['nullable', 'integer', 'min:0', 'max:86400'],
             'exercises.*.planned_distance_meters' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
             'exercises.*.planned_speed_kph' => ['nullable', 'numeric', 'min:0', 'max:200'],
-            'exercises.*.planned_pace_seconds_per_km' => ['nullable', 'integer', 'min:1', 'max:86400'],
+            'exercises.*.planned_pace_seconds_per_km' => ['nullable', 'integer', 'min:0', 'max:86400'],
             'exercises.*.target_weight' => ['nullable', 'numeric', 'min:0'],
             'exercises.*.target_resistance' => ['nullable', 'numeric', 'min:0'],
             'exercises.*.target_machine_level' => ['nullable', 'numeric', 'min:0'],

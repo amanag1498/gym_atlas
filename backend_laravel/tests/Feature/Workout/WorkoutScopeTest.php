@@ -630,6 +630,29 @@ class WorkoutScopeTest extends TestCase
             ->assertJsonPath('data', null);
     }
 
+    public function test_member_can_complete_a_session_without_logging_exercises(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        [$gym, $branch] = $this->makeGymContext();
+        $trainer = $this->makeTrainer($gym, $branch);
+        $member = $this->makeMember($gym, $branch, $trainer->id);
+
+        $sessionId = $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/workout-sessions/start', [
+                'session_date' => now()->toDateString(),
+            ])
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->actingAs($member, 'sanctum')
+            ->postJson("/api/member/workout-sessions/{$sessionId}/complete", [
+                'notes' => 'Completed without logging exercise details.',
+                'exercises' => [],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'completed');
+    }
+
     public function test_grouped_plan_progression_and_estimated_one_rep_max_round_trip_end_to_end(): void
     {
         $this->seed(PermissionSeeder::class);

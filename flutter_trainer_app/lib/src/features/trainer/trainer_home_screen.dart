@@ -5670,7 +5670,6 @@ class __WorkoutPageState extends State<_WorkoutPage> {
   final _notesController = TextEditingController();
   final _exerciseSearchController = TextEditingController();
   final _exercisePickerTextController = TextEditingController();
-  final _exercisePickerMenuController = MenuController();
   Timer? _exerciseSearchDebounce;
   final _dayLabelController = TextEditingController();
   final _focusController = TextEditingController();
@@ -6511,10 +6510,8 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                             ),
                           DropdownMenu<int>(
                             controller: _exercisePickerTextController,
-                            menuController: _exercisePickerMenuController,
                             initialSelection: _selectedExerciseId,
                             expandedInsets: EdgeInsets.zero,
-                            selectOnly: true,
                             requestFocusOnTap: false,
                             enableFilter: false,
                             enableSearch: false,
@@ -6587,13 +6584,7 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                                     ? suggested
                                     : 'reps';
                               });
-                              _exercisePickerMenuController.close();
                             },
-                            decorationBuilder: (context, controller) =>
-                                _workoutInputDecoration(
-                                  'Exercise picker',
-                                  icon: Icons.fitness_center_rounded,
-                                ),
                           ),
                           const SizedBox(height: 14),
                           _SelectedExerciseBodyPart(
