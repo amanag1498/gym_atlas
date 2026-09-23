@@ -5710,7 +5710,11 @@ class __WorkoutPageState extends State<_WorkoutPage>
 
       return {
         'id': exercise['id'],
-        if (exerciseId != null) 'exercise_id': exerciseId,
+        // Existing session exercises are already linked to their catalog
+        // exercise. Do not revalidate that catalog ID during completion; a
+        // retired catalog record must not block finishing the session.
+        if (exercise['id'] == null && exerciseId != null)
+          'exercise_id': exerciseId,
         'sort_order': exercise['sort_order'],
         'planned_sets': exercise['planned_sets'],
         'tracking_mode': mode,

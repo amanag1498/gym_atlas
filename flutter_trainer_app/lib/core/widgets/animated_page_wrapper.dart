@@ -21,9 +21,18 @@ class AnimatedPageWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBodyBehindAppBar: false,
+      extendBody: true,
       appBar: appBar,
       floatingActionButton: floatingActionButton,
-      bottomNavigationBar: bottomNavigationBar,
+      bottomNavigationBar: bottomNavigationBar == null
+          ? null
+          : Container(
+              color: Colors.white,
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.paddingOf(context).bottom,
+              ),
+              child: bottomNavigationBar,
+            ),
       body: DecoratedBox(
         decoration: const BoxDecoration(gradient: AppGradients.pageBackground),
         child: Stack(
