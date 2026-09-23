@@ -636,6 +636,7 @@ class WorkoutScopeTest extends TestCase
         [$gym, $branch] = $this->makeGymContext();
         $trainer = $this->makeTrainer($gym, $branch);
         $member = $this->makeMember($gym, $branch, $trainer->id);
+        [$exercise] = $this->makePlanExercises($gym, $branch, $trainer);
 
         $sessionId = $this->actingAs($member, 'sanctum')
             ->postJson('/api/member/workout-sessions/start', [
@@ -644,13 +645,23 @@ class WorkoutScopeTest extends TestCase
             ->assertCreated()
             ->json('data.id');
 
+        WorkoutSession::query()->findOrFail($sessionId)->exercises()->create([
+            'exercise_id' => $exercise->id,
+            'tracking_mode' => 'reps',
+            'sort_order' => 1,
+            'planned_sets' => 3,
+            'performed_status' => 'planned',
+        ]);
+
         $this->actingAs($member, 'sanctum')
             ->postJson("/api/member/workout-sessions/{$sessionId}/complete", [
                 'notes' => 'Completed without logging exercise details.',
                 'exercises' => [],
             ])
             ->assertOk()
-            ->assertJsonPath('data.status', 'completed');
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.exercises.0.performed_status', 'skipped')
+            ->assertJsonPath('data.exercises.0.sets', []);
     }
 
     public function test_grouped_plan_progression_and_estimated_one_rep_max_round_trip_end_to_end(): void

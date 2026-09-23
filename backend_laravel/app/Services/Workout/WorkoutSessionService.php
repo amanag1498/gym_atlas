@@ -281,6 +281,7 @@ class WorkoutSessionService
                 $session->notes = $payload['notes'];
             }
 
+            $submittedSessionExerciseIds = [];
             foreach ($payload['exercises'] ?? [] as $exercisePayload) {
                 $substitutedForId = $exercisePayload['substituted_for_session_exercise_id'] ?? null;
                 if (
@@ -315,7 +316,21 @@ class WorkoutSessionService
                 foreach ($exercisePayload['sets'] ?? [] as $setPayload) {
                     $sessionExercise->sets()->create($this->setPayload($setPayload));
                 }
+
+                $submittedSessionExerciseIds[] = $sessionExercise->id;
             }
+
+            // Completion payloads contain only exercises with actual logged
+            // work. Everything else in the session is a valid skipped
+            // exercise and must never prevent the workout from completing.
+            $unsubmittedExercises = $session->exercises();
+            if ($submittedSessionExerciseIds !== []) {
+                $unsubmittedExercises->whereNotIn('id', $submittedSessionExerciseIds);
+            }
+            $unsubmittedExercises->get()->each(function (WorkoutSessionExercise $exercise): void {
+                $exercise->update(['performed_status' => 'skipped']);
+                $exercise->sets()->delete();
+            });
 
             $session->load('plan', 'exercises.exercise', 'exercises.sets');
 

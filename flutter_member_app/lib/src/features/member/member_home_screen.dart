@@ -5694,7 +5694,7 @@ class __WorkoutPageState extends State<_WorkoutPage>
   }
 
   List<Map<String, dynamic>> _buildCompletionPayload() {
-    return _sessionExercises.map((exercise) {
+    return _sessionExercises.expand((exercise) {
       final mode = exercise['tracking_mode']?.toString() ?? 'reps';
       final exerciseId =
           (exercise['exercise_id'] as num?)?.toInt() ??
@@ -5708,62 +5708,52 @@ class __WorkoutPageState extends State<_WorkoutPage>
           .where((set) => _setHasActual(mode, set))
           .toList();
 
-      return {
-        'id': exercise['id'],
-        // Existing session exercises are already linked to their catalog
-        // exercise. Do not revalidate that catalog ID during completion; a
-        // retired catalog record must not block finishing the session.
-        if (exercise['id'] == null && exerciseId != null)
-          'exercise_id': exerciseId,
-        'sort_order': exercise['sort_order'],
-        'planned_sets': exercise['planned_sets'],
-        'tracking_mode': mode,
-        'planned_reps': exercise['planned_reps']?.toString(),
-        'planned_duration_seconds': exercise['planned_duration_seconds'],
-        'planned_distance_meters': exercise['planned_distance_meters'],
-        'planned_speed_kph': exercise['planned_speed_kph'],
-        'planned_pace_seconds_per_km': exercise['planned_pace_seconds_per_km'],
-        'target_weight': exercise['target_weight'],
-        'target_resistance': exercise['target_resistance'],
-        'target_machine_level': exercise['target_machine_level'],
-        'is_per_side': exercise['is_per_side'] == true,
-        'is_bodyweight': exercise['is_bodyweight'] == true,
-        'performed_status': exercise['performed_status'] == 'skipped'
-            ? 'skipped'
-            : (sets.isEmpty ? 'skipped' : 'completed'),
-        'rest_timer_seconds': exercise['rest_timer_seconds'],
-        'notes': exercise['notes']?.toString(),
-        'sets': sets.map((set) {
-          return {
-            'set_number': (set['set_number'] as num?)?.toInt() ?? 1,
-            'reps': (set['reps'] as num?)?.toInt() ?? 0,
-            'duration_seconds': (set['duration_seconds'] as num?)?.toInt(),
-            'distance_meters': (set['distance_meters'] as num?)?.toDouble(),
-            'speed_kph': (set['speed_kph'] as num?)?.toDouble(),
-            'pace_seconds_per_km':
-                ((set['pace_seconds_per_km'] as num?)?.toInt() ?? 0) > 0
-                ? (set['pace_seconds_per_km'] as num).toInt()
-                : null,
-            'weight': (set['weight'] as num?)?.toDouble() ?? 0,
-            'rest_seconds': (set['rest_seconds'] as num?)?.toInt() ?? 0,
-            if ((set['notes']?.toString().trim() ?? '').isNotEmpty)
-              'notes': set['notes']?.toString().trim(),
-            if (const {'rir', 'rpe'}.contains(set['effort_scale']))
-              'effort_scale': set['effort_scale']?.toString(),
-            if (const {'rir', 'rpe'}.contains(set['effort_scale']) &&
-                (set['effort_value'] as num?) != null)
-              'effort_value': (set['effort_value'] as num?)?.toDouble(),
-            if (const {
-              'left',
-              'right',
-              'both',
-              'alternating',
-            }.contains(set['side']))
-              'side': set['side']?.toString(),
-            'is_completed': true,
-          };
-        }).toList(),
-      };
+      // Empty exercises are intentionally omitted. The server marks every
+      // unsubmitted session exercise as skipped when completing the workout.
+      if (sets.isEmpty) {
+        return const <Map<String, dynamic>>[];
+      }
+
+      return <Map<String, dynamic>>[
+        {
+          'id': exercise['id'],
+          if (exercise['id'] == null && exerciseId != null)
+            'exercise_id': exerciseId,
+          'tracking_mode': mode,
+          'performed_status': 'completed',
+          'notes': exercise['notes']?.toString(),
+          'sets': sets.map((set) {
+            return {
+              'set_number': (set['set_number'] as num?)?.toInt() ?? 1,
+              'reps': (set['reps'] as num?)?.toInt() ?? 0,
+              'duration_seconds': (set['duration_seconds'] as num?)?.toInt(),
+              'distance_meters': (set['distance_meters'] as num?)?.toDouble(),
+              'speed_kph': (set['speed_kph'] as num?)?.toDouble(),
+              'pace_seconds_per_km':
+                  ((set['pace_seconds_per_km'] as num?)?.toInt() ?? 0) > 0
+                  ? (set['pace_seconds_per_km'] as num).toInt()
+                  : null,
+              'weight': (set['weight'] as num?)?.toDouble() ?? 0,
+              'rest_seconds': (set['rest_seconds'] as num?)?.toInt() ?? 0,
+              if ((set['notes']?.toString().trim() ?? '').isNotEmpty)
+                'notes': set['notes']?.toString().trim(),
+              if (const {'rir', 'rpe'}.contains(set['effort_scale']))
+                'effort_scale': set['effort_scale']?.toString(),
+              if (const {'rir', 'rpe'}.contains(set['effort_scale']) &&
+                  (set['effort_value'] as num?) != null)
+                'effort_value': (set['effort_value'] as num?)?.toDouble(),
+              if (const {
+                'left',
+                'right',
+                'both',
+                'alternating',
+              }.contains(set['side']))
+                'side': set['side']?.toString(),
+              'is_completed': true,
+            };
+          }).toList(),
+        },
+      ];
     }).toList();
   }
 
