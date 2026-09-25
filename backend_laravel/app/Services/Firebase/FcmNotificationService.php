@@ -8,6 +8,7 @@ use App\Services\Users\AppPresenceService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class FcmNotificationService
 {
@@ -114,17 +115,25 @@ class FcmNotificationService
 
         if ($response->successful()) {
             app(AppPresenceService::class)->markPushSuccess($token);
-            UserFcmToken::query()->where('token', $token)->update([
-                'last_push_success_at' => now(),
-                'uninstall_suspected_at' => null,
-            ]);
+            $updates = [];
+            if (Schema::hasColumn('user_fcm_tokens', 'last_push_success_at')) {
+                $updates['last_push_success_at'] = now();
+            }
+            if (Schema::hasColumn('user_fcm_tokens', 'uninstall_suspected_at')) {
+                $updates['uninstall_suspected_at'] = null;
+            }
+            if ($updates !== []) {
+                UserFcmToken::query()->where('token', $token)->update($updates);
+            }
 
             return true;
         }
 
         if ($this->isInvalidTokenResponse($response->status(), $response->body())) {
             app(AppPresenceService::class)->markUninstallSuspected($token);
-            UserFcmToken::query()->where('token', $token)->update(['uninstall_suspected_at' => now()]);
+            if (Schema::hasColumn('user_fcm_tokens', 'uninstall_suspected_at')) {
+                UserFcmToken::query()->where('token', $token)->update(['uninstall_suspected_at' => now()]);
+            }
         }
 
         Log::warning('FCM notification send failed', [

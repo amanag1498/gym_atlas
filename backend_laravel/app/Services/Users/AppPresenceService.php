@@ -7,11 +7,27 @@ use App\Models\UserAppPresence;
 use App\Models\UserFcmToken;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
+use Throwable;
 
 class AppPresenceService
 {
-    public function recordSeen(User $user, array $payload): UserAppPresence
+    public function isReady(): bool
     {
+        try {
+            return Schema::hasTable('user_app_presences')
+                && Schema::hasColumn('user_app_presences', 'device_key')
+                && Schema::hasColumn('user_app_presences', 'last_seen_at');
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    public function recordSeen(User $user, array $payload): ?UserAppPresence
+    {
+        if (! $this->isReady()) {
+            return null;
+        }
         $role = $this->normalizeRole($payload['app_role'] ?? $user->active_role ?? 'member');
         $deviceKey = $this->normalizeDeviceKey($payload['device_id'] ?? $payload['device_key'] ?? $payload['token'] ?? 'unknown');
         $now = now();
@@ -38,6 +54,10 @@ class AppPresenceService
 
     public function markRevoked(User $user, array $payload): void
     {
+        if (! $this->isReady()) {
+            return;
+        }
+
         $role = $this->normalizeRole($payload['app_role'] ?? $user->active_role ?? 'member');
         $deviceKey = $this->normalizeDeviceKey($payload['device_id'] ?? $payload['device_key'] ?? $payload['token'] ?? 'unknown');
 
@@ -50,6 +70,10 @@ class AppPresenceService
 
     public function markPushSuccess(string $token): void
     {
+        if (! $this->isReady()) {
+            return;
+        }
+
         $fcmToken = UserFcmToken::query()->where('token', $token)->first();
         if (! $fcmToken) {
             return;
@@ -64,6 +88,10 @@ class AppPresenceService
 
     public function markUninstallSuspected(string $token): void
     {
+        if (! $this->isReady()) {
+            return;
+        }
+
         $fcmToken = UserFcmToken::query()->where('token', $token)->first();
         if (! $fcmToken) {
             return;
@@ -78,6 +106,10 @@ class AppPresenceService
 
     public function summary(User $user, string $role = 'member'): array
     {
+        if (! $this->isReady()) {
+            return $this->summaryFromPresences(collect());
+        }
+
         $presences = $user->relationLoaded('appPresences')
             ? $user->appPresences->where('app_role', $role)->values()
             : UserAppPresence::query()->where('user_id', $user->id)->where('app_role', $role)->get();

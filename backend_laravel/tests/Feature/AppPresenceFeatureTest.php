@@ -11,6 +11,7 @@ use App\Models\UserAppPresence;
 use App\Services\Users\AppPresenceService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class AppPresenceFeatureTest extends TestCase
@@ -152,6 +153,73 @@ class AppPresenceFeatureTest extends TestCase
         $this->assertSame('App inactive', $summary['label']);
         $this->assertSame(1, $summary['device_count']);
         $this->assertSame('old-active-device', $summary['latest']->device_key);
+    }
+
+    public function test_admin_and_gym_pages_fall_back_when_presence_table_has_not_been_migrated(): void
+    {
+        $owner = $this->user(RoleName::GymOwner->value, 'presence-fallback-owner@example.com');
+        $admin = $this->user(RoleName::PlatformAdmin->value, 'presence-fallback-admin@example.com');
+        $member = $this->user(RoleName::Member->value, 'presence-fallback-member@example.com', 'Presence Fallback Member');
+
+        $gym = Gym::query()->create([
+            'owner_user_id' => $owner->id,
+            'name' => 'Presence Fallback Gym',
+            'slug' => 'presence-fallback-gym',
+            'approval_status' => 'approved',
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+        $branch = Branch::query()->create([
+            'gym_id' => $gym->id,
+            'name' => 'Presence Fallback Branch',
+            'slug' => 'presence-fallback-branch',
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+        $this->attach($owner, $gym, $branch);
+        $this->attach($member, $gym, $branch);
+
+        MemberProfile::query()->create([
+            'user_id' => $member->id,
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'membership_status' => 'active',
+            'is_active' => true,
+        ]);
+
+        Schema::dropIfExists('user_app_presences');
+
+        $this->actingAs($admin)
+            ->get(route('web.admin.users.show', $member))
+            ->assertOk()
+            ->assertSee('Gym Atlas app status')
+            ->assertSee('Not using app yet')
+            ->assertSee('Presence Fallback Member');
+
+        $this->actingAs($owner)
+            ->get(route('web.gym.members.index', ['gym' => $gym->id, 'branch' => $branch->id]))
+            ->assertOk()
+            ->assertSee('Presence Fallback Member')
+            ->assertSee('Not using app yet');
+    }
+
+    public function test_presence_endpoint_falls_back_when_presence_table_has_not_been_migrated(): void
+    {
+        $member = $this->user(RoleName::Member->value, 'presence-api-fallback@example.com');
+
+        Schema::dropIfExists('user_app_presences');
+
+        $this->actingAs($member, 'sanctum')
+            ->postJson('/api/public/app-presence', [
+                'platform' => 'android',
+                'app_role' => 'member',
+                'device_id' => 'pending-migration-device',
+            ])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.presence_id', null)
+            ->assertJsonPath('data.app_role', 'member')
+            ->assertJsonPath('data.platform', 'android');
     }
 
     public function test_uninstall_suspected_status_is_preserved_after_invalid_push_token(): void

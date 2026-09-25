@@ -47,7 +47,7 @@ class UserController extends Controller
 
     public function show(User $user): View
     {
-        $user->load([
+        $relations = [
             'roles',
             'permissions',
             'consentRecords',
@@ -118,8 +118,11 @@ class UserController extends Controller
             'workoutSessionsAsMember.trainer',
             'workoutSessionsAsMember.plan',
             'workoutSessionsAsMember.starter',
-            'appPresences',
-        ]);
+        ];
+        if ($this->appPresenceService->isReady()) {
+            $relations[] = 'appPresences';
+        }
+        $user->load($relations);
         $user->loadCount([
             'ownedGyms',
             'assignedMembers',

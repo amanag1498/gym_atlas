@@ -7,6 +7,7 @@ use App\Models\UserFcmToken;
 use App\Services\Privacy\ConsentService;
 use App\Services\Users\AppPresenceService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class FcmTokenController extends Controller
 {
@@ -25,19 +26,29 @@ class FcmTokenController extends Controller
             'app_version' => ['nullable', 'string', 'max:80'],
         ]);
 
-        $token = UserFcmToken::query()->updateOrCreate([
-            'token' => $validated['token'],
-        ], [
+        $tokenUpdates = [
             'user_id' => $request->user()->id,
             'platform' => $validated['platform'] ?? null,
             'app_role' => $validated['app_role'] ?? $request->user()->active_role,
             'device_name' => $validated['device_name'] ?? null,
-            'device_key' => $validated['device_id'] ?? $validated['device_key'] ?? null,
-            'app_version' => $validated['app_version'] ?? null,
             'last_seen_at' => now(),
-            'uninstall_suspected_at' => null,
-            'revoked_at' => null,
-        ]);
+        ];
+        if (Schema::hasColumn('user_fcm_tokens', 'device_key')) {
+            $tokenUpdates['device_key'] = $validated['device_id'] ?? $validated['device_key'] ?? null;
+        }
+        if (Schema::hasColumn('user_fcm_tokens', 'app_version')) {
+            $tokenUpdates['app_version'] = $validated['app_version'] ?? null;
+        }
+        if (Schema::hasColumn('user_fcm_tokens', 'uninstall_suspected_at')) {
+            $tokenUpdates['uninstall_suspected_at'] = null;
+        }
+        if (Schema::hasColumn('user_fcm_tokens', 'revoked_at')) {
+            $tokenUpdates['revoked_at'] = null;
+        }
+
+        $token = UserFcmToken::query()->updateOrCreate([
+            'token' => $validated['token'],
+        ], $tokenUpdates);
 
         $presence = $this->appPresenceService->recordSeen($request->user(), $validated + [
             'token' => $validated['token'],
@@ -49,7 +60,7 @@ class FcmTokenController extends Controller
             'platform' => $token->platform,
             'app_role' => $token->app_role,
             'last_seen_at' => $token->last_seen_at?->toIso8601String(),
-            'presence_id' => $presence->id,
+            'presence_id' => $presence?->id,
         ], 'FCM token registered successfully.');
     }
 
@@ -67,10 +78,10 @@ class FcmTokenController extends Controller
         $presence = $this->appPresenceService->recordSeen($request->user(), $validated);
 
         return $this->success([
-            'presence_id' => $presence->id,
-            'app_role' => $presence->app_role,
-            'platform' => $presence->platform,
-            'last_seen_at' => $presence->last_seen_at?->toIso8601String(),
+            'presence_id' => $presence?->id,
+            'app_role' => $presence?->app_role ?? ($validated['app_role'] ?? $request->user()->active_role),
+            'platform' => $presence?->platform ?? ($validated['platform'] ?? null),
+            'last_seen_at' => $presence?->last_seen_at?->toIso8601String(),
         ], 'App presence recorded successfully.');
     }
 
@@ -83,10 +94,14 @@ class FcmTokenController extends Controller
             'device_key' => ['nullable', 'string', 'max:120'],
         ]);
 
-        UserFcmToken::query()
+        $tokenQuery = UserFcmToken::query()
             ->where('user_id', $request->user()->id)
-            ->where('token', $validated['token'])
-            ->update(['revoked_at' => now()]);
+            ->where('token', $validated['token']);
+        if (Schema::hasColumn('user_fcm_tokens', 'revoked_at')) {
+            $tokenQuery->update(['revoked_at' => now()]);
+        } else {
+            $tokenQuery->delete();
+        }
 
         $this->appPresenceService->markRevoked($request->user(), $validated);
 

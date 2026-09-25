@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Schema;
 
 class UserFcmToken extends Model
 {
@@ -45,8 +46,8 @@ class UserFcmToken extends Model
         $staleDays = max(1, (int) config('services.firebase.token_stale_days', 60));
 
         return $query
-            ->whereNull('revoked_at')
-            ->whereNull('uninstall_suspected_at')
+            ->when(Schema::hasColumn('user_fcm_tokens', 'revoked_at'), fn (Builder $builder) => $builder->whereNull('revoked_at'))
+            ->when(Schema::hasColumn('user_fcm_tokens', 'uninstall_suspected_at'), fn (Builder $builder) => $builder->whereNull('uninstall_suspected_at'))
             ->where(fn (Builder $token) => $token
                 ->whereNull('last_seen_at')
                 ->orWhere('last_seen_at', '>=', now()->subDays($staleDays)));

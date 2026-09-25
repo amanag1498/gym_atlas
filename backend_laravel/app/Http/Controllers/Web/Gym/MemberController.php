@@ -174,7 +174,11 @@ class MemberController extends Controller
         }
 
         $memberProfile->loadMissing(['branch', 'assignedTrainer.managedTrainerProfile.branch']);
-        $member->loadMissing(['roles', 'permissions', 'consentRecords', 'whatsappConsents', 'appPresences']);
+        $memberRelations = ['roles', 'permissions', 'consentRecords', 'whatsappConsents'];
+        if ($this->appPresenceService->isReady()) {
+            $memberRelations[] = 'appPresences';
+        }
+        $member->loadMissing($memberRelations);
         $member->setRelation('memberProfile', $memberProfile);
 
         return view('web.gym.members.show', [
@@ -582,9 +586,7 @@ class MemberController extends Controller
             $this->engagementScoreService->enrichUsers($memberCollection, $gym->id);
             $data['memberAppPresenceSummaries'] = $memberCollection
                 ->mapWithKeys(fn (User $member): array => [
-                    $member->id => $this->appPresenceService->summaryFromPresences(
-                        $member->appPresences->where('app_role', 'member')->values()
-                    ),
+                    $member->id => $this->appPresenceService->summary($member, 'member'),
                 ]);
         }
 
@@ -599,17 +601,21 @@ class MemberController extends Controller
 
     private function memberQuery(Request $request, $gym)
     {
+        $with = [
+            'memberProfile' => fn ($builder) => $builder
+                ->where('gym_id', $gym->id)
+                ->with(['branch', 'assignedTrainer']),
+            'memberMemberships' => fn ($builder) => $builder
+                ->where('gym_id', $gym->id)
+                ->currentFirst()
+                ->limit(1),
+        ];
+        if ($this->appPresenceService->isReady()) {
+            $with['appPresences'] = fn ($builder) => $builder->where('app_role', 'member');
+        }
+
         $query = User::query()
-            ->with([
-                'memberProfile' => fn ($builder) => $builder
-                    ->where('gym_id', $gym->id)
-                    ->with(['branch', 'assignedTrainer']),
-                'memberMemberships' => fn ($builder) => $builder
-                    ->where('gym_id', $gym->id)
-                    ->currentFirst()
-                    ->limit(1),
-                'appPresences' => fn ($builder) => $builder->where('app_role', 'member'),
-            ])
+            ->with($with)
             ->whereHas('memberProfile', function ($builder) use ($gym): void {
                 $builder->where('gym_id', $gym->id);
                 $this->gymMemberAccessService->scopeAccessibleProfiles($builder);
