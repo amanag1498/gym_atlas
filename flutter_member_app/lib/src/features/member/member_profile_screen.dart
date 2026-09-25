@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
@@ -243,62 +244,65 @@ class _MemberProfileScreenState extends State<MemberProfileScreen> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     _EditAnimatedSection(
-                      child: PremiumCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: <Widget>[
-                            Row(
-                              children: <Widget>[
-                                _ProfileAvatar(
-                                  imageUrl: photoUrl,
-                                  name: _stringValue(_profile['name']),
-                                  size: 64,
-                                ),
-                                const SizedBox(width: AppSpacing.md),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: <Widget>[
-                                      Text(
-                                        _stringValue(
-                                          _profile['name'],
-                                          fallback: 'Member profile',
-                                        ),
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              color: AppColors.textPrimary,
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        _stringValue(
-                                          _profile['email'],
-                                          fallback: 'Email unavailable',
-                                        ),
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(
-                                              color: AppColors.textSecondary,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                      ),
-                                    ],
+                      child: GuideTarget(
+                        id: 'member_profile_v1/overview',
+                        child: PremiumCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: <Widget>[
+                              Row(
+                                children: <Widget>[
+                                  _ProfileAvatar(
+                                    imageUrl: photoUrl,
+                                    name: _stringValue(_profile['name']),
+                                    size: 64,
                                   ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: AppSpacing.md),
-                            _ProfileCompletionAction(
-                              percent: completionPercent,
-                              complete: completion.missingLabels.isEmpty,
-                              onEdit: _openEditProfile,
-                            ),
-                          ],
+                                  const SizedBox(width: AppSpacing.md),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Text(
+                                          _stringValue(
+                                            _profile['name'],
+                                            fallback: 'Member profile',
+                                          ),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                color: AppColors.textPrimary,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          _stringValue(
+                                            _profile['email'],
+                                            fallback: 'Email unavailable',
+                                          ),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                color: AppColors.textSecondary,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              _ProfileCompletionAction(
+                                percent: completionPercent,
+                                complete: completion.missingLabels.isEmpty,
+                                onEdit: _openEditProfile,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -335,78 +339,86 @@ class _MemberProfileScreenState extends State<MemberProfileScreen> {
                     const SizedBox(height: 25),
                     _EditAnimatedSection(
                       delay: const Duration(milliseconds: 120),
-                      child: _EditGroup(
-                        title: 'Training Profile',
-                        subtitle:
-                            'The baseline used to personalize your training.',
-                        children: <Widget>[
-                          _OverviewValueRow(
-                            icon: Icons.height_rounded,
-                            title: 'Height',
-                            value: _numericLabel(_profile['height_cm'], 'cm'),
-                          ),
-                          _OverviewValueRow(
-                            icon: Icons.monitor_weight_outlined,
-                            title: 'Weight',
-                            value: _numericLabel(_profile['weight_kg'], 'kg'),
-                          ),
-                          _OverviewValueRow(
-                            icon: Icons.trending_up_rounded,
-                            title: 'Experience Level',
-                            value: _stringValue(_profile['experience_level']),
-                          ),
-                          _OverviewGoalsRow(goals: _fitnessGoalNames(_profile)),
-                          _OverviewValueRow(
-                            icon: Icons.track_changes_rounded,
-                            title: 'Profile Completion',
-                            value: completion.missingLabels.isEmpty
-                                ? 'Complete'
-                                : '${completion.missingLabels.length} missing',
-                            onPressed: _openCompletionDetails,
-                          ),
-                        ],
+                      child: GuideTarget(
+                        id: 'member_profile_v1/training',
+                        child: _EditGroup(
+                          title: 'Training Profile',
+                          subtitle:
+                              'The baseline used to personalize your training.',
+                          children: <Widget>[
+                            _OverviewValueRow(
+                              icon: Icons.height_rounded,
+                              title: 'Height',
+                              value: _numericLabel(_profile['height_cm'], 'cm'),
+                            ),
+                            _OverviewValueRow(
+                              icon: Icons.monitor_weight_outlined,
+                              title: 'Weight',
+                              value: _numericLabel(_profile['weight_kg'], 'kg'),
+                            ),
+                            _OverviewValueRow(
+                              icon: Icons.trending_up_rounded,
+                              title: 'Experience Level',
+                              value: _stringValue(_profile['experience_level']),
+                            ),
+                            _OverviewGoalsRow(
+                              goals: _fitnessGoalNames(_profile),
+                            ),
+                            _OverviewValueRow(
+                              icon: Icons.track_changes_rounded,
+                              title: 'Profile Completion',
+                              value: completion.missingLabels.isEmpty
+                                  ? 'Complete'
+                                  : '${completion.missingLabels.length} missing',
+                              onPressed: _openCompletionDetails,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 25),
                     _EditAnimatedSection(
                       delay: const Duration(milliseconds: 170),
-                      child: _EditGroup(
-                        title: 'Gym Access',
-                        children: <Widget>[
-                          _OverviewValueRow(
-                            icon: Icons.fitness_center_rounded,
-                            title: 'Current Gym',
-                            value: currentGymName,
-                          ),
-                          if (_activeGymRelationshipCount > 1)
+                      child: GuideTarget(
+                        id: 'member_profile_v1/access',
+                        child: _EditGroup(
+                          title: 'Gym Access',
+                          children: <Widget>[
                             _OverviewValueRow(
-                              icon: Icons.account_tree_outlined,
-                              title: 'Active Gym Relationships',
-                              value:
-                                  '$_activeGymRelationshipCount gyms · switch from Home',
+                              icon: Icons.fitness_center_rounded,
+                              title: 'Current Gym',
+                              value: currentGymName,
                             ),
-                          _OverviewValueRow(
-                            icon: Icons.location_on_outlined,
-                            title: 'Current Branch',
-                            value: _stringValue(currentBranch['name']),
-                          ),
-                          _OverviewValueRow(
-                            icon: Icons.support_agent_rounded,
-                            title: 'Assigned Trainer',
-                            value: _stringValue(assignedTrainer['name']),
-                          ),
-                          if (hasCurrentGym)
+                            if (_activeGymRelationshipCount > 1)
+                              _OverviewValueRow(
+                                icon: Icons.account_tree_outlined,
+                                title: 'Active Gym Relationships',
+                                value:
+                                    '$_activeGymRelationshipCount gyms · switch from Home',
+                              ),
                             _OverviewValueRow(
-                              icon: Icons.logout_rounded,
-                              title: _leavingGym
-                                  ? 'Leaving Gym...'
-                                  : 'Leave Gym',
-                              value: 'Keep history, remove active app access',
-                              onPressed: _leavingGym
-                                  ? null
-                                  : () => _confirmLeaveGym(currentGymName),
+                              icon: Icons.location_on_outlined,
+                              title: 'Current Branch',
+                              value: _stringValue(currentBranch['name']),
                             ),
-                        ],
+                            _OverviewValueRow(
+                              icon: Icons.support_agent_rounded,
+                              title: 'Assigned Trainer',
+                              value: _stringValue(assignedTrainer['name']),
+                            ),
+                            if (hasCurrentGym)
+                              _OverviewValueRow(
+                                icon: Icons.logout_rounded,
+                                title: _leavingGym
+                                    ? 'Leaving Gym...'
+                                    : 'Leave Gym',
+                                value: 'Keep history, remove active app access',
+                                onPressed: _leavingGym
+                                    ? null
+                                    : () => _confirmLeaveGym(currentGymName),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 25),

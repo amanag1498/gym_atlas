@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../member/member_settings_screen.dart';
@@ -16,8 +17,7 @@ class MemberConsentScreen extends StatefulWidget {
 
 class _MemberConsentScreenState extends State<MemberConsentScreen> {
   bool _saving = false;
-  bool _customizing = false;
-  bool _showDetails = false;
+  bool _signingOut = false;
   String? _error;
   final Set<String> _selected = <String>{};
 
@@ -57,7 +57,7 @@ class _MemberConsentScreenState extends State<MemberConsentScreen> {
     } catch (_) {
       if (mounted) {
         setState(
-          () => _error = 'Could not save your choice. Please try again.',
+          () => _error = 'We could not save your choice. Please try again.',
         );
       }
     } finally {
@@ -65,8 +65,29 @@ class _MemberConsentScreenState extends State<MemberConsentScreen> {
     }
   }
 
+  Future<void> _signOut() async {
+    if (_saving || _signingOut) return;
+    setState(() => _signingOut = true);
+    await widget.session.logout();
+    if (mounted) setState(() => _signingOut = false);
+  }
+
+  void _setAllOptional(bool enabled, List<Map<String, dynamic>> optionalItems) {
+    setState(() {
+      for (final item in optionalItems) {
+        final purpose = item['purpose'].toString();
+        if (enabled) {
+          _selected.add(purpose);
+        } else {
+          _selected.remove(purpose);
+        }
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final items =
         ((widget.session.consentState['items'] as List<dynamic>?) ?? const [])
             .whereType<Map>()
@@ -78,152 +99,199 @@ class _MemberConsentScreenState extends State<MemberConsentScreen> {
     final allOptionalSelected =
         optionalItems.isNotEmpty &&
         optionalItems.every((value) => _selected.contains(value['purpose']));
+    final busy = _saving || _signingOut;
+
     return AppGradientScaffold(
-      title: 'Your privacy choices',
+      title: 'Privacy',
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text(
-                        'Make Gym Atlas yours',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      const Text(
-                        'Choose the extras you want. Your account can be created without them.',
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      const Text(
-                        'Optional features',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      const Text(
-                        'You can change these anytime in Settings. Features left off may be unavailable.',
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        optionalItems
-                            .map((value) => value['title'])
-                            .join(' · '),
-                      ),
-                      TextButton(
-                        onPressed: () =>
-                            setState(() => _showDetails = !_showDetails),
-                        child: Text(
-                          _showDetails
-                              ? 'Hide details'
-                              : 'See what this includes',
-                        ),
-                      ),
-                      if (_showDetails)
-                        ...optionalItems.map(
-                          (value) => Padding(
-                            padding: const EdgeInsets.only(
-                              bottom: AppSpacing.sm,
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 520,
+                  minHeight: constraints.maxHeight > (AppSpacing.lg * 2)
+                      ? constraints.maxHeight - (AppSpacing.lg * 2)
+                      : 0,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(18),
                             ),
-                            child: Text(
-                              '${value['title']}: ${value['description']}',
+                            child: const Icon(
+                              Icons.verified_user_rounded,
+                              color: AppColors.primary,
+                              size: 28,
                             ),
                           ),
                         ),
-                      CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        value: allOptionalSelected,
-                        title: const Text('Turn on all optional features'),
-                        subtitle: const Text('Not required to continue'),
-                        onChanged: (checked) => setState(() {
-                          for (final value in optionalItems) {
-                            final purpose = value['purpose'].toString();
-                            if (checked == true) {
-                              _selected.add(purpose);
-                            } else {
-                              _selected.remove(purpose);
-                            }
-                          }
-                        }),
-                      ),
-                      TextButton(
-                        onPressed: () =>
-                            setState(() => _customizing = !_customizing),
-                        child: Text(
-                          _customizing
-                              ? 'Hide individual choices'
-                              : 'Choose individually instead',
-                        ),
-                      ),
-                      if (_customizing)
-                        ...optionalItems.map(
-                          (value) => CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            value: _selected.contains(value['purpose']),
-                            title: Text(
-                              value['title']?.toString() ?? 'Optional data use',
-                            ),
-                            subtitle: Text(
-                              value['description']?.toString() ?? '',
-                            ),
-                            onChanged: (checked) => setState(() {
-                              if (checked == true) {
-                                _selected.add(value['purpose'].toString());
-                              } else {
-                                _selected.remove(value['purpose'].toString());
-                              }
-                            }),
-                          ),
-                        ),
-                      if (_error != null) ...[
-                        const SizedBox(height: AppSpacing.md),
+                        const SizedBox(height: AppSpacing.xl),
                         Text(
-                          _error!,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
+                          'One last step',
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.8,
                           ),
                         ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          'Review your privacy choice, then continue to Gym Atlas.',
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: AppColors.textSecondary,
+                            height: 1.45,
+                          ),
+                        ),
+                        if (optionalItems.isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.xxl),
+                          Material(
+                            color: allOptionalSelected
+                                ? AppColors.primary.withValues(alpha: 0.07)
+                                : AppColors.surface,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                AppSpacing.radiusMd,
+                              ),
+                              side: BorderSide(
+                                color: allOptionalSelected
+                                    ? AppColors.primary.withValues(alpha: 0.30)
+                                    : AppColors.stroke,
+                              ),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: CheckboxListTile(
+                              value: allOptionalSelected,
+                              onChanged: busy
+                                  ? null
+                                  : (value) => _setAllOptional(
+                                      value == true,
+                                      optionalItems,
+                                    ),
+                              controlAffinity: ListTileControlAffinity.leading,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.md,
+                                vertical: AppSpacing.sm,
+                              ),
+                              title: Text(
+                                'Enable optional features',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              subtitle: Text(
+                                'Health sync, nearby gyms, photos and updates. Leave this off if you prefer—you can still continue.',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: AppColors.textSecondary,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                        if (_error != null) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          Semantics(
+                            liveRegion: true,
+                            child: Container(
+                              padding: const EdgeInsets.all(AppSpacing.md),
+                              decoration: BoxDecoration(
+                                color: AppColors.error.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(
+                                  AppSpacing.radiusSm,
+                                ),
+                              ),
+                              child: Text(
+                                _error!,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: AppColors.error,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
-                      const SizedBox(height: AppSpacing.md),
-                    ],
-                  ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.xxl),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          FilledButton(
+                            onPressed: busy ? null : _continue,
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size.fromHeight(54),
+                            ),
+                            child: _saving
+                                ? const SizedBox.square(
+                                    dimension: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.4,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('Continue to Gym Atlas'),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            'By continuing, you agree to our Terms of Service and acknowledge our Privacy Policy.',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppColors.textSecondary,
+                              height: 1.4,
+                            ),
+                          ),
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: AppSpacing.xs,
+                            children: [
+                              TextButton(
+                                onPressed: busy
+                                    ? null
+                                    : () =>
+                                          MemberSettingsScreen.openTermsOfService(
+                                            context,
+                                          ),
+                                child: const Text('Terms'),
+                              ),
+                              TextButton(
+                                onPressed: busy
+                                    ? null
+                                    : () =>
+                                          MemberSettingsScreen.openPrivacyPolicy(
+                                            context,
+                                          ),
+                                child: const Text('Privacy'),
+                              ),
+                              TextButton(
+                                onPressed: busy ? null : _signOut,
+                                child: Text(
+                                  _signingOut ? 'Signing out…' : 'Sign out',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _saving ? null : _continue,
-                  child: _saving
-                      ? const CircularProgressIndicator()
-                      : const Text('Continue'),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              const Text(
-                'By continuing, you agree to our Terms of Service and Privacy Policy. We use your account and training details to provide Gym Atlas.',
-                textAlign: TextAlign.center,
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  TextButton(
-                    onPressed: () =>
-                        MemberSettingsScreen.openTermsOfService(context),
-                    child: const Text('Terms of Service'),
-                  ),
-                  TextButton(
-                    onPressed: () =>
-                        MemberSettingsScreen.openPrivacyPolicy(context),
-                    child: const Text('Privacy Policy'),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
       ),

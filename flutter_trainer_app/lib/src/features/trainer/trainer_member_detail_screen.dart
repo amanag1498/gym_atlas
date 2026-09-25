@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:gym_flutter_core/metric_trend_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:gym_flutter_core/diet_plan_summary_view.dart';
@@ -733,25 +734,29 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
                     child: ListView(
                       padding: const EdgeInsets.fromLTRB(18, 8, 18, 32),
                       children: [
-                        _FitMemberHero(
-                          name: displayName,
-                          email:
-                              member['email']?.toString() ?? 'Assigned member',
-                          avatarUrl: member['avatar']?.toString(),
-                          goal:
-                              progressSummary['fitness_goal']?.toString() ??
-                              memberProfile['fitness_goal']?.toString() ??
-                              'No fitness goal set',
-                          membershipStatus: _titleCase(
-                            membershipSummary['status']?.toString() ??
-                                (_isIndependent
-                                    ? 'personal coaching'
-                                    : 'active'),
+                        GuideTarget(
+                          id: 'trainer_member_v1/profile',
+                          child: _FitMemberHero(
+                            name: displayName,
+                            email:
+                                member['email']?.toString() ??
+                                'Assigned member',
+                            avatarUrl: member['avatar']?.toString(),
+                            goal:
+                                progressSummary['fitness_goal']?.toString() ??
+                                memberProfile['fitness_goal']?.toString() ??
+                                'No fitness goal set',
+                            membershipStatus: _titleCase(
+                              membershipSummary['status']?.toString() ??
+                                  (_isIndependent
+                                      ? 'personal coaching'
+                                      : 'active'),
+                            ),
+                            attendanceStatus: _isIndependent
+                                ? '${_sharingPermissions.length} shared areas'
+                                : _attendanceLabel(attendanceSummary),
+                            workoutStatus: _workoutCompletionLabel(_plans),
                           ),
-                          attendanceStatus: _isIndependent
-                              ? '${_sharingPermissions.length} shared areas'
-                              : _attendanceLabel(attendanceSummary),
-                          workoutStatus: _workoutCompletionLabel(_plans),
                         ),
                         const SizedBox(height: 12),
                         Row(
@@ -789,38 +794,44 @@ class _TrainerMemberDetailScreenState extends State<TrainerMemberDetailScreen> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        _FitActionPanel(
-                          onAssignWorkout: _can('workouts')
-                              ? widget.onAssignWorkout
-                              : null,
-                          onAssignDiet:
-                              _can('diets') && widget.onAssignDiet != null
-                              ? _assignDiet
-                              : null,
-                          onMessage: _can('chat') ? widget.onMessage : null,
-                          onAddCoachingNote: _can('profile')
-                              ? widget.onAddCoachingNote
-                              : null,
-                          onManageRelationship:
-                              widget.onManageRelationship != null
-                              ? _manageRelationship
-                              : null,
+                        GuideTarget(
+                          id: 'trainer_member_v1/assign',
+                          child: _FitActionPanel(
+                            onAssignWorkout: _can('workouts')
+                                ? widget.onAssignWorkout
+                                : null,
+                            onAssignDiet:
+                                _can('diets') && widget.onAssignDiet != null
+                                ? _assignDiet
+                                : null,
+                            onMessage: _can('chat') ? widget.onMessage : null,
+                            onAddCoachingNote: _can('profile')
+                                ? widget.onAddCoachingNote
+                                : null,
+                            onManageRelationship:
+                                widget.onManageRelationship != null
+                                ? _manageRelationship
+                                : null,
+                          ),
                         ),
                         const SizedBox(height: 18),
-                        _FitSectionCard(
-                          title: 'Overview',
-                          icon: Icons.person_outline_rounded,
-                          child: _OverviewTab(
-                            memberProfile: memberProfile,
-                            membershipSummary: membershipSummary,
-                            attendanceSummary: attendanceSummary,
-                            attendance: _attendance,
-                            progressSummary: progressSummary,
-                            planCount: _plans.length,
-                            dietPlanCount: _dietPlans.length,
-                            independent: _isIndependent,
-                            acceptedAt: _detail['accepted_at'],
-                            profileShared: _can('profile'),
+                        GuideTarget(
+                          id: 'trainer_member_v1/permissions',
+                          child: _FitSectionCard(
+                            title: 'Overview',
+                            icon: Icons.person_outline_rounded,
+                            child: _OverviewTab(
+                              memberProfile: memberProfile,
+                              membershipSummary: membershipSummary,
+                              attendanceSummary: attendanceSummary,
+                              attendance: _attendance,
+                              progressSummary: progressSummary,
+                              planCount: _plans.length,
+                              dietPlanCount: _dietPlans.length,
+                              independent: _isIndependent,
+                              acceptedAt: _detail['accepted_at'],
+                              profileShared: _can('profile'),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 18),

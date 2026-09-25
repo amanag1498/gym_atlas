@@ -140,6 +140,29 @@
                         <x-status-badge :label="($consentState['policy_version'] ?? 'Current policy')" tone="neutral" />
                     </div>
                     <div class="mt-5 grid gap-3 md:grid-cols-2">
+                        <div class="panel-card-muted flex flex-col justify-between gap-4 p-4 md:col-span-2">
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <p class="font-semibold text-slate-950 dark:text-white">Gym Atlas app status</p>
+                                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $memberAppPresence['description'] }}</p>
+                                </div>
+                                <x-status-badge :label="$memberAppPresence['label']" :tone="$memberAppPresence['tone']" />
+                            </div>
+                            <div class="grid gap-3 text-sm text-slate-600 dark:text-slate-300 sm:grid-cols-3">
+                                <div>
+                                    <span class="block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Last app open</span>
+                                    <span class="mt-1 block font-semibold text-slate-950 dark:text-white">{{ $memberAppPresence['last_seen_at']?->format('d M Y h:i A') ?? 'Never' }}</span>
+                                </div>
+                                <div>
+                                    <span class="block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Known devices</span>
+                                    <span class="mt-1 block font-semibold text-slate-950 dark:text-white">{{ $memberAppPresence['device_count'] }}</span>
+                                </div>
+                                <div>
+                                    <span class="block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Platform</span>
+                                    <span class="mt-1 block font-semibold text-slate-950 dark:text-white">{{ collect($memberAppPresence['platforms'])->map(fn ($platform) => str($platform)->upper())->implode(', ') ?: 'Unknown' }}</span>
+                                </div>
+                            </div>
+                        </div>
                         @foreach (($consentState['items'] ?? []) as $consent)
                             <div class="panel-card-muted flex items-center justify-between gap-4 p-4">
                                 <div>

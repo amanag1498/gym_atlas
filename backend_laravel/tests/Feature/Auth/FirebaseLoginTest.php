@@ -6,6 +6,7 @@ use App\Enums\RoleName;
 use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Services\Auth\FirebaseTokenVerifier;
+use App\Services\Privacy\ConsentService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -42,6 +43,8 @@ class FirebaseLoginTest extends TestCase
             'id_token' => 'fake.firebase.jwt',
             'device_name' => 'flutter-member-app',
             'app_type' => 'member',
+            'accepted_terms' => true,
+            'enable_optional_features' => true,
         ]);
 
         $response->assertOk()
@@ -56,6 +59,16 @@ class FirebaseLoginTest extends TestCase
         $this->assertSame('firebase-user-001', $user->firebase_uid);
         $this->assertTrue($user->hasRole('member'));
         $this->assertSame(1, $user->tokens()->count());
+        $this->assertCount(
+            count(ConsentService::PURPOSES),
+            $user->consentRecords()->where('policy_version', ConsentService::POLICY_VERSION)->get(),
+        );
+        $this->assertTrue(
+            $user->consentRecords()
+                ->where('policy_version', ConsentService::POLICY_VERSION)
+                ->get()
+                ->every(fn ($record): bool => $record->consented_at !== null && $record->withdrawn_at === null),
+        );
     }
 
     public function test_trainer_app_login_provisions_an_independent_trainer_account(): void

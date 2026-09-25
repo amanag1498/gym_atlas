@@ -7,18 +7,24 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\Auth\AuthSessionResource;
 use App\Models\User;
 use App\Services\Platform\PlatformSettingService;
+use App\Services\Privacy\ConsentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class DemoAuthController extends Controller
 {
-    public function __invoke(Request $request, PlatformSettingService $settings)
-    {
+    public function __invoke(
+        Request $request,
+        PlatformSettingService $settings,
+        ConsentService $consents,
+    ) {
         $validated = $request->validate([
             'email' => ['required', 'email:rfc', 'max:255'],
             'device_name' => ['nullable', 'string', 'max:100'],
             'app_type' => ['required', Rule::in([RoleName::Member->value, RoleName::Trainer->value])],
+            'accepted_terms' => ['sometimes', 'boolean'],
+            'enable_optional_features' => ['sometimes', 'boolean'],
         ]);
 
         $values = $settings->all();
@@ -78,6 +84,13 @@ class DemoAuthController extends Controller
         }
 
         $deviceName = trim((string) ($validated['device_name'] ?? 'flutter-demo')) ?: 'flutter-demo';
+        if ($request->boolean('accepted_terms')) {
+            $consents->recordLoginAcceptance(
+                $user,
+                $request,
+                $request->boolean('enable_optional_features', true),
+            );
+        }
         $session = [
             'token' => $user->createToken($deviceName, ['role:'.$appType])->plainTextToken,
             'user' => $user->fresh(['roles', 'permissions']),

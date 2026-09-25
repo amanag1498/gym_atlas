@@ -11,6 +11,7 @@ use App\Services\Audit\AdminActivityFeedService;
 use App\Services\Audit\AuditLogService;
 use App\Services\Platform\PlatformAuditLogService;
 use App\Services\Privacy\ConsentService;
+use App\Services\Users\AppPresenceService;
 use App\Services\Users\ManagedUserService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -26,6 +27,7 @@ class UserController extends Controller
         private readonly PlatformAuditLogService $platformAuditLogService,
         private readonly ManagedUserService $managedUserService,
         private readonly ConsentService $consentService,
+        private readonly AppPresenceService $appPresenceService,
     ) {}
 
     public function index(Request $request): View
@@ -116,6 +118,7 @@ class UserController extends Controller
             'workoutSessionsAsMember.trainer',
             'workoutSessionsAsMember.plan',
             'workoutSessionsAsMember.starter',
+            'appPresences',
         ]);
         $user->loadCount([
             'ownedGyms',
@@ -150,6 +153,7 @@ class UserController extends Controller
             'hasPhoneColumn' => Schema::hasColumn('users', 'phone'),
             'consentState' => $this->consentService->state($user),
             'whatsappConsents' => $user->whatsappConsents,
+            'memberAppPresence' => $this->appPresenceService->summary($user, 'member'),
         ]);
     }
 

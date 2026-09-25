@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:gym_flutter_core/metric_trend_chart.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -811,8 +812,11 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
                     AppSpacing.lg,
                     0,
                   ),
-                  child: _BodyProgressHeader(
-                    onOpenSettings: _editWorkoutPreferences,
+                  child: GuideTarget(
+                    id: 'member_metrics_v1/preferences',
+                    child: _BodyProgressHeader(
+                      onOpenSettings: _editWorkoutPreferences,
+                    ),
                   ),
                 ),
                 Padding(
@@ -822,14 +826,17 @@ class _MemberProgressScreenState extends State<MemberProgressScreen>
                     AppSpacing.lg,
                     0,
                   ),
-                  child: _StrengthTrackingHeader(
-                    weightCount: _weightLogs.length,
-                    measurementCount: _bodyMeasurements.length,
-                    photoCount: _photos.length,
-                    stepCount: _stepSummary.length,
-                    latestWeight: latestWeight,
-                    successMessage: _lastSuccessMessage,
-                    tabController: _tabController,
+                  child: GuideTarget(
+                    id: 'member_metrics_v1/metrics',
+                    child: _StrengthTrackingHeader(
+                      weightCount: _weightLogs.length,
+                      measurementCount: _bodyMeasurements.length,
+                      photoCount: _photos.length,
+                      stepCount: _stepSummary.length,
+                      latestWeight: latestWeight,
+                      successMessage: _lastSuccessMessage,
+                      tabController: _tabController,
+                    ),
                   ),
                 ),
                 Expanded(

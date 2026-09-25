@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -433,29 +434,32 @@ class _MemberGymDiscoveryScreenState extends State<MemberGymDiscoveryScreen> {
                     ],
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  _DiscoveryHeroPanel(
-                    gymCount: _gyms.length,
-                    savedCount: _savedGyms.length,
-                    filterCount: _filters.hasActiveFilters
-                        ? _filters.activeCount
-                        : 0,
-                    filters: _filters,
-                    locationEnabled:
-                        _currentLatitude != null && _currentLongitude != null,
-                    locationLoading: _locationLoading,
-                    locationError: _locationError,
-                    nearbyDistanceKm: _nearbyDistanceKm,
-                    nearbyDistanceOptions: _nearbyDistanceOptions,
-                    searchController: _searchController,
-                    onSearch: _applySearch,
-                    onClearSearch: () async {
-                      _searchController.clear();
-                      await _applySearch();
-                    },
-                    onOpenFilters: _openFilters,
-                    onUseLocation: _useCurrentLocation,
-                    onClearLocation: _clearCurrentLocation,
-                    onDistanceChanged: _changeNearbyDistance,
+                  GuideTarget(
+                    id: 'member_discovery_v1/search',
+                    child: _DiscoveryHeroPanel(
+                      gymCount: _gyms.length,
+                      savedCount: _savedGyms.length,
+                      filterCount: _filters.hasActiveFilters
+                          ? _filters.activeCount
+                          : 0,
+                      filters: _filters,
+                      locationEnabled:
+                          _currentLatitude != null && _currentLongitude != null,
+                      locationLoading: _locationLoading,
+                      locationError: _locationError,
+                      nearbyDistanceKm: _nearbyDistanceKm,
+                      nearbyDistanceOptions: _nearbyDistanceOptions,
+                      searchController: _searchController,
+                      onSearch: _applySearch,
+                      onClearSearch: () async {
+                        _searchController.clear();
+                        await _applySearch();
+                      },
+                      onOpenFilters: _openFilters,
+                      onUseLocation: _useCurrentLocation,
+                      onClearLocation: _clearCurrentLocation,
+                      onDistanceChanged: _changeNearbyDistance,
+                    ),
                   ),
                   if (_savedGyms.isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.lg),
@@ -481,12 +485,15 @@ class _MemberGymDiscoveryScreenState extends State<MemberGymDiscoveryScreen> {
                     ),
                   ],
                   const SizedBox(height: AppSpacing.lg),
-                  _DiscoverySectionTitle(
-                    title: _gyms.isEmpty
-                        ? 'No gyms available'
-                        : '${_gymPage.total} gyms ready to explore',
-                    action: 'Filters',
-                    onTap: _openFilters,
+                  GuideTarget(
+                    id: 'member_discovery_v1/filters',
+                    child: _DiscoverySectionTitle(
+                      title: _gyms.isEmpty
+                          ? 'No gyms available'
+                          : '${_gymPage.total} gyms ready to explore',
+                      action: 'Filters',
+                      onTap: _openFilters,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   if (_gyms.isEmpty)
@@ -502,11 +509,15 @@ class _MemberGymDiscoveryScreenState extends State<MemberGymDiscoveryScreen> {
                         padding: const EdgeInsets.only(bottom: AppSpacing.md),
                         child: RevealOnBuild(
                           delay: Duration(milliseconds: 40 * entry.key),
-                          child: _NearbyGymCard(
-                            gym: entry.value,
-                            isSaved: _isSavedGym(entry.value),
-                            onTap: () => _openGymDetail(entry.value),
-                            onToggleSaved: () => _toggleSavedGym(entry.value),
+                          child: GuideTarget(
+                            id: 'member_discovery_v1/results',
+                            enabled: entry.key == 0,
+                            child: _NearbyGymCard(
+                              gym: entry.value,
+                              isSaved: _isSavedGym(entry.value),
+                              onTap: () => _openGymDetail(entry.value),
+                              onToggleSaved: () => _toggleSavedGym(entry.value),
+                            ),
                           ),
                         ),
                       ),
@@ -1443,14 +1454,17 @@ class _MemberGymDetailScreenState extends State<MemberGymDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
-          _GymDetailHero(
-            detail: detail,
-            imageUrl: gallery.isEmpty
-                ? gymDiscoveryHeroImage(detail)
-                : gallery.first,
-            isOpen: isOpen,
-            canShowPricing: canShowPricing,
-            feeSummary: feeSummary,
+          GuideTarget(
+            id: 'member_gym_detail_v1/overview',
+            child: _GymDetailHero(
+              detail: detail,
+              imageUrl: gallery.isEmpty
+                  ? gymDiscoveryHeroImage(detail)
+                  : gallery.first,
+              isOpen: isOpen,
+              canShowPricing: canShowPricing,
+              feeSummary: feeSummary,
+            ),
           ),
           if (gallery.length > 1) ...[
             const SizedBox(height: AppSpacing.lg),
@@ -1601,29 +1615,32 @@ class _MemberGymDetailScreenState extends State<MemberGymDetailScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _savingGym ? null : _toggleSaved,
-                  icon: Icon(
-                    _isSaved
-                        ? Icons.bookmark_remove_rounded
-                        : Icons.bookmark_add_rounded,
+          GuideTarget(
+            id: 'member_gym_detail_v1/trial',
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _savingGym ? null : _toggleSaved,
+                    icon: Icon(
+                      _isSaved
+                          ? Icons.bookmark_remove_rounded
+                          : Icons.bookmark_add_rounded,
+                    ),
+                    label: Text(_isSaved ? 'Saved' : 'Save Gym'),
                   ),
-                  label: Text(_isSaved ? 'Saved' : 'Save Gym'),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: GradientButton(
-                  onPressed: canRequestTrial ? _openTrialSheet : null,
-                  label: trialActionLabel,
-                  icon: Icons.flash_on_rounded,
-                  expanded: true,
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: GradientButton(
+                    onPressed: canRequestTrial ? _openTrialSheet : null,
+                    label: trialActionLabel,
+                    icon: Icons.flash_on_rounded,
+                    expanded: true,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),

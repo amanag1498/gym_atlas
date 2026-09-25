@@ -4,6 +4,7 @@ namespace App\Services\Firebase;
 
 use App\Models\User;
 use App\Models\UserFcmToken;
+use App\Services\Users\AppPresenceService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -112,11 +113,18 @@ class FcmNotificationService
         }
 
         if ($response->successful()) {
+            app(AppPresenceService::class)->markPushSuccess($token);
+            UserFcmToken::query()->where('token', $token)->update([
+                'last_push_success_at' => now(),
+                'uninstall_suspected_at' => null,
+            ]);
+
             return true;
         }
 
         if ($this->isInvalidTokenResponse($response->status(), $response->body())) {
-            UserFcmToken::query()->where('token', $token)->delete();
+            app(AppPresenceService::class)->markUninstallSuspected($token);
+            UserFcmToken::query()->where('token', $token)->update(['uninstall_suspected_at' => now()]);
         }
 
         Log::warning('FCM notification send failed', [

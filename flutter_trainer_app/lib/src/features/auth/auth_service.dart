@@ -16,6 +16,8 @@ class TrainerAuthService {
         'id_token': idToken,
         'device_name': 'flutter_trainer_app',
         'app_type': appType,
+        'accepted_terms': true,
+        'enable_optional_features': true,
       },
     );
 
@@ -49,6 +51,8 @@ class TrainerAuthService {
         'email': email.trim(),
         'device_name': 'flutter_trainer_app_demo',
         'app_type': appType,
+        'accepted_terms': true,
+        'enable_optional_features': true,
       },
     );
 

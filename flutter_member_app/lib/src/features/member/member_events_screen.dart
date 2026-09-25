@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -235,13 +236,16 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
                 AppSpacing.lg,
                 0,
               ),
-              child: _EventsSummaryPanel(
-                upcomingCount: _events.length,
-                bookingCount: _bookedEvents.where((event) {
-                  final status = _map(event['booking'])['status'];
-                  return status == 'reserved' || status == 'waitlisted';
-                }).length,
-                nextEvent: _events.firstOrNull,
+              child: GuideTarget(
+                id: 'member_events_v1/summary',
+                child: _EventsSummaryPanel(
+                  upcomingCount: _events.length,
+                  bookingCount: _bookedEvents.where((event) {
+                    final status = _map(event['booking'])['status'];
+                    return status == 'reserved' || status == 'waitlisted';
+                  }).length,
+                  nextEvent: _events.firstOrNull,
+                ),
               ),
             ),
             Padding(
@@ -251,9 +255,12 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
                 AppSpacing.lg,
                 AppSpacing.md,
               ),
-              child: _EventsTabSlider(
-                selected: _tab,
-                onChanged: (value) => setState(() => _tab = value),
+              child: GuideTarget(
+                id: 'member_events_v1/tabs',
+                child: _EventsTabSlider(
+                  selected: _tab,
+                  onChanged: (value) => setState(() => _tab = value),
+                ),
               ),
             ),
             Expanded(
@@ -289,9 +296,13 @@ class _MemberEventsScreenState extends State<MemberEventsScreen> {
                               itemCount: visible.length,
                               separatorBuilder: (_, __) =>
                                   const SizedBox(height: 12),
-                              itemBuilder: (_, index) => _EventCard(
-                                event: visible[index],
-                                onTap: () => _showEvent(visible[index]),
+                              itemBuilder: (_, index) => GuideTarget(
+                                id: 'member_events_v1/event',
+                                enabled: index == 0,
+                                child: _EventCard(
+                                  event: visible[index],
+                                  onTap: () => _showEvent(visible[index]),
+                                ),
                               ),
                             ),
                     ),

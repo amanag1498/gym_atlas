@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
 import '../../core/user_facing_error.dart';
@@ -718,39 +719,42 @@ class _MemberAssignedTrainerScreenState
                   120,
                 ),
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Messages',
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(
-                                    color: AppColors.textPrimary,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              'Private coaching conversations',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: AppColors.textSecondary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                            ),
-                          ],
+                  GuideTarget(
+                    id: 'member_coach_v1/overview',
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Messages',
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(
+                                      color: AppColors.textPrimary,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Private coaching conversations',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: AppColors.textSecondary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      _MemberChatSquareButton(
-                        icon: _loading
-                            ? Icons.sync_rounded
-                            : Icons.refresh_rounded,
-                        onTap: _loading ? null : _load,
-                      ),
-                    ],
+                        _MemberChatSquareButton(
+                          icon: _loading
+                              ? Icons.sync_rounded
+                              : Icons.refresh_rounded,
+                          onTap: _loading ? null : _load,
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
                   if (_chatLoading)
@@ -777,21 +781,25 @@ class _MemberAssignedTrainerScreenState
                       final expired = _independentInvitationExpired(invitation);
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
-                        child: _IndependentInvitationCard(
-                          trainer: trainer,
-                          expired: expired,
-                          onAccept: invitationId == null || expired
-                              ? null
-                              : () => _respondIndependentInvitation(
-                                  invitationId,
-                                  true,
-                                ),
-                          onReject: invitationId == null || expired
-                              ? null
-                              : () => _respondIndependentInvitation(
-                                  invitationId,
-                                  false,
-                                ),
+                        child: GuideTarget(
+                          id: 'member_coach_v1/invitations',
+                          enabled: invitation == _pendingInvitations.first,
+                          child: _IndependentInvitationCard(
+                            trainer: trainer,
+                            expired: expired,
+                            onAccept: invitationId == null || expired
+                                ? null
+                                : () => _respondIndependentInvitation(
+                                    invitationId,
+                                    true,
+                                  ),
+                            onReject: invitationId == null || expired
+                                ? null
+                                : () => _respondIndependentInvitation(
+                                    invitationId,
+                                    false,
+                                  ),
+                          ),
                         ),
                       );
                     }),
@@ -807,22 +815,25 @@ class _MemberAssignedTrainerScreenState
                     ),
                     const SizedBox(height: 10),
                     RevealOnBuild(
-                      child: _MemberConversationCard(
-                        trainerName: trainerName,
-                        trainerAvatarUrl: trainerAvatarUrl,
-                        preview: preview,
-                        time: lastMessage == null
-                            ? 'New'
-                            : _memberChatTime(lastMessage['created_at']),
-                        enabled: trainerId != null,
-                        unreadCount: _unreadCount,
-                        loading: _chatLoading,
-                        onMore: trainerId == null
-                            ? null
-                            : _removeGymTrainerAssignment,
-                        onTap: trainerId == null
-                            ? null
-                            : () => _openTrainerChatThread(assignedTrainer),
+                      child: GuideTarget(
+                        id: 'member_coach_v1/conversation',
+                        child: _MemberConversationCard(
+                          trainerName: trainerName,
+                          trainerAvatarUrl: trainerAvatarUrl,
+                          preview: preview,
+                          time: lastMessage == null
+                              ? 'New'
+                              : _memberChatTime(lastMessage['created_at']),
+                          enabled: trainerId != null,
+                          unreadCount: _unreadCount,
+                          loading: _chatLoading,
+                          onMore: trainerId == null
+                              ? null
+                              : _removeGymTrainerAssignment,
+                          onTap: trainerId == null
+                              ? null
+                              : () => _openTrainerChatThread(assignedTrainer),
+                        ),
                       ),
                     ),
                     if (_chatError != null) ...[
@@ -872,21 +883,28 @@ class _MemberAssignedTrainerScreenState
                           relationship['access_active'] != false;
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
-                        child: _MemberConversationCard(
-                          trainerName:
-                              trainer['name']?.toString() ?? 'Verified trainer',
-                          trainerAvatarUrl:
-                              trainer['profile_photo_url']?.toString() ??
-                              trainer['avatar']?.toString(),
-                          preview: accessActive
-                              ? 'Independent coaching · tap to message'
-                              : 'Coaching access paused · manage connection',
-                          time: accessActive ? 'Verified' : 'Paused',
-                          enabled: trainerId != null && accessActive,
-                          onMore: () => _endIndependentCoaching(relationship),
-                          onTap: trainerId == null || !accessActive
-                              ? null
-                              : () => _openTrainerChatThread(relationship),
+                        child: GuideTarget(
+                          id: 'member_coach_v1/conversation',
+                          enabled:
+                              !hasTrainer &&
+                              relationship == _independentTrainers.first,
+                          child: _MemberConversationCard(
+                            trainerName:
+                                trainer['name']?.toString() ??
+                                'Verified trainer',
+                            trainerAvatarUrl:
+                                trainer['profile_photo_url']?.toString() ??
+                                trainer['avatar']?.toString(),
+                            preview: accessActive
+                                ? 'Independent coaching · tap to message'
+                                : 'Coaching access paused · manage connection',
+                            time: accessActive ? 'Verified' : 'Paused',
+                            enabled: trainerId != null && accessActive,
+                            onMore: () => _endIndependentCoaching(relationship),
+                            onTap: trainerId == null || !accessActive
+                                ? null
+                                : () => _openTrainerChatThread(relationship),
+                          ),
                         ),
                       );
                     }),

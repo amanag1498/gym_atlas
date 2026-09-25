@@ -149,6 +149,33 @@
                             <p class="panel-section-copy">Consent status and effective permissions are visible for support and access troubleshooting. Raw evidence is intentionally hidden.</p>
                         </div>
                         <div class="admin-detail-grid p-5">
+                            <div class="panel-card-muted admin-detail-span-full px-4 py-4">
+                                <div class="flex flex-wrap items-start justify-between gap-3">
+                                    <div>
+                                        <div class="text-sm font-semibold text-slate-950 dark:text-white">Gym Atlas app status</div>
+                                        <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $memberAppPresence['description'] }}</div>
+                                    </div>
+                                    <x-status-badge :label="$memberAppPresence['label']" :tone="$memberAppPresence['tone']" />
+                                </div>
+                                <div class="mt-4 grid gap-3 text-sm sm:grid-cols-4">
+                                    <div>
+                                        <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Last app open</div>
+                                        <div class="mt-1 font-semibold text-slate-950 dark:text-white">{{ $memberAppPresence['last_seen_at']?->format('d M Y h:i A') ?? 'Never' }}</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Known devices</div>
+                                        <div class="mt-1 font-semibold text-slate-950 dark:text-white">{{ $memberAppPresence['device_count'] }}</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Platforms</div>
+                                        <div class="mt-1 font-semibold text-slate-950 dark:text-white">{{ collect($memberAppPresence['platforms'])->map(fn ($platform) => str($platform)->upper())->implode(', ') ?: 'Unknown' }}</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">App versions</div>
+                                        <div class="mt-1 font-semibold text-slate-950 dark:text-white">{{ collect($memberAppPresence['app_versions'])->implode(', ') ?: 'Unknown' }}</div>
+                                    </div>
+                                </div>
+                            </div>
                             @foreach (($consentState['items'] ?? []) as $consent)
                                 <div class="panel-card-muted flex items-center justify-between gap-3 px-4 py-4">
                                     <div>

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/user_facing_error.dart';
@@ -431,11 +432,23 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(25, 15, 25, 28),
                 children: [
+                  GuideTarget(
+                    id: 'member_notifications_v1/inbox',
+                    child: _NotificationSectionTitle(
+                      title: 'Notifications',
+                      action: unreadCount == 0
+                          ? 'All caught up'
+                          : '$unreadCount unread',
+                    ),
+                  ),
                   if (pendingInvitations.isNotEmpty) ...[
                     const SizedBox(height: 18),
-                    _NotificationSectionTitle(
-                      title: 'Gym invitations',
-                      action: '${pendingInvitations.length} pending',
+                    GuideTarget(
+                      id: 'member_notifications_v1/invitations',
+                      child: _NotificationSectionTitle(
+                        title: 'Gym invitations',
+                        action: '${pendingInvitations.length} pending',
+                      ),
                     ),
                     const SizedBox(height: 10),
                     ...pendingInvitations.asMap().entries.map(
@@ -475,9 +488,13 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
                   ],
                   if (pendingIndependentInvitations.isNotEmpty) ...[
                     const SizedBox(height: 18),
-                    _NotificationSectionTitle(
-                      title: 'Independent coaching invitations',
-                      action: '${pendingIndependentInvitations.length} pending',
+                    GuideTarget(
+                      id: 'member_notifications_v1/invitations',
+                      child: _NotificationSectionTitle(
+                        title: 'Independent coaching invitations',
+                        action:
+                            '${pendingIndependentInvitations.length} pending',
+                      ),
                     ),
                     const SizedBox(height: 10),
                     ...pendingIndependentInvitations.asMap().entries.map((
@@ -517,9 +534,13 @@ class _MemberNotificationsScreenState extends State<MemberNotificationsScreen> {
                     }),
                   ],
                   const SizedBox(height: 18),
-                  const _NotificationSectionTitle(
-                    title: 'Updates',
-                    action: 'Latest',
+                  const SizedBox(height: 18),
+                  const GuideTarget(
+                    id: 'member_notifications_v1/updates',
+                    child: _NotificationSectionTitle(
+                      title: 'Updates',
+                      action: 'Latest',
+                    ),
                   ),
                   const SizedBox(height: 2),
                   if (visibleNotifications.isEmpty)

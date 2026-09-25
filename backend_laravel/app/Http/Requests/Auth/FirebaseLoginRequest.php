@@ -21,6 +21,8 @@ class FirebaseLoginRequest extends FormRequest
             'id_token' => ['required', 'string'],
             'device_name' => ['nullable', 'string', 'max:255'],
             'app_type' => ['nullable', 'string', Rule::in(['member', 'trainer'])],
+            'accepted_terms' => ['sometimes', 'boolean'],
+            'enable_optional_features' => ['sometimes', 'boolean'],
         ];
     }
 }

@@ -31,6 +31,7 @@ use App\Services\Members\MemberEmailInvitationService;
 use App\Services\Members\MemberGymInvitationService;
 use App\Services\Notification\ReminderService;
 use App\Services\Privacy\ConsentService;
+use App\Services\Users\AppPresenceService;
 use App\Services\Users\ManagedUserService;
 use App\Services\Web\CsvStreamService;
 use App\Services\Web\GymMemberImportService;
@@ -67,6 +68,7 @@ class MemberController extends Controller
         private readonly MemberAppService $memberAppService,
         private readonly GymMemberAccessService $gymMemberAccessService,
         private readonly ConsentService $consentService,
+        private readonly AppPresenceService $appPresenceService,
     ) {}
 
     public function index(Request $request): View|StreamedResponse
@@ -172,7 +174,7 @@ class MemberController extends Controller
         }
 
         $memberProfile->loadMissing(['branch', 'assignedTrainer.managedTrainerProfile.branch']);
-        $member->loadMissing(['roles', 'permissions', 'consentRecords', 'whatsappConsents']);
+        $member->loadMissing(['roles', 'permissions', 'consentRecords', 'whatsappConsents', 'appPresences']);
         $member->setRelation('memberProfile', $memberProfile);
 
         return view('web.gym.members.show', [
@@ -221,6 +223,7 @@ class MemberController extends Controller
                 ->get(),
             'consentState' => $this->consentService->state($member),
             'whatsappConsents' => $member->whatsappConsents->where('gym_id', $gym->id)->values(),
+            'memberAppPresence' => $this->appPresenceService->summary($member, 'member'),
         ]);
     }
 
@@ -575,7 +578,14 @@ class MemberController extends Controller
     private function renderIndex(Request $request, $gym, array $data): View
     {
         if (($data['members'] ?? null) instanceof LengthAwarePaginator) {
-            $this->engagementScoreService->enrichUsers($data['members']->getCollection(), $gym->id);
+            $memberCollection = $data['members']->getCollection();
+            $this->engagementScoreService->enrichUsers($memberCollection, $gym->id);
+            $data['memberAppPresenceSummaries'] = $memberCollection
+                ->mapWithKeys(fn (User $member): array => [
+                    $member->id => $this->appPresenceService->summaryFromPresences(
+                        $member->appPresences->where('app_role', 'member')->values()
+                    ),
+                ]);
         }
 
         return view('web.gym.members.index', $data + [
@@ -598,6 +608,7 @@ class MemberController extends Controller
                     ->where('gym_id', $gym->id)
                     ->currentFirst()
                     ->limit(1),
+                'appPresences' => fn ($builder) => $builder->where('app_role', 'member'),
             ])
             ->whereHas('memberProfile', function ($builder) use ($gym): void {
                 $builder->where('gym_id', $gym->id);

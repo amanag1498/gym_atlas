@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -183,64 +184,67 @@ class _TrainerTrialLeadsScreenState extends State<TrainerTrialLeadsScreen> {
                 AppSpacing.lg,
                 AppSpacing.md,
               ),
-              child: Column(
-                children: [
-                  TextField(
-                    controller: _searchController,
-                    textInputAction: TextInputAction.search,
-                    onSubmitted: (_) => _load(),
-                    decoration: InputDecoration(
-                      hintText: 'Search name, phone or email',
-                      prefixIcon: const Icon(Icons.search_rounded),
-                      suffixIcon: IconButton(
-                        tooltip: 'Search',
-                        onPressed: _load,
-                        icon: const Icon(Icons.arrow_forward_rounded),
+              child: GuideTarget(
+                id: 'trainer_trials_v1/filters',
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: _searchController,
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: (_) => _load(),
+                      decoration: InputDecoration(
+                        hintText: 'Search name, phone or email',
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        suffixIcon: IconButton(
+                          tooltip: 'Search',
+                          onPressed: _load,
+                          icon: const Icon(Icons.arrow_forward_rounded),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          _StatusFilter(
-                            label: 'All',
-                            value: '',
-                            selected: _status,
-                            onSelected: _setStatus,
-                          ),
-                          _StatusFilter(
-                            label: 'New',
-                            value: 'pending',
-                            selected: _status,
-                            onSelected: _setStatus,
-                          ),
-                          _StatusFilter(
-                            label: 'Accepted',
-                            value: 'accepted',
-                            selected: _status,
-                            onSelected: _setStatus,
-                          ),
-                          _StatusFilter(
-                            label: 'Visited',
-                            value: 'completed',
-                            selected: _status,
-                            onSelected: _setStatus,
-                          ),
-                          _StatusFilter(
-                            label: 'Converted',
-                            value: 'converted',
-                            selected: _status,
-                            onSelected: _setStatus,
-                          ),
-                        ],
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _StatusFilter(
+                              label: 'All',
+                              value: '',
+                              selected: _status,
+                              onSelected: _setStatus,
+                            ),
+                            _StatusFilter(
+                              label: 'New',
+                              value: 'pending',
+                              selected: _status,
+                              onSelected: _setStatus,
+                            ),
+                            _StatusFilter(
+                              label: 'Accepted',
+                              value: 'accepted',
+                              selected: _status,
+                              onSelected: _setStatus,
+                            ),
+                            _StatusFilter(
+                              label: 'Visited',
+                              value: 'completed',
+                              selected: _status,
+                              onSelected: _setStatus,
+                            ),
+                            _StatusFilter(
+                              label: 'Converted',
+                              value: 'converted',
+                              selected: _status,
+                              onSelected: _setStatus,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             Expanded(child: _body()),
@@ -305,9 +309,13 @@ class _TrainerTrialLeadsScreenState extends State<TrainerTrialLeadsScreen> {
               ),
             );
           }
-          return _TrialLeadCard(
-            lead: _leads[index],
-            onTap: () => _openLead(_leads[index]),
+          return GuideTarget(
+            id: 'trainer_trials_v1/lead',
+            enabled: index == 0,
+            child: _TrialLeadCard(
+              lead: _leads[index],
+              onTap: () => _openLead(_leads[index]),
+            ),
           );
         },
       ),

@@ -265,6 +265,11 @@ class User extends Authenticatable
         return $this->hasMany(UserFcmToken::class);
     }
 
+    public function appPresences(): HasMany
+    {
+        return $this->hasMany(UserAppPresence::class);
+    }
+
     public function scheduledReminders(): HasMany
     {
         return $this->hasMany(ScheduledReminder::class);

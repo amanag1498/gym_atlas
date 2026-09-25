@@ -140,6 +140,7 @@ Route::prefix('public')->group(function (): void {
         Route::post('notifications/read-all', [PublicNotificationController::class, 'markAllRead'])->middleware('core_consent');
         Route::get('notification-preferences', [PublicNotificationController::class, 'preferences'])->middleware('core_consent');
         Route::put('notification-preferences', [PublicNotificationController::class, 'updatePreferences'])->middleware('core_consent');
+        Route::post('app-presence', [FcmTokenController::class, 'presence'])->middleware('core_consent');
         Route::post('fcm-tokens', [FcmTokenController::class, 'store'])->middleware(['core_consent', 'consent:notifications']);
         Route::delete('fcm-tokens', [FcmTokenController::class, 'destroy']);
         Route::get('privacy/consents', [PrivacyConsentController::class, 'index']);
@@ -156,6 +157,7 @@ Route::middleware(['auth:sanctum', 'active_account', 'core_consent'])->group(fun
     Route::post('notifications/read-all', [PublicNotificationController::class, 'markAllRead']);
     Route::get('notification-preferences', [PublicNotificationController::class, 'preferences']);
     Route::put('notification-preferences', [PublicNotificationController::class, 'updatePreferences']);
+    Route::post('app-presence', [FcmTokenController::class, 'presence']);
     Route::post('fcm-tokens', [FcmTokenController::class, 'store'])->middleware('consent:notifications');
     Route::delete('fcm-tokens', [FcmTokenController::class, 'destroy']);
     Route::get('chat/conversations', [TrainerMemberChatController::class, 'conversations']);

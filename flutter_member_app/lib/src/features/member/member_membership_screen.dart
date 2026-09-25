@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/user_facing_error.dart';
@@ -127,10 +128,13 @@ class _MemberMembershipScreenState extends State<MemberMembershipScreen> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     _FitAnimatedSection(
-                      child: _MembershipProfileHeader(
-                        gymName: gymName,
-                        branchName: branchName,
-                        status: status,
+                      child: GuideTarget(
+                        id: 'member_membership_v1/status',
+                        child: _MembershipProfileHeader(
+                          gymName: gymName,
+                          branchName: branchName,
+                          status: status,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 15),
@@ -186,53 +190,59 @@ class _MemberMembershipScreenState extends State<MemberMembershipScreen> {
                     const SizedBox(height: 25),
                     _FitAnimatedSection(
                       delay: const Duration(milliseconds: 120),
-                      child: _FitGroup(
-                        title: 'Access',
-                        children: <Widget>[
-                          _FitRow(
-                            icon: Icons.fact_check_outlined,
-                            title: 'Attendance History',
-                            subtitle: 'Recent check-ins',
-                            onPressed: widget.onOpenAttendance,
-                          ),
-                          _FitRow(
-                            icon: Icons.person_pin_circle_outlined,
-                            title: 'Assigned Trainer',
-                            subtitle: _stringValue(trainer['name']),
-                            showChevron: false,
-                          ),
-                        ],
+                      child: GuideTarget(
+                        id: 'member_membership_v1/access',
+                        child: _FitGroup(
+                          title: 'Access',
+                          children: <Widget>[
+                            _FitRow(
+                              icon: Icons.fact_check_outlined,
+                              title: 'Attendance History',
+                              subtitle: 'Recent check-ins',
+                              onPressed: widget.onOpenAttendance,
+                            ),
+                            _FitRow(
+                              icon: Icons.person_pin_circle_outlined,
+                              title: 'Assigned Trainer',
+                              subtitle: _stringValue(trainer['name']),
+                              showChevron: false,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 25),
                     _FitAnimatedSection(
                       delay: const Duration(milliseconds: 170),
-                      child: _FitGroup(
-                        title: 'Payment',
-                        children: <Widget>[
-                          _FitValueRow(
-                            icon: Icons.payments_rounded,
-                            title: 'Final Payable',
-                            value: _formatCurrency(
-                              membership['final_payable_amount'],
+                      child: GuideTarget(
+                        id: 'member_membership_v1/billing',
+                        child: _FitGroup(
+                          title: 'Payment',
+                          children: <Widget>[
+                            _FitValueRow(
+                              icon: Icons.payments_rounded,
+                              title: 'Final Payable',
+                              value: _formatCurrency(
+                                membership['final_payable_amount'],
+                              ),
                             ),
-                          ),
-                          _FitValueRow(
-                            icon: Icons.account_balance_wallet_rounded,
-                            title: 'Due Amount',
-                            value: _formatCurrency(membership['due_amount']),
-                          ),
-                          _FitValueRow(
-                            icon: Icons.event_available_rounded,
-                            title: 'Due Date',
-                            value: _formatDate(membership['due_date']),
-                          ),
-                          _FitValueRow(
-                            icon: Icons.verified_rounded,
-                            title: 'Payment Status',
-                            value: paymentStatus,
-                          ),
-                        ],
+                            _FitValueRow(
+                              icon: Icons.account_balance_wallet_rounded,
+                              title: 'Due Amount',
+                              value: _formatCurrency(membership['due_amount']),
+                            ),
+                            _FitValueRow(
+                              icon: Icons.event_available_rounded,
+                              title: 'Due Date',
+                              value: _formatDate(membership['due_date']),
+                            ),
+                            _FitValueRow(
+                              icon: Icons.verified_rounded,
+                              title: 'Payment Status',
+                              value: paymentStatus,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 25),
@@ -415,81 +425,91 @@ class _MemberAttendanceScreenState extends State<MemberAttendanceScreen> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     _FitAnimatedSection(
-                      child: _AttendanceHeader(
-                        latestGym: latestGym,
-                        totalVisits: _pagination.total,
-                        checkedInToday: checkedInToday,
-                        enabled: attendanceEnabled,
-                        statusMessage: _stringValue(
-                          _attendanceStatus['message'],
-                          fallback:
-                              'Connect to an active gym membership to use check-ins.',
+                      child: GuideTarget(
+                        id: 'member_attendance_v1/status',
+                        child: _AttendanceHeader(
+                          latestGym: latestGym,
+                          totalVisits: _pagination.total,
+                          checkedInToday: checkedInToday,
+                          enabled: attendanceEnabled,
+                          statusMessage: _stringValue(
+                            _attendanceStatus['message'],
+                            fallback:
+                                'Connect to an active gym membership to use check-ins.',
+                          ),
                         ),
                       ),
                     ),
                     const SizedBox(height: 15),
                     _FitAnimatedSection(
                       delay: const Duration(milliseconds: 45),
-                      child: _BiometricAttendanceCard(
-                        attendanceEnabled: attendanceEnabled,
-                        biometricEnabled:
-                            _biometricProfile['biometric_enabled'] == true,
-                        biometricRegistered:
-                            _biometricProfile['biometric_registered'] == true,
-                        message: _stringValue(
-                          _biometricProfile['message'],
-                          fallback:
-                              'Ask your gym to enroll your biometric attendance profile.',
+                      child: GuideTarget(
+                        id: 'member_attendance_v1/biometric',
+                        child: _BiometricAttendanceCard(
+                          attendanceEnabled: attendanceEnabled,
+                          biometricEnabled:
+                              _biometricProfile['biometric_enabled'] == true,
+                          biometricRegistered:
+                              _biometricProfile['biometric_registered'] == true,
+                          message: _stringValue(
+                            _biometricProfile['message'],
+                            fallback:
+                                'Ask your gym to enroll your biometric attendance profile.',
+                          ),
                         ),
                       ),
                     ),
                     const SizedBox(height: 25),
                     _FitAnimatedSection(
                       delay: const Duration(milliseconds: 90),
-                      child: _FitGroup(
-                        title: 'Recent Check-ins',
-                        children: _attendance.isEmpty
-                            ? <Widget>[
-                                _FitInlineEmpty(
-                                  icon: Icons.fact_check_outlined,
-                                  title: 'No attendance history yet',
-                                  message: attendanceEnabled
-                                      ? 'Your verified gym visits will appear here after your first check-in.'
-                                      : 'Attendance becomes available with active gym access.',
-                                ),
-                              ]
-                            : <Widget>[
-                                ..._attendance.map(
-                                  (entry) =>
-                                      _AttendanceHistoryRow(entry: entry),
-                                ),
-                                if (_pagination.hasMore) ...<Widget>[
-                                  const SizedBox(height: 8),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: OutlinedButton.icon(
-                                      onPressed: _loadingMore
-                                          ? null
-                                          : () => _load(append: true),
-                                      icon: _loadingMore
-                                          ? const SizedBox.square(
-                                              dimension: 16,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
+                      child: GuideTarget(
+                        id: 'member_attendance_v1/history',
+                        child: _FitGroup(
+                          title: 'Recent Check-ins',
+                          children: _attendance.isEmpty
+                              ? <Widget>[
+                                  _FitInlineEmpty(
+                                    icon: Icons.fact_check_outlined,
+                                    title: 'No attendance history yet',
+                                    message: attendanceEnabled
+                                        ? 'Your verified gym visits will appear here after your first check-in.'
+                                        : 'Attendance becomes available with active gym access.',
+                                  ),
+                                ]
+                              : <Widget>[
+                                  ..._attendance.map(
+                                    (entry) =>
+                                        _AttendanceHistoryRow(entry: entry),
+                                  ),
+                                  if (_pagination.hasMore) ...<Widget>[
+                                    const SizedBox(height: 8),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: OutlinedButton.icon(
+                                        onPressed: _loadingMore
+                                            ? null
+                                            : () => _load(append: true),
+                                        icon: _loadingMore
+                                            ? const SizedBox.square(
+                                                dimension: 16,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                              )
+                                            : const Icon(
+                                                Icons.expand_more_rounded,
                                               ),
-                                            )
-                                          : const Icon(
-                                              Icons.expand_more_rounded,
-                                            ),
-                                      label: Text(
-                                        _loadingMore
-                                            ? 'Loading visits...'
-                                            : 'Load more visits',
+                                        label: Text(
+                                          _loadingMore
+                                              ? 'Loading visits...'
+                                              : 'Load more visits',
+                                        ),
                                       ),
                                     ),
-                                  ),
+                                  ],
                                 ],
-                              ],
+                        ),
                       ),
                     ),
                   ],

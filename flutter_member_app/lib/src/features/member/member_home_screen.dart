@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:flutter/services.dart';
 import 'package:gym_flutter_core/gym_flutter_core.dart'
     show ChatNotificationService;
@@ -855,104 +856,115 @@ class _MemberHomeScreenState extends State<MemberHomeScreen>
       ),
     ];
 
-    return AppGradientScaffold(
-      title: 'Welcome Back',
-      subtitle: user.name,
-      actions: [
-        IconButton(
-          tooltip: 'Events and bookings',
-          onPressed: () => Navigator.of(context).push<void>(
-            MaterialPageRoute(
-              builder: (_) => MemberEventsScreen(repository: _memberRepository),
-            ),
-          ),
-          icon: const Icon(Icons.calendar_month_outlined),
-        ),
-        if (gymRelationships.length > 1)
+    return GuideAvailability(
+      enabled:
+          !_loading &&
+          _error == null &&
+          onboardingCompleted &&
+          widget.storePreviewData == null,
+      child: AppGradientScaffold(
+        title: 'Welcome Back',
+        subtitle: user.name,
+        actions: [
           IconButton(
-            tooltip: 'Switch gym',
-            onPressed: _openGymSwitcher,
-            icon: const Icon(Icons.swap_horiz_rounded),
-          ),
-        _UnreadBellAction(
-          unreadCount: _notifications
-              .where((item) => item['read_at'] == null)
-              .length,
-          onPressed: _openNotificationsScreen,
-        ),
-        IconButton(
-          onPressed: _openDietPlanScreen,
-          icon: const Icon(Icons.restaurant_menu_rounded),
-        ),
-        IconButton(
-          onPressed: _openSettingsScreen,
-          icon: const Icon(Icons.settings_outlined),
-        ),
-        IconButton(
-          onPressed: _handleManualRefresh,
-          icon: const Icon(Icons.refresh_rounded),
-        ),
-      ],
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 240),
-        transitionBuilder: (child, animation) {
-          final curved = CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-            reverseCurve: Curves.easeInCubic,
-          );
-          return FadeTransition(
-            opacity: curved,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0.03, 0.015),
-                end: Offset.zero,
-              ).animate(curved),
-              child: child,
-            ),
-          );
-        },
-        child: _loading
-            ? const _MemberHomeSkeleton(key: ValueKey('member-loading'))
-            : _error != null
-            ? ErrorStateView(
-                key: const ValueKey('member-error'),
-                message: _error!,
-                onRetry: _handleManualRefresh,
-              )
-            : !onboardingCompleted
-            ? KeyedSubtree(
-                key: const ValueKey('member-onboarding'),
-                child: MemberOnboardingFlow(
-                  repository: _memberRepository,
-                  profile: memberProfile,
-                  publicGyms: _publicGyms,
-                  trainerConnection: trainerConnection,
-                  onFinished: () async {
-                    await _load();
-                    if (mounted) {
-                      setState(() => _index = 1);
-                    }
-                  },
-                ),
-              )
-            : KeyedSubtree(
-                key: ValueKey('member-page-$_index'),
-                child: pages[_index],
+            tooltip: 'Events and bookings',
+            onPressed: () => Navigator.of(context).push<void>(
+              MaterialPageRoute(
+                builder: (_) =>
+                    MemberEventsScreen(repository: _memberRepository),
               ),
+            ),
+            icon: const Icon(Icons.calendar_month_outlined),
+          ),
+          if (gymRelationships.length > 1)
+            IconButton(
+              tooltip: 'Switch gym',
+              onPressed: _openGymSwitcher,
+              icon: const Icon(Icons.swap_horiz_rounded),
+            ),
+          _UnreadBellAction(
+            unreadCount: _notifications
+                .where((item) => item['read_at'] == null)
+                .length,
+            onPressed: _openNotificationsScreen,
+          ),
+          IconButton(
+            onPressed: _openDietPlanScreen,
+            icon: const Icon(Icons.restaurant_menu_rounded),
+          ),
+          GuideTarget(
+            id: 'member_home_v1/settings',
+            child: IconButton(
+              onPressed: _openSettingsScreen,
+              icon: const Icon(Icons.settings_outlined),
+            ),
+          ),
+          IconButton(
+            onPressed: _handleManualRefresh,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+        body: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 240),
+          transitionBuilder: (child, animation) {
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            );
+            return FadeTransition(
+              opacity: curved,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0.03, 0.015),
+                  end: Offset.zero,
+                ).animate(curved),
+                child: child,
+              ),
+            );
+          },
+          child: _loading
+              ? const _MemberHomeSkeleton(key: ValueKey('member-loading'))
+              : _error != null
+              ? ErrorStateView(
+                  key: const ValueKey('member-error'),
+                  message: _error!,
+                  onRetry: _handleManualRefresh,
+                )
+              : !onboardingCompleted
+              ? KeyedSubtree(
+                  key: const ValueKey('member-onboarding'),
+                  child: MemberOnboardingFlow(
+                    repository: _memberRepository,
+                    profile: memberProfile,
+                    publicGyms: _publicGyms,
+                    trainerConnection: trainerConnection,
+                    onFinished: () async {
+                      await _load();
+                      if (mounted) {
+                        setState(() => _index = 1);
+                      }
+                    },
+                  ),
+                )
+              : KeyedSubtree(
+                  key: ValueKey('member-page-$_index'),
+                  child: pages[_index],
+                ),
+        ),
+        floatingActionButton: null,
+        bottomNavigationBar: onboardingCompleted
+            ? _MemberBottomNav(
+                currentIndex: _index,
+                onSelect: (value) {
+                  setState(() => _index = value);
+                  if (value == 0) {
+                    unawaited(_handleDashboardFocus());
+                  }
+                },
+              )
+            : null,
       ),
-      floatingActionButton: null,
-      bottomNavigationBar: onboardingCompleted
-          ? _MemberBottomNav(
-              currentIndex: _index,
-              onSelect: (value) {
-                setState(() => _index = value);
-                if (value == 0) {
-                  unawaited(_handleDashboardFocus());
-                }
-              },
-            )
-          : null,
     );
   }
 
@@ -1040,30 +1052,42 @@ class _GlassBottomNav extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _GlassBottomNavItem(
-                    label: 'Home',
-                    icon: Icons.home_rounded,
-                    active: currentIndex == 0,
-                    onTap: () => onSelect(0),
+                  GuideTarget(
+                    id: 'member_home_v1/home',
+                    child: _GlassBottomNavItem(
+                      label: 'Home',
+                      icon: Icons.home_rounded,
+                      active: currentIndex == 0,
+                      onTap: () => onSelect(0),
+                    ),
                   ),
-                  _GlassBottomNavItem(
-                    label: 'Train',
-                    icon: Icons.fitness_center_rounded,
-                    active: currentIndex == 1,
-                    onTap: () => onSelect(1),
+                  GuideTarget(
+                    id: 'member_home_v1/train',
+                    child: _GlassBottomNavItem(
+                      label: 'Train',
+                      icon: Icons.fitness_center_rounded,
+                      active: currentIndex == 1,
+                      onTap: () => onSelect(1),
+                    ),
                   ),
                   const SizedBox(width: 58),
-                  _GlassBottomNavItem(
-                    label: 'Body',
-                    icon: Icons.monitor_weight_rounded,
-                    active: currentIndex == 2,
-                    onTap: () => onSelect(2),
+                  GuideTarget(
+                    id: 'member_home_v1/progress',
+                    child: _GlassBottomNavItem(
+                      label: 'Body',
+                      icon: Icons.monitor_weight_rounded,
+                      active: currentIndex == 2,
+                      onTap: () => onSelect(2),
+                    ),
                   ),
-                  _GlassBottomNavItem(
-                    label: 'Chats',
-                    icon: Icons.chat_bubble_rounded,
-                    active: currentIndex == 3,
-                    onTap: () => onSelect(3),
+                  GuideTarget(
+                    id: 'member_home_v1/coach',
+                    child: _GlassBottomNavItem(
+                      label: 'Chats',
+                      icon: Icons.chat_bubble_rounded,
+                      active: currentIndex == 3,
+                      onTap: () => onSelect(3),
+                    ),
                   ),
                 ],
               ),
@@ -1071,9 +1095,12 @@ class _GlassBottomNav extends StatelessWidget {
           ),
           Positioned(
             top: -26,
-            child: _MemberCenterAction(
-              active: currentIndex == 4,
-              onTap: () => onSelect(4),
+            child: GuideTarget(
+              id: 'member_home_v1/discover',
+              child: _MemberCenterAction(
+                active: currentIndex == 4,
+                onTap: () => onSelect(4),
+              ),
             ),
           ),
         ],
@@ -2342,10 +2369,13 @@ class _MemberGreetingHeader extends StatelessWidget {
             onTap: onOpenDietPlan,
           ),
           const SizedBox(width: 10),
-          _HeaderAction(
-            icon: Icons.settings_rounded,
-            label: 'Settings',
-            onTap: onOpenSettings,
+          GuideTarget(
+            id: 'member_home_v1/settings',
+            child: _HeaderAction(
+              icon: Icons.settings_rounded,
+              label: 'Settings',
+              onTap: onOpenSettings,
+            ),
           ),
         ],
       ),
@@ -5080,10 +5110,14 @@ class __WorkoutPageState extends State<_WorkoutPage>
                 onTap: _openLogbook,
                 tooltip: 'Workout history',
               ),
-              MemberHeaderActionButton(
-                icon: Icons.menu_book_rounded,
-                onTap: widget.onOpenWorkoutBook,
-                tooltip: 'Workout book',
+              GuideTarget(
+                id: 'member_train_v1/books',
+                enabled: _activeSessionId == null,
+                child: MemberHeaderActionButton(
+                  icon: Icons.menu_book_rounded,
+                  onTap: widget.onOpenWorkoutBook,
+                  tooltip: 'Workout book',
+                ),
               ),
             ],
           ),
@@ -5197,11 +5231,14 @@ class __WorkoutPageState extends State<_WorkoutPage>
               ),
               const SizedBox(height: 12),
               if (_activeSessionId != null)
-                _ActiveWorkoutMiniBar(
-                  duration: activeDuration ?? Duration.zero,
-                  exerciseCount: _sessionExercises.length,
-                  totalVolume: totalVolume,
-                  dayLabel: _activePlanDayLabel,
+                GuideTarget(
+                  id: 'member_active_workout_v1/active',
+                  child: _ActiveWorkoutMiniBar(
+                    duration: activeDuration ?? Duration.zero,
+                    exerciseCount: _sessionExercises.length,
+                    totalVolume: totalVolume,
+                    dayLabel: _activePlanDayLabel,
+                  ),
                 )
               else if (visiblePlans.isEmpty)
                 _FitLifeEmptyPanel(
@@ -5222,23 +5259,26 @@ class __WorkoutPageState extends State<_WorkoutPage>
                 ),
               if (_activeSessionId == null) ...[
                 const SizedBox(height: 18),
-                _FitLifePrimaryAction(
-                  label: _startingWorkout
-                      ? 'Starting workout...'
-                      : hasAssignedPlans
-                      ? (selectedPlanId != null
-                            ? (widget.workoutDaySelectionEnabled &&
-                                      selectedPlanDays > 1
-                                  ? 'Choose Day & Start'
-                                  : 'Start Workout')
-                            : 'Select Workout Plan')
-                      : 'Start Custom Workout',
-                  icon: Icons.play_arrow_rounded,
-                  loading: _startingWorkout,
-                  enabled:
-                      canStartWorkout &&
-                      (!hasAssignedPlans || selectedPlanId != null),
-                  onTap: _startWorkout,
+                GuideTarget(
+                  id: 'member_train_v1/start',
+                  child: _FitLifePrimaryAction(
+                    label: _startingWorkout
+                        ? 'Starting workout...'
+                        : hasAssignedPlans
+                        ? (selectedPlanId != null
+                              ? (widget.workoutDaySelectionEnabled &&
+                                        selectedPlanDays > 1
+                                    ? 'Choose Day & Start'
+                                    : 'Start Workout')
+                              : 'Select Workout Plan')
+                        : 'Start Custom Workout',
+                    icon: Icons.play_arrow_rounded,
+                    loading: _startingWorkout,
+                    enabled:
+                        canStartWorkout &&
+                        (!hasAssignedPlans || selectedPlanId != null),
+                    onTap: _startWorkout,
+                  ),
                 ),
               ],
               if (hasAssignedPlans &&
@@ -5292,50 +5332,58 @@ class __WorkoutPageState extends State<_WorkoutPage>
                             _WorkoutGroupHeader(exercise: entry.value),
                             const SizedBox(height: 10),
                           ],
-                          _WorkoutExerciseCard(
-                            exercise: entry.value,
-                            initiallyExpanded: entry.key == 0,
-                            previousBest: _recordForExercise(
-                              personalRecords,
-                              entry.value,
+                          GuideTarget(
+                            id: 'member_active_workout_v1/exercise',
+                            enabled: entry.key == 0,
+                            child: _WorkoutExerciseCard(
+                              exercise: entry.value,
+                              initiallyExpanded: entry.key == 0,
+                              previousBest: _recordForExercise(
+                                personalRecords,
+                                entry.value,
+                              ),
+                              recentHistory:
+                                  _exerciseHistoryCache[_exerciseId(
+                                    entry.value,
+                                  )] ??
+                                  const [],
+                              historyLoading:
+                                  _exerciseHistoryLoading[_exerciseId(
+                                    entry.value,
+                                  )] ==
+                                  true,
+                              historyError:
+                                  _exerciseHistoryError[_exerciseId(
+                                    entry.value,
+                                  )],
+                              onLoadHistory: () =>
+                                  _loadExerciseHistory(entry.value),
+                              onAddSet: () => _addSet(entry.key),
+                              onDuplicateLastSet: () =>
+                                  _duplicateLastSet(entry.key),
+                              onUpdateExerciseNotes: (value) =>
+                                  _updateExerciseNotes(entry.key, value),
+                              onUpdateSet: (setIndex, field, value) =>
+                                  _updateSet(entry.key, setIndex, field, value),
+                              onDeleteSet: (setIndex) =>
+                                  _deleteSet(entry.key, setIndex),
+                              onSkipExercise: () => _skipExercise(entry.key),
+                              onStartRest: (seconds) => _startRest(
+                                entry.key,
+                                _groupAwareRestSeconds(entry.key, seconds),
+                              ),
+                              runningWorkSetIndex:
+                                  _workExerciseIndex == entry.key
+                                  ? _workSetIndex
+                                  : null,
+                              workElapsedSeconds:
+                                  _workExerciseIndex == entry.key
+                                  ? _workElapsedSeconds
+                                  : 0,
+                              onStartWork: (setIndex) =>
+                                  _startWorkTimer(entry.key, setIndex),
+                              onFinishWork: _finishWorkTimer,
                             ),
-                            recentHistory:
-                                _exerciseHistoryCache[_exerciseId(
-                                  entry.value,
-                                )] ??
-                                const [],
-                            historyLoading:
-                                _exerciseHistoryLoading[_exerciseId(
-                                  entry.value,
-                                )] ==
-                                true,
-                            historyError:
-                                _exerciseHistoryError[_exerciseId(entry.value)],
-                            onLoadHistory: () =>
-                                _loadExerciseHistory(entry.value),
-                            onAddSet: () => _addSet(entry.key),
-                            onDuplicateLastSet: () =>
-                                _duplicateLastSet(entry.key),
-                            onUpdateExerciseNotes: (value) =>
-                                _updateExerciseNotes(entry.key, value),
-                            onUpdateSet: (setIndex, field, value) =>
-                                _updateSet(entry.key, setIndex, field, value),
-                            onDeleteSet: (setIndex) =>
-                                _deleteSet(entry.key, setIndex),
-                            onSkipExercise: () => _skipExercise(entry.key),
-                            onStartRest: (seconds) => _startRest(
-                              entry.key,
-                              _groupAwareRestSeconds(entry.key, seconds),
-                            ),
-                            runningWorkSetIndex: _workExerciseIndex == entry.key
-                                ? _workSetIndex
-                                : null,
-                            workElapsedSeconds: _workExerciseIndex == entry.key
-                                ? _workElapsedSeconds
-                                : 0,
-                            onStartWork: (setIndex) =>
-                                _startWorkTimer(entry.key, setIndex),
-                            onFinishWork: _finishWorkTimer,
                           ),
                         ],
                       ),
@@ -5343,21 +5391,27 @@ class __WorkoutPageState extends State<_WorkoutPage>
                   ),
                 ],
                 const SizedBox(height: 4),
-                _FitLifePrimaryAction(
-                  label: _completingWorkout
-                      ? (_sessionExercises.isEmpty
-                            ? 'Ending workout...'
-                            : 'Completing workout...')
-                      : (_sessionExercises.isEmpty
-                            ? 'End Workout'
-                            : 'Complete Workout'),
-                  icon: _sessionExercises.isEmpty
-                      ? Icons.stop_circle_rounded
-                      : Icons.emoji_events_rounded,
-                  loading: _completingWorkout,
-                  enabled: !_completingWorkout,
-                  gradient: const [AppColors.primaryBright, AppColors.primary],
-                  onTap: _completeWorkout,
+                GuideTarget(
+                  id: 'member_active_workout_v1/finish',
+                  child: _FitLifePrimaryAction(
+                    label: _completingWorkout
+                        ? (_sessionExercises.isEmpty
+                              ? 'Ending workout...'
+                              : 'Completing workout...')
+                        : (_sessionExercises.isEmpty
+                              ? 'End Workout'
+                              : 'Complete Workout'),
+                    icon: _sessionExercises.isEmpty
+                        ? Icons.stop_circle_rounded
+                        : Icons.emoji_events_rounded,
+                    loading: _completingWorkout,
+                    enabled: !_completingWorkout,
+                    gradient: const [
+                      AppColors.primaryBright,
+                      AppColors.primary,
+                    ],
+                    onTap: _completeWorkout,
+                  ),
                 ),
               ],
               if (_showPrAchievement) ...[
@@ -5439,13 +5493,16 @@ class __WorkoutPageState extends State<_WorkoutPage>
                                 constraints: const BoxConstraints(
                                   maxWidth: 440,
                                 ),
-                                child: _RestTimerOverlay(
-                                  exerciseName: restExerciseName,
-                                  remainingSeconds: _restRemainingSeconds,
-                                  totalSeconds: _restTotalSeconds,
-                                  onSubtract: () => _adjustRest(-15),
-                                  onAdd: () => _adjustRest(15),
-                                  onSkip: _skipRest,
+                                child: GuideTarget(
+                                  id: 'member_rest_v1/rest',
+                                  child: _RestTimerOverlay(
+                                    exerciseName: restExerciseName,
+                                    remainingSeconds: _restRemainingSeconds,
+                                    totalSeconds: _restTotalSeconds,
+                                    onSubtract: () => _adjustRest(-15),
+                                    onAdd: () => _adjustRest(15),
+                                    onSkip: _skipRest,
+                                  ),
                                 ),
                               ),
                             ),
@@ -6690,119 +6747,10 @@ class __WorkoutPageState extends State<_WorkoutPage>
   }
 
   Future<void> _showWorkoutSummary(Map<String, dynamic> summary) {
-    final duration =
-        (summary['session_duration_seconds'] as num?)?.toInt() ?? 0;
-    final planned = (summary['planned_exercises'] as num?)?.toInt() ?? 0;
-    final completed = (summary['completed_exercises'] as num?)?.toInt() ?? 0;
-    final skipped = (summary['skipped_exercises'] as num?)?.toInt() ?? 0;
-    final exercises = (summary['exercises'] as List<dynamic>? ?? const [])
-        .map((item) => Map<String, dynamic>.from(item as Map))
-        .toList();
-    final progressions =
-        (summary['progression_recommendations'] as List<dynamic>? ?? const [])
-            .map((item) => Map<String, dynamic>.from(item as Map))
-            .toList();
     return showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Workout summary'),
-        content: SizedBox(
-          width: 480,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Completed $completed of $planned planned exercises'),
-                const SizedBox(height: 8),
-                Text('Skipped: $skipped'),
-                const SizedBox(height: 8),
-                Text('Duration: ${duration ~/ 60}m ${duration % 60}s'),
-                const SizedBox(height: 8),
-                Text(
-                  'Compatible volume: ${((summary['total_compatible_volume'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)} kg',
-                ),
-                if (exercises.isNotEmpty) ...[
-                  const Divider(height: 28),
-                  ...exercises.map((exercise) {
-                    final mode =
-                        exercise['tracking_mode']?.toString() ?? 'reps';
-                    final plannedMetrics = Map<String, dynamic>.from(
-                      exercise['planned'] as Map? ?? const {},
-                    );
-                    final performedMetrics = Map<String, dynamic>.from(
-                      exercise['performed'] as Map? ?? const {},
-                    );
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            exercise['exercise_name']?.toString() ?? 'Exercise',
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Planned: ${_summaryMetric(mode, plannedMetrics, planned: true)}',
-                          ),
-                          Text(
-                            'Performed: ${_summaryMetric(mode, performedMetrics, planned: false)}',
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                ],
-                if (progressions.isNotEmpty) ...[
-                  const Divider(height: 28),
-                  Text(
-                    'Next workout',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  ...progressions.map(
-                    (recommendation) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(
-                        '${recommendation['explanation'] ?? 'Your prescription was reviewed.'}${recommendation['status'] == 'pending' ? ' Waiting for trainer approval.' : ''}',
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Done'),
-          ),
-        ],
-      ),
+      builder: (_) => _WorkoutSummaryDialog(summary: summary),
     );
-  }
-
-  String _summaryMetric(
-    String mode,
-    Map<String, dynamic> values, {
-    required bool planned,
-  }) {
-    if (mode == 'timed') {
-      return '${(values['duration_seconds'] as num?)?.toInt() ?? 0}s';
-    }
-    if (mode == 'cardio' || mode == 'distance') {
-      final distance = (values['distance_meters'] as num?)?.toDouble() ?? 0;
-      final duration = (values['duration_seconds'] as num?)?.toInt() ?? 0;
-      return '${distance.toStringAsFixed(0)}m • ${duration}s';
-    }
-    if (planned) {
-      return '${values['reps'] ?? 'open'} reps • ${values['load'] ?? 0} kg';
-    }
-    final estimated = (values['best_estimated_one_rep_max'] as num?)
-        ?.toDouble();
-    return '${(values['reps'] as num?)?.toInt() ?? 0} reps • max ${values['max_load'] ?? 0} kg${estimated == null ? '' : ' • e1RM ${estimated.toStringAsFixed(1)} kg'}';
   }
 
   Future<void> _showCompletionCelebration(BuildContext context, bool hasPr) {
@@ -8073,6 +8021,464 @@ class _WorkoutGroupHeader extends StatelessWidget {
   }
 }
 
+class _WorkoutSummaryDialog extends StatelessWidget {
+  const _WorkoutSummaryDialog({required this.summary});
+
+  final Map<String, dynamic> summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final duration =
+        (summary['session_duration_seconds'] as num?)?.toInt() ?? 0;
+    final planned = (summary['planned_exercises'] as num?)?.toInt() ?? 0;
+    final completed = (summary['completed_exercises'] as num?)?.toInt() ?? 0;
+    final skipped = (summary['skipped_exercises'] as num?)?.toInt() ?? 0;
+    final volume =
+        (summary['total_compatible_volume'] as num?)?.toDouble() ?? 0;
+    final exercises = (summary['exercises'] as List<dynamic>? ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+    final recommendations =
+        (summary['progression_recommendations'] as List<dynamic>? ?? const [])
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .toList();
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      backgroundColor: Colors.transparent,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 520,
+          maxHeight: math.max(
+            280,
+            MediaQuery.sizeOf(context).height -
+                MediaQuery.viewInsetsOf(context).bottom -
+                48,
+          ),
+        ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            border: Border.all(color: AppColors.stroke),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.textPrimary.withValues(alpha: 0.16),
+                blurRadius: 32,
+                offset: const Offset(0, 16),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.xl,
+                  AppSpacing.md,
+                  AppSpacing.md,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ExcludeSemantics(
+                      child: Container(
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          color: AppColors.success.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: const Icon(
+                          Icons.check_circle_rounded,
+                          color: AppColors.success,
+                          size: 30,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Workout complete',
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.4,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            completed == 0
+                                ? 'Session saved. You can add details from your logbook later.'
+                                : 'Strong work. Here is what you logged today.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: AppColors.textSecondary,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close workout summary',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.xl,
+                    0,
+                    AppSpacing.xl,
+                    AppSpacing.md,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final width = (constraints.maxWidth - 12) / 2;
+                          return Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              _WorkoutSummaryMetric(
+                                width: width,
+                                icon: Icons.task_alt_rounded,
+                                label: 'Exercises',
+                                value: '$completed/$planned',
+                              ),
+                              _WorkoutSummaryMetric(
+                                width: width,
+                                icon: Icons.timer_outlined,
+                                label: 'Duration',
+                                value: _formatWorkoutDuration(duration),
+                              ),
+                              _WorkoutSummaryMetric(
+                                width: width,
+                                icon: Icons.fitness_center_rounded,
+                                label: 'Volume',
+                                value: '${volume.toStringAsFixed(0)} kg',
+                              ),
+                              _WorkoutSummaryMetric(
+                                width: width,
+                                icon: Icons.fast_forward_rounded,
+                                label: 'Skipped',
+                                value: '$skipped',
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                      if (exercises.isNotEmpty) ...[
+                        const SizedBox(height: AppSpacing.xl),
+                        Text(
+                          'Exercise results',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        ...exercises.map(
+                          (exercise) => Padding(
+                            key: ValueKey(
+                              exercise['session_exercise_id'] ??
+                                  exercise['exercise_id'] ??
+                                  exercise['exercise_name'],
+                            ),
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.sm,
+                            ),
+                            child: _WorkoutSummaryExerciseCard(
+                              exercise: exercise,
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (recommendations.isNotEmpty) ...[
+                        const SizedBox(height: AppSpacing.md),
+                        Text(
+                          'Next workout',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        ...recommendations.map(
+                          (recommendation) => _WorkoutNextStepCard(
+                            key: ValueKey(recommendation['id']),
+                            recommendation: recommendation,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.sm,
+                  AppSpacing.xl,
+                  AppSpacing.xl,
+                ),
+                child: FilledButton.icon(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.done_rounded),
+                  label: const Text('Done'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(54),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkoutSummaryMetric extends StatelessWidget {
+  const _WorkoutSummaryMetric({
+    required this.width,
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final double width;
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      width: width,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceSoft,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          border: Border.all(color: AppColors.stroke),
+        ),
+        child: Row(
+          children: [
+            ExcludeSemantics(
+              child: Icon(icon, color: AppColors.primary, size: 22),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  Text(
+                    label,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkoutSummaryExerciseCard extends StatelessWidget {
+  const _WorkoutSummaryExerciseCard({required this.exercise});
+
+  final Map<String, dynamic> exercise;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final mode = exercise['tracking_mode']?.toString() ?? 'reps';
+    final status = exercise['performed_status']?.toString() ?? 'skipped';
+    final skipped = status == 'skipped';
+    final planned = Map<String, dynamic>.from(
+      exercise['planned'] as Map? ?? const {},
+    );
+    final performed = Map<String, dynamic>.from(
+      exercise['performed'] as Map? ?? const {},
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        border: Border.all(color: AppColors.stroke),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  exercise['exercise_name']?.toString() ?? 'Exercise',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xxs,
+                ),
+                decoration: BoxDecoration(
+                  color: skipped
+                      ? AppColors.surfaceSoft
+                      : AppColors.success.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  skipped ? 'Skipped' : 'Completed',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: skipped
+                        ? AppColors.textSecondary
+                        : AppColors.success,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Planned  ${_workoutSummaryMetric(mode, planned, planned: true)}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+          Text(
+            skipped
+                ? 'No sets logged'
+                : 'Logged  ${_workoutSummaryMetric(mode, performed, planned: false)}',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: skipped ? AppColors.textMuted : AppColors.textPrimary,
+              fontWeight: skipped ? FontWeight.w500 : FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkoutNextStepCard extends StatelessWidget {
+  const _WorkoutNextStepCard({super.key, required this.recommendation});
+
+  final Map<String, dynamic> recommendation;
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = recommendation['status'] == 'pending';
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const ExcludeSemantics(
+            child: Icon(Icons.trending_up_rounded, color: AppColors.primary),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              '${recommendation['explanation'] ?? 'Your next workout target is ready.'}${pending ? ' Your trainer will review it.' : ''}',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textPrimary,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatWorkoutDuration(int totalSeconds) {
+  final hours = totalSeconds ~/ 3600;
+  final minutes = (totalSeconds % 3600) ~/ 60;
+  final seconds = totalSeconds % 60;
+  if (hours > 0) return '${hours}h ${minutes}m';
+  if (minutes > 0) return '${minutes}m ${seconds}s';
+  return '${seconds}s';
+}
+
+String _workoutSummaryMetric(
+  String mode,
+  Map<String, dynamic> values, {
+  required bool planned,
+}) {
+  if (mode == 'timed') {
+    return _formatWorkoutDuration(
+      (values['duration_seconds'] as num?)?.toInt() ?? 0,
+    );
+  }
+  if (mode == 'cardio' || mode == 'distance') {
+    final distance = (values['distance_meters'] as num?)?.toDouble() ?? 0;
+    final duration = (values['duration_seconds'] as num?)?.toInt() ?? 0;
+    final distanceLabel = distance >= 1000
+        ? '${(distance / 1000).toStringAsFixed(2)} km'
+        : '${distance.toStringAsFixed(0)} m';
+    return '$distanceLabel • ${_formatWorkoutDuration(duration)}';
+  }
+  if (planned) {
+    final reps = values['reps']?.toString().trim();
+    final load = (values['load'] as num?)?.toDouble();
+    final parts = <String>[
+      '${reps == null || reps.isEmpty ? 'Open' : reps} reps',
+      if (load != null && load > 0) '${load.toStringAsFixed(1)} kg',
+    ];
+    return parts.join(' • ');
+  }
+  final reps = (values['reps'] as num?)?.toInt() ?? 0;
+  final maxLoad = (values['max_load'] as num?)?.toDouble() ?? 0;
+  final estimated = (values['best_estimated_one_rep_max'] as num?)?.toDouble();
+  return <String>[
+    '$reps reps',
+    if (maxLoad > 0) 'max ${maxLoad.toStringAsFixed(1)} kg',
+    if (estimated != null && estimated > 0)
+      'e1RM ${estimated.toStringAsFixed(1)} kg',
+  ].join(' • ');
+}
+
 class _PreWorkoutWeightDialog extends StatefulWidget {
   const _PreWorkoutWeightDialog();
 
@@ -8083,29 +8489,60 @@ class _PreWorkoutWeightDialog extends StatefulWidget {
 
 class _PreWorkoutWeightDialogState extends State<_PreWorkoutWeightDialog> {
   late final TextEditingController _controller;
+  late final FocusNode _weightFocusNode;
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   bool _saveToProgress = false;
+  bool _closing = false;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController();
+    _weightFocusNode = FocusNode();
+    _controller.addListener(_handleWeightChanged);
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_handleWeightChanged);
     _controller.dispose();
+    _weightFocusNode.dispose();
     super.dispose();
   }
 
-  void _continue() {
-    final weight = double.tryParse(_controller.text.trim());
-    if (weight == null || weight < 20 || weight > 500) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a weight from 20–500 kg.')),
-      );
+  bool get _hasWeight => _controller.text.trim().isNotEmpty;
+
+  void _finish(Map<String, dynamic>? result) {
+    if (_closing || !mounted) {
       return;
     }
-    Navigator.of(context).pop(<String, dynamic>{
+    _closing = true;
+    FocusScope.of(context).unfocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop<Map<String, dynamic>>(result);
+    });
+  }
+
+  void _handleWeightChanged() {
+    if (!_hasWeight && _saveToProgress) {
+      _saveToProgress = false;
+    }
+    setState(() {});
+  }
+
+  void _continue() {
+    if (!_formKey.currentState!.validate()) {
+      _weightFocusNode.requestFocus();
+      return;
+    }
+    final weight = double.tryParse(_controller.text.trim());
+    if (weight == null) {
+      return;
+    }
+    _finish(<String, dynamic>{
       'pre_workout_weight_kg': weight,
       'save_pre_workout_weight': _saveToProgress,
     });
@@ -8113,40 +8550,188 @@ class _PreWorkoutWeightDialogState extends State<_PreWorkoutWeightDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      scrollable: true,
-      title: const Text('Pre-workout check-in'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _controller,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Weight in kg (optional)',
-              hintText: 'Skip if you do not want to log it',
+    final theme = Theme.of(context);
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      backgroundColor: Colors.transparent,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 420,
+          maxHeight: math.max(
+            220,
+            MediaQuery.sizeOf(context).height -
+                MediaQuery.viewInsetsOf(context).bottom -
+                48,
+          ),
+        ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            border: Border.all(color: AppColors.stroke),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.textPrimary.withValues(alpha: 0.16),
+                blurRadius: 32,
+                offset: const Offset(0, 16),
+              ),
+            ],
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ExcludeSemantics(
+                        child: Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: const Icon(
+                            Icons.monitor_weight_rounded,
+                            color: AppColors.primary,
+                            size: 27,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Ready to train?',
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.4,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              'Add your current weight for a more complete workout record.',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: AppColors.textSecondary,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Close check-in',
+                        onPressed: () => _finish(null),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  TextFormField(
+                    controller: _controller,
+                    focusNode: _weightFocusNode,
+                    autofocus: false,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) => _continue(),
+                    decoration: InputDecoration(
+                      labelText: 'Current weight',
+                      hintText: 'For example, 72.5',
+                      helperText: 'Enter a value between 20 and 500 kg',
+                      prefixIcon: const Icon(Icons.scale_rounded),
+                      suffixText: 'kg',
+                      filled: true,
+                      fillColor: AppColors.surfaceSoft,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusSm,
+                        ),
+                      ),
+                    ),
+                    validator: (value) {
+                      final weight = double.tryParse(value?.trim() ?? '');
+                      if (weight == null) {
+                        return 'Enter your weight or start without check-in.';
+                      }
+                      if (weight < 20 || weight > 500) {
+                        return 'Weight must be between 20 and 500 kg.';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Material(
+                    color: _hasWeight
+                        ? AppColors.primary.withValues(alpha: 0.06)
+                        : AppColors.surfaceSoft,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                      side: BorderSide(
+                        color: _hasWeight
+                            ? AppColors.primary.withValues(alpha: 0.18)
+                            : AppColors.stroke,
+                      ),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: SwitchListTile.adaptive(
+                      value: _saveToProgress,
+                      onChanged: _hasWeight
+                          ? (value) => setState(() => _saveToProgress = value)
+                          : null,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.xs,
+                      ),
+                      title: Text(
+                        'Save to progress history',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Keep this weight in your body progress timeline.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  FilledButton.icon(
+                    onPressed: _hasWeight ? _continue : null,
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const Text('Start workout'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(54),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  OutlinedButton(
+                    onPressed: () => _finish(const <String, dynamic>{}),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                      side: const BorderSide(color: AppColors.strokeStrong),
+                    ),
+                    child: const Text('Start without check-in'),
+                  ),
+                ],
+              ),
             ),
           ),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            value: _saveToProgress,
-            title: const Text('Save to progress history'),
-            onChanged: (value) =>
-                setState(() => _saveToProgress = value == true),
-          ),
-        ],
+        ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(const {}),
-          child: const Text('Skip'),
-        ),
-        FilledButton(onPressed: _continue, child: const Text('Continue')),
-      ],
     );
   }
 }

@@ -76,6 +76,13 @@ class TrainerSessionController extends ChangeNotifier {
       _ensureEligibleTrainer(me);
       user = me;
       consentState = await _authService.fetchConsentState();
+      if (!hasRequiredConsent) {
+        await _googleSafeSignOut();
+        await _clearLocalState(notify: false);
+        initializing = false;
+        notifyListeners();
+        return;
+      }
       await _storage.saveSession(token: storedToken, user: me);
       _registerFcmToken();
     } on DioException catch (exception) {

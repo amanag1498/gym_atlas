@@ -77,7 +77,15 @@ class MemberSessionController extends ChangeNotifier {
       _ensureEligibleMember(me);
       user = me;
       consentState = await _authService.fetchConsentState();
+      if (!hasRequiredConsent) {
+        await _googleSafeSignOut();
+        await _clearLocalState(notify: false);
+        initializing = false;
+        notifyListeners();
+        return;
+      }
       await _storage.saveSession(token: storedToken, user: me);
+      _registerAppPresence();
       _registerFcmToken();
     } on DioException catch (exception) {
       if (exception.response?.statusCode == 401) {
@@ -249,6 +257,7 @@ class MemberSessionController extends ChangeNotifier {
     user = me;
     consentState = await _authService.fetchConsentState();
     await _storage.saveSession(token: session.token, user: me);
+    _registerAppPresence();
     _registerFcmToken();
   }
 
@@ -287,6 +296,9 @@ class MemberSessionController extends ChangeNotifier {
   Future<void> grantConsent(String purpose) async {
     consentState = await _authService.grantConsent(purpose);
     notifyListeners();
+    if (purpose == 'core_account') {
+      _registerAppPresence();
+    }
     if (purpose == 'notifications' || purpose == 'core_account') {
       _registerFcmToken();
     }
@@ -315,6 +327,16 @@ class MemberSessionController extends ChangeNotifier {
     }
 
     return currentUser;
+  }
+
+  void _registerAppPresence() {
+    if (token == null || token!.isEmpty || !hasRequiredConsent) {
+      return;
+    }
+    final service = _fcmTokenService;
+    if (service != null) {
+      unawaited(service.registerPresence(appRole: 'member'));
+    }
   }
 
   void _registerFcmToken() {

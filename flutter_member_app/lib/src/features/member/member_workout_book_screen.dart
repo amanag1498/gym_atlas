@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:gym_flutter_core/workout_builder_validation.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -1119,566 +1120,75 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
         AppSpacing.xl,
       ),
       children: [
-        _WorkoutBuilderPanel(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _BuilderSectionHeading(
-                      title: _editingPlanId == null
-                          ? 'Workout details'
-                          : 'Edit workout details',
-                      subtitle:
-                          'Create a reusable program with a clear goal and weekly structure.',
-                    ),
-                  ),
-                  if (_editingPlanId != null)
-                    TextButton.icon(
-                      onPressed: _resetCreator,
-                      icon: const Icon(Icons.close_rounded),
-                      label: const Text('Cancel'),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _nameController,
-                decoration: _memberWorkoutInputDecoration(
-                  'Plan name',
-                  icon: Icons.drive_file_rename_outline_rounded,
-                ),
-              ),
-              const SizedBox(height: 12),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final compact = constraints.maxWidth < 680;
-                  final fields = <Widget>[
-                    TextField(
-                      controller: _goalController,
-                      decoration: _memberWorkoutInputDecoration(
-                        'Goal',
-                        icon: Icons.flag_rounded,
-                      ),
-                    ),
-                    DropdownButtonFormField<String>(
-                      isExpanded: true,
-                      initialValue: _difficulty,
-                      decoration: _memberWorkoutInputDecoration(
-                        'Difficulty',
-                        icon: Icons.speed_rounded,
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'beginner',
-                          child: Text('Beginner'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'intermediate',
-                          child: Text('Intermediate'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'advanced',
-                          child: Text('Advanced'),
-                        ),
-                      ],
-                      onChanged: (value) =>
-                          setState(() => _difficulty = value ?? 'beginner'),
-                    ),
-                  ];
-                  if (compact) {
-                    return Column(
-                      children: [
-                        fields[0],
-                        const SizedBox(height: 12),
-                        fields[1],
-                      ],
-                    );
-                  }
-                  return Row(
-                    children: [
-                      Expanded(child: fields[0]),
-                      const SizedBox(width: 12),
-                      Expanded(child: fields[1]),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final compact = constraints.maxWidth < 680;
-                  final duration = TextField(
-                    controller: _durationController,
-                    keyboardType: TextInputType.number,
-                    decoration: _memberWorkoutInputDecoration(
-                      'Duration weeks',
-                      icon: Icons.date_range_rounded,
-                    ),
-                  );
-                  final minutes = TextField(
-                    controller: _minutesController,
-                    keyboardType: TextInputType.number,
-                    decoration: _memberWorkoutInputDecoration(
-                      'Minutes per session',
-                      icon: Icons.timer_outlined,
-                    ),
-                  );
-                  if (compact) {
-                    return Column(
-                      children: [duration, const SizedBox(height: 12), minutes],
-                    );
-                  }
-                  return Row(
-                    children: [
-                      Expanded(child: duration),
-                      const SizedBox(width: 12),
-                      Expanded(child: minutes),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _planNotesController,
-                minLines: 2,
-                maxLines: 4,
-                decoration: _memberWorkoutInputDecoration(
-                  'Plan notes',
-                  icon: Icons.notes_rounded,
-                ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                isExpanded: true,
-                initialValue: _planProgressionPolicy,
-                decoration: _memberWorkoutInputDecoration(
-                  'Automatic progression',
-                  icon: Icons.trending_up_rounded,
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'off', child: Text('Manual / off')),
-                  DropdownMenuItem(
-                    value: 'linear_load',
-                    child: Text('Linear load'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'double_progression',
-                    child: Text('Double progression'),
-                  ),
-                ],
-                onChanged: (value) =>
-                    setState(() => _planProgressionPolicy = value ?? 'off'),
-              ),
-              if (_planProgressionPolicy != 'off') ...[
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
+        GuideTarget(
+          id: 'member_workout_builder_v1/details',
+          child: _WorkoutBuilderPanel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (_planProgressionPolicy == 'double_progression') ...[
-                      SizedBox(
-                        width: 150,
-                        child: TextField(
-                          controller: _planProgressionMinRepsController,
-                          keyboardType: TextInputType.number,
-                          decoration: _memberWorkoutInputDecoration('Min reps'),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 150,
-                        child: TextField(
-                          controller: _planProgressionMaxRepsController,
-                          keyboardType: TextInputType.number,
-                          decoration: _memberWorkoutInputDecoration('Max reps'),
-                        ),
-                      ),
-                    ],
-                    SizedBox(
-                      width: 180,
-                      child: TextField(
-                        controller: _planProgressionIncrementController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: _memberWorkoutInputDecoration(
-                          'Load increase kg',
-                        ),
+                    Expanded(
+                      child: _BuilderSectionHeading(
+                        title: _editingPlanId == null
+                            ? 'Workout details'
+                            : 'Edit workout details',
+                        subtitle:
+                            'Create a reusable program with a clear goal and weekly structure.',
                       ),
                     ),
-                    SizedBox(
-                      width: 180,
-                      child: TextField(
-                        controller: _planDeloadAfterController,
-                        keyboardType: TextInputType.number,
-                        decoration: _memberWorkoutInputDecoration(
-                          'Deload after misses',
-                        ),
+                    if (_editingPlanId != null)
+                      TextButton.icon(
+                        onPressed: _resetCreator,
+                        icon: const Icon(Icons.close_rounded),
+                        label: const Text('Cancel'),
                       ),
-                    ),
-                    SizedBox(
-                      width: 180,
-                      child: TextField(
-                        controller: _planDeloadPercentController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: _memberWorkoutInputDecoration(
-                          'Deload percent',
-                        ),
-                      ),
-                    ),
                   ],
                 ),
-              ],
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Weekly schedule',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  _BuilderInfoChip(
-                    label:
-                        '${_dayDrafts.length} day${_dayDrafts.length == 1 ? '' : 's'}',
-                    icon: Icons.calendar_today_rounded,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _builderWeekdays.entries.map((entry) {
-                  final selected = _dayDrafts.any(
-                    (day) => day.weekday == entry.key,
-                  );
-                  return FilterChip(
-                    selected: selected,
-                    onSelected: (_) => _toggleBuilderWeekday(entry.key),
-                    label: Text(entry.value),
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        _WorkoutBuilderPanel(
-          gradient: const [Color(0xFFFFFFFF), Color(0xFFF7FAFF)],
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const _BuilderSectionHeading(
-                title: 'Day builder',
-                subtitle:
-                    'Choose each day, add exercises, and set the work and recovery targets.',
-              ),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _dayDrafts.asMap().entries.map((entry) {
-                  final weekday = entry.value.weekday ?? entry.key + 1;
-                  final selected = _selectedBuilderDayIndex == entry.key;
-                  return ChoiceChip(
-                    label: Text(_weekdayLabel(weekday)),
-                    selected: selected,
-                    onSelected: (_) =>
-                        setState(() => _selectedBuilderDayIndex = entry.key),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 14),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final compact = constraints.maxWidth < 680;
-                  final label = TextField(
-                    controller: selectedDay.labelController,
-                    decoration: _memberWorkoutInputDecoration(
-                      'Day label',
-                      icon: Icons.label_outline_rounded,
-                    ),
-                  );
-                  final focus = TextField(
-                    controller: selectedDay.focusController,
-                    decoration: _memberWorkoutInputDecoration(
-                      'Focus',
-                      icon: Icons.center_focus_strong_rounded,
-                    ),
-                  );
-                  if (compact) {
-                    return Column(
-                      children: [label, const SizedBox(height: 12), focus],
-                    );
-                  }
-                  return Row(
-                    children: [
-                      Expanded(child: label),
-                      const SizedBox(width: 12),
-                      Expanded(child: focus),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: selectedDay.notesController,
-                minLines: 2,
-                maxLines: 3,
-                decoration: _memberWorkoutInputDecoration(
-                  'Day notes',
-                  icon: Icons.sticky_note_2_outlined,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Exercise library',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _exerciseSearchController,
-                onChanged: (_) => setState(() {}),
-                decoration:
-                    _memberWorkoutInputDecoration(
-                      'Search exercises',
-                      icon: Icons.search_rounded,
-                    ).copyWith(
-                      suffixIcon: _exerciseSearchController.text.trim().isEmpty
-                          ? null
-                          : IconButton(
-                              tooltip: 'Clear exercise search',
-                              onPressed: () {
-                                _exerciseSearchController.clear();
-                                _searchExercises();
-                              },
-                              icon: const Icon(Icons.close_rounded),
-                            ),
-                      helperText: 'Search by exercise, muscle, or body part.',
-                    ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children:
-                    <(String, String, IconData)>[
-                      ('all', 'All', Icons.grid_view_rounded),
-                      ('favourites', 'Favourites', Icons.favorite_rounded),
-                      ('recent', 'Recent', Icons.history_rounded),
-                    ].map((option) {
-                      return ChoiceChip(
-                        avatar:
-                            _loadingExercises &&
-                                _exerciseCatalogView == option.$1
-                            ? const SizedBox.square(
-                                dimension: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Icon(option.$3, size: 16),
-                        label: Text(option.$2),
-                        selected: _exerciseCatalogView == option.$1,
-                        onSelected: _loadingExercises
-                            ? null
-                            : (_) {
-                                setState(
-                                  () => _exerciseCatalogView = option.$1,
-                                );
-                                _searchExercises();
-                              },
-                      );
-                    }).toList(),
-              ),
-              if (_equipmentProfiles.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                DropdownButtonFormField<int?>(
-                  isExpanded: true,
-                  initialValue: _selectedEquipmentProfileId,
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _nameController,
                   decoration: _memberWorkoutInputDecoration(
-                    'Available equipment',
-                    icon: Icons.home_repair_service_outlined,
+                    'Plan name',
+                    icon: Icons.drive_file_rename_outline_rounded,
                   ),
-                  items: <DropdownMenuItem<int?>>[
-                    const DropdownMenuItem<int?>(
-                      value: null,
-                      child: Text('Any equipment'),
-                    ),
-                    ..._equipmentProfiles.map(
-                      (profile) => DropdownMenuItem<int?>(
-                        value: (profile['id'] as num?)?.toInt(),
-                        child: Text(profile['name']?.toString() ?? 'Profile'),
-                      ),
-                    ),
-                  ],
-                  onChanged: _loadingExercises
-                      ? null
-                      : (value) {
-                          setState(() => _selectedEquipmentProfileId = value);
-                          _searchExercises();
-                        },
-                ),
-              ],
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: _loadingExercises
-                      ? null
-                      : _showEquipmentProfileSheet,
-                  icon: const Icon(Icons.tune_rounded),
-                  label: Text(
-                    _equipmentProfiles.isEmpty
-                        ? 'Set available equipment'
-                        : 'Add equipment profile',
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (filteredExercises.isEmpty)
-                EmptyStateView(
-                  title: _loadingExercises
-                      ? 'Finding exercises...'
-                      : 'No exercises found',
-                  message: _loadingExercises
-                      ? 'Checking the exercise library for matching results.'
-                      : 'Try another search, choose All, or change your equipment profile.',
-                  icon: _loadingExercises
-                      ? Icons.hourglass_top_rounded
-                      : Icons.search_off_rounded,
-                )
-              else ...[
-                DropdownMenu<int>(
-                  controller: _exercisePickerTextController,
-                  initialSelection: _selectedBuilderExerciseId,
-                  expandedInsets: EdgeInsets.zero,
-                  requestFocusOnTap: false,
-                  enableFilter: false,
-                  enableSearch: false,
-                  closeBehavior: DropdownMenuCloseBehavior.none,
-                  label: const Text('Exercise picker'),
-                  leadingIcon: const Icon(Icons.fitness_center_rounded),
-                  helperText: _exercisePage.hasMore
-                      ? 'More results are available at the end of this list.'
-                      : '${filteredExercises.length} exercises available',
-                  dropdownMenuEntries: [
-                    ...filteredExercises
-                        .where((exercise) => exercise['id'] is num)
-                        .map(
-                          (exercise) => DropdownMenuEntry<int>(
-                            value: (exercise['id'] as num).toInt(),
-                            label:
-                                '${_exerciseDisplayName(exercise)} • ${_bodyPartLabel(_bodyPartKeyForExercise(exercise))}',
-                            labelWidget: Text(
-                              '${_exerciseDisplayName(exercise)} • ${_bodyPartLabel(_bodyPartKeyForExercise(exercise))}',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                    if (_exercisePage.hasMore)
-                      DropdownMenuEntry<int>(
-                        value: _loadMoreExercisePickerValue,
-                        label: _loadingExercises
-                            ? 'Loading exercises...'
-                            : 'Load more exercise results',
-                        enabled: !_loadingExercises,
-                        leadingIcon: _loadingExercises
-                            ? const SizedBox.square(
-                                dimension: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.expand_more_rounded, size: 20),
-                      ),
-                  ],
-                  onSelected: (value) {
-                    if (value == _loadMoreExercisePickerValue) {
-                      _exercisePickerTextController.text =
-                          _exercisePickerLabelForSelection() ==
-                              'Choose an exercise'
-                          ? ''
-                          : _exercisePickerLabelForSelection();
-                      unawaited(_loadMoreExercises());
-                      return;
-                    }
-                    setState(() {
-                      _selectedBuilderExerciseId = value;
-                      final selected = _exerciseById(value);
-                      final suggested =
-                          selected?['default_tracking_mode']?.toString() ??
-                          'reps';
-                      _trackingMode =
-                          const {
-                            'reps',
-                            'timed',
-                            'cardio',
-                            'distance',
-                          }.contains(suggested)
-                          ? suggested
-                          : 'reps';
-                      if (_trackingMode != 'reps') {
-                        _exerciseProgressionPolicy = 'off';
-                      }
-                    });
-                  },
-                ),
-                const SizedBox(height: 12),
-                _buildExerciseMetaPanel(context, selectedExercise),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  key: ValueKey('member-tracking-mode-$_trackingMode'),
-                  initialValue: _trackingMode,
-                  decoration: _memberWorkoutInputDecoration(
-                    'Tracking mode',
-                    icon: Icons.track_changes_rounded,
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'reps', child: Text('Reps & load')),
-                    DropdownMenuItem(value: 'timed', child: Text('Timed work')),
-                    DropdownMenuItem(value: 'cardio', child: Text('Cardio')),
-                    DropdownMenuItem(
-                      value: 'distance',
-                      child: Text('Distance'),
-                    ),
-                  ],
-                  onChanged: (value) => setState(() {
-                    _trackingMode = value ?? 'reps';
-                    if (_trackingMode != 'reps') {
-                      _exerciseProgressionPolicy = 'off';
-                    }
-                  }),
                 ),
                 const SizedBox(height: 12),
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final compact = constraints.maxWidth < 720;
+                    final compact = constraints.maxWidth < 680;
                     final fields = <Widget>[
                       TextField(
-                        controller: _setsController,
-                        keyboardType: TextInputType.number,
-                        decoration: _memberWorkoutInputDecoration('Sets'),
+                        controller: _goalController,
+                        decoration: _memberWorkoutInputDecoration(
+                          'Goal',
+                          icon: Icons.flag_rounded,
+                        ),
                       ),
-                      TextField(
-                        controller: _repsController,
-                        decoration: _memberWorkoutInputDecoration('Reps'),
-                      ),
-                      TextField(
-                        controller: _restController,
-                        keyboardType: TextInputType.number,
-                        decoration: _memberWorkoutInputDecoration('Rest sec'),
+                      DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        initialValue: _difficulty,
+                        decoration: _memberWorkoutInputDecoration(
+                          'Difficulty',
+                          icon: Icons.speed_rounded,
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'beginner',
+                            child: Text('Beginner'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'intermediate',
+                            child: Text('Intermediate'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'advanced',
+                            child: Text('Advanced'),
+                          ),
+                        ],
+                        onChanged: (value) =>
+                            setState(() => _difficulty = value ?? 'beginner'),
                       ),
                     ];
                     if (compact) {
@@ -1687,8 +1197,6 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                           fields[0],
                           const SizedBox(height: 12),
                           fields[1],
-                          const SizedBox(height: 12),
-                          fields[2],
                         ],
                       );
                     }
@@ -1697,161 +1205,685 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                         Expanded(child: fields[0]),
                         const SizedBox(width: 12),
                         Expanded(child: fields[1]),
-                        const SizedBox(width: 12),
-                        Expanded(child: fields[2]),
                       ],
                     );
                   },
                 ),
                 const SizedBox(height: 12),
-                _buildGroupingOptions(context),
-                const SizedBox(height: 12),
-                _buildAdvancedExerciseOptions(context),
-                const SizedBox(height: 12),
-                if (_trackingMode != 'reps') ...[
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      SizedBox(
-                        width: 180,
-                        child: TextField(
-                          controller: _durationSecondsController,
-                          keyboardType: TextInputType.number,
-                          decoration: _memberWorkoutInputDecoration(
-                            'Target duration sec',
-                          ),
-                        ),
-                      ),
-                      if (_trackingMode == 'cardio' ||
-                          _trackingMode == 'distance')
-                        SizedBox(
-                          width: 180,
-                          child: TextField(
-                            controller: _distanceMetersController,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            decoration: _memberWorkoutInputDecoration(
-                              'Target distance m',
-                            ),
-                          ),
-                        ),
-                      if (_trackingMode == 'cardio') ...[
-                        SizedBox(
-                          width: 180,
-                          child: TextField(
-                            controller: _speedKphController,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            decoration: _memberWorkoutInputDecoration(
-                              'Target speed km/h',
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 180,
-                          child: TextField(
-                            controller: _paceSecondsController,
-                            keyboardType: TextInputType.number,
-                            decoration: _memberWorkoutInputDecoration(
-                              'Target pace sec/km',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                ],
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final compact = constraints.maxWidth < 680;
-                    final weight = TextField(
-                      controller: _targetWeightController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
+                    final duration = TextField(
+                      controller: _durationController,
+                      keyboardType: TextInputType.number,
                       decoration: _memberWorkoutInputDecoration(
-                        'Target weight',
+                        'Duration weeks',
+                        icon: Icons.date_range_rounded,
                       ),
                     );
-                    final notes = TextField(
-                      controller: _exerciseNotesController,
+                    final minutes = TextField(
+                      controller: _minutesController,
+                      keyboardType: TextInputType.number,
                       decoration: _memberWorkoutInputDecoration(
-                        'Exercise notes',
+                        'Minutes per session',
+                        icon: Icons.timer_outlined,
                       ),
                     );
                     if (compact) {
                       return Column(
-                        children: [weight, const SizedBox(height: 12), notes],
+                        children: [
+                          duration,
+                          const SizedBox(height: 12),
+                          minutes,
+                        ],
                       );
                     }
                     return Row(
                       children: [
-                        Expanded(child: weight),
+                        Expanded(child: duration),
                         const SizedBox(width: 12),
-                        Expanded(child: notes),
+                        Expanded(child: minutes),
                       ],
                     );
                   },
                 ),
-                const SizedBox(height: 14),
-                GradientButton(
-                  label:
-                      'Add exercise to ${_weekdayLabel(selectedDay.weekday ?? 1).toUpperCase()}',
-                  icon: Icons.add_circle_outline_rounded,
-                  expanded: true,
-                  onPressed: _addExerciseToBuilderDay,
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _planNotesController,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: _memberWorkoutInputDecoration(
+                    'Plan notes',
+                    icon: Icons.notes_rounded,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  initialValue: _planProgressionPolicy,
+                  decoration: _memberWorkoutInputDecoration(
+                    'Automatic progression',
+                    icon: Icons.trending_up_rounded,
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'off', child: Text('Manual / off')),
+                    DropdownMenuItem(
+                      value: 'linear_load',
+                      child: Text('Linear load'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'double_progression',
+                      child: Text('Double progression'),
+                    ),
+                  ],
+                  onChanged: (value) =>
+                      setState(() => _planProgressionPolicy = value ?? 'off'),
+                ),
+                if (_planProgressionPolicy != 'off') ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      if (_planProgressionPolicy == 'double_progression') ...[
+                        SizedBox(
+                          width: 150,
+                          child: TextField(
+                            controller: _planProgressionMinRepsController,
+                            keyboardType: TextInputType.number,
+                            decoration: _memberWorkoutInputDecoration(
+                              'Min reps',
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 150,
+                          child: TextField(
+                            controller: _planProgressionMaxRepsController,
+                            keyboardType: TextInputType.number,
+                            decoration: _memberWorkoutInputDecoration(
+                              'Max reps',
+                            ),
+                          ),
+                        ),
+                      ],
+                      SizedBox(
+                        width: 180,
+                        child: TextField(
+                          controller: _planProgressionIncrementController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: _memberWorkoutInputDecoration(
+                            'Load increase kg',
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 180,
+                        child: TextField(
+                          controller: _planDeloadAfterController,
+                          keyboardType: TextInputType.number,
+                          decoration: _memberWorkoutInputDecoration(
+                            'Deload after misses',
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 180,
+                        child: TextField(
+                          controller: _planDeloadPercentController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: _memberWorkoutInputDecoration(
+                            'Deload percent',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Weekly schedule',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    _BuilderInfoChip(
+                      label:
+                          '${_dayDrafts.length} day${_dayDrafts.length == 1 ? '' : 's'}',
+                      icon: Icons.calendar_today_rounded,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _builderWeekdays.entries.map((entry) {
+                    final selected = _dayDrafts.any(
+                      (day) => day.weekday == entry.key,
+                    );
+                    return FilterChip(
+                      selected: selected,
+                      onSelected: (_) => _toggleBuilderWeekday(entry.key),
+                      label: Text(entry.value),
+                    );
+                  }).toList(),
                 ),
               ],
-              const SizedBox(height: 20),
-              Text(
-                'Exercises for ${_weekdayLabel(selectedDay.weekday ?? 1).toUpperCase()}',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        GuideTarget(
+          id: 'member_workout_builder_v1/day',
+          child: _WorkoutBuilderPanel(
+            gradient: const [Color(0xFFFFFFFF), Color(0xFFF7FAFF)],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _BuilderSectionHeading(
+                  title: 'Day builder',
+                  subtitle:
+                      'Choose each day, add exercises, and set the work and recovery targets.',
                 ),
-              ),
-              const SizedBox(height: 10),
-              if (selectedDay.exercises.isEmpty)
-                const EmptyStateView(
-                  title: 'No exercises added yet',
-                  message:
-                      'Pick an exercise, set the prescription, and add it to this day.',
-                  icon: Icons.playlist_add_check_circle_outlined,
-                )
-              else
-                ...selectedDay.exercises.asMap().entries.map((entry) {
-                  final exercise = entry.value;
-                  final meta = _exerciseById(exercise.exerciseId);
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _MemberBuilderExerciseTile(
-                      title: meta?['name']?.toString() ?? 'Exercise',
-                      subtitle:
-                          '${exercise.sets} sets • ${exercise.reps} • ${exercise.restSeconds} sec rest${exercise.groupKey == null ? '' : ' • ${exercise.groupKey}${exercise.groupOrder} ${exercise.groupType} • ${exercise.groupRounds} rounds • ${exercise.transitionSeconds}s transition'}${exercise.progressionPolicy == 'off' ? '' : ' • progression'}',
-                      badge: meta == null
-                          ? null
-                          : _bodyPartLabel(_bodyPartKeyForExercise(meta)),
-                      moveLabel: entry.key == 0 ? 'Move down' : 'Move up',
-                      onMove: selectedDay.exercises.length < 2
-                          ? null
-                          : () => _moveBuilderExercise(
-                              selectedDay,
-                              entry.key,
-                              entry.key == 0 ? 1 : -1,
-                            ),
-                      removeLabel: exercise.groupKey == null
-                          ? 'Remove'
-                          : 'Group / Remove',
-                      onRemove: () =>
-                          _editOrRemoveBuilderExercise(selectedDay, entry.key),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _dayDrafts.asMap().entries.map((entry) {
+                    final weekday = entry.value.weekday ?? entry.key + 1;
+                    final selected = _selectedBuilderDayIndex == entry.key;
+                    return ChoiceChip(
+                      label: Text(_weekdayLabel(weekday)),
+                      selected: selected,
+                      onSelected: (_) =>
+                          setState(() => _selectedBuilderDayIndex = entry.key),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 14),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxWidth < 680;
+                    final label = TextField(
+                      controller: selectedDay.labelController,
+                      decoration: _memberWorkoutInputDecoration(
+                        'Day label',
+                        icon: Icons.label_outline_rounded,
+                      ),
+                    );
+                    final focus = TextField(
+                      controller: selectedDay.focusController,
+                      decoration: _memberWorkoutInputDecoration(
+                        'Focus',
+                        icon: Icons.center_focus_strong_rounded,
+                      ),
+                    );
+                    if (compact) {
+                      return Column(
+                        children: [label, const SizedBox(height: 12), focus],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        Expanded(child: label),
+                        const SizedBox(width: 12),
+                        Expanded(child: focus),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: selectedDay.notesController,
+                  minLines: 2,
+                  maxLines: 3,
+                  decoration: _memberWorkoutInputDecoration(
+                    'Day notes',
+                    icon: Icons.sticky_note_2_outlined,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Exercise library',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _exerciseSearchController,
+                  onChanged: (_) => setState(() {}),
+                  decoration:
+                      _memberWorkoutInputDecoration(
+                        'Search exercises',
+                        icon: Icons.search_rounded,
+                      ).copyWith(
+                        suffixIcon:
+                            _exerciseSearchController.text.trim().isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Clear exercise search',
+                                onPressed: () {
+                                  _exerciseSearchController.clear();
+                                  _searchExercises();
+                                },
+                                icon: const Icon(Icons.close_rounded),
+                              ),
+                        helperText: 'Search by exercise, muscle, or body part.',
+                      ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children:
+                      <(String, String, IconData)>[
+                        ('all', 'All', Icons.grid_view_rounded),
+                        ('favourites', 'Favourites', Icons.favorite_rounded),
+                        ('recent', 'Recent', Icons.history_rounded),
+                      ].map((option) {
+                        return ChoiceChip(
+                          avatar:
+                              _loadingExercises &&
+                                  _exerciseCatalogView == option.$1
+                              ? const SizedBox.square(
+                                  dimension: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Icon(option.$3, size: 16),
+                          label: Text(option.$2),
+                          selected: _exerciseCatalogView == option.$1,
+                          onSelected: _loadingExercises
+                              ? null
+                              : (_) {
+                                  setState(
+                                    () => _exerciseCatalogView = option.$1,
+                                  );
+                                  _searchExercises();
+                                },
+                        );
+                      }).toList(),
+                ),
+                if (_equipmentProfiles.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int?>(
+                    isExpanded: true,
+                    initialValue: _selectedEquipmentProfileId,
+                    decoration: _memberWorkoutInputDecoration(
+                      'Available equipment',
+                      icon: Icons.home_repair_service_outlined,
                     ),
-                  );
-                }),
-            ],
+                    items: <DropdownMenuItem<int?>>[
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text('Any equipment'),
+                      ),
+                      ..._equipmentProfiles.map(
+                        (profile) => DropdownMenuItem<int?>(
+                          value: (profile['id'] as num?)?.toInt(),
+                          child: Text(profile['name']?.toString() ?? 'Profile'),
+                        ),
+                      ),
+                    ],
+                    onChanged: _loadingExercises
+                        ? null
+                        : (value) {
+                            setState(() => _selectedEquipmentProfileId = value);
+                            _searchExercises();
+                          },
+                  ),
+                ],
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: _loadingExercises
+                        ? null
+                        : _showEquipmentProfileSheet,
+                    icon: const Icon(Icons.tune_rounded),
+                    label: Text(
+                      _equipmentProfiles.isEmpty
+                          ? 'Set available equipment'
+                          : 'Add equipment profile',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (filteredExercises.isEmpty)
+                  EmptyStateView(
+                    title: _loadingExercises
+                        ? 'Finding exercises...'
+                        : 'No exercises found',
+                    message: _loadingExercises
+                        ? 'Checking the exercise library for matching results.'
+                        : 'Try another search, choose All, or change your equipment profile.',
+                    icon: _loadingExercises
+                        ? Icons.hourglass_top_rounded
+                        : Icons.search_off_rounded,
+                  )
+                else ...[
+                  GuideTarget(
+                    id: 'member_workout_builder_v1/exercise',
+                    child: DropdownMenu<int>(
+                      controller: _exercisePickerTextController,
+                      initialSelection: _selectedBuilderExerciseId,
+                      expandedInsets: EdgeInsets.zero,
+                      requestFocusOnTap: false,
+                      enableFilter: false,
+                      enableSearch: false,
+                      closeBehavior: DropdownMenuCloseBehavior.none,
+                      label: const Text('Exercise picker'),
+                      leadingIcon: const Icon(Icons.fitness_center_rounded),
+                      helperText: _exercisePage.hasMore
+                          ? 'More results are available at the end of this list.'
+                          : '${filteredExercises.length} exercises available',
+                      dropdownMenuEntries: [
+                        ...filteredExercises
+                            .where((exercise) => exercise['id'] is num)
+                            .map(
+                              (exercise) => DropdownMenuEntry<int>(
+                                value: (exercise['id'] as num).toInt(),
+                                label:
+                                    '${_exerciseDisplayName(exercise)} • ${_bodyPartLabel(_bodyPartKeyForExercise(exercise))}',
+                                labelWidget: Text(
+                                  '${_exerciseDisplayName(exercise)} • ${_bodyPartLabel(_bodyPartKeyForExercise(exercise))}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                        if (_exercisePage.hasMore)
+                          DropdownMenuEntry<int>(
+                            value: _loadMoreExercisePickerValue,
+                            label: _loadingExercises
+                                ? 'Loading exercises...'
+                                : 'Load more exercise results',
+                            enabled: !_loadingExercises,
+                            leadingIcon: _loadingExercises
+                                ? const SizedBox.square(
+                                    dimension: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.expand_more_rounded,
+                                    size: 20,
+                                  ),
+                          ),
+                      ],
+                      onSelected: (value) {
+                        if (value == _loadMoreExercisePickerValue) {
+                          _exercisePickerTextController.text =
+                              _exercisePickerLabelForSelection() ==
+                                  'Choose an exercise'
+                              ? ''
+                              : _exercisePickerLabelForSelection();
+                          unawaited(_loadMoreExercises());
+                          return;
+                        }
+                        setState(() {
+                          _selectedBuilderExerciseId = value;
+                          final selected = _exerciseById(value);
+                          final suggested =
+                              selected?['default_tracking_mode']?.toString() ??
+                              'reps';
+                          _trackingMode =
+                              const {
+                                'reps',
+                                'timed',
+                                'cardio',
+                                'distance',
+                              }.contains(suggested)
+                              ? suggested
+                              : 'reps';
+                          if (_trackingMode != 'reps') {
+                            _exerciseProgressionPolicy = 'off';
+                          }
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildExerciseMetaPanel(context, selectedExercise),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    key: ValueKey('member-tracking-mode-$_trackingMode'),
+                    initialValue: _trackingMode,
+                    decoration: _memberWorkoutInputDecoration(
+                      'Tracking mode',
+                      icon: Icons.track_changes_rounded,
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'reps',
+                        child: Text('Reps & load'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'timed',
+                        child: Text('Timed work'),
+                      ),
+                      DropdownMenuItem(value: 'cardio', child: Text('Cardio')),
+                      DropdownMenuItem(
+                        value: 'distance',
+                        child: Text('Distance'),
+                      ),
+                    ],
+                    onChanged: (value) => setState(() {
+                      _trackingMode = value ?? 'reps';
+                      if (_trackingMode != 'reps') {
+                        _exerciseProgressionPolicy = 'off';
+                      }
+                    }),
+                  ),
+                  const SizedBox(height: 12),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final compact = constraints.maxWidth < 720;
+                      final fields = <Widget>[
+                        TextField(
+                          controller: _setsController,
+                          keyboardType: TextInputType.number,
+                          decoration: _memberWorkoutInputDecoration('Sets'),
+                        ),
+                        TextField(
+                          controller: _repsController,
+                          decoration: _memberWorkoutInputDecoration('Reps'),
+                        ),
+                        TextField(
+                          controller: _restController,
+                          keyboardType: TextInputType.number,
+                          decoration: _memberWorkoutInputDecoration('Rest sec'),
+                        ),
+                      ];
+                      if (compact) {
+                        return Column(
+                          children: [
+                            fields[0],
+                            const SizedBox(height: 12),
+                            fields[1],
+                            const SizedBox(height: 12),
+                            fields[2],
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: fields[0]),
+                          const SizedBox(width: 12),
+                          Expanded(child: fields[1]),
+                          const SizedBox(width: 12),
+                          Expanded(child: fields[2]),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _buildGroupingOptions(context),
+                  const SizedBox(height: 12),
+                  _buildAdvancedExerciseOptions(context),
+                  const SizedBox(height: 12),
+                  if (_trackingMode != 'reps') ...[
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        SizedBox(
+                          width: 180,
+                          child: TextField(
+                            controller: _durationSecondsController,
+                            keyboardType: TextInputType.number,
+                            decoration: _memberWorkoutInputDecoration(
+                              'Target duration sec',
+                            ),
+                          ),
+                        ),
+                        if (_trackingMode == 'cardio' ||
+                            _trackingMode == 'distance')
+                          SizedBox(
+                            width: 180,
+                            child: TextField(
+                              controller: _distanceMetersController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: _memberWorkoutInputDecoration(
+                                'Target distance m',
+                              ),
+                            ),
+                          ),
+                        if (_trackingMode == 'cardio') ...[
+                          SizedBox(
+                            width: 180,
+                            child: TextField(
+                              controller: _speedKphController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: _memberWorkoutInputDecoration(
+                                'Target speed km/h',
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 180,
+                            child: TextField(
+                              controller: _paceSecondsController,
+                              keyboardType: TextInputType.number,
+                              decoration: _memberWorkoutInputDecoration(
+                                'Target pace sec/km',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final compact = constraints.maxWidth < 680;
+                      final weight = TextField(
+                        controller: _targetWeightController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: _memberWorkoutInputDecoration(
+                          'Target weight',
+                        ),
+                      );
+                      final notes = TextField(
+                        controller: _exerciseNotesController,
+                        decoration: _memberWorkoutInputDecoration(
+                          'Exercise notes',
+                        ),
+                      );
+                      if (compact) {
+                        return Column(
+                          children: [weight, const SizedBox(height: 12), notes],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: weight),
+                          const SizedBox(width: 12),
+                          Expanded(child: notes),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  GradientButton(
+                    label:
+                        'Add exercise to ${_weekdayLabel(selectedDay.weekday ?? 1).toUpperCase()}',
+                    icon: Icons.add_circle_outline_rounded,
+                    expanded: true,
+                    onPressed: _addExerciseToBuilderDay,
+                  ),
+                ],
+                const SizedBox(height: 20),
+                Text(
+                  'Exercises for ${_weekdayLabel(selectedDay.weekday ?? 1).toUpperCase()}',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (selectedDay.exercises.isEmpty)
+                  const EmptyStateView(
+                    title: 'No exercises added yet',
+                    message:
+                        'Pick an exercise, set the prescription, and add it to this day.',
+                    icon: Icons.playlist_add_check_circle_outlined,
+                  )
+                else
+                  ...selectedDay.exercises.asMap().entries.map((entry) {
+                    final exercise = entry.value;
+                    final meta = _exerciseById(exercise.exerciseId);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _MemberBuilderExerciseTile(
+                        title: meta?['name']?.toString() ?? 'Exercise',
+                        subtitle:
+                            '${exercise.sets} sets • ${exercise.reps} • ${exercise.restSeconds} sec rest${exercise.groupKey == null ? '' : ' • ${exercise.groupKey}${exercise.groupOrder} ${exercise.groupType} • ${exercise.groupRounds} rounds • ${exercise.transitionSeconds}s transition'}${exercise.progressionPolicy == 'off' ? '' : ' • progression'}',
+                        badge: meta == null
+                            ? null
+                            : _bodyPartLabel(_bodyPartKeyForExercise(meta)),
+                        moveLabel: entry.key == 0 ? 'Move down' : 'Move up',
+                        onMove: selectedDay.exercises.length < 2
+                            ? null
+                            : () => _moveBuilderExercise(
+                                selectedDay,
+                                entry.key,
+                                entry.key == 0 ? 1 : -1,
+                              ),
+                        removeLabel: exercise.groupKey == null
+                            ? 'Remove'
+                            : 'Group / Remove',
+                        onRemove: () => _editOrRemoveBuilderExercise(
+                          selectedDay,
+                          entry.key,
+                        ),
+                      ),
+                    );
+                  }),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.lg),
@@ -1868,88 +1900,95 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
   }
 
   Widget _buildGroupingOptions(BuildContext context) {
-    return Material(
-      color: AppColors.surfaceSoft,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppColors.stroke),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Exercise group (optional)',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w800,
+    return GuideTarget(
+      id: 'member_workout_builder_v1/grouping',
+      child: Material(
+        color: AppColors.surfaceSoft,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppColors.stroke),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Exercise group (optional)',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _groupKeyController,
-              textCapitalization: TextCapitalization.characters,
-              decoration:
-                  _memberWorkoutInputDecoration(
-                    'Group label (optional)',
-                    icon: Icons.link_rounded,
-                  ).copyWith(
-                    hintText: 'A, B, or Circuit 1',
-                    helperText: 'Use the same label on two or more exercises.',
-                  ),
-            ),
-            const SizedBox(height: 12),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final compact = constraints.maxWidth < 520;
-                final type = DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  initialValue: _groupType,
-                  decoration: _memberWorkoutInputDecoration('Group type'),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'superset',
-                      child: Text('Superset'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _groupKeyController,
+                textCapitalization: TextCapitalization.characters,
+                decoration:
+                    _memberWorkoutInputDecoration(
+                      'Group label (optional)',
+                      icon: Icons.link_rounded,
+                    ).copyWith(
+                      hintText: 'A, B, or Circuit 1',
+                      helperText:
+                          'Use the same label on two or more exercises.',
                     ),
-                    DropdownMenuItem(value: 'circuit', child: Text('Circuit')),
-                  ],
-                  onChanged: (value) =>
-                      setState(() => _groupType = value ?? 'superset'),
-                );
-                final rounds = TextField(
-                  controller: _groupRoundsController,
-                  keyboardType: TextInputType.number,
-                  decoration: _memberWorkoutInputDecoration('Rounds'),
-                );
-                final transition = TextField(
-                  controller: _transitionSecondsController,
-                  keyboardType: TextInputType.number,
-                  decoration: _memberWorkoutInputDecoration('Transition sec'),
-                );
-                if (compact) {
-                  return Column(
+              ),
+              const SizedBox(height: 12),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 520;
+                  final type = DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    initialValue: _groupType,
+                    decoration: _memberWorkoutInputDecoration('Group type'),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'superset',
+                        child: Text('Superset'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'circuit',
+                        child: Text('Circuit'),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _groupType = value ?? 'superset'),
+                  );
+                  final rounds = TextField(
+                    controller: _groupRoundsController,
+                    keyboardType: TextInputType.number,
+                    decoration: _memberWorkoutInputDecoration('Rounds'),
+                  );
+                  final transition = TextField(
+                    controller: _transitionSecondsController,
+                    keyboardType: TextInputType.number,
+                    decoration: _memberWorkoutInputDecoration('Transition sec'),
+                  );
+                  if (compact) {
+                    return Column(
+                      children: [
+                        type,
+                        const SizedBox(height: 10),
+                        rounds,
+                        const SizedBox(height: 10),
+                        transition,
+                      ],
+                    );
+                  }
+                  return Row(
                     children: [
-                      type,
-                      const SizedBox(height: 10),
-                      rounds,
-                      const SizedBox(height: 10),
-                      transition,
+                      Expanded(child: type),
+                      const SizedBox(width: 10),
+                      Expanded(child: rounds),
+                      const SizedBox(width: 10),
+                      Expanded(child: transition),
                     ],
                   );
-                }
-                return Row(
-                  children: [
-                    Expanded(child: type),
-                    const SizedBox(width: 10),
-                    Expanded(child: rounds),
-                    const SizedBox(width: 10),
-                    Expanded(child: transition),
-                  ],
-                );
-              },
-            ),
-          ],
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2811,19 +2850,26 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
     return AppGradientScaffold(
       title: 'Workout Book',
       bottomNavigationBar: _activeTabIndex == 2
-          ? _WorkoutBuilderSaveBar(
-              saving: _saving,
-              editing: _editingPlanId != null,
-              onSave: _saving ? null : _savePlan,
+          ? GuideTarget(
+              id: 'member_workout_builder_v1/save',
+              child: _WorkoutBuilderSaveBar(
+                saving: _saving,
+                editing: _editingPlanId != null,
+                onSave: _saving ? null : _savePlan,
+              ),
             )
           : null,
       body: SafeArea(
         bottom: false,
         child: Column(
           children: [
-            _WorkoutBookTopBar(
-              title: 'Workout Book',
-              subtitle: 'Choose a plan, discover one, or build your own.',
+            GuideTarget(
+              id: 'member_workouts_v1/books',
+              enabled: !_loading && _error == null,
+              child: _WorkoutBookTopBar(
+                title: 'Workout Book',
+                subtitle: 'Choose a plan, discover one, or build your own.',
+              ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(
@@ -2832,7 +2878,11 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
                 AppSpacing.lg,
                 0,
               ),
-              child: _WorkoutBookTabSlider(controller: _tabController),
+              child: GuideTarget(
+                id: 'member_workouts_v1/browse',
+                enabled: !_loading && _error == null,
+                child: _WorkoutBookTabSlider(controller: _tabController),
+              ),
             ),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 180),
@@ -2923,26 +2973,30 @@ class _MemberWorkoutBookScreenState extends State<MemberWorkoutBookScreen>
               .map((item) => item.toString())
               .toList();
 
-          return _WorkoutBookPlanCard(
-            plan: plan,
-            originLabel: _originLabel(origin),
-            originColor: _originColor(origin),
-            editable: editable,
-            focusAreas: focusAreas,
-            saving: _saving,
-            onStart: () => widget.onStartPlan((plan['id'] as num?)?.toInt()),
-            onPreview: () => _showPlanPreview(
-              title: plan['name']?.toString() ?? 'Workout plan',
+          return GuideTarget(
+            id: 'member_workouts_v1/select',
+            enabled: index == 1 && !_loading && _error == null,
+            child: _WorkoutBookPlanCard(
               plan: plan,
-              primaryAction: () =>
-                  widget.onStartPlan((plan['id'] as num?)?.toInt()),
-              primaryLabel: 'Start with this plan',
+              originLabel: _originLabel(origin),
+              originColor: _originColor(origin),
+              editable: editable,
+              focusAreas: focusAreas,
+              saving: _saving,
+              onStart: () => widget.onStartPlan((plan['id'] as num?)?.toInt()),
+              onPreview: () => _showPlanPreview(
+                title: plan['name']?.toString() ?? 'Workout plan',
+                plan: plan,
+                primaryAction: () =>
+                    widget.onStartPlan((plan['id'] as num?)?.toInt()),
+                primaryLabel: 'Start with this plan',
+              ),
+              sharing: _sharingPlanId == (plan['id'] as num?)?.toInt(),
+              onShare: () => _sharePlan(plan),
+              onDuplicate: () => _duplicatePlan(plan),
+              onEdit: () => _beginEditPlan(plan),
+              onDelete: () => _deletePlan(plan),
             ),
-            sharing: _sharingPlanId == (plan['id'] as num?)?.toInt(),
-            onShare: () => _sharePlan(plan),
-            onDuplicate: () => _duplicatePlan(plan),
-            onEdit: () => _beginEditPlan(plan),
-            onDelete: () => _deletePlan(plan),
           );
         },
         separatorBuilder: (_, _) => const SizedBox(height: 12),

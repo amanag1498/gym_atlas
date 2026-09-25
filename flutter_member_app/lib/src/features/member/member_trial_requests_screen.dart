@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 
 import '../../core/user_facing_error.dart';
 import '../../core/models.dart';
@@ -370,7 +371,10 @@ class _MemberTrialRequestsScreenState extends State<MemberTrialRequestsScreen>
                       AppSpacing.lg,
                       0,
                     ),
-                    child: _TrialTabSlider(controller: _tabController),
+                    child: GuideTarget(
+                      id: 'member_trials_v1/status',
+                      child: _TrialTabSlider(controller: _tabController),
+                    ),
                   ),
                   Expanded(
                     child: TabBarView(
@@ -701,147 +705,151 @@ class _TrialRequestFormTab extends StatelessWidget {
         AppSpacing.xl,
       ),
       children: [
-        PremiumCard(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceSoft,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.stroke),
+        GuideTarget(
+          id: 'member_trials_v1/form',
+          child: PremiumCard(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceSoft,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.stroke),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Book a trial',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Choose the gym, pick your slot, and keep the request easy to follow. Gyms where you are already a member are excluded.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Book a trial',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w800,
+                const SizedBox(height: AppSpacing.md),
+                DropdownButtonFormField<int>(
+                  initialValue: selectedGymId,
+                  decoration: const InputDecoration(
+                    labelText: 'Gym',
+                    prefixIcon: Icon(Icons.storefront_rounded),
+                  ),
+                  items: publicGyms
+                      .map(
+                        (gym) => DropdownMenuItem<int>(
+                          value: (gym['id'] as num?)?.toInt(),
+                          child: Text(gym['name']?.toString() ?? 'Gym'),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: onGymChanged,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                DropdownButtonFormField<int>(
+                  initialValue: selectedBranchId,
+                  decoration: const InputDecoration(
+                    labelText: 'Branch (optional)',
+                    prefixIcon: Icon(Icons.account_tree_rounded),
+                  ),
+                  items: [
+                    const DropdownMenuItem<int>(
+                      value: null,
+                      child: Text('Auto / no preference'),
+                    ),
+                    ...branches.map(
+                      (branch) => DropdownMenuItem<int>(
+                        value: (branch['id'] as num?)?.toInt(),
+                        child: Text(branch['name']?.toString() ?? 'Branch'),
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Choose the gym, pick your slot, and keep the request easy to follow. Gyms where you are already a member are excluded.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w600,
+                  ],
+                  onChanged: onBranchChanged,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    prefixIcon: Icon(Icons.person_outline_rounded),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Phone',
+                    prefixIcon: Icon(Icons.phone_outlined),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email (optional)',
+                    prefixIcon: Icon(Icons.alternate_email_rounded),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: preferredDateController,
+                        decoration: const InputDecoration(
+                          labelText: 'Preferred date',
+                          prefixIcon: Icon(Icons.calendar_month_rounded),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: TextField(
+                        controller: preferredTimeController,
+                        decoration: const InputDecoration(
+                          labelText: 'Preferred time',
+                          prefixIcon: Icon(Icons.schedule_rounded),
+                        ),
                       ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              DropdownButtonFormField<int>(
-                initialValue: selectedGymId,
-                decoration: const InputDecoration(
-                  labelText: 'Gym',
-                  prefixIcon: Icon(Icons.storefront_rounded),
-                ),
-                items: publicGyms
-                    .map(
-                      (gym) => DropdownMenuItem<int>(
-                        value: (gym['id'] as num?)?.toInt(),
-                        child: Text(gym['name']?.toString() ?? 'Gym'),
-                      ),
-                    )
-                    .toList(),
-                onChanged: onGymChanged,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              DropdownButtonFormField<int>(
-                initialValue: selectedBranchId,
-                decoration: const InputDecoration(
-                  labelText: 'Branch (optional)',
-                  prefixIcon: Icon(Icons.account_tree_rounded),
-                ),
-                items: [
-                  const DropdownMenuItem<int>(
-                    value: null,
-                    child: Text('Auto / no preference'),
+                const SizedBox(height: AppSpacing.md),
+                TextField(
+                  controller: notesController,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes',
+                    prefixIcon: Icon(Icons.notes_rounded),
                   ),
-                  ...branches.map(
-                    (branch) => DropdownMenuItem<int>(
-                      value: (branch['id'] as num?)?.toInt(),
-                      child: Text(branch['name']?.toString() ?? 'Branch'),
-                    ),
-                  ),
-                ],
-                onChanged: onBranchChanged,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                  prefixIcon: Icon(Icons.person_outline_rounded),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Phone',
-                  prefixIcon: Icon(Icons.phone_outlined),
+                const SizedBox(height: AppSpacing.lg),
+                GradientButton(
+                  label: 'Submit Trial',
+                  icon: Icons.flash_on_rounded,
+                  loading: submitting,
+                  expanded: true,
+                  onPressed: submitting ? null : onSubmit,
                 ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Email (optional)',
-                  prefixIcon: Icon(Icons.alternate_email_rounded),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: preferredDateController,
-                      decoration: const InputDecoration(
-                        labelText: 'Preferred date',
-                        prefixIcon: Icon(Icons.calendar_month_rounded),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: TextField(
-                      controller: preferredTimeController,
-                      decoration: const InputDecoration(
-                        labelText: 'Preferred time',
-                        prefixIcon: Icon(Icons.schedule_rounded),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: notesController,
-                minLines: 2,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Notes',
-                  prefixIcon: Icon(Icons.notes_rounded),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              GradientButton(
-                label: 'Submit Trial',
-                icon: Icons.flash_on_rounded,
-                loading: submitting,
-                expanded: true,
-                onPressed: submitting ? null : onSubmit,
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],

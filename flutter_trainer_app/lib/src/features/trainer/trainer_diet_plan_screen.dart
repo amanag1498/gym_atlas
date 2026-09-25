@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:gym_flutter_core/diet_plan_meals_editor.dart';
 import 'package:gym_flutter_core/diet_plan_summary_view.dart';
 
@@ -688,9 +689,12 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
                 widget.plannerNavigation!,
               ],
               const SizedBox(height: 16),
-              _DietBuilderTabs(
-                selectedIndex: _selectedTab,
-                onChanged: (index) => setState(() => _selectedTab = index),
+              GuideTarget(
+                id: 'trainer_diet_v1/library',
+                child: _DietBuilderTabs(
+                  selectedIndex: _selectedTab,
+                  onChanged: (index) => setState(() => _selectedTab = index),
+                ),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 10),
@@ -722,53 +726,73 @@ class _TrainerDietPlanScreenState extends State<TrainerDietPlanScreen> {
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(18, 2, 18, 32),
         children: [
-          _DietBuilderSection(
-            title: 'Plan details',
-            subtitle: 'Set the goal, nutrition targets, and preferences.',
-            icon: Icons.tune_rounded,
-            child: DietPlanDetailsEditor(
-              key: ValueKey('details-$_editorRevision'),
-              initialPlan: _draftDetails,
-              onChanged: (value) => _draftDetails = value,
+          GuideTarget(
+            id: 'trainer_diet_v1/details',
+            child: _DietBuilderSection(
+              title: 'Plan details',
+              subtitle: 'Set the goal, nutrition targets, and preferences.',
+              icon: Icons.tune_rounded,
+              child: DietPlanDetailsEditor(
+                key: ValueKey('details-$_editorRevision'),
+                initialPlan: _draftDetails,
+                onChanged: (value) => _draftDetails = value,
+              ),
             ),
           ),
           const SizedBox(height: 14),
-          _DietBuilderSection(
-            title: 'Meals',
-            subtitle: 'Build meal timings, foods, portions, and macros.',
-            icon: Icons.restaurant_menu_rounded,
-            child: DietPlanMealsEditor(
-              key: ValueKey('meals-$_editorRevision'),
-              initialMeals: _draftMeals,
-              foodCatalog: _foodCatalog,
-              onSearchFoodCatalog: _foodCatalogAvailable ? _searchFoods : null,
-              onChanged: (value) => _draftMeals = value,
+          GuideTarget(
+            id: 'trainer_diet_v1/meals',
+            child: _DietBuilderSection(
+              title: 'Meals',
+              subtitle: 'Build meal timings, foods, portions, and macros.',
+              icon: Icons.restaurant_menu_rounded,
+              child: DietPlanMealsEditor(
+                key: ValueKey('meals-$_editorRevision'),
+                initialMeals: _draftMeals,
+                foodCatalog: _foodCatalog,
+                onSearchFoodCatalog: _foodCatalogAvailable
+                    ? _searchFoods
+                    : null,
+                onChanged: (value) => _draftMeals = value,
+              ),
             ),
           ),
           const SizedBox(height: 16),
-          if (widget.members.isNotEmpty) ...[
-            GradientButton(
-              label: _saving ? 'Saving plan...' : 'Save and assign to members',
-              icon: Icons.assignment_turned_in_rounded,
-              expanded: true,
-              onPressed: _saving ? null : () => _save(assignAfterSave: true),
+          GuideTarget(
+            id: 'trainer_diet_v1/save',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (widget.members.isNotEmpty) ...[
+                  GradientButton(
+                    label: _saving
+                        ? 'Saving plan...'
+                        : 'Save and assign to members',
+                    icon: Icons.assignment_turned_in_rounded,
+                    expanded: true,
+                    onPressed: _saving
+                        ? null
+                        : () => _save(assignAfterSave: true),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton.icon(
+                      onPressed: _saving ? null : _save,
+                      icon: const Icon(Icons.library_add_check_rounded),
+                      label: const Text('Save to library only'),
+                    ),
+                  ),
+                ] else
+                  GradientButton(
+                    label: _saving ? 'Saving plan...' : 'Save to diet library',
+                    icon: Icons.library_add_check_rounded,
+                    expanded: true,
+                    onPressed: _saving ? null : _save,
+                  ),
+              ],
             ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: TextButton.icon(
-                onPressed: _saving ? null : _save,
-                icon: const Icon(Icons.library_add_check_rounded),
-                label: const Text('Save to library only'),
-              ),
-            ),
-          ] else
-            GradientButton(
-              label: _saving ? 'Saving plan...' : 'Save to diet library',
-              icon: Icons.library_add_check_rounded,
-              expanded: true,
-              onPressed: _saving ? null : _save,
-            ),
+          ),
         ],
       ),
     );

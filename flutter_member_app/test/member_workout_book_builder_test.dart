@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:gym_flutter_core/guides.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_member_app/src/core/api_client.dart';
@@ -7,6 +9,30 @@ import 'package:flutter_member_app/src/features/member/member_workout_book_scree
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('Workout Book guide launches after data loads and skips safely', (
+    tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues({});
+    await tester.pumpWidget(
+      GuideScope(
+        account: 'member:guide-test',
+        guides: memberGuides,
+        child: _buildScreen(_WorkoutBuilderRepository()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pumpAndSettle();
+    expect(find.text('Find your next workout'), findsOneWidget);
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    expect(find.text('Browse and compare'), findsOneWidget);
+    await tester.tap(find.text('Skip'));
+    await tester.pumpAndSettle();
+    expect(find.byType(GuideOverlay), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('builder loads the next exercise page from the picker', (
     tester,
   ) async {

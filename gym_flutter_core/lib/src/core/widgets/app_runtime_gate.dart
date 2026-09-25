@@ -196,7 +196,7 @@ class AppRuntimeGate extends StatelessWidget {
       builder: (context, _) {
         final config = controller.config;
         if (controller.loading && config == null) {
-          return const BrandedStartupLoader();
+          return BrandedStartupLoader(audience: audience);
         }
         if (config?.updateRequired == true) {
           return _BlockingScreen(

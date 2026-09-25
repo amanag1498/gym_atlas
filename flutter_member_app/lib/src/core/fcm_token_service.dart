@@ -1,16 +1,24 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, debugPrint, defaultTargetPlatform, kIsWeb;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:gym_flutter_core/fcm_retry_policy.dart';
 
 import 'api_client.dart';
 
 class MemberFcmTokenService {
-  MemberFcmTokenService(this._client);
+  MemberFcmTokenService(this._client, {FlutterSecureStorage? storage})
+    : _storage = storage ?? const FlutterSecureStorage();
+
+  static const _devicePresenceKey = 'member_device_presence_id';
+  static const _appVersion = String.fromEnvironment('APP_VERSION');
 
   final MemberApiClient _client;
+  final FlutterSecureStorage _storage;
   final FcmRetryPolicy _retryPolicy = FcmRetryPolicy();
   Timer? _retryTimer;
   StreamSubscription<String>? _tokenRefreshSubscription;
@@ -20,6 +28,15 @@ class MemberFcmTokenService {
   String? _registeredToken;
   int _generation = 0;
   bool _active = false;
+
+  Future<void> registerPresence({required String appRole}) async {
+    try {
+      await _sendPresence(appRole);
+      debugPrint('[fcm] app presence recorded for $appRole app');
+    } catch (exception) {
+      debugPrint('[fcm] app presence registration skipped: $exception');
+    }
+  }
 
   Future<void> registerToken({required String appRole}) async {
     _active = true;
@@ -198,7 +215,14 @@ class MemberFcmTokenService {
     try {
       final token = _registeredToken ?? await _readTokenIfAvailable();
       if (token != null && token.isNotEmpty) {
-        await _client.delete('/fcm-tokens', data: {'token': token});
+        await _client.delete(
+          '/fcm-tokens',
+          data: {
+            'token': token,
+            'app_role': _lastAppRole ?? 'member',
+            'device_id': await _devicePresenceId(),
+          },
+        );
       }
     } catch (exception) {
       debugPrint('[fcm] token unregister skipped: $exception');
@@ -257,16 +281,42 @@ class MemberFcmTokenService {
     }
   }
 
-  Future<void> _sendToken(String token, String appRole) {
-    return _client.post(
+  Future<void> _sendPresence(String appRole) async {
+    await _client.post(
+      '/app-presence',
+      data: {
+        'platform': _platformLabel(),
+        'app_role': appRole,
+        'device_name': _deviceName(),
+        'device_id': await _devicePresenceId(),
+        if (_appVersion.isNotEmpty) 'app_version': _appVersion,
+      },
+    );
+  }
+
+  Future<void> _sendToken(String token, String appRole) async {
+    await _client.post(
       '/fcm-tokens',
       data: {
         'token': token,
         'platform': _platformLabel(),
         'app_role': appRole,
         'device_name': _deviceName(),
+        'device_id': await _devicePresenceId(),
+        if (_appVersion.isNotEmpty) 'app_version': _appVersion,
       },
     );
+  }
+
+  Future<String> _devicePresenceId() async {
+    final existing = await _storage.read(key: _devicePresenceKey);
+    if (existing != null && existing.isNotEmpty) return existing;
+
+    final random = Random.secure();
+    final bytes = List<int>.generate(18, (_) => random.nextInt(256));
+    final id = base64UrlEncode(bytes).replaceAll('=', '');
+    await _storage.write(key: _devicePresenceKey, value: id);
+    return id;
   }
 
   String _platformLabel() {

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_flutter_core/gym_flutter_core.dart'
     show AppRuntimeController, AppRuntimeGate, ChatNotificationService;
@@ -388,7 +389,15 @@ class _MemberAppState extends State<MemberApp> {
         builder: (context, child) => AppRuntimeGate(
           controller: runtimeController,
           audience: 'Member',
-          child: child ?? const SizedBox.shrink(),
+          child: Consumer<MemberSessionController>(
+            builder: (context, session, _) => GuideScope(
+              account: session.isAuthenticated && session.hasRequiredConsent
+                  ? 'member:${session.user!.id}'
+                  : null,
+              guides: memberGuides,
+              child: child ?? const SizedBox.shrink(),
+            ),
+          ),
         ),
       ),
     );

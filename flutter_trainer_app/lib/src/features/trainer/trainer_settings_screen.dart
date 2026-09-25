@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:flutter/services.dart';
 import 'package:gym_flutter_core/gym_flutter_core.dart'
-    show PrivacyRequestsDialog;
+    show PrivacyConsentDialog, PrivacyRequestsDialog;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -75,79 +76,90 @@ class TrainerSettingsScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              const GuideTarget(
+                id: 'trainer_settings_v1/guides',
+                child: GuideSettingsTile(),
+              ),
               const _SettingsTopBar(
                 title: 'Settings',
                 subtitle: 'Manage your account, coaching, and support options.',
               ),
               const SizedBox(height: AppSpacing.md),
               _AnimatedSection(
-                child: _ProfileHeader(
-                  name: name,
-                  email: email,
-                  isActive: user?.isActive == true,
-                  onView: onViewProfile,
+                child: GuideTarget(
+                  id: 'trainer_settings_v1/profile',
+                  child: _ProfileHeader(
+                    name: name,
+                    email: email,
+                    isActive: user?.isActive == true,
+                    onView: onViewProfile,
+                  ),
                 ),
               ),
               const SizedBox(height: 25),
               _AnimatedSection(
                 delay: const Duration(milliseconds: 120),
-                child: _SettingsGroup(
-                  title: 'Help & Legal',
-                  subtitle: 'Support and information about your account.',
-                  children: [
-                    _SettingsRow(
-                      icon: Icons.help_outline_rounded,
-                      title: 'Help & FAQ',
-                      subtitle: 'Answers to common coaching questions',
-                      onPressed: () => _openLink(
-                        context,
-                        _webUrl(webBase, '/faq'),
-                        'Help and FAQ page',
+                child: GuideTarget(
+                  id: 'trainer_settings_v1/privacy',
+                  child: _SettingsGroup(
+                    title: 'Help & Legal',
+                    subtitle: 'Support and information about your account.',
+                    children: [
+                      _SettingsRow(
+                        icon: Icons.help_outline_rounded,
+                        title: 'Help & FAQ',
+                        subtitle: 'Answers to common coaching questions',
+                        onPressed: () => _openLink(
+                          context,
+                          _webUrl(webBase, '/faq'),
+                          'Help and FAQ page',
+                        ),
                       ),
-                    ),
-                    _SettingsRow(
-                      icon: Icons.support_agent_rounded,
-                      title: 'Contact Us',
-                      subtitle: 'Get help from Gym Atlas support',
-                      onPressed: () => _openLink(
-                        context,
-                        _webUrl(webBase, '/contact'),
-                        'Contact page',
+                      _SettingsRow(
+                        icon: Icons.support_agent_rounded,
+                        title: 'Contact Us',
+                        subtitle: 'Get help from Gym Atlas support',
+                        onPressed: () => _openLink(
+                          context,
+                          _webUrl(webBase, '/contact'),
+                          'Contact page',
+                        ),
                       ),
-                    ),
-                    _SettingsRow(
-                      icon: Icons.privacy_tip_outlined,
-                      title: 'Privacy Policy',
-                      subtitle: 'How your information is handled',
-                      onPressed: () => _openLink(
-                        context,
-                        _webUrl(webBase, '/privacy-policy'),
-                        'Privacy policy',
+                      _SettingsRow(
+                        icon: Icons.privacy_tip_outlined,
+                        title: 'Privacy Policy',
+                        subtitle: 'How your information is handled',
+                        onPressed: () => _openLink(
+                          context,
+                          _webUrl(webBase, '/privacy-policy'),
+                          'Privacy policy',
+                        ),
                       ),
-                    ),
-                    _SettingsRow(
-                      icon: Icons.gavel_rounded,
-                      title: 'Terms of Service',
-                      subtitle: 'Rules for using Gym Atlas',
-                      onPressed: () => _openLink(
-                        context,
-                        _webUrl(webBase, '/terms'),
-                        'Terms',
+                      _SettingsRow(
+                        icon: Icons.gavel_rounded,
+                        title: 'Terms of Service',
+                        subtitle: 'Rules for using Gym Atlas',
+                        onPressed: () => _openLink(
+                          context,
+                          _webUrl(webBase, '/terms'),
+                          'Terms',
+                        ),
                       ),
-                    ),
-                    _SettingsRow(
-                      icon: Icons.tune_rounded,
-                      title: 'Privacy & consent',
-                      subtitle: 'Manage the information choices you have made',
-                      onPressed: () => _openConsentManager(context, session),
-                    ),
-                    _SettingsRow(
-                      icon: Icons.manage_accounts_outlined,
-                      title: 'Your privacy requests',
-                      subtitle: 'Ask for access, correction or deletion',
-                      onPressed: () => _openPrivacyRequests(context, session),
-                    ),
-                  ],
+                      _SettingsRow(
+                        icon: Icons.tune_rounded,
+                        title: 'Privacy & consent',
+                        subtitle:
+                            'Manage the information choices you have made',
+                        onPressed: () => _openConsentManager(context, session),
+                      ),
+                      _SettingsRow(
+                        icon: Icons.manage_accounts_outlined,
+                        title: 'Your privacy requests',
+                        subtitle: 'Ask for access, correction or deletion',
+                        onPressed: () => _openPrivacyRequests(context, session),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 25),
@@ -273,103 +285,26 @@ Future<void> _openConsentManager(
   BuildContext context,
   TrainerSessionController session,
 ) async {
+  final items = (session.consentState['items'] as List<dynamic>? ?? const [])
+      .whereType<Map>()
+      .map((value) => Map<String, dynamic>.from(value))
+      .where(
+        (item) =>
+            item['required'] == true ||
+            const {
+              'photos',
+              'notifications',
+              'whatsapp',
+            }.contains(item['purpose']),
+      )
+      .toList();
   await showDialog<void>(
     context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (context, setState) {
-        final items =
-            (session.consentState['items'] as List<dynamic>? ?? const [])
-                .whereType<Map>()
-                .map((value) => Map<String, dynamic>.from(value))
-                .where(
-                  (item) =>
-                      item['required'] == true ||
-                      const {
-                        'photos',
-                        'notifications',
-                        'whatsapp',
-                      }.contains(item['purpose']),
-                )
-                .toList();
-        return AlertDialog(
-          title: const Text('Privacy & consent'),
-          content: SizedBox(
-            width: 420,
-            child: ListView(
-              shrinkWrap: true,
-              children: items.map((item) {
-                final required = item['required'] == true;
-                return SwitchListTile.adaptive(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(item['title']?.toString() ?? 'Data use'),
-                  subtitle: Text(item['description']?.toString() ?? ''),
-                  value: item['granted'] == true,
-                  onChanged: required && item['granted'] != true
-                      ? null
-                      : (value) async {
-                          if (required && !value) {
-                            final confirmed = await showDialog<bool>(
-                              context: dialogContext,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Withdraw account consent?'),
-                                content: const Text(
-                                  'Gym Atlas Coach will stop access to your account features. You can review and agree again to resume using the app.',
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, false),
-                                    child: const Text('Keep using app'),
-                                  ),
-                                  FilledButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, true),
-                                    child: const Text('Withdraw'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (confirmed != true) return;
-                          }
-                          try {
-                            if (value) {
-                              await session.grantConsent(
-                                item['purpose'].toString(),
-                              );
-                            } else {
-                              await session.withdrawConsent(
-                                item['purpose'].toString(),
-                              );
-                            }
-                          } catch (_) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Could not save your choice. Please try again.',
-                                  ),
-                                ),
-                              );
-                            }
-                            return;
-                          }
-                          if (required && !value && dialogContext.mounted) {
-                            Navigator.pop(dialogContext);
-                          }
-                          if (dialogContext.mounted) setState(() {});
-                        },
-                );
-              }).toList(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Done'),
-            ),
-          ],
-        );
-      },
+    builder: (_) => PrivacyConsentDialog(
+      appName: 'Gym Atlas Coach',
+      items: items,
+      onGrant: session.grantConsent,
+      onWithdraw: session.withdrawConsent,
     ),
   );
 }

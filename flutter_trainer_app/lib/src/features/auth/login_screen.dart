@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../trainer/trainer_settings_screen.dart';
 import 'session_controller.dart';
 
 class TrainerLoginScreen extends StatefulWidget {
@@ -151,6 +152,14 @@ class _TrainerLoginScreenState extends State<TrainerLoginScreen>
                                     : () => context
                                           .read<TrainerSessionController>()
                                           .loginWithApple(),
+                                onTermsPressed: () =>
+                                    TrainerSettingsScreen.openTermsOfService(
+                                      context,
+                                    ),
+                                onPrivacyPressed: () =>
+                                    TrainerSettingsScreen.openPrivacyPolicy(
+                                      context,
+                                    ),
                               ),
                             ),
                           ],
@@ -198,6 +207,8 @@ class _LoginPanel extends StatelessWidget {
     required this.error,
     required this.onPressed,
     required this.onApplePressed,
+    required this.onTermsPressed,
+    required this.onPrivacyPressed,
   });
 
   final bool compact;
@@ -205,6 +216,8 @@ class _LoginPanel extends StatelessWidget {
   final String? error;
   final VoidCallback? onPressed;
   final VoidCallback? onApplePressed;
+  final VoidCallback onTermsPressed;
+  final VoidCallback onPrivacyPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -260,6 +273,29 @@ class _LoginPanel extends StatelessWidget {
             ),
           ),
         ],
+        SizedBox(height: compact ? 18 : 22),
+        Text(
+          'By continuing, you agree to our Terms of Service and acknowledge our Privacy Policy. Optional features are on by default and can be changed anytime in Settings.',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: AppColors.textSecondary,
+            height: 1.45,
+          ),
+        ),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: AppSpacing.xs,
+          children: [
+            TextButton(
+              onPressed: busy ? null : onTermsPressed,
+              child: const Text('Terms'),
+            ),
+            TextButton(
+              onPressed: busy ? null : onPrivacyPressed,
+              child: const Text('Privacy'),
+            ),
+          ],
+        ),
       ],
     );
   }

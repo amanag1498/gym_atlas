@@ -1,3 +1,5 @@
+import 'notification_preferences_sheet.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -769,110 +771,118 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
       ),
     ];
 
-    return AppGradientScaffold(
-      title: _pageTitle(_index, user.name),
-      actions: [
-        IconButton(
-          tooltip: 'Events and hosted management',
-          onPressed: () => Navigator.of(context).push<void>(
-            MaterialPageRoute(
-              builder: (_) => TrainerEventsScreen(repository: _repository),
-            ),
-          ),
-          icon: const Icon(Icons.calendar_month_outlined),
-        ),
-        IconButton(
-          tooltip: 'Diet plans',
-          onPressed: _openDietBuilder,
-          icon: const Icon(Icons.restaurant_menu_rounded),
-        ),
-      ],
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 240),
-        transitionBuilder: (child, animation) {
-          final curved = CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-            reverseCurve: Curves.easeInCubic,
-          );
-
-          return FadeTransition(
-            opacity: curved,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0.03, 0.015),
-                end: Offset.zero,
-              ).animate(curved),
-              child: child,
-            ),
-          );
-        },
-        child: _loading
-            ? const _TrainerHomeSkeleton(key: ValueKey('trainer-loading'))
-            : _error != null
-            ? ErrorStateView(
-                key: const ValueKey('trainer-error'),
-                message: _error!,
-                onRetry: _load,
-              )
-            : !hasTrainerProfile
-            ? KeyedSubtree(
-                key: const ValueKey('trainer-gym-invitation'),
-                child: _NotificationPage(
-                  notifications: _notifications,
-                  trialRequests: const [],
-                  members: const [],
-                  onRefresh: _load,
-                  hasMore: _notificationPage.hasMore || _trialPage.hasMore,
-                  loadingMore: _loadingMoreNotifications,
-                  onLoadMore: _loadMoreNotifications,
-                  onMarkRead: (notificationId) async {
-                    await _repository.markNotificationRead(notificationId);
-                    await _load();
-                  },
-                  onMarkUnread: (notificationId) async {
-                    await _repository.markNotificationUnread(notificationId);
-                    await _load();
-                  },
-                  onMarkAllRead: () async {
-                    await _repository.markAllNotificationsRead();
-                    await _load();
-                  },
-                  onUpdateTrial: (_, __) async {},
-                  onOpenTrialLeads: () => _openTrialLeads(),
-                  onCreateAnnouncement: (_) async {},
-                  onRespondGymInvitation: (id, decision) async {
-                    await _repository.respondToGymInvitation(id, decision);
-                    await _load();
-                  },
-                  onOpenEvent: _openEvents,
-                ),
-              )
-            : !onboardingCompleted
-            ? KeyedSubtree(
-                key: const ValueKey('trainer-onboarding'),
-                child: TrainerOnboardingFlow(
-                  repository: _repository,
-                  contextData: _contextData,
-                  onFinished: () async {
-                    await _load();
-                    if (mounted) {
-                      setState(() => _index = 0);
-                    }
-                  },
-                ),
-              )
-            : KeyedSubtree(
-                key: ValueKey('trainer-page-$_index'),
-                child: pages[_index],
+    return GuideAvailability(
+      enabled:
+          !_loading &&
+          _error == null &&
+          onboardingCompleted &&
+          widget.storePreviewData == null &&
+          hasTrainerProfile,
+      child: AppGradientScaffold(
+        title: _pageTitle(_index, user.name),
+        actions: [
+          IconButton(
+            tooltip: 'Events and hosted management',
+            onPressed: () => Navigator.of(context).push<void>(
+              MaterialPageRoute(
+                builder: (_) => TrainerEventsScreen(repository: _repository),
               ),
+            ),
+            icon: const Icon(Icons.calendar_month_outlined),
+          ),
+          IconButton(
+            tooltip: 'Diet plans',
+            onPressed: _openDietBuilder,
+            icon: const Icon(Icons.restaurant_menu_rounded),
+          ),
+        ],
+        body: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 240),
+          transitionBuilder: (child, animation) {
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            );
+
+            return FadeTransition(
+              opacity: curved,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0.03, 0.015),
+                  end: Offset.zero,
+                ).animate(curved),
+                child: child,
+              ),
+            );
+          },
+          child: _loading
+              ? const _TrainerHomeSkeleton(key: ValueKey('trainer-loading'))
+              : _error != null
+              ? ErrorStateView(
+                  key: const ValueKey('trainer-error'),
+                  message: _error!,
+                  onRetry: _load,
+                )
+              : !hasTrainerProfile
+              ? KeyedSubtree(
+                  key: const ValueKey('trainer-gym-invitation'),
+                  child: _NotificationPage(
+                    notifications: _notifications,
+                    trialRequests: const [],
+                    members: const [],
+                    onRefresh: _load,
+                    hasMore: _notificationPage.hasMore || _trialPage.hasMore,
+                    loadingMore: _loadingMoreNotifications,
+                    onLoadMore: _loadMoreNotifications,
+                    onMarkRead: (notificationId) async {
+                      await _repository.markNotificationRead(notificationId);
+                      await _load();
+                    },
+                    onMarkUnread: (notificationId) async {
+                      await _repository.markNotificationUnread(notificationId);
+                      await _load();
+                    },
+                    onMarkAllRead: () async {
+                      await _repository.markAllNotificationsRead();
+                      await _load();
+                    },
+                    onUpdateTrial: (_, __) async {},
+                    onOpenTrialLeads: () => _openTrialLeads(),
+                    onCreateAnnouncement: (_) async {},
+                    onRespondGymInvitation: (id, decision) async {
+                      await _repository.respondToGymInvitation(id, decision);
+                      await _load();
+                    },
+                    onOpenEvent: _openEvents,
+                  ),
+                )
+              : !onboardingCompleted
+              ? KeyedSubtree(
+                  key: const ValueKey('trainer-onboarding'),
+                  child: TrainerOnboardingFlow(
+                    repository: _repository,
+                    contextData: _contextData,
+                    onFinished: () async {
+                      await _load();
+                      if (mounted) {
+                        setState(() => _index = 0);
+                      }
+                    },
+                  ),
+                )
+              : KeyedSubtree(
+                  key: ValueKey('trainer-page-$_index'),
+                  child: pages[_index],
+                ),
+        ),
+        bottomNavigationBar: onboardingCompleted && hasTrainerProfile
+            ? _TrainerBottomNav(
+                currentIndex: _index,
+                onSelect: (value) => setState(() => _index = value),
+              )
+            : null,
       ),
-      bottomNavigationBar: onboardingCompleted && hasTrainerProfile
-          ? _TrainerBottomNav(
-              currentIndex: _index,
-              onSelect: (value) => setState(() => _index = value),
-            )
-          : null,
     );
   }
 
@@ -2096,14 +2106,17 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    'Assign workout to $memberName',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: _TrainerWorkoutColor.black,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w900,
+                                  GuideTarget(
+                                    id: 'trainer_assignment_v1/member',
+                                    child: Text(
+                                      'Assign workout to $memberName',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: _TrainerWorkoutColor.black,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w900,
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(height: 4),
@@ -2201,13 +2214,16 @@ class _TrainerHomeScreenState extends State<TrainerHomeScreen> {
                             ),
                           ),
                           const SizedBox(height: 18),
-                          GradientButton(
-                            label: submitting
-                                ? 'Assigning workout...'
-                                : 'Assign to $memberName',
-                            icon: Icons.check_circle_rounded,
-                            expanded: true,
-                            onPressed: submitting ? null : assignTemplate,
+                          GuideTarget(
+                            id: 'trainer_assignment_v1/assign',
+                            child: GradientButton(
+                              label: submitting
+                                  ? 'Assigning workout...'
+                                  : 'Assign to $memberName',
+                              icon: Icons.check_circle_rounded,
+                              expanded: true,
+                              onPressed: submitting ? null : assignTemplate,
+                            ),
                           ),
                         ],
                       ],
@@ -2324,30 +2340,42 @@ class _TrainerBottomNav extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _TrainerBottomNavItem(
-                    label: 'Home',
-                    icon: Icons.home_rounded,
-                    active: currentIndex == 0,
-                    onTap: () => onSelect(0),
+                  GuideTarget(
+                    id: 'trainer_home_v1/home',
+                    child: _TrainerBottomNavItem(
+                      label: 'Home',
+                      icon: Icons.home_rounded,
+                      active: currentIndex == 0,
+                      onTap: () => onSelect(0),
+                    ),
                   ),
-                  _TrainerBottomNavItem(
-                    label: 'Clients',
-                    icon: Icons.groups_rounded,
-                    active: currentIndex == 1,
-                    onTap: () => onSelect(1),
+                  GuideTarget(
+                    id: 'trainer_home_v1/members',
+                    child: _TrainerBottomNavItem(
+                      label: 'Clients',
+                      icon: Icons.groups_rounded,
+                      active: currentIndex == 1,
+                      onTap: () => onSelect(1),
+                    ),
                   ),
                   const SizedBox(width: 58),
-                  _TrainerBottomNavItem(
-                    label: 'Chat',
-                    icon: Icons.chat_bubble_rounded,
-                    active: currentIndex == 3,
-                    onTap: () => onSelect(3),
+                  GuideTarget(
+                    id: 'trainer_home_v1/messages',
+                    child: _TrainerBottomNavItem(
+                      label: 'Chat',
+                      icon: Icons.chat_bubble_rounded,
+                      active: currentIndex == 3,
+                      onTap: () => onSelect(3),
+                    ),
                   ),
-                  _TrainerBottomNavItem(
-                    label: 'Alerts',
-                    icon: Icons.notifications_rounded,
-                    active: currentIndex == 4,
-                    onTap: () => onSelect(4),
+                  GuideTarget(
+                    id: 'trainer_home_v1/notifications',
+                    child: _TrainerBottomNavItem(
+                      label: 'Alerts',
+                      icon: Icons.notifications_rounded,
+                      active: currentIndex == 4,
+                      onTap: () => onSelect(4),
+                    ),
                   ),
                 ],
               ),
@@ -2355,9 +2383,12 @@ class _TrainerBottomNav extends StatelessWidget {
           ),
           Positioned(
             top: -26,
-            child: _TrainerCenterAction(
-              active: currentIndex == 2,
-              onTap: () => onSelect(2),
+            child: GuideTarget(
+              id: 'trainer_home_v1/builder',
+              child: _TrainerCenterAction(
+                active: currentIndex == 2,
+                onTap: () => onSelect(2),
+              ),
             ),
           ),
         ],
@@ -2594,7 +2625,13 @@ class _TrainerGreetingHeader extends StatelessWidget {
             onTap: onOpenNotifications,
           ),
           const SizedBox(width: 10),
-          _HeaderAction(icon: Icons.settings_rounded, onTap: onOpenSettings),
+          GuideTarget(
+            id: 'trainer_home_v1/settings',
+            child: _HeaderAction(
+              icon: Icons.settings_rounded,
+              onTap: onOpenSettings,
+            ),
+          ),
         ],
       ),
     );
@@ -4437,10 +4474,13 @@ class _FitnessWelcomeBar extends StatelessWidget {
               ],
             ),
           ),
-          _SquareIconButton(
-            icon: Icons.settings_rounded,
-            tooltip: 'Settings',
-            onTap: onOpenSettings,
+          GuideTarget(
+            id: 'trainer_home_v1/settings',
+            child: _SquareIconButton(
+              icon: Icons.settings_rounded,
+              tooltip: 'Settings',
+              onTap: onOpenSettings,
+            ),
           ),
         ],
       ),
@@ -6114,27 +6154,30 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        DropdownButtonFormField<String>(
-                          key: ValueKey('member-$_selectedAssignmentKey'),
-                          initialValue: _selectedAssignmentKey,
-                          isExpanded: true,
-                          items: widget.members
-                              .map(
-                                (member) => DropdownMenuItem<String>(
-                                  value: _assignmentKey(member),
-                                  child: Text(
-                                    '${_map(member['member'])['name']?.toString() ?? 'Member'} · '
-                                    '${_assignmentScopeLabel(member)}',
-                                    overflow: TextOverflow.ellipsis,
+                        GuideTarget(
+                          id: 'trainer_assignment_v1/member',
+                          child: DropdownButtonFormField<String>(
+                            key: ValueKey('member-$_selectedAssignmentKey'),
+                            initialValue: _selectedAssignmentKey,
+                            isExpanded: true,
+                            items: widget.members
+                                .map(
+                                  (member) => DropdownMenuItem<String>(
+                                    value: _assignmentKey(member),
+                                    child: Text(
+                                      '${_map(member['member'])['name']?.toString() ?? 'Member'} · '
+                                      '${_assignmentScopeLabel(member)}',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) =>
-                              setState(() => _selectedAssignmentKey = value),
-                          decoration: _workoutInputDecoration(
-                            'Member',
-                            icon: Icons.person_search_rounded,
+                                )
+                                .toList(),
+                            onChanged: (value) =>
+                                setState(() => _selectedAssignmentKey = value),
+                            decoration: _workoutInputDecoration(
+                              'Member',
+                              icon: Icons.person_search_rounded,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 14),
@@ -6508,83 +6551,86 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                                   ? Icons.hourglass_top_rounded
                                   : Icons.search_off_rounded,
                             ),
-                          DropdownMenu<int>(
-                            controller: _exercisePickerTextController,
-                            initialSelection: _selectedExerciseId,
-                            expandedInsets: EdgeInsets.zero,
-                            requestFocusOnTap: false,
-                            enableFilter: false,
-                            enableSearch: false,
-                            closeBehavior: DropdownMenuCloseBehavior.none,
-                            dropdownMenuEntries: [
-                              ...filteredExercises
-                                  .where((exercise) => exercise['id'] is num)
-                                  .map((exercise) {
-                                    final bodyPart =
-                                        exercise['body_part_label']
-                                            ?.toString() ??
-                                        _bodyPartLabel(
-                                          exercise['body_part']?.toString() ??
-                                              '',
-                                        );
-                                    return DropdownMenuEntry<int>(
-                                      value: (exercise['id'] as num).toInt(),
-                                      label:
+                          GuideTarget(
+                            id: 'trainer_builder_v1/picker',
+                            child: DropdownMenu<int>(
+                              controller: _exercisePickerTextController,
+                              initialSelection: _selectedExerciseId,
+                              expandedInsets: EdgeInsets.zero,
+                              requestFocusOnTap: false,
+                              enableFilter: false,
+                              enableSearch: false,
+                              closeBehavior: DropdownMenuCloseBehavior.none,
+                              dropdownMenuEntries: [
+                                ...filteredExercises
+                                    .where((exercise) => exercise['id'] is num)
+                                    .map((exercise) {
+                                      final bodyPart =
+                                          exercise['body_part_label']
+                                              ?.toString() ??
+                                          _bodyPartLabel(
+                                            exercise['body_part']?.toString() ??
+                                                '',
+                                          );
+                                      return DropdownMenuEntry<int>(
+                                        value: (exercise['id'] as num).toInt(),
+                                        label:
+                                            '${_exerciseDisplayName(exercise)} • $bodyPart',
+                                        labelWidget: Text(
                                           '${_exerciseDisplayName(exercise)} • $bodyPart',
-                                      labelWidget: Text(
-                                        '${_exerciseDisplayName(exercise)} • $bodyPart',
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    );
-                                  }),
-                              if (_catalogExercisePage.hasMore)
-                                DropdownMenuEntry<int>(
-                                  value: _loadMoreExercisePickerValue,
-                                  label: _loadingExerciseCatalog
-                                      ? 'Loading exercises...'
-                                      : 'Load more exercise results',
-                                  enabled: !_loadingExerciseCatalog,
-                                  leadingIcon: _loadingExerciseCatalog
-                                      ? const SizedBox.square(
-                                          dimension: 16,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Icon(
-                                          Icons.expand_more_rounded,
-                                          size: 20,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                ),
-                            ],
-                            onSelected: (value) {
-                              if (value == _loadMoreExercisePickerValue) {
-                                _syncExercisePickerText();
-                                unawaited(_loadMoreExercises());
-                                return;
-                              }
-                              setState(() {
-                                _selectedExerciseId = value;
-                                final selected = _catalogExercises.firstWhere(
-                                  (item) =>
-                                      (item['id'] as num?)?.toInt() == value,
-                                  orElse: () => const <String, dynamic>{},
-                                );
-                                final suggested =
-                                    selected['default_tracking_mode']
-                                        ?.toString() ??
-                                    'reps';
-                                _trackingMode =
-                                    const {
-                                      'reps',
-                                      'timed',
-                                      'cardio',
-                                      'distance',
-                                    }.contains(suggested)
-                                    ? suggested
-                                    : 'reps';
-                              });
-                            },
+                                      );
+                                    }),
+                                if (_catalogExercisePage.hasMore)
+                                  DropdownMenuEntry<int>(
+                                    value: _loadMoreExercisePickerValue,
+                                    label: _loadingExerciseCatalog
+                                        ? 'Loading exercises...'
+                                        : 'Load more exercise results',
+                                    enabled: !_loadingExerciseCatalog,
+                                    leadingIcon: _loadingExerciseCatalog
+                                        ? const SizedBox.square(
+                                            dimension: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.expand_more_rounded,
+                                            size: 20,
+                                          ),
+                                  ),
+                              ],
+                              onSelected: (value) {
+                                if (value == _loadMoreExercisePickerValue) {
+                                  _syncExercisePickerText();
+                                  unawaited(_loadMoreExercises());
+                                  return;
+                                }
+                                setState(() {
+                                  _selectedExerciseId = value;
+                                  final selected = _catalogExercises.firstWhere(
+                                    (item) =>
+                                        (item['id'] as num?)?.toInt() == value,
+                                    orElse: () => const <String, dynamic>{},
+                                  );
+                                  final suggested =
+                                      selected['default_tracking_mode']
+                                          ?.toString() ??
+                                      'reps';
+                                  _trackingMode =
+                                      const {
+                                        'reps',
+                                        'timed',
+                                        'cardio',
+                                        'distance',
+                                      }.contains(suggested)
+                                      ? suggested
+                                      : 'reps';
+                                });
+                              },
+                            ),
                           ),
                           const SizedBox(height: 14),
                           _SelectedExerciseBodyPart(
@@ -6701,10 +6747,13 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                                   () => _groupType = value ?? 'superset',
                                 ),
                               ),
-                              TextFormField(
-                                controller: _groupRoundsController,
-                                keyboardType: TextInputType.number,
-                                decoration: _workoutInputDecoration('Rounds'),
+                              GuideTarget(
+                                id: 'trainer_builder_v1/groups',
+                                child: TextFormField(
+                                  controller: _groupRoundsController,
+                                  keyboardType: TextInputType.number,
+                                  decoration: _workoutInputDecoration('Rounds'),
+                                ),
                               ),
                               TextFormField(
                                 controller: _transitionSecondsController,
@@ -6973,23 +7022,28 @@ class __WorkoutPageState extends State<_WorkoutPage> {
                   ),
                   const SizedBox(height: 20),
                 ],
-                GradientButton(
-                  label: _savingPlan
-                      ? (_workoutTabIndex == 0
-                            ? 'Assigning workout...'
-                            : 'Saving library workout...')
-                      : (_workoutTabIndex == 0
-                            ? 'Assign selected workout to $memberName'
-                            : 'Save workout to library'),
-                  icon: _workoutTabIndex == 0
-                      ? Icons.assignment_turned_in_rounded
-                      : Icons.library_add_check_rounded,
-                  expanded: true,
-                  onPressed: _savingPlan
-                      ? null
-                      : (_workoutTabIndex == 0
-                            ? _assignSelectedTemplateToMember
-                            : _saveLibraryWorkout),
+                GuideTarget(
+                  id: _workoutTabIndex == 0
+                      ? 'trainer_assignment_v1/assign'
+                      : 'trainer_builder_v1/save',
+                  child: GradientButton(
+                    label: _savingPlan
+                        ? (_workoutTabIndex == 0
+                              ? 'Assigning workout...'
+                              : 'Saving library workout...')
+                        : (_workoutTabIndex == 0
+                              ? 'Assign selected workout to $memberName'
+                              : 'Save workout to library'),
+                    icon: _workoutTabIndex == 0
+                        ? Icons.assignment_turned_in_rounded
+                        : Icons.library_add_check_rounded,
+                    expanded: true,
+                    onPressed: _savingPlan
+                        ? null
+                        : (_workoutTabIndex == 0
+                              ? _assignSelectedTemplateToMember
+                              : _saveLibraryWorkout),
+                  ),
                 ),
               ],
             ),
@@ -11367,22 +11421,47 @@ class _NotificationPage extends StatelessWidget {
         .where((item) => item['read_at'] == null)
         .length;
 
-    return ColoredBox(
+    return Material(
       color: Colors.white,
       child: RefreshIndicator(
         onRefresh: onRefresh,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(25, 15, 25, 28),
           children: [
+            GuideTarget(
+              id: 'trainer_notifications_v1/preferences',
+              child: ListTile(
+                leading: const Icon(Icons.notifications_outlined),
+                title: const Text('Notification preferences'),
+                onTap: () {
+                  final repository = TrainerRepository(
+                    context.read<TrainerSessionController>().client,
+                  );
+                  showModalBottomSheet<void>(
+                    context: context,
+                    isScrollControlled: true,
+                    useSafeArea: true,
+                    builder: (_) => TrainerNotificationPreferencesSheet(
+                      onLoad: repository.fetchNotificationPreferences,
+                      onSave: repository.updateNotificationPreferences,
+                    ),
+                  );
+                },
+              ),
+            ),
+
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    'Notification',
-                    style: const TextStyle(
-                      color: Color(0xFF1D1617),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
+                  child: GuideTarget(
+                    id: 'trainer_notifications_v1/updates',
+                    child: Text(
+                      'Notification',
+                      style: const TextStyle(
+                        color: Color(0xFF1D1617),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                 ),

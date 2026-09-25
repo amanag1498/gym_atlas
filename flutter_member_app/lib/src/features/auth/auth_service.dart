@@ -18,6 +18,8 @@ class AuthService {
       'id_token': idToken,
       'device_name': 'flutter_member_app',
       'app_type': appType,
+      'accepted_terms': true,
+      'enable_optional_features': true,
     };
 
     debugPrint(
@@ -74,6 +76,8 @@ class AuthService {
         'email': email.trim(),
         'device_name': 'flutter_member_app_demo',
         'app_type': appType,
+        'accepted_terms': true,
+        'enable_optional_features': true,
       },
     );
     final data = Map<String, dynamic>.from(

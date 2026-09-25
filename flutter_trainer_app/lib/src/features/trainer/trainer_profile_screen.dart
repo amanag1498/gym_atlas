@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
@@ -451,16 +452,19 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
     final displayName = _trainerUser['name']?.toString() ?? 'Trainer';
     return AppGradientScaffold(
       title: 'Edit Profile',
-      bottomNavigationBar: _TrainerProfileSaveBar(
-        saving: _saving,
-        onSave:
-            _saving ||
-                _submittingVerification ||
-                _uploadingPhoto ||
-                _loading ||
-                _error != null
-            ? null
-            : _saveProfile,
+      bottomNavigationBar: GuideTarget(
+        id: 'trainer_profile_edit_v1/save',
+        child: _TrainerProfileSaveBar(
+          saving: _saving,
+          onSave:
+              _saving ||
+                  _submittingVerification ||
+                  _uploadingPhoto ||
+                  _loading ||
+                  _error != null
+              ? null
+              : _saveProfile,
+        ),
       ),
       body: SafeArea(
         bottom: false,
@@ -498,230 +502,241 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
                           : _removePhoto,
                     ),
                     const SizedBox(height: 25),
-                    _FitProfileCard(
-                      title: 'Basic Details',
-                      subtitle:
-                          'Keep your account details accurate. Birth date and gender are optional.',
-                      child: Column(
-                        children: <Widget>[
-                          TextFormField(
-                            controller: _nameController,
-                            textCapitalization: TextCapitalization.words,
-                            decoration: _fitInputDecoration(
-                              'Name',
-                              icon: Icons.person_outline_rounded,
+                    GuideTarget(
+                      id: 'trainer_profile_edit_v1/basic',
+                      child: _FitProfileCard(
+                        title: 'Basic Details',
+                        subtitle:
+                            'Keep your account details accurate. Birth date and gender are optional.',
+                        child: Column(
+                          children: <Widget>[
+                            TextFormField(
+                              controller: _nameController,
+                              textCapitalization: TextCapitalization.words,
+                              decoration: _fitInputDecoration(
+                                'Name',
+                                icon: Icons.person_outline_rounded,
+                              ),
+                              validator: (value) => (value ?? '').trim().isEmpty
+                                  ? 'Name is required'
+                                  : null,
                             ),
-                            validator: (value) => (value ?? '').trim().isEmpty
-                                ? 'Name is required'
-                                : null,
-                          ),
-                          const SizedBox(height: 14),
-                          TextFormField(
-                            controller: _phoneController,
-                            readOnly: !_editing,
-                            keyboardType: TextInputType.phone,
-                            autofillHints: const [
-                              AutofillHints.telephoneNumber,
-                            ],
-                            decoration: _fitInputDecoration(
-                              'Phone number',
-                              icon: Icons.phone_outlined,
-                            ),
-                            validator: (value) {
-                              final phone = (value ?? '').trim();
-                              if (phone.isEmpty) {
-                                return 'Phone number is required';
-                              }
-                              final digitCount = phone.codeUnits
-                                  .where((unit) => unit >= 48 && unit <= 57)
-                                  .length;
-                              if (digitCount < 7 || digitCount > 15) {
-                                return 'Enter a valid phone number';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 14),
-                          DropdownButtonFormField<String>(
-                            initialValue:
-                                const [
-                                  'female',
-                                  'male',
-                                  'non_binary',
-                                  'prefer_not_to_say',
-                                ].contains(_gender)
-                                ? _gender
-                                : null,
-                            decoration: _fitInputDecoration(
-                              'Gender (optional)',
-                              icon: Icons.person_outline_rounded,
-                            ),
-                            items:
-                                const {
-                                      'female': 'Female',
-                                      'male': 'Male',
-                                      'non_binary': 'Non-binary',
-                                      'prefer_not_to_say': 'Prefer not to say',
-                                    }.entries
-                                    .map(
-                                      (entry) => DropdownMenuItem<String>(
-                                        value: entry.key,
-                                        child: Text(entry.value),
-                                      ),
-                                    )
-                                    .toList(),
-                            onChanged: _editing
-                                ? (value) => setState(() => _gender = value)
-                                : null,
-                          ),
-                          const SizedBox(height: 14),
-                          TextFormField(
-                            controller: _dateOfBirthController,
-                            readOnly: true,
-                            onTap: _editing ? _pickDateOfBirth : null,
-                            decoration: _fitInputDecoration(
-                              'Date of birth (optional)',
-                              icon: Icons.cake_outlined,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 25),
-                    _FitProfileCard(
-                      title: 'Coaching Details',
-                      subtitle:
-                          'Tell members about your specialties and experience.',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          TextFormField(
-                            controller: _bioController,
-                            readOnly: !_editing,
-                            maxLines: 4,
-                            decoration: _fitInputDecoration(
-                              'Bio',
-                              icon: Icons.notes_rounded,
-                            ),
-                            validator: (value) {
-                              if ((value ?? '').trim().length > 5000) {
-                                return 'Bio is too long';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 14),
-                          TextFormField(
-                            controller: _specializationController,
-                            readOnly: !_editing,
-                            decoration: _fitInputDecoration(
-                              'Specializations',
-                              hint: 'Strength, Fat Loss, Mobility',
-                              icon: Icons.fitness_center_rounded,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          TextFormField(
-                            controller: _experienceController,
-                            readOnly: !_editing,
-                            keyboardType: TextInputType.number,
-                            decoration: _fitInputDecoration(
-                              'Experience years',
-                              icon: Icons.timeline_rounded,
-                            ),
-                            validator: (value) {
-                              final trimmed = value?.trim() ?? '';
-                              if (trimmed.isEmpty) {
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: _phoneController,
+                              readOnly: !_editing,
+                              keyboardType: TextInputType.phone,
+                              autofillHints: const [
+                                AutofillHints.telephoneNumber,
+                              ],
+                              decoration: _fitInputDecoration(
+                                'Phone number',
+                                icon: Icons.phone_outlined,
+                              ),
+                              validator: (value) {
+                                final phone = (value ?? '').trim();
+                                if (phone.isEmpty) {
+                                  return 'Phone number is required';
+                                }
+                                final digitCount = phone.codeUnits
+                                    .where((unit) => unit >= 48 && unit <= 57)
+                                    .length;
+                                if (digitCount < 7 || digitCount > 15) {
+                                  return 'Enter a valid phone number';
+                                }
                                 return null;
-                              }
-                              final years = int.tryParse(trimmed);
-                              if (years == null || years < 0) {
-                                return 'Enter a valid number of years';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 14),
-                          if (_editing)
-                            TrainerCertificationBuilder(
-                              certifications: _certifications,
-                              nameController: _certificationNameController,
-                              issuerController: _certificationIssuerController,
-                              yearController: _certificationYearController,
-                              pendingProof: _pendingCertificationProof,
-                              uploading: _uploadingCertification,
-                              onUpload: _uploadingCertification
-                                  ? null
-                                  : _pickAndUploadCertification,
-                              onAdd: _addCertification,
-                              onRemove: (index) => setState(
-                                () => _certifications.removeAt(index),
+                              },
+                            ),
+                            const SizedBox(height: 14),
+                            DropdownButtonFormField<String>(
+                              initialValue:
+                                  const [
+                                    'female',
+                                    'male',
+                                    'non_binary',
+                                    'prefer_not_to_say',
+                                  ].contains(_gender)
+                                  ? _gender
+                                  : null,
+                              decoration: _fitInputDecoration(
+                                'Gender (optional)',
+                                icon: Icons.person_outline_rounded,
                               ),
-                            )
-                          else
-                            _CertificationPreviewList(
-                              certifications: _certificationPayload(),
-                              editing: false,
+                              items:
+                                  const {
+                                        'female': 'Female',
+                                        'male': 'Male',
+                                        'non_binary': 'Non-binary',
+                                        'prefer_not_to_say':
+                                            'Prefer not to say',
+                                      }.entries
+                                      .map(
+                                        (entry) => DropdownMenuItem<String>(
+                                          value: entry.key,
+                                          child: Text(entry.value),
+                                        ),
+                                      )
+                                      .toList(),
+                              onChanged: _editing
+                                  ? (value) => setState(() => _gender = value)
+                                  : null,
                             ),
-                          const SizedBox(height: 14),
-                          TextFormField(
-                            controller: _languagesController,
-                            readOnly: !_editing,
-                            decoration: _fitInputDecoration(
-                              'Languages',
-                              hint: 'English, Hindi',
-                              icon: Icons.translate_rounded,
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: _dateOfBirthController,
+                              readOnly: true,
+                              onTap: _editing ? _pickDateOfBirth : null,
+                              decoration: _fitInputDecoration(
+                                'Date of birth (optional)',
+                                icon: Icons.cake_outlined,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 25),
-                    _FitProfileCard(
-                      title: 'Personal Coaching Verification',
-                      subtitle: verificationStatus == 'verified'
-                          ? 'Your personal coaching profile is verified.'
-                          : verificationStatus == 'suspended'
-                          ? 'Personal coaching access is suspended. Contact support for help.'
-                          : verificationStatus == 'rejected'
-                          ? 'Update the requested details, then resubmit for review.'
-                          : verificationSubmitted
-                          ? 'Your application is under review.'
-                          : 'Complete your coaching details and certifications to apply.',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (verificationReason?.isNotEmpty == true)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 14),
-                              child: Text(
-                                verificationReason!,
-                                style: Theme.of(context).textTheme.bodySmall,
+                    GuideTarget(
+                      id: 'trainer_profile_edit_v1/coaching',
+                      child: _FitProfileCard(
+                        title: 'Coaching Details',
+                        subtitle:
+                            'Tell members about your specialties and experience.',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            TextFormField(
+                              controller: _bioController,
+                              readOnly: !_editing,
+                              maxLines: 4,
+                              decoration: _fitInputDecoration(
+                                'Bio',
+                                icon: Icons.notes_rounded,
+                              ),
+                              validator: (value) {
+                                if ((value ?? '').trim().length > 5000) {
+                                  return 'Bio is too long';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: _specializationController,
+                              readOnly: !_editing,
+                              decoration: _fitInputDecoration(
+                                'Specializations',
+                                hint: 'Strength, Fat Loss, Mobility',
+                                icon: Icons.fitness_center_rounded,
                               ),
                             ),
-                          if (verificationStatus != 'verified' &&
-                              verificationStatus != 'suspended' &&
-                              (verificationStatus == 'rejected' ||
-                                  !verificationSubmitted))
-                            OutlinedButton.icon(
-                              onPressed: _submittingVerification || _saving
-                                  ? null
-                                  : _submitVerification,
-                              icon: _submittingVerification
-                                  ? const SizedBox.square(
-                                      dimension: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.verified_user_outlined),
-                              label: Text(
-                                verificationStatus == 'rejected'
-                                    ? 'Resubmit verification'
-                                    : 'Submit for verification',
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: _experienceController,
+                              readOnly: !_editing,
+                              keyboardType: TextInputType.number,
+                              decoration: _fitInputDecoration(
+                                'Experience years',
+                                icon: Icons.timeline_rounded,
+                              ),
+                              validator: (value) {
+                                final trimmed = value?.trim() ?? '';
+                                if (trimmed.isEmpty) {
+                                  return null;
+                                }
+                                final years = int.tryParse(trimmed);
+                                if (years == null || years < 0) {
+                                  return 'Enter a valid number of years';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 14),
+                            if (_editing)
+                              TrainerCertificationBuilder(
+                                certifications: _certifications,
+                                nameController: _certificationNameController,
+                                issuerController:
+                                    _certificationIssuerController,
+                                yearController: _certificationYearController,
+                                pendingProof: _pendingCertificationProof,
+                                uploading: _uploadingCertification,
+                                onUpload: _uploadingCertification
+                                    ? null
+                                    : _pickAndUploadCertification,
+                                onAdd: _addCertification,
+                                onRemove: (index) => setState(
+                                  () => _certifications.removeAt(index),
+                                ),
+                              )
+                            else
+                              _CertificationPreviewList(
+                                certifications: _certificationPayload(),
+                                editing: false,
+                              ),
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: _languagesController,
+                              readOnly: !_editing,
+                              decoration: _fitInputDecoration(
+                                'Languages',
+                                hint: 'English, Hindi',
+                                icon: Icons.translate_rounded,
                               ),
                             ),
-                        ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 25),
+                    GuideTarget(
+                      id: 'trainer_profile_edit_v1/verification',
+                      child: _FitProfileCard(
+                        title: 'Personal Coaching Verification',
+                        subtitle: verificationStatus == 'verified'
+                            ? 'Your personal coaching profile is verified.'
+                            : verificationStatus == 'suspended'
+                            ? 'Personal coaching access is suspended. Contact support for help.'
+                            : verificationStatus == 'rejected'
+                            ? 'Update the requested details, then resubmit for review.'
+                            : verificationSubmitted
+                            ? 'Your application is under review.'
+                            : 'Complete your coaching details and certifications to apply.',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (verificationReason?.isNotEmpty == true)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 14),
+                                child: Text(
+                                  verificationReason!,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ),
+                            if (verificationStatus != 'verified' &&
+                                verificationStatus != 'suspended' &&
+                                (verificationStatus == 'rejected' ||
+                                    !verificationSubmitted))
+                              OutlinedButton.icon(
+                                onPressed: _submittingVerification || _saving
+                                    ? null
+                                    : _submitVerification,
+                                icon: _submittingVerification
+                                    ? const SizedBox.square(
+                                        dimension: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.verified_user_outlined),
+                                label: Text(
+                                  verificationStatus == 'rejected'
+                                      ? 'Resubmit verification'
+                                      : 'Submit for verification',
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ],

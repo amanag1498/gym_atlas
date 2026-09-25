@@ -1,9 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:flutter/services.dart';
 import 'package:gym_flutter_core/gym_flutter_core.dart'
-    show PrivacyRequestsDialog;
+    show PrivacyConsentDialog, PrivacyRequestsDialog;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/user_facing_error.dart';
@@ -98,6 +99,10 @@ class MemberSettingsScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              const GuideTarget(
+                id: 'member_settings_v1/guides',
+                child: GuideSettingsTile(),
+              ),
               const _SettingsTopBar(
                 title: 'Settings',
                 subtitle: 'Manage your account, training, and support options.',
@@ -114,23 +119,27 @@ class MemberSettingsScreen extends StatelessWidget {
               const SizedBox(height: 25),
               _AnimatedSection(
                 delay: const Duration(milliseconds: 120),
-                child: _SettingsGroup(
-                  title: 'Account',
-                  subtitle: 'Your profile, membership, and attendance records.',
-                  children: [
-                    _SettingsRow(
-                      icon: Icons.workspace_premium_rounded,
-                      title: 'Membership',
-                      subtitle: 'Plans, status, and membership history',
-                      onPressed: onOpenMembership,
-                    ),
-                    _SettingsRow(
-                      icon: Icons.fact_check_outlined,
-                      title: 'Activity History',
-                      subtitle: 'View gym check-ins and attendance',
-                      onPressed: onOpenAttendance,
-                    ),
-                  ],
+                child: GuideTarget(
+                  id: 'member_settings_v1/account',
+                  child: _SettingsGroup(
+                    title: 'Account',
+                    subtitle:
+                        'Your profile, membership, and attendance records.',
+                    children: [
+                      _SettingsRow(
+                        icon: Icons.workspace_premium_rounded,
+                        title: 'Membership',
+                        subtitle: 'Plans, status, and membership history',
+                        onPressed: onOpenMembership,
+                      ),
+                      _SettingsRow(
+                        icon: Icons.fact_check_outlined,
+                        title: 'Activity History',
+                        subtitle: 'View gym check-ins and attendance',
+                        onPressed: onOpenAttendance,
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 25),
@@ -152,43 +161,47 @@ class MemberSettingsScreen extends StatelessWidget {
               const SizedBox(height: 25),
               _AnimatedSection(
                 delay: const Duration(milliseconds: 220),
-                child: _SettingsGroup(
-                  title: 'Help & Legal',
-                  subtitle: 'Support and information about your account.',
-                  children: [
-                    _SettingsRow(
-                      icon: Icons.support_agent_rounded,
-                      title: 'Contact Us',
-                      subtitle: 'Get help from Gym Atlas support',
-                      onPressed: () =>
-                          _openLink(context, contactUrl, 'Contact page'),
-                    ),
-                    _SettingsRow(
-                      icon: Icons.privacy_tip_outlined,
-                      title: 'Privacy Policy',
-                      subtitle: 'How your information is handled',
-                      onPressed: () =>
-                          _openLink(context, privacyUrl, 'Privacy policy'),
-                    ),
-                    _SettingsRow(
-                      icon: Icons.gavel_rounded,
-                      title: 'Terms of Service',
-                      subtitle: 'Rules for using Gym Atlas',
-                      onPressed: () => _openLink(context, termsUrl, 'Terms'),
-                    ),
-                    _SettingsRow(
-                      icon: Icons.tune_rounded,
-                      title: 'Privacy & consent',
-                      subtitle: 'Manage the information choices you have made',
-                      onPressed: () => _openConsentManager(context, session),
-                    ),
-                    _SettingsRow(
-                      icon: Icons.manage_accounts_outlined,
-                      title: 'Your privacy requests',
-                      subtitle: 'Ask for access, correction or deletion',
-                      onPressed: () => _openPrivacyRequests(context, session),
-                    ),
-                  ],
+                child: GuideTarget(
+                  id: 'member_settings_v1/privacy',
+                  child: _SettingsGroup(
+                    title: 'Help & Legal',
+                    subtitle: 'Support and information about your account.',
+                    children: [
+                      _SettingsRow(
+                        icon: Icons.support_agent_rounded,
+                        title: 'Contact Us',
+                        subtitle: 'Get help from Gym Atlas support',
+                        onPressed: () =>
+                            _openLink(context, contactUrl, 'Contact page'),
+                      ),
+                      _SettingsRow(
+                        icon: Icons.privacy_tip_outlined,
+                        title: 'Privacy Policy',
+                        subtitle: 'How your information is handled',
+                        onPressed: () =>
+                            _openLink(context, privacyUrl, 'Privacy policy'),
+                      ),
+                      _SettingsRow(
+                        icon: Icons.gavel_rounded,
+                        title: 'Terms of Service',
+                        subtitle: 'Rules for using Gym Atlas',
+                        onPressed: () => _openLink(context, termsUrl, 'Terms'),
+                      ),
+                      _SettingsRow(
+                        icon: Icons.tune_rounded,
+                        title: 'Privacy & consent',
+                        subtitle:
+                            'Manage the information choices you have made',
+                        onPressed: () => _openConsentManager(context, session),
+                      ),
+                      _SettingsRow(
+                        icon: Icons.manage_accounts_outlined,
+                        title: 'Your privacy requests',
+                        subtitle: 'Ask for access, correction or deletion',
+                        onPressed: () => _openPrivacyRequests(context, session),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 25),
@@ -658,95 +671,17 @@ Future<void> _openConsentManager(
   BuildContext context,
   MemberSessionController session,
 ) async {
+  final items = (session.consentState['items'] as List<dynamic>? ?? const [])
+      .whereType<Map>()
+      .map((value) => Map<String, dynamic>.from(value))
+      .toList();
   await showDialog<void>(
     context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (context, setState) {
-        final items =
-            (session.consentState['items'] as List<dynamic>? ?? const [])
-                .whereType<Map>()
-                .map((value) => Map<String, dynamic>.from(value))
-                .toList();
-        return AlertDialog(
-          title: const Text('Privacy & consent'),
-          content: SizedBox(
-            width: 420,
-            child: ListView(
-              shrinkWrap: true,
-              children: items.map((item) {
-                final granted = item['granted'] == true;
-                final required = item['required'] == true;
-                return SwitchListTile.adaptive(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(item['title']?.toString() ?? 'Data use'),
-                  subtitle: Text(item['description']?.toString() ?? ''),
-                  value: granted,
-                  onChanged: required && !granted
-                      ? null
-                      : (value) async {
-                          if (required && !value) {
-                            final confirmed = await showDialog<bool>(
-                              context: dialogContext,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Withdraw account consent?'),
-                                content: const Text(
-                                  'Gym Atlas will stop access to your account features. You can review and agree again to resume using the app.',
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, false),
-                                    child: const Text('Keep using app'),
-                                  ),
-                                  FilledButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, true),
-                                    child: const Text('Withdraw'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (confirmed != true) return;
-                          }
-                          try {
-                            if (value) {
-                              await session.grantConsent(
-                                item['purpose'].toString(),
-                              );
-                            } else {
-                              await session.withdrawConsent(
-                                item['purpose'].toString(),
-                              );
-                            }
-                          } catch (_) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Could not save your choice. Please try again.',
-                                  ),
-                                ),
-                              );
-                            }
-                            return;
-                          }
-                          if (required && !value && dialogContext.mounted) {
-                            Navigator.pop(dialogContext);
-                          }
-                          if (dialogContext.mounted) setState(() {});
-                        },
-                );
-              }).toList(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Done'),
-            ),
-          ],
-        );
-      },
+    builder: (_) => PrivacyConsentDialog(
+      appName: 'Gym Atlas',
+      items: items,
+      onGrant: session.grantConsent,
+      onWithdraw: session.withdrawConsent,
     ),
   );
 }

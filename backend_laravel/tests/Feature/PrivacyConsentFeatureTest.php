@@ -43,6 +43,25 @@ class PrivacyConsentFeatureTest extends TestCase
         $this->assertCount(3, $user->consentRecords()->get());
     }
 
+    public function test_login_acceptance_enables_unset_optional_features_without_overriding_a_withdrawal(): void
+    {
+        $user = User::factory()->create();
+        $service = app(ConsentService::class);
+        $request = Request::create('/api/public/auth/firebase/login', 'POST');
+
+        $service->record($user, 'notifications', $request);
+        $service->withdraw($user, 'notifications', $request);
+        $service->recordLoginAcceptance($user, $request);
+
+        $state = collect($service->state($user)['items'])->keyBy('purpose');
+
+        $this->assertTrue($state['core_account']['granted']);
+        $this->assertTrue($state['health_and_fitness_data']['granted']);
+        $this->assertTrue($state['whatsapp']['granted']);
+        $this->assertFalse($state['notifications']['granted']);
+        $this->assertCount(2, $user->consentRecords()->where('purpose', 'notifications')->get());
+    }
+
     public function test_withdrawal_blocks_protected_routes_and_deletes_push_tokens(): void
     {
         $user = User::factory()->create();

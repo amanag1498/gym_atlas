@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/user_facing_error.dart';
@@ -222,17 +223,20 @@ class _MemberAssignedWorkoutScreenState
                           ),
                           const SizedBox(height: AppSpacing.sm),
                           RevealOnBuild(
-                            child: _AssignedWorkoutHero(
-                              title: planName,
-                              subtitle: goal,
-                              days: days.length,
-                              exercises: _countExercises(days),
-                              status: _titleCase(status),
-                              todayLabel: todayDay.isEmpty
-                                  ? 'Weekly plan ready'
-                                  : 'Today: ${_dayLabel(todayDay)}',
-                              onStart: () => widget.onStartAssignedWorkout(
-                                (activePlan['id'] as num?)?.toInt(),
+                            child: GuideTarget(
+                              id: 'member_assigned_workout_v1/overview',
+                              child: _AssignedWorkoutHero(
+                                title: planName,
+                                subtitle: goal,
+                                days: days.length,
+                                exercises: _countExercises(days),
+                                status: _titleCase(status),
+                                todayLabel: todayDay.isEmpty
+                                    ? 'Weekly plan ready'
+                                    : 'Today: ${_dayLabel(todayDay)}',
+                                onStart: () => widget.onStartAssignedWorkout(
+                                  (activePlan['id'] as num?)?.toInt(),
+                                ),
                               ),
                             ),
                           ),
@@ -295,54 +299,60 @@ class _MemberAssignedWorkoutScreenState
                           const SizedBox(height: AppSpacing.lg),
                           RevealOnBuild(
                             delay: const Duration(milliseconds: 120),
-                            child: WorkoutReferenceSection(
-                              title: 'Daily workout schedule',
-                              subtitle:
-                                  'Choose the workout day you want to review before starting the session.',
-                              child: days.isEmpty
-                                  ? const EmptyStateView(
-                                      title: 'No workout days configured',
-                                      message:
-                                          'Your trainer has not added workout-day blocks yet.',
-                                      icon: Icons.event_busy_rounded,
-                                    )
-                                  : Column(
-                                      children: days.asMap().entries.map((
-                                        entry,
-                                      ) {
-                                        final selected =
-                                            entry.key == _selectedDayIndex;
-                                        return Padding(
-                                          padding: EdgeInsets.only(
-                                            bottom: entry.key == days.length - 1
-                                                ? 0
-                                                : AppSpacing.sm,
-                                          ),
-                                          child: WorkoutReferenceScheduleRow(
-                                            onTap: () => setState(
-                                              () =>
-                                                  _selectedDayIndex = entry.key,
+                            child: GuideTarget(
+                              id: 'member_assigned_workout_v1/schedule',
+                              child: WorkoutReferenceSection(
+                                title: 'Daily workout schedule',
+                                subtitle:
+                                    'Choose the workout day you want to review before starting the session.',
+                                child: days.isEmpty
+                                    ? const EmptyStateView(
+                                        title: 'No workout days configured',
+                                        message:
+                                            'Your trainer has not added workout-day blocks yet.',
+                                        icon: Icons.event_busy_rounded,
+                                      )
+                                    : Column(
+                                        children: days.asMap().entries.map((
+                                          entry,
+                                        ) {
+                                          final selected =
+                                              entry.key == _selectedDayIndex;
+                                          return Padding(
+                                            padding: EdgeInsets.only(
+                                              bottom:
+                                                  entry.key == days.length - 1
+                                                  ? 0
+                                                  : AppSpacing.sm,
                                             ),
-                                            title: _dayLabel(entry.value),
-                                            subtitle:
-                                                entry.value['focus']
-                                                    ?.toString() ??
-                                                '${_dayExercises(entry.value).length} exercises configured',
-                                            icon: selected
-                                                ? Icons.play_circle_fill_rounded
-                                                : Icons.calendar_today_rounded,
-                                            trailing: StatusBadge(
-                                              label: selected
-                                                  ? 'Selected'
-                                                  : 'Review',
-                                              color: selected
-                                                  ? AppColors.primary
-                                                  : AppColors.textSecondary,
+                                            child: WorkoutReferenceScheduleRow(
+                                              onTap: () => setState(
+                                                () => _selectedDayIndex =
+                                                    entry.key,
+                                              ),
+                                              title: _dayLabel(entry.value),
+                                              subtitle:
+                                                  entry.value['focus']
+                                                      ?.toString() ??
+                                                  '${_dayExercises(entry.value).length} exercises configured',
+                                              icon: selected
+                                                  ? Icons
+                                                        .play_circle_fill_rounded
+                                                  : Icons
+                                                        .calendar_today_rounded,
+                                              trailing: StatusBadge(
+                                                label: selected
+                                                    ? 'Selected'
+                                                    : 'Review',
+                                                color: selected
+                                                    ? AppColors.primary
+                                                    : AppColors.textSecondary,
+                                              ),
                                             ),
-                                          ),
-                                        );
-                                      }).toList(),
-                                    ),
+                                          );
+                                        }).toList(),
+                                      ),
+                              ),
                             ),
                           ),
                           const SizedBox(height: AppSpacing.lg),
@@ -366,54 +376,58 @@ class _MemberAssignedWorkoutScreenState
                           const SizedBox(height: AppSpacing.lg),
                           RevealOnBuild(
                             delay: const Duration(milliseconds: 220),
-                            child: WorkoutReferenceExerciseSection(
-                              title: 'Exercises',
-                              countLabel: '${exercises.length} blocks',
-                              children: [
-                                if (exercises.isEmpty)
-                                  const EmptyStateView(
-                                    title: 'No exercises on this day yet',
-                                    message:
-                                        'This workout day is available, but your trainer has not attached exercises yet.',
-                                    icon: Icons.playlist_remove_rounded,
-                                  )
-                                else
-                                  ...exercises.asMap().entries.map((entry) {
-                                    final exercise = entry.value;
-                                    final detail = Map<String, dynamic>.from(
-                                      exercise['exercise'] as Map? ?? const {},
-                                    );
-                                    final targetWeight =
-                                        (exercise['target_weight'] as num?)
-                                            ?.toDouble();
+                            child: GuideTarget(
+                              id: 'member_assigned_workout_v1/exercises',
+                              child: WorkoutReferenceExerciseSection(
+                                title: 'Exercises',
+                                countLabel: '${exercises.length} blocks',
+                                children: [
+                                  if (exercises.isEmpty)
+                                    const EmptyStateView(
+                                      title: 'No exercises on this day yet',
+                                      message:
+                                          'This workout day is available, but your trainer has not attached exercises yet.',
+                                      icon: Icons.playlist_remove_rounded,
+                                    )
+                                  else
+                                    ...exercises.asMap().entries.map((entry) {
+                                      final exercise = entry.value;
+                                      final detail = Map<String, dynamic>.from(
+                                        exercise['exercise'] as Map? ??
+                                            const {},
+                                      );
+                                      final targetWeight =
+                                          (exercise['target_weight'] as num?)
+                                              ?.toDouble();
 
-                                    return Padding(
-                                      padding: EdgeInsets.only(
-                                        bottom:
-                                            entry.key == exercises.length - 1
-                                            ? 0
-                                            : AppSpacing.sm,
-                                      ),
-                                      child: WorkoutReferenceScheduleRow(
-                                        title:
-                                            detail['name']?.toString() ??
-                                            exercise['name']?.toString() ??
-                                            'Exercise',
-                                        subtitle:
-                                            '${detail['muscle_group']?.toString() ?? 'General'} • ${exercise['reps'] ?? '--'} reps • Rest ${exercise['rest_seconds'] ?? '--'}s',
-                                        icon: Icons.fitness_center_rounded,
-                                        trailing: StatusBadge(
-                                          label: targetWeight == null
-                                              ? 'Sets ${exercise['sets'] ?? '--'}'
-                                              : '${targetWeight.toStringAsFixed(0)} kg',
-                                          color: targetWeight == null
-                                              ? const Color(0xFF22D3EE)
-                                              : const Color(0xFF34D399),
+                                      return Padding(
+                                        padding: EdgeInsets.only(
+                                          bottom:
+                                              entry.key == exercises.length - 1
+                                              ? 0
+                                              : AppSpacing.sm,
                                         ),
-                                      ),
-                                    );
-                                  }),
-                              ],
+                                        child: WorkoutReferenceScheduleRow(
+                                          title:
+                                              detail['name']?.toString() ??
+                                              exercise['name']?.toString() ??
+                                              'Exercise',
+                                          subtitle:
+                                              '${detail['muscle_group']?.toString() ?? 'General'} • ${exercise['reps'] ?? '--'} reps • Rest ${exercise['rest_seconds'] ?? '--'}s',
+                                          icon: Icons.fitness_center_rounded,
+                                          trailing: StatusBadge(
+                                            label: targetWeight == null
+                                                ? 'Sets ${exercise['sets'] ?? '--'}'
+                                                : '${targetWeight.toStringAsFixed(0)} kg',
+                                            color: targetWeight == null
+                                                ? const Color(0xFF22D3EE)
+                                                : const Color(0xFF34D399),
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                ],
+                              ),
                             ),
                           ),
                         ],

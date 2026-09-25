@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 
 import '../../core/user_facing_error.dart';
 import '../../../core/theme/app_colors.dart';
@@ -96,108 +97,115 @@ class _TrainerProfileOverviewScreenState
                   children: [
                     _OverviewTopBar(onRefresh: _loadProfile),
                     const SizedBox(height: AppSpacing.md),
-                    PremiumCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            children: [
-                              _TrainerAvatar(
-                                imageUrl: _value(
-                                  _profile['profile_photo_url'],
-                                  fallback: '',
+                    GuideTarget(
+                      id: 'trainer_profile_v1/overview',
+                      child: PremiumCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                _TrainerAvatar(
+                                  imageUrl: _value(
+                                    _profile['profile_photo_url'],
+                                    fallback: '',
+                                  ),
+                                  name: name,
                                 ),
-                                name: name,
-                              ),
-                              const SizedBox(width: AppSpacing.md),
-                              Expanded(
-                                child: Column(
+                                const SizedBox(width: AppSpacing.md),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        name,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(
+                                              color: AppColors.textPrimary,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        email,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: AppColors.textSecondary,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final progress = Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      name,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
+                                      '${completion.toStringAsFixed(0)}% complete',
                                       style: Theme.of(context)
                                           .textTheme
-                                          .titleMedium
+                                          .labelLarge
                                           ?.copyWith(
                                             color: AppColors.textPrimary,
                                             fontWeight: FontWeight.w800,
                                           ),
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      email,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: AppColors.textSecondary,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                    const SizedBox(height: 7),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(999),
+                                      child: LinearProgressIndicator(
+                                        value: completion / 100,
+                                        minHeight: 7,
+                                        backgroundColor: AppColors.surfaceSoft,
+                                        color: AppColors.primaryBright,
+                                      ),
                                     ),
                                   ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          LayoutBuilder(
-                            builder: (context, constraints) {
-                              final progress = Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${completion.toStringAsFixed(0)}% complete',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelLarge
-                                        ?.copyWith(
-                                          color: AppColors.textPrimary,
-                                          fontWeight: FontWeight.w800,
-                                        ),
+                                );
+                                final edit = FilledButton.icon(
+                                  onPressed: _openEditor,
+                                  icon: const Icon(
+                                    Icons.edit_outlined,
+                                    size: 18,
                                   ),
-                                  const SizedBox(height: 7),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(999),
-                                    child: LinearProgressIndicator(
-                                      value: completion / 100,
-                                      minHeight: 7,
-                                      backgroundColor: AppColors.surfaceSoft,
-                                      color: AppColors.primaryBright,
-                                    ),
-                                  ),
-                                ],
-                              );
-                              final edit = FilledButton.icon(
-                                onPressed: _openEditor,
-                                icon: const Icon(Icons.edit_outlined, size: 18),
-                                label: const Text('Edit profile'),
-                              );
-                              if (constraints.maxWidth < 310) {
-                                return Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
+                                  label: const Text('Edit profile'),
+                                );
+                                if (constraints.maxWidth < 310) {
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      progress,
+                                      const SizedBox(height: AppSpacing.md),
+                                      edit,
+                                    ],
+                                  );
+                                }
+                                return Row(
                                   children: [
-                                    progress,
-                                    const SizedBox(height: AppSpacing.md),
+                                    Expanded(child: progress),
+                                    const SizedBox(width: AppSpacing.md),
                                     edit,
                                   ],
                                 );
-                              }
-                              return Row(
-                                children: [
-                                  Expanded(child: progress),
-                                  const SizedBox(width: AppSpacing.md),
-                                  edit,
-                                ],
-                              );
-                            },
-                          ),
-                        ],
+                              },
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 25),
@@ -224,48 +232,51 @@ class _TrainerProfileOverviewScreenState
                       ],
                     ),
                     const SizedBox(height: 25),
-                    _OverviewGroup(
-                      title: 'Coaching Profile',
-                      subtitle:
-                          'What members and gyms see about your coaching.',
-                      children: [
-                        _OverviewRow(
-                          icon: Icons.notes_rounded,
-                          title: 'Bio',
-                          value: _value(_profile['bio']),
-                          multiline: true,
-                        ),
-                        _OverviewRow(
-                          icon: Icons.fitness_center_rounded,
-                          title: 'Specializations',
-                          value: specializations.isEmpty
-                              ? 'Not added'
-                              : specializations.join(', '),
-                          multiline: true,
-                        ),
-                        _OverviewRow(
-                          icon: Icons.timeline_rounded,
-                          title: 'Experience',
-                          value: _profile['experience_years'] == null
-                              ? 'Not added'
-                              : '${_profile['experience_years']} years',
-                        ),
-                        _OverviewRow(
-                          icon: Icons.workspace_premium_outlined,
-                          title: 'Certifications',
-                          value: certifications.isEmpty
-                              ? 'Not added'
-                              : certifications.join(', '),
-                          multiline: true,
-                        ),
-                        _OverviewRow(
-                          icon: Icons.translate_rounded,
-                          title: 'Languages',
-                          value: languages.isEmpty
-                              ? 'Not added'
-                              : languages.join(', '),
-                        ),
-                      ],
+                    GuideTarget(
+                      id: 'trainer_profile_v1/coaching',
+                      child: _OverviewGroup(
+                        title: 'Coaching Profile',
+                        subtitle:
+                            'What members and gyms see about your coaching.',
+                        children: [
+                          _OverviewRow(
+                            icon: Icons.notes_rounded,
+                            title: 'Bio',
+                            value: _value(_profile['bio']),
+                            multiline: true,
+                          ),
+                          _OverviewRow(
+                            icon: Icons.fitness_center_rounded,
+                            title: 'Specializations',
+                            value: specializations.isEmpty
+                                ? 'Not added'
+                                : specializations.join(', '),
+                            multiline: true,
+                          ),
+                          _OverviewRow(
+                            icon: Icons.timeline_rounded,
+                            title: 'Experience',
+                            value: _profile['experience_years'] == null
+                                ? 'Not added'
+                                : '${_profile['experience_years']} years',
+                          ),
+                          _OverviewRow(
+                            icon: Icons.workspace_premium_outlined,
+                            title: 'Certifications',
+                            value: certifications.isEmpty
+                                ? 'Not added'
+                                : certifications.join(', '),
+                            multiline: true,
+                          ),
+                          _OverviewRow(
+                            icon: Icons.translate_rounded,
+                            title: 'Languages',
+                            value: languages.isEmpty
+                                ? 'Not added'
+                                : languages.join(', '),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 25),
                     _OverviewGroup(
@@ -292,29 +303,32 @@ class _TrainerProfileOverviewScreenState
                       ],
                     ),
                     const SizedBox(height: 25),
-                    _OverviewGroup(
-                      title: 'Personal Coaching Verification',
-                      subtitle:
-                          'Your eligibility to coach members independently.',
-                      children: [
-                        _OverviewRow(
-                          icon: Icons.verified_outlined,
-                          title: 'Status',
-                          value: _titleCase(verificationStatus),
-                        ),
-                        if (_value(
-                          _profile['verification_rejection_reason'],
-                          fallback: '',
-                        ).isNotEmpty)
+                    GuideTarget(
+                      id: 'trainer_profile_v1/verification',
+                      child: _OverviewGroup(
+                        title: 'Personal Coaching Verification',
+                        subtitle:
+                            'Your eligibility to coach members independently.',
+                        children: [
                           _OverviewRow(
-                            icon: Icons.info_outline_rounded,
-                            title: 'Changes requested',
-                            value: _value(
-                              _profile['verification_rejection_reason'],
-                            ),
-                            multiline: true,
+                            icon: Icons.verified_outlined,
+                            title: 'Status',
+                            value: _titleCase(verificationStatus),
                           ),
-                      ],
+                          if (_value(
+                            _profile['verification_rejection_reason'],
+                            fallback: '',
+                          ).isNotEmpty)
+                            _OverviewRow(
+                              icon: Icons.info_outline_rounded,
+                              title: 'Changes requested',
+                              value: _value(
+                                _profile['verification_rejection_reason'],
+                              ),
+                              multiline: true,
+                            ),
+                        ],
+                      ),
                     ),
                   ],
                 ),

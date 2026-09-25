@@ -17,13 +17,21 @@ class UserFcmToken extends Model
         'platform',
         'app_role',
         'device_name',
+        'device_key',
+        'app_version',
         'last_seen_at',
+        'last_push_success_at',
+        'uninstall_suspected_at',
+        'revoked_at',
     ];
 
     protected function casts(): array
     {
         return [
             'last_seen_at' => 'datetime',
+            'last_push_success_at' => 'datetime',
+            'uninstall_suspected_at' => 'datetime',
+            'revoked_at' => 'datetime',
         ];
     }
 
@@ -36,8 +44,11 @@ class UserFcmToken extends Model
     {
         $staleDays = max(1, (int) config('services.firebase.token_stale_days', 60));
 
-        return $query->where(fn (Builder $token) => $token
-            ->whereNull('last_seen_at')
-            ->orWhere('last_seen_at', '>=', now()->subDays($staleDays)));
+        return $query
+            ->whereNull('revoked_at')
+            ->whereNull('uninstall_suspected_at')
+            ->where(fn (Builder $token) => $token
+                ->whereNull('last_seen_at')
+                ->orWhere('last_seen_at', '>=', now()->subDays($staleDays)));
     }
 }

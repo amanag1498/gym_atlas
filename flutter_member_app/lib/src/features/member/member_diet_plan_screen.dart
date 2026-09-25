@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gym_flutter_core/diet_plan_meals_editor.dart';
 import 'package:gym_flutter_core/diet_plan_summary_view.dart';
+import 'package:gym_flutter_core/guides.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -274,11 +275,14 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
         bottom: false,
         child: Column(
           children: [
-            _DietPageTopBar(
-              title: 'Diet plans',
-              subtitle: 'Meals, nutrition targets, and daily progress.',
-              actionIcon: Icons.refresh_rounded,
-              onAction: _loading ? null : _load,
+            GuideTarget(
+              id: 'member_diet_v1/overview',
+              child: _DietPageTopBar(
+                title: 'Diet plans',
+                subtitle: 'Meals, nutrition targets, and daily progress.',
+                actionIcon: Icons.refresh_rounded,
+                onAction: _loading ? null : _load,
+              ),
             ),
             Expanded(
               child: _loading
@@ -295,7 +299,10 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                           AppSpacing.xl,
                         ),
                         children: [
-                          _DietCreateCard(onCreate: _openCreateStudio),
+                          GuideTarget(
+                            id: 'member_diet_v1/create',
+                            child: _DietCreateCard(onCreate: _openCreateStudio),
+                          ),
                           if (_planPage.hasMore) ...[
                             const SizedBox(height: AppSpacing.md),
                             Align(
@@ -427,25 +434,28 @@ class _MemberDietPlanScreenState extends State<MemberDietPlanScreen> {
                               ],
                             ),
                             const SizedBox(height: AppSpacing.lg),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'Today\'s meals',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleLarge,
+                            GuideTarget(
+                              id: 'member_diet_v1/meals',
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'Today\'s meals',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleLarge,
+                                    ),
                                   ),
-                                ),
-                                Text(
-                                  '${_completedMealIds.length}/${meals.length} done',
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: AppColors.success,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                ),
-                              ],
+                                  Text(
+                                    '${_completedMealIds.length}/${meals.length} done',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: AppColors.success,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                  ),
+                                ],
+                              ),
                             ),
                             const SizedBox(height: AppSpacing.sm),
                             ...meals.map((meal) {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -158,28 +159,31 @@ class _TrainerEventsScreenState extends State<TrainerEventsScreen> {
               ),
               child: SizedBox(
                 width: double.infinity,
-                child: SegmentedButton<int>(
-                  segments: [
-                    ButtonSegment(
-                      value: 0,
-                      label: const Text('Schedule'),
-                      icon: const Icon(Icons.calendar_month),
-                    ),
-                    ButtonSegment(
-                      value: 1,
-                      label: const Text('Hosting'),
-                      icon: const Icon(Icons.groups_2_outlined),
-                    ),
-                    if (_canManage)
+                child: GuideTarget(
+                  id: 'trainer_events_v1/tabs',
+                  child: SegmentedButton<int>(
+                    segments: [
                       const ButtonSegment(
-                        value: 2,
-                        label: Text('Manage'),
-                        icon: Icon(Icons.edit_calendar_outlined),
+                        value: 0,
+                        label: Text('Schedule'),
+                        icon: Icon(Icons.calendar_month),
                       ),
-                  ],
-                  selected: {_tab},
-                  onSelectionChanged: (value) =>
-                      setState(() => _tab = value.first),
+                      const ButtonSegment(
+                        value: 1,
+                        label: Text('Hosting'),
+                        icon: Icon(Icons.groups_2_outlined),
+                      ),
+                      if (_canManage)
+                        const ButtonSegment(
+                          value: 2,
+                          label: Text('Manage'),
+                          icon: Icon(Icons.edit_calendar_outlined),
+                        ),
+                    ],
+                    selected: {_tab},
+                    onSelectionChanged: (value) =>
+                        setState(() => _tab = value.first),
+                  ),
                 ),
               ),
             ),
@@ -237,11 +241,15 @@ class _TrainerEventsScreenState extends State<TrainerEventsScreen> {
                                     _hosted.any(
                                       (item) => item['id'] == event['id'],
                                     );
-                                return _TrainerEventCard(
-                                  event: event,
-                                  hosted: hosted,
-                                  managed: managed,
-                                  onTap: () => _showEvent(event),
+                                return GuideTarget(
+                                  id: 'trainer_events_v1/event',
+                                  enabled: index == 0,
+                                  child: _TrainerEventCard(
+                                    event: event,
+                                    hosted: hosted,
+                                    managed: managed,
+                                    onTap: () => _showEvent(event),
+                                  ),
                                 );
                               },
                             ),

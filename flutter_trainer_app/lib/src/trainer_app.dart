@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:gym_flutter_core/gym_flutter_core.dart'
     show
         AppRuntimeController,
@@ -177,12 +178,20 @@ class _TrainerAppState extends State<TrainerApp> {
         builder: (context, child) => AppRuntimeGate(
           controller: _runtimeController,
           audience: 'Trainer',
-          child: child ?? const SizedBox.shrink(),
+          child: Consumer<TrainerSessionController>(
+            builder: (context, session, _) => GuideScope(
+              account: session.isAuthenticated && session.hasRequiredConsent
+                  ? 'trainer:${session.user!.id}'
+                  : null,
+              guides: trainerGuides,
+              child: child ?? const SizedBox.shrink(),
+            ),
+          ),
         ),
         home: Consumer<TrainerSessionController>(
           builder: (context, session, _) {
             if (session.initializing) {
-              return const BrandedStartupLoader();
+              return const BrandedStartupLoader(audience: 'Trainer');
             }
 
             return session.isAuthenticated

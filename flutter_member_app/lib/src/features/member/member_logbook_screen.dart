@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/user_facing_error.dart';
@@ -171,7 +172,10 @@ class _MemberLogbookScreenState extends State<MemberLogbookScreen> {
                       AppSpacing.lg,
                       0,
                     ),
-                    child: const _LogbookTabSlider(),
+                    child: const GuideTarget(
+                      id: 'member_logbook_v1/history',
+                      child: _LogbookTabSlider(),
+                    ),
                   ),
                   Expanded(
                     child: TabBarView(
@@ -500,21 +504,29 @@ class _LogbookOverviewTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        _LogbookMomentumPanel(
-          workoutCount: history.length,
-          totalVolume: _formatKg(totalVolume),
-          recordCount: records.length,
-          trend: _historyTrend(history),
-          latestDate: lastWorkout == null
-              ? 'No dates yet'
-              : _formatDate(lastWorkout['session_date']),
-          topLift: bestRecord == null ? 'No PR yet' : _exerciseName(bestRecord),
+        GuideTarget(
+          id: 'member_logbook_v1/overview',
+          child: _LogbookMomentumPanel(
+            workoutCount: history.length,
+            totalVolume: _formatKg(totalVolume),
+            recordCount: records.length,
+            trend: _historyTrend(history),
+            latestDate: lastWorkout == null
+                ? 'No dates yet'
+                : _formatDate(lastWorkout['session_date']),
+            topLift: bestRecord == null
+                ? 'No PR yet'
+                : _exerciseName(bestRecord),
+          ),
         ),
         const SizedBox(height: AppSpacing.lg),
         if (records.isNotEmpty) ...[
-          _LogbookSectionTitle(
-            title: 'Personal record highlights',
-            action: '${records.length} PRs',
+          GuideTarget(
+            id: 'member_logbook_v1/records',
+            child: _LogbookSectionTitle(
+              title: 'Personal record highlights',
+              action: '${records.length} PRs',
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           ...records
@@ -1096,9 +1108,12 @@ class _WorkoutHistoryTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        _LogbookSectionTitle(
-          title: 'Workout history',
-          action: '${history.length} sessions',
+        GuideTarget(
+          id: 'member_logbook_v1/history',
+          child: _LogbookSectionTitle(
+            title: 'Workout history',
+            action: '${history.length} sessions',
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
         ...history.asMap().entries.map((entry) {
@@ -1152,9 +1167,12 @@ class _PersonalRecordsTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        _LogbookSectionTitle(
-          title: 'Personal records',
-          action: '${records.length} PRs',
+        GuideTarget(
+          id: 'member_logbook_v1/records',
+          child: _LogbookSectionTitle(
+            title: 'Personal records',
+            action: '${records.length} PRs',
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
         ...records.asMap().entries.map((entry) {

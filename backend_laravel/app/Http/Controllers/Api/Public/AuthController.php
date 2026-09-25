@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\Auth\FirebaseAuthService;
 use App\Services\Auth\GoogleAuthService;
 use App\Services\Authorization\ActiveRoleManager;
+use App\Services\Privacy\ConsentService;
 use Illuminate\Http\Request;
 
 class AuthController extends Controller
@@ -20,6 +21,7 @@ class AuthController extends Controller
         private readonly GoogleAuthService $googleAuthService,
         private readonly FirebaseAuthService $firebaseAuthService,
         private readonly ActiveRoleManager $activeRoleManager,
+        private readonly ConsentService $consentService,
     ) {}
 
     public function googleLogin(GoogleLoginRequest $request)
@@ -42,6 +44,14 @@ class AuthController extends Controller
             deviceName: $request->validated('device_name', 'flutter-app'),
             appType: $request->validated('app_type'),
         );
+
+        if ($request->boolean('accepted_terms')) {
+            $this->consentService->recordLoginAcceptance(
+                $session['user'],
+                $request,
+                $request->boolean('enable_optional_features', true),
+            );
+        }
 
         return $this->success(
             AuthSessionResource::make($session),

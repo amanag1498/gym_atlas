@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/guides.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/user_facing_error.dart';
@@ -370,28 +371,37 @@ class _TrainerTasksScreenState extends State<TrainerTasksScreen> {
                 ),
                 padding: const EdgeInsets.fromLTRB(25, 15, 25, 32),
                 children: <Widget>[
-                  _FollowHeroCard(
-                    todayCount: todayCount,
-                    overdueCount: overdueCount,
-                    pendingCount: summaryPendingCount,
+                  GuideTarget(
+                    id: 'trainer_tasks_v1/summary',
+                    child: _FollowHeroCard(
+                      todayCount: todayCount,
+                      overdueCount: overdueCount,
+                      pendingCount: summaryPendingCount,
+                    ),
                   ),
                   const SizedBox(height: 22),
-                  _FollowComposerCard(
-                    members: _gymMembers,
-                    selectedMemberId: _selectedMemberId,
-                    noteController: _noteController,
-                    followUpDateController: _followUpDateController,
-                    saving: _saving,
-                    onMemberChanged: (value) =>
-                        setState(() => _selectedMemberId = value),
-                    onSave: _saving ? null : _submitNote,
+                  GuideTarget(
+                    id: 'trainer_tasks_v1/composer',
+                    child: _FollowComposerCard(
+                      members: _gymMembers,
+                      selectedMemberId: _selectedMemberId,
+                      noteController: _noteController,
+                      followUpDateController: _followUpDateController,
+                      saving: _saving,
+                      onMemberChanged: (value) =>
+                          setState(() => _selectedMemberId = value),
+                      onSave: _saving ? null : _submitNote,
+                    ),
                   ),
                   const SizedBox(height: 22),
-                  _FollowTimelineCard(
-                    followUps: _followUps,
-                    endpointUnavailable: _followUpEndpointUnavailable,
-                    completionUnavailable: _completionUnavailable,
-                    onComplete: _completeTask,
+                  GuideTarget(
+                    id: 'trainer_tasks_v1/timeline',
+                    child: _FollowTimelineCard(
+                      followUps: _followUps,
+                      endpointUnavailable: _followUpEndpointUnavailable,
+                      completionUnavailable: _completionUnavailable,
+                      onComplete: _completeTask,
+                    ),
                   ),
                   if (_followUpPage.hasMore) ...[
                     const SizedBox(height: 16),

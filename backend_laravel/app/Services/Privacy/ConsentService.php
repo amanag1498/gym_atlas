@@ -118,6 +118,28 @@ class ConsentService
         ]);
     }
 
+    public function recordLoginAcceptance(
+        User $user,
+        Request $request,
+        bool $enableOptionalFeatures = true,
+    ): void {
+        if (! $this->granted($user, 'core_account')) {
+            $this->record($user, 'core_account', $request);
+        }
+
+        if (! $enableOptionalFeatures) {
+            return;
+        }
+
+        foreach (array_keys(self::PURPOSES) as $purpose) {
+            if ($purpose === 'core_account' || $this->hasDecision($user, $purpose)) {
+                continue;
+            }
+
+            $this->record($user, $purpose, $request);
+        }
+    }
+
     public function withdraw(User $user, string $purpose, Request $request): void
     {
         $notice = self::PURPOSES[$purpose]['title'].' — '.self::PURPOSES[$purpose]['description'];
@@ -153,6 +175,15 @@ class ConsentService
             ->first();
 
         return $latest !== null && $latest->consented_at !== null && $latest->withdrawn_at === null;
+    }
+
+    private function hasDecision(User $user, string $purpose): bool
+    {
+        return ConsentRecord::query()
+            ->where('user_id', $user->id)
+            ->where('purpose', $purpose)
+            ->where('policy_version', self::POLICY_VERSION)
+            ->exists();
     }
 
     /** @param array<int,int> $userIds

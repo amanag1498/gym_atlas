@@ -9,6 +9,7 @@
         $expiringSoonCount = $memberCollection->filter(fn ($member) => in_array(strtolower((string) ($member->memberProfile?->membership_status ?? '')), ['expiring soon', 'expiring_soon'], true))->count();
         $dueMembersCount = $memberCollection->filter(fn ($member) => (float) ($member->memberMemberships->first()?->due_amount ?? 0) > 0)->count();
         $assignedTrainerCount = max(0, $visibleMembersCount - $noTrainerCount);
+        $appActiveCount = collect($memberAppPresenceSummaries ?? [])->filter(fn ($presence) => ($presence['status'] ?? null) === 'active')->count();
     @endphp
 
     <div class="space-y-4">
@@ -56,12 +57,13 @@
             </div>
         </section>
 
-        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <x-stat-card label="Filtered Members" :value="$members->total()" hint="Current result set" tone="sky" />
             <x-stat-card label="High Risk" :value="$highRiskCount" hint="Needs intervention" tone="rose" />
             <x-stat-card label="No Trainer" :value="$noTrainerCount" hint="Coverage gap" tone="amber" />
             <x-stat-card label="Expiring Soon" :value="$expiringSoonCount" hint="Renewal pressure" tone="violet" />
             <x-stat-card label="Due Now" :value="$dueMembersCount" hint="Billing follow-up" tone="emerald" />
+            <x-stat-card label="App Active" :value="$appActiveCount" hint="Seen in 30 days" tone="indigo" />
         </div>
 
         <div class="space-y-4">
@@ -159,7 +161,7 @@
                     </div>
                 </div>
                 <div class="overflow-x-auto">
-                    <table class="panel-table min-w-[1320px]">
+                    <table class="panel-table min-w-[1480px]">
                             <thead>
                                 <tr>
                                     <th>Member</th>
@@ -167,6 +169,7 @@
                                     <th>Trainer / Branch</th>
                                     <th>Goal / Profile</th>
                                     <th>Engagement</th>
+                                    <th>App</th>
                                     <th class="w-[25rem]">Actions</th>
                                 </tr>
                             </thead>
@@ -177,6 +180,7 @@
                                         $latestMembership = $member->memberMemberships->first();
                                         $engagement = $member->engagement_score ?? $profile?->engagement_score ?? null;
                                         $engagementScore = (int) ($engagement['score'] ?? 0);
+                                        $appPresence = ($memberAppPresenceSummaries ?? collect())->get($member->id, ['label' => 'Not using app yet', 'tone' => 'warning', 'last_seen_at' => null, 'platforms' => []]);
                                         $engagementToneClass = match ($engagement['category'] ?? null) {
                                             'Excellent' => 'bg-emerald-500',
                                             'Good' => 'bg-sky-500',
@@ -247,6 +251,13 @@
                                                     <div class="h-full rounded-full {{ $engagementToneClass }}" style="width: {{ max(0, min(100, $engagementScore)) }}%"></div>
                                                 </div>
                                                 <p class="mt-1 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">{{ $engagement['summary'] ?? 'No engagement summary yet.' }}</p>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="min-w-[10rem]">
+                                                <x-status-badge :label="$appPresence['label']" :tone="$appPresence['tone']" />
+                                                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">{{ $appPresence['last_seen_at']?->diffForHumans() ?? 'Never opened' }}</p>
+                                                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ collect($appPresence['platforms'])->map(fn ($platform) => str($platform)->upper())->implode(', ') ?: 'Unknown platform' }}</p>
                                             </div>
                                         </td>
                                         <td>
