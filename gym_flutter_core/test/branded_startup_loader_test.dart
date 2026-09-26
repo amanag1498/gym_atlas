@@ -15,7 +15,8 @@ void main() {
     expect(find.byType(AtlasBrandMark), findsWidgets);
     expect(find.text('Getting things ready'), findsOneWidget);
     expect(find.text('Preparing your training space'), findsOneWidget);
-    expect(find.text('ATLAS'), findsOneWidget);
+    expect(find.text('GYM ATLAS'), findsOneWidget);
+    expect(find.text('COACH'), findsOneWidget);
     expect(find.byIcon(Icons.fitness_center_rounded), findsNothing);
   });
 

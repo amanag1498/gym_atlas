@@ -112,6 +112,21 @@ class DashboardController extends Controller
             ->latest('checked_in_at')
             ->take(8)
             ->get();
+        $membersInGym = (clone $attendanceQuery)
+            ->with(['member', 'branch'])
+            ->whereNull('checked_out_at')
+            ->where('checked_in_at', '>=', now()->subHours(6))
+            ->where(function (Builder $query): void {
+                $query->where('check_in_method', '!=', 'smart_attendance')
+                    ->orWhere(function (Builder $smart): void {
+                        $smart->where('check_in_method', 'smart_attendance')
+                            ->where('last_presence_at', '>', now()->subHours(2));
+                    });
+            })
+            ->latest('checked_in_at')
+            ->get()
+            ->unique('member_id')
+            ->values();
         $recentAnnouncements = Announcement::query()
             ->with(['creator', 'branch'])
             ->where('gym_id', $gym->id)
@@ -254,6 +269,7 @@ class DashboardController extends Controller
                     ->whereBetween('membership_expires_on', [now()->toDateString(), now()->addDays(7)->toDateString()])
                     ->count(),
                 'today_check_ins' => (clone $attendanceQuery)->whereDate('checked_in_at', now()->toDateString())->count(),
+                'members_in_gym' => $membersInGym->count(),
                 'pending_dues' => $pendingDuesAmount,
                 'overdue_dues' => $overdueDuesAmount,
                 'monthly_collection' => (float) (clone $paymentQuery)->whereBetween('paid_at', [now()->startOfMonth(), now()->endOfMonth()])->sum('amount'),
@@ -302,6 +318,7 @@ class DashboardController extends Controller
             'pendingCustomFeeMemberships' => $pendingCustomFeeMemberships,
             'recentPayments' => $recentPayments,
             'recentAttendance' => $recentAttendance,
+            'membersInGym' => $membersInGym,
             'recentAnnouncements' => $recentAnnouncements,
             'recentActivity' => $recentActivity,
             'branchSnapshots' => $branchSnapshots,

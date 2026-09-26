@@ -69,12 +69,16 @@ class AttendanceController extends Controller
         if ($request->string('export')->toString() === 'csv') {
             return $this->csvStreamService->download(
                 'gym-attendance-'.$gym->id.'-'.now()->format('Ymd-His').'.csv',
-                ['Member', 'Branch', 'Check-in Method', 'Checked In At', 'Checked In By', 'Notes', 'Source Device'],
+                ['Member', 'Branch', 'Check-in Method', 'Checked In At', 'Checked Out At', 'Duration Minutes', 'Checked In By', 'Notes', 'Source Device'],
                 (clone $query)->latest('checked_in_at')->get()->map(fn (AttendanceLog $log) => [
                     $log->member?->name ?? '',
                     $log->branch?->name ?? '',
                     $log->check_in_method,
                     optional($log->checked_in_at)->format('Y-m-d H:i:s') ?? '',
+                    optional($log->checked_out_at)->format('Y-m-d H:i:s') ?? '',
+                    $log->checked_in_at && $log->checked_out_at
+                        ? $log->checked_in_at->diffInMinutes($log->checked_out_at)
+                        : '',
                     $log->checkedInByUser?->name ?? 'System',
                     $log->notes ?? '',
                     $log->source_device ?? '',
@@ -87,6 +91,7 @@ class AttendanceController extends Controller
             ? (clone $membersQuery)->find($request->integer('member_id'))
             : null;
         [$todayStart, $todayEnd] = $this->attendanceService->localDayBounds($gym);
+        $currentPresence = $this->currentPresence($gym->id, $branchIds);
 
         return view('web.gym.attendance.index', [
             'pageTitle' => 'Attendance',
@@ -107,7 +112,9 @@ class AttendanceController extends Controller
             'selectedMemberSearchItem' => $selectedMember ? $this->attendanceMemberSearchItem($selectedMember) : null,
             'canManageAttendance' => $this->canManageAttendance($request, $gym, $request->integer('branch_id') ?: null),
             'duplicateProtectionEnabled' => (bool) $gym->prevent_duplicate_same_day_checkins,
+            'currentPresence' => $currentPresence,
             'summary' => [
+                'members_in_gym' => $currentPresence->count(),
                 'visible_logs' => (clone $summaryQuery)->count(),
                 'manual_logs' => (clone $summaryQuery)->where('check_in_method', 'manual')->count(),
                 'biometric_logs' => (clone $summaryQuery)->where('check_in_method', 'biometric')->count(),
@@ -262,6 +269,54 @@ class AttendanceController extends Controller
             'gym' => $gym->id,
             'branch' => $branch?->id,
         ])->with('status', 'Manual attendance recorded successfully.');
+    }
+
+    public function checkout(Request $request, AttendanceLog $attendanceLog): RedirectResponse
+    {
+        $gym = $this->gymWebPanelService->resolveGym($request);
+        $this->gymWebPanelService->assertPermission(
+            $request,
+            PermissionName::AttendanceManage->value,
+            $gym,
+            $attendanceLog->branch_id,
+        );
+        $this->assertAttendanceManageAccess($request, $gym, $attendanceLog->branch_id);
+        $branchIds = $this->gymWebPanelService->accessibleBranchIds($request, $gym);
+        abort_unless(
+            (int) $attendanceLog->gym_id === (int) $gym->id
+                && in_array((int) $attendanceLog->branch_id, $branchIds, true),
+            404,
+        );
+
+        if ($attendanceLog->checked_out_at !== null) {
+            return back()->with('status', 'This attendance visit is already checked out.');
+        }
+
+        $before = $attendanceLog->toArray();
+        $checkoutAt = now();
+        if ($attendanceLog->attendance_window_ends_at?->lt($checkoutAt)) {
+            $checkoutAt = $attendanceLog->attendance_window_ends_at;
+        }
+
+        $attendanceLog->forceFill([
+            'checked_out_at' => $checkoutAt,
+            'last_presence_at' => $attendanceLog->check_in_method === 'smart_attendance'
+                ? $checkoutAt
+                : $attendanceLog->last_presence_at,
+        ])->save();
+
+        $this->auditLogService->log(
+            event: 'web.gym.attendance.checked_out',
+            action: 'update',
+            request: $request,
+            subject: $attendanceLog,
+            gym: $gym,
+            branch: $attendanceLog->branch,
+            oldValues: $before,
+            newValues: $attendanceLog->fresh()->toArray(),
+        );
+
+        return back()->with('status', ($attendanceLog->member?->name ?? 'Member').' checked out successfully.');
     }
 
     public function storeCorrection(StoreAttendanceCorrectionRequest $request): RedirectResponse
@@ -499,6 +554,35 @@ class AttendanceController extends Controller
             'avatar' => $member->avatar,
             'branch_id' => $profile?->branch_id,
         ];
+    }
+
+    /**
+     * Open visits are limited to the six-hour attendance window. Smart
+     * Attendance visits also require a presence update within the last two
+     * hours so a delayed finalizer never inflates live occupancy.
+     *
+     * @param  list<int>  $branchIds
+     * @return Collection<int, AttendanceLog>
+     */
+    private function currentPresence(int $gymId, array $branchIds): Collection
+    {
+        return AttendanceLog::query()
+            ->with(['member', 'branch', 'smartAttendanceHub'])
+            ->where('gym_id', $gymId)
+            ->whereIn('branch_id', $branchIds)
+            ->whereNull('checked_out_at')
+            ->where('checked_in_at', '>=', now()->subHours(6))
+            ->where(function ($query): void {
+                $query->where('check_in_method', '!=', 'smart_attendance')
+                    ->orWhere(function ($smart): void {
+                        $smart->where('check_in_method', 'smart_attendance')
+                            ->where('last_presence_at', '>', now()->subHours(2));
+                    });
+            })
+            ->latest('checked_in_at')
+            ->get()
+            ->unique('member_id')
+            ->values();
     }
 
     /**

@@ -31,7 +31,8 @@
     <meta name="google-maps-id" content="{{ config('services.google.maps_id') }}" />
     <meta name="google-maps-region" content="{{ config('services.google.maps_region', 'IN') }}" />
 
-    <link rel="icon" href="{{ asset('tailadmin/images/logo/logo-icon.svg') }}" type="image/svg+xml" />
+    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any" />
+    <link rel="apple-touch-icon" href="{{ asset('images/public-site/brand/apple-touch-icon.png') }}" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" />

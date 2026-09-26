@@ -17,8 +17,8 @@ void main() {
     );
 
     expect(find.byType(AtlasBrandMark), findsOneWidget);
-    expect(find.text('GYM'), findsOneWidget);
-    expect(find.text('ATLAS'), findsOneWidget);
+    expect(find.text('GYM ATLAS'), findsOneWidget);
+    expect(find.text('DISCIPLINE IN MOTION'), findsOneWidget);
     expect(find.text('MEMBER APP'), findsNothing);
     expect(
       find.byWidgetPredicate(
@@ -47,5 +47,26 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(find.text('COACH'), findsOneWidget);
+  });
+
+  testWidgets('announces the admin product name for admin audiences', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: AtlasBrandLockup(audience: 'Admin')),
+      ),
+    );
+
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            widget.properties.label == 'Gym Atlas Admin app',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('ADMIN'), findsOneWidget);
   });
 }

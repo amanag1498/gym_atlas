@@ -72,17 +72,11 @@
         }
 
         .atlas-logo {
-            width: 3.4rem;
-            height: 3.4rem;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 1.15rem;
-            background: linear-gradient(135deg, #60a5fa, #2563eb);
-            color: #ffffff;
-            font-size: 1.25rem;
-            font-weight: 800;
-            box-shadow: 0 20px 45px rgba(37, 99, 235, 0.28);
+            display: block;
+            width: min(100%, 19rem);
+            height: auto;
+            object-fit: contain;
+            object-position: left center;
         }
 
         .atlas-kicker {
@@ -202,7 +196,7 @@
 <div class="atlas-login-shell">
     <main class="atlas-login-card">
         <div class="atlas-login-inner">
-            <div class="atlas-logo">A</div>
+            <img class="atlas-logo" src="{{ asset('images/brand/gym-atlas-lockup.png') }}" alt="Gym Atlas — Discipline in Motion">
 
             <p class="atlas-kicker">
                 {{ $panel === 'admin' ? 'Admin Panel' : 'Gym Panel' }}

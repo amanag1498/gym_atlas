@@ -14,7 +14,7 @@
             ['label' => 'Open Dues', 'value' => '₹'.number_format((float) $stats['pending_dues'], 2), 'hint' => $collectionRisk > 0 ? $collectionRisk.'% overdue risk' : 'No overdue pressure', 'tone' => $collectionRisk > 0 ? 'rose' : 'sky'],
             ['label' => 'Active Members', 'value' => $stats['active_members'].' / '.$stats['total_members'], 'hint' => 'Live member base', 'tone' => 'sky'],
             ['label' => 'Trainer Coverage', 'value' => $trainerCoverage.'%', 'hint' => $stats['members_without_trainer_count'].' without trainer', 'tone' => $stats['members_without_trainer_count'] > 0 ? 'amber' : 'emerald'],
-            ['label' => 'Today Check-ins', 'value' => $stats['today_check_ins'], 'hint' => 'Attendance pulse', 'tone' => 'violet'],
+            ['label' => 'Members in Gym', 'value' => $stats['members_in_gym'], 'hint' => $stats['today_check_ins'].' check-ins today', 'tone' => 'violet'],
             ['label' => 'Pending Trials', 'value' => $stats['pending_trial_requests'], 'hint' => 'Lead follow-up queue', 'tone' => $stats['pending_trial_requests'] > 0 ? 'amber' : 'sky'],
         ];
         $pulseRows = [
@@ -82,6 +82,43 @@
                 <x-stat-card :label="$metric['label']" :value="$metric['value']" :hint="$metric['hint']" :tone="$metric['tone']" />
             @endforeach
         </div>
+
+        @if ($visibility['attendance'])
+            <x-premium-card class="overflow-hidden p-0">
+                <div class="flex flex-col gap-3 border-b border-slate-200/80 px-5 py-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h2 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Members currently in gym</h2>
+                            <x-status-badge :label="$membersInGym->count().' present'" :tone="$membersInGym->isNotEmpty() ? 'success' : 'neutral'" />
+                        </div>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Live open visits across the selected gym and branch scope.</p>
+                    </div>
+                    <x-action-button as="a" variant="secondary" href="{{ route('web.gym.attendance.index', request()->query()) }}">Open attendance desk</x-action-button>
+                </div>
+                <div class="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
+                    @forelse ($membersInGym->take(8) as $presence)
+                        <a href="{{ route('web.gym.members.show', ['member' => $presence->member_id] + request()->query()) }}" class="group rounded-2xl border border-slate-200 bg-slate-50/80 p-4 transition hover:-translate-y-0.5 hover:border-sky-300 hover:bg-white hover:shadow-lg hover:shadow-sky-950/5 dark:border-slate-800 dark:bg-slate-900/70 dark:hover:border-sky-500/40 dark:hover:bg-slate-900">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <div class="truncate font-semibold text-slate-950 dark:text-white">{{ $presence->member?->name ?? 'Member' }}</div>
+                                    <div class="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">{{ $presence->branch?->name ?? 'Branch not set' }}</div>
+                                </div>
+                                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]" aria-label="In gym"></span>
+                            </div>
+                            <div class="mt-4 flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+                                <span>Since {{ $presence->checked_in_at?->format('h:i A') }}</span>
+                                <span>{{ $presence->checked_in_at?->diffForHumans(now(), true) }}</span>
+                            </div>
+                        </a>
+                    @empty
+                        <div class="sm:col-span-2 xl:col-span-4"><x-empty-state title="Nobody is currently checked in" message="Open visits from the attendance desk and Smart Attendance will appear here." /></div>
+                    @endforelse
+                </div>
+                @if ($membersInGym->count() > 8)
+                    <div class="border-t border-slate-200/80 px-5 py-3 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">And {{ $membersInGym->count() - 8 }} more members currently in the gym.</div>
+                @endif
+            </x-premium-card>
+        @endif
 
         @if ($visibility['billing'] || $visibility['attendance'] || $visibility['members_view'])
             <section aria-labelledby="dashboard-trends-heading" class="space-y-4">

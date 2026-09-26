@@ -29,3 +29,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/branding/gym_atlas_mark.png
+    - assets/branding/gym_atlas_lockup.png

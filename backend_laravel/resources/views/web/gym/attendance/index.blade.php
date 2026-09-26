@@ -34,13 +34,57 @@
         </div>
 
         <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <x-stat-card label="Members in Gym" :value="$summary['members_in_gym']" hint="Open visits in the last 6 hours" tone="success" />
             <x-stat-card label="Today Check-ins" :value="$todayCount" hint="Current day volume" tone="success" />
             <x-stat-card label="Filtered Logs" :value="$summary['visible_logs']" hint="Visible in current ledger" tone="sky" />
             <x-stat-card label="Unique Members" :value="$summary['unique_members']" hint="Distinct attendees in current filter" tone="violet" />
-            <x-stat-card label="Avg Daily" :value="$summary['avg_daily_logs']" hint="Average active day volume" tone="amber" />
             <x-stat-card label="Pending Corrections" :value="$summary['pending_corrections']" hint="Needs approval or rejection" tone="warning" />
             <x-stat-card label="Peak Window" :value="$peakHour['label'] ?? 'No pattern'" :hint="$peakHour ? $peakHour['count'].' logs in the strongest hour' : 'No traffic pattern yet'" tone="info" />
         </div>
+
+        <x-premium-card class="overflow-hidden p-0">
+            <div class="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h2 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Members currently in gym</h2>
+                        <x-status-badge :label="$currentPresence->count().' present'" :tone="$currentPresence->isNotEmpty() ? 'success' : 'neutral'" />
+                    </div>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Open attendance visits within the six-hour window. Smart visits disappear after two hours without a presence update.</p>
+                </div>
+                @if ($canManageAttendance)
+                    <a href="{{ route('web.gym.attendance.manual', $scopeQuery) }}" class="panel-btn-primary justify-center"><i class="ti ti-user-plus" aria-hidden="true"></i>Check in member</a>
+                @endif
+            </div>
+
+            <div class="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+                @forelse ($currentPresence as $presence)
+                    <article class="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/70">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <div class="truncate font-semibold text-slate-950 dark:text-white">{{ $presence->member?->name ?? 'Member' }}</div>
+                                <div class="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">{{ $presence->branch?->name ?? 'Branch not set' }}</div>
+                            </div>
+                            <x-status-badge :label="$presence->check_in_method === 'smart_attendance' ? 'Live' : 'Open'" :tone="$presence->check_in_method === 'smart_attendance' ? 'success' : 'info'" />
+                        </div>
+                        <dl class="mt-4 grid grid-cols-2 gap-3 text-xs">
+                            <div><dt class="font-medium uppercase tracking-[.12em] text-slate-400">In time</dt><dd class="mt-1 font-semibold text-slate-700 dark:text-slate-200">{{ $presence->checked_in_at?->format('h:i A') }}</dd></div>
+                            <div><dt class="font-medium uppercase tracking-[.12em] text-slate-400">Duration</dt><dd class="mt-1 font-semibold text-slate-700 dark:text-slate-200">{{ $presence->checked_in_at?->diffForHumans(now(), true) }}</dd></div>
+                        </dl>
+                        <div class="mt-4 flex items-center justify-between gap-2">
+                            <span class="text-xs text-slate-500 dark:text-slate-400">{{ str($presence->check_in_method)->replace('_', ' ')->title() }}</span>
+                            @if ($canManageAttendance)
+                                <form method="POST" action="{{ route('web.gym.attendance.checkout', ['attendanceLog' => $presence->id] + $scopeQuery) }}" data-confirm-submit data-confirm-title="Check out this member?" data-confirm-message="The current time will be saved as the out time for this visit." data-confirm-button="Check out">
+                                    @csrf
+                                    <button type="submit" class="panel-btn-secondary !rounded-xl !px-3 !py-2 !text-xs"><i class="ti ti-logout" aria-hidden="true"></i>Check out</button>
+                                </form>
+                            @endif
+                        </div>
+                    </article>
+                @empty
+                    <div class="sm:col-span-2 xl:col-span-3"><x-empty-state title="Nobody is currently checked in" message="New arrivals will appear here until they check out or their attendance window closes." /></div>
+                @endforelse
+            </div>
+        </x-premium-card>
 
         <div class="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_360px]">
             <x-premium-card class="overflow-hidden p-0">
@@ -68,7 +112,7 @@
                         :initial-item="$selectedMemberSearchItem"
                         placeholder="Search members"
                     />
-                    <x-form-select name="check_in_method" label="Method" :selected="request('check_in_method')" :options="['' => 'All methods', 'biometric' => 'Biometric', 'qr' => 'QR', 'manual' => 'Manual']" />
+                    <x-form-select name="check_in_method" label="Method" :selected="request('check_in_method')" :options="['' => 'All methods', 'smart_attendance' => 'Smart Attendance', 'biometric' => 'Biometric', 'qr' => 'QR', 'manual' => 'Manual']" />
                     <x-form-input name="start_date" label="Start Date" type="date" :value="request('start_date')" />
                     <x-form-input name="end_date" label="End Date" type="date" :value="request('end_date')" />
                     <div class="grid grid-cols-3 gap-2">
@@ -182,6 +226,11 @@
                             </thead>
                             <tbody>
                                 @foreach ($logs as $log)
+                                    @php
+                                        $isOpenVisit = $log->checked_out_at === null
+                                            && $log->checked_in_at?->gte(now()->subHours(6))
+                                            && ($log->check_in_method !== 'smart_attendance' || $log->last_presence_at?->gt(now()->subHours(2)));
+                                    @endphp
                                     <tr>
                                         <td>
                                             <div class="font-semibold text-slate-950 dark:text-white">{{ $log->member?->name ?? 'Member' }}</div>
@@ -195,8 +244,8 @@
                                             @if ($log->checked_out_at)
                                                 <div class="font-medium text-slate-900 dark:text-slate-100">{{ $log->checked_out_at->format('d M Y') }}</div>
                                                 <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $log->checked_out_at->format('h:i A') }}</div>
-                                            @elseif ($log->check_in_method === 'smart_attendance')
-                                                <x-status-badge label="ACTIVE" tone="success" />
+                                            @elseif ($isOpenVisit)
+                                                <x-status-badge label="IN GYM" tone="success" />
                                             @else
                                                 <span class="text-slate-400">—</span>
                                             @endif
@@ -210,18 +259,26 @@
                                         </td>
                                         <td>
                                             @if ($canManageAttendance)
-                                                <button
-                                                    type="button"
-                                                    class="panel-btn-secondary !rounded-xl !px-3 !py-2 !text-xs"
-                                                    data-attendance-correction-trigger
-                                                    data-log-id="{{ $log->id }}"
-                                                    data-member-id="{{ $log->member_id }}"
-                                                    data-branch-id="{{ $log->branch_id }}"
-                                                    data-checkin-at="{{ optional($log->checked_in_at)->format('Y-m-d\TH:i') }}"
-                                                    data-member-label="{{ $log->member?->name ?? 'Member' }}"
-                                                >
-                                                    Correct
-                                                </button>
+                                                <div class="flex flex-wrap gap-2">
+                                                    @if ($isOpenVisit)
+                                                        <form method="POST" action="{{ route('web.gym.attendance.checkout', ['attendanceLog' => $log->id] + $scopeQuery) }}" data-confirm-submit data-confirm-title="Check out this member?" data-confirm-message="The current time will be saved as the out time for this visit." data-confirm-button="Check out">
+                                                            @csrf
+                                                            <button type="submit" class="panel-btn-secondary !rounded-xl !px-3 !py-2 !text-xs">Check out</button>
+                                                        </form>
+                                                    @endif
+                                                    <button
+                                                        type="button"
+                                                        class="panel-btn-secondary !rounded-xl !px-3 !py-2 !text-xs"
+                                                        data-attendance-correction-trigger
+                                                        data-log-id="{{ $log->id }}"
+                                                        data-member-id="{{ $log->member_id }}"
+                                                        data-branch-id="{{ $log->branch_id }}"
+                                                        data-checkin-at="{{ optional($log->checked_in_at)->format('Y-m-d\TH:i') }}"
+                                                        data-member-label="{{ $log->member?->name ?? 'Member' }}"
+                                                    >
+                                                        Correct
+                                                    </button>
+                                                </div>
                                             @endif
                                         </td>
                                     </tr>

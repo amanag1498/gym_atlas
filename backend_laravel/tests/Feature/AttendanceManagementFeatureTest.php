@@ -52,6 +52,28 @@ class AttendanceManagementFeatureTest extends TestCase
             'check_in_method' => 'manual',
         ]);
 
+        $attendanceLogId = DB::table('attendance_logs')
+            ->where('gym_id', $gym->id)
+            ->where('member_id', $member->id)
+            ->value('id');
+
+        $presencePage = $this->actingAs($owner)
+            ->get(route('web.gym.attendance.index', ['gym' => $gym->id, 'branch' => $branch->id]))
+            ->assertOk()
+            ->assertSee('Members currently in gym')
+            ->assertSee('1 present');
+        $this->assertCount(1, $presencePage->viewData('currentPresence'));
+
+        $this->actingAs($owner)
+            ->post(route('web.gym.attendance.checkout', [
+                'gym' => $gym->id,
+                'branch' => $branch->id,
+                'attendanceLog' => $attendanceLogId,
+            ]))
+            ->assertRedirect();
+
+        $this->assertNotNull(DB::table('attendance_logs')->where('id', $attendanceLogId)->value('checked_out_at'));
+
         $this->actingAs($owner)
             ->get(route('web.gym.attendance.today', ['gym' => $gym->id, 'branch' => $branch->id]))
             ->assertOk()

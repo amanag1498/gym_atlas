@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gym_flutter_core/gym_flutter_core.dart';
 import 'package:intl/intl.dart';
 
 import '../theme/app_colors.dart';
@@ -415,7 +416,7 @@ class AuthPanel extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  const BrandMark(size: 80),
+                  const AtlasBrandLockup(audience: 'Admin', markSize: 72),
                   const SizedBox(height: AppSpacing.lg),
                   Text(
                     title,
