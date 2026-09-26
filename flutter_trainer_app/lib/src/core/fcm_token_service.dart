@@ -1,16 +1,24 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, debugPrint, defaultTargetPlatform, kIsWeb;
 import 'package:gym_flutter_core/fcm_retry_policy.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'api_client.dart';
 
 class TrainerFcmTokenService {
-  TrainerFcmTokenService(this._client);
+  TrainerFcmTokenService(this._client, {FlutterSecureStorage? storage})
+    : _storage = storage ?? const FlutterSecureStorage();
+
+  static const _devicePresenceKey = 'trainer_device_presence_id';
+  static const _appVersion = String.fromEnvironment('APP_VERSION');
 
   final TrainerApiClient _client;
+  final FlutterSecureStorage _storage;
   final FcmRetryPolicy _retryPolicy = FcmRetryPolicy();
   Timer? _retryTimer;
   StreamSubscription<String>? _tokenRefreshSubscription;
@@ -188,7 +196,14 @@ class TrainerFcmTokenService {
     try {
       final token = _registeredToken ?? await _readTokenIfAvailable();
       if (token != null && token.isNotEmpty) {
-        await _client.delete('/fcm-tokens', data: {'token': token});
+        await _client.delete(
+          '/fcm-tokens',
+          data: {
+            'token': token,
+            'app_role': _lastAppRole ?? 'trainer',
+            'device_id': await _devicePresenceId(),
+          },
+        );
       }
     } catch (exception) {
       debugPrint('[fcm] token unregister skipped: $exception');
@@ -247,16 +262,29 @@ class TrainerFcmTokenService {
     }
   }
 
-  Future<void> _sendToken(String token, String appRole) {
-    return _client.post(
+  Future<void> _sendToken(String token, String appRole) async {
+    await _client.post(
       '/fcm-tokens',
       data: {
         'token': token,
         'platform': _platformLabel(),
         'app_role': appRole,
         'device_name': _deviceName(),
+        'device_id': await _devicePresenceId(),
+        if (_appVersion.isNotEmpty) 'app_version': _appVersion,
       },
     );
+  }
+
+  Future<String> _devicePresenceId() async {
+    final existing = await _storage.read(key: _devicePresenceKey);
+    if (existing != null && existing.isNotEmpty) return existing;
+
+    final random = Random.secure();
+    final bytes = List<int>.generate(18, (_) => random.nextInt(256));
+    final id = base64UrlEncode(bytes).replaceAll('=', '');
+    await _storage.write(key: _devicePresenceKey, value: id);
+    return id;
   }
 
   String _platformLabel() {

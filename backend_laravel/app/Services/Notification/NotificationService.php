@@ -35,6 +35,7 @@ class NotificationService
         ?int $membershipId = null,
         ?array $data = null,
         mixed $scheduledFor = null,
+        ?string $idempotencyKey = null,
     ): ?Notification {
         $memberInAppPreferenceEnabled = $this->isChannelEnabled(
             $user->id,
@@ -69,6 +70,20 @@ class NotificationService
             'gym_name' => $gymName,
             'branch_name' => $branchName,
         ], fn (mixed $value): bool => $value !== null);
+        $notificationData = [...$context, ...($data ?? [])];
+        $deduplicationKey = $this->deduplicationKey(
+            userId: $user->id,
+            type: $type,
+            title: $title,
+            body: $body,
+            gymId: $gymId,
+            branchId: $branchId,
+            announcementId: $announcementId,
+            membershipId: $membershipId,
+            data: $notificationData,
+            scheduledFor: $scheduledFor,
+            idempotencyKey: $idempotencyKey,
+        );
 
         return DB::transaction(function () use (
             $user,
@@ -80,13 +95,15 @@ class NotificationService
             $createdByUserId,
             $announcementId,
             $membershipId,
-            $data,
             $scheduledFor,
-            $context,
+            $notificationData,
+            $deduplicationKey,
             $inAppEnabled,
             $automationRule,
         ): Notification {
-            $notification = Notification::query()->create([
+            $notification = Notification::query()->createOrFirst([
+                'deduplication_key' => $deduplicationKey,
+            ], [
                 'user_id' => $user->id,
                 'gym_id' => $gymId,
                 'branch_id' => $branchId,
@@ -96,11 +113,15 @@ class NotificationService
                 'title' => $title,
                 'message' => $body,
                 'body' => $body,
-                'data' => [...$context, ...($data ?? [])],
+                'data' => [...$notificationData, 'deduplication_key' => $deduplicationKey],
                 'created_by_user_id' => $createdByUserId,
                 'scheduled_for' => $scheduledFor,
                 'in_app_visible' => $inAppEnabled,
             ]);
+
+            if (! $notification->wasRecentlyCreated) {
+                return $notification;
+            }
 
             NotificationDelivery::query()->create([
                 'notification_id' => $notification->id,
@@ -314,5 +335,52 @@ class NotificationService
             ->get();
 
         return $rules->firstWhere('branch_id', $branchId) ?? $rules->firstWhere('branch_id', null);
+    }
+
+    private function deduplicationKey(
+        int $userId,
+        string $type,
+        string $title,
+        string $body,
+        ?int $gymId,
+        ?int $branchId,
+        ?int $announcementId,
+        ?int $membershipId,
+        array $data,
+        mixed $scheduledFor,
+        ?string $idempotencyKey,
+    ): string {
+        $payload = $idempotencyKey !== null && trim($idempotencyKey) !== ''
+            ? ['user_id' => $userId, 'event' => trim($idempotencyKey)]
+            : [
+                'user_id' => $userId,
+                'type' => $type,
+                'title' => $title,
+                'body' => $body,
+                'gym_id' => $gymId,
+                'branch_id' => $branchId,
+                'announcement_id' => $announcementId,
+                'membership_id' => $membershipId,
+                'data' => $this->canonicalize($data),
+                'scheduled_for' => $scheduledFor instanceof \DateTimeInterface
+                    ? $scheduledFor->format(DATE_ATOM)
+                    : $scheduledFor,
+                'window' => intdiv(now()->getTimestamp(), 120),
+            ];
+
+        return hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR));
+    }
+
+    private function canonicalize(mixed $value): mixed
+    {
+        if (! is_array($value)) {
+            return $value;
+        }
+
+        if (! array_is_list($value)) {
+            ksort($value);
+        }
+
+        return array_map(fn (mixed $item): mixed => $this->canonicalize($item), $value);
     }
 }

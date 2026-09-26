@@ -7,6 +7,7 @@ use App\Models\UserFcmToken;
 use App\Services\Privacy\ConsentService;
 use App\Services\Users\AppPresenceService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class FcmTokenController extends Controller
@@ -46,9 +47,34 @@ class FcmTokenController extends Controller
             $tokenUpdates['revoked_at'] = null;
         }
 
-        $token = UserFcmToken::query()->updateOrCreate([
-            'token' => $validated['token'],
-        ], $tokenUpdates);
+        $deviceKey = $tokenUpdates['device_key'] ?? null;
+        $appRole = $tokenUpdates['app_role'];
+        $token = DB::transaction(function () use ($validated, $tokenUpdates, $deviceKey, $appRole, $request): UserFcmToken {
+            if (is_string($deviceKey) && $deviceKey !== '') {
+                $staleDeviceTokens = UserFcmToken::query()
+                    ->where('app_role', $appRole)
+                    ->where(function ($query) use ($deviceKey, $request, $tokenUpdates): void {
+                        $query->where('device_key', $deviceKey)
+                            ->orWhere(function ($legacy) use ($request, $tokenUpdates): void {
+                                $legacy->whereNull('device_key')
+                                    ->where('user_id', $request->user()->id)
+                                    ->where('platform', $tokenUpdates['platform'])
+                                    ->where('device_name', $tokenUpdates['device_name']);
+                            });
+                    })
+                    ->where('token', '!=', $validated['token']);
+
+                if (Schema::hasColumn('user_fcm_tokens', 'revoked_at')) {
+                    $staleDeviceTokens->update(['revoked_at' => now()]);
+                } else {
+                    $staleDeviceTokens->delete();
+                }
+            }
+
+            return UserFcmToken::query()->updateOrCreate([
+                'token' => $validated['token'],
+            ], $tokenUpdates);
+        });
 
         $presence = $this->appPresenceService->recordSeen($request->user(), $validated + [
             'token' => $validated['token'],

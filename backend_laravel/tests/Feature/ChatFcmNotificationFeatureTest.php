@@ -14,6 +14,7 @@ use App\Models\NotificationPreference;
 use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Models\UserFcmToken;
+use App\Services\Firebase\FcmNotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -52,15 +53,55 @@ class ChatFcmNotificationFeatureTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('success', true);
 
-        $this->assertSame(0, Notification::query()->count());
-        Http::assertSent(function ($request): bool {
+        $this->assertSame(1, Notification::query()->count());
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $member->id,
+            'type' => 'trainer_message',
+            'in_app_visible' => true,
+        ]);
+        $notification = Notification::query()->firstOrFail();
+        Http::assertSent(function ($request) use ($notification): bool {
             $payload = $request->data();
 
             return str_contains((string) $request->url(), '/messages:send')
                 && $payload['message']['token'] === 'member-fcm-token'
                 && $payload['message']['notification']['title'] === 'Coach Sparsh sent you a message'
                 && $payload['message']['data']['type'] === 'chat_message'
+                && $payload['message']['data']['notification_id'] !== ''
+                && $payload['message']['android']['notification']['channel_id'] === 'chat_messages'
+                && $payload['message']['android']['collapse_key'] === $notification->deduplication_key
+                && $payload['message']['apns']['headers']['apns-collapse-id'] === $notification->deduplication_key
                 && $payload['message']['data']['click_action'] === 'FLUTTER_NOTIFICATION_CLICK';
+        });
+    }
+
+    public function test_non_chat_fcm_uses_the_shared_gym_atlas_channel_and_collapse_identity(): void
+    {
+        $this->enableFcm();
+
+        $sent = app(FcmNotificationService::class)->sendToToken(
+            'general-notification-token',
+            'Membership updated',
+            'Your membership is active.',
+            [
+                'type' => 'membership_resumed',
+                'notification_id' => 91,
+                'deduplication_key' => str_repeat('a', 64),
+            ],
+        );
+
+        $this->assertTrue($sent);
+        Http::assertSent(function ($request): bool {
+            if (! str_contains((string) $request->url(), '/messages:send')) {
+                return false;
+            }
+
+            $message = $request->data()['message'];
+
+            return $message['android']['notification']['channel_id'] === 'gym_atlas_notifications'
+                && $message['android']['collapse_key'] === str_repeat('a', 64)
+                && $message['android']['notification']['tag'] === 'gym_atlas_'.str_repeat('a', 64)
+                && $message['apns']['headers']['apns-collapse-id'] === str_repeat('a', 64);
         });
     }
 
@@ -90,7 +131,7 @@ class ChatFcmNotificationFeatureTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('success', true);
 
-        $this->assertSame(0, Notification::query()->count());
+        $this->assertSame(1, Notification::query()->count());
         Http::assertSent(function ($request): bool {
             $payload = $request->data();
 
@@ -126,7 +167,7 @@ class ChatFcmNotificationFeatureTest extends TestCase
             'X-Internal-Api-Key' => config('services.realtime.internal_api_key'),
         ])->assertCreated();
 
-        $this->assertSame(0, Notification::query()->count());
+        $this->assertSame(1, Notification::query()->count());
         Http::assertSentCount(0);
     }
 
@@ -153,7 +194,7 @@ class ChatFcmNotificationFeatureTest extends TestCase
 
         $this->assertSame($first, $second);
         $this->assertSame(1, ChatMessage::query()->where('client_message_id', 'trainer-idempotent-1')->count());
-        $this->assertSame(0, Notification::query()->count());
+        $this->assertSame(1, Notification::query()->count());
     }
 
     public function test_internal_chat_message_client_id_is_idempotent_for_socket_retry(): void
@@ -185,7 +226,7 @@ class ChatFcmNotificationFeatureTest extends TestCase
 
         $this->assertSame($first, $second);
         $this->assertSame(1, ChatMessage::query()->where('client_message_id', 'member-idempotent-1')->count());
-        $this->assertSame(0, Notification::query()->count());
+        $this->assertSame(1, Notification::query()->count());
     }
 
     public function test_internal_chat_message_does_not_suppress_push_from_global_presence_alone(): void
@@ -216,7 +257,7 @@ class ChatFcmNotificationFeatureTest extends TestCase
             ->assertJsonPath('success', true);
 
         $this->assertSame(1, ChatMessage::query()->where('client_message_id', 'member-online-1')->count());
-        $this->assertSame(0, Notification::query()->count());
+        $this->assertSame(1, Notification::query()->count());
         Http::assertSent(fn ($request): bool => str_contains((string) $request->url(), '/messages:send'));
     }
 
@@ -253,7 +294,7 @@ class ChatFcmNotificationFeatureTest extends TestCase
     public function test_rest_fallback_checks_exact_realtime_chat_focus_before_push(): void
     {
         $this->enableFcm();
-        Queue::fake();
+        Queue::fake([PublishRealtimeEvent::class]);
         config()->set('services.realtime.url', 'https://realtime.example.test');
         [$trainer, $member] = $this->assignedTrainerPair();
 
@@ -290,7 +331,7 @@ class ChatFcmNotificationFeatureTest extends TestCase
     public function test_rest_fallback_sends_push_when_recipient_is_not_in_exact_chat(): void
     {
         $this->enableFcm();
-        Queue::fake();
+        Queue::fake([PublishRealtimeEvent::class]);
         config()->set('services.realtime.url', 'https://realtime.example.test');
         [$trainer, $member] = $this->assignedTrainerPair();
 
@@ -318,7 +359,7 @@ class ChatFcmNotificationFeatureTest extends TestCase
             ])
             ->assertCreated();
 
-        $this->assertSame(0, Notification::query()->count());
+        $this->assertSame(1, Notification::query()->count());
         Http::assertSentCount(2);
         Http::assertSent(function ($request): bool {
             $payload = $request->data();

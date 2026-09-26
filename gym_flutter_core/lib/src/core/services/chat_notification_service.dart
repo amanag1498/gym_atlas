@@ -22,6 +22,12 @@ class ChatNotificationService {
     description: 'Messages from your trainer or member',
     importance: Importance.high,
   );
+  static const _notificationChannel = AndroidNotificationChannel(
+    'gym_atlas_notifications',
+    'Gym Atlas notifications',
+    description: 'Membership, attendance, workout, event, and account updates',
+    importance: Importance.high,
+  );
   static const _workoutTimerChannel = AndroidNotificationChannel(
     'workout_timers',
     'Workout timers',
@@ -56,6 +62,7 @@ class ChatNotificationService {
             AndroidFlutterLocalNotificationsPlugin
           >();
       await android?.createNotificationChannel(_channel);
+      await android?.createNotificationChannel(_notificationChannel);
       await android?.createNotificationChannel(_workoutTimerChannel);
     }
 
@@ -71,25 +78,31 @@ class ChatNotificationService {
     required String body,
     required Map<String, dynamic> data,
   }) async {
-    if (kIsWeb ||
-        defaultTargetPlatform != TargetPlatform.android ||
-        data['type'] != 'chat_message') {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       return;
     }
 
+    final isChat = data['type'] == 'chat_message';
+    final notificationId = int.tryParse(
+      data['notification_id']?.toString() ?? '',
+    );
     final messageId = int.tryParse(data['message_id']?.toString() ?? '');
     await _plugin.show(
-      messageId ?? DateTime.now().millisecondsSinceEpoch.remainder(1 << 31),
+      notificationId ??
+          messageId ??
+          DateTime.now().millisecondsSinceEpoch.remainder(1 << 31),
       title,
       body,
-      const NotificationDetails(
+      NotificationDetails(
         android: AndroidNotificationDetails(
-          'chat_messages',
-          'Chat messages',
-          channelDescription: 'Messages from your trainer or member',
+          isChat ? 'chat_messages' : 'gym_atlas_notifications',
+          isChat ? 'Chat messages' : 'Gym Atlas notifications',
+          channelDescription: isChat
+              ? 'Messages from your trainer or member'
+              : 'Membership, attendance, workout, event, and account updates',
           importance: Importance.high,
           priority: Priority.high,
-          category: AndroidNotificationCategory.message,
+          category: isChat ? AndroidNotificationCategory.message : null,
         ),
       ),
       payload: jsonEncode(data),
@@ -149,7 +162,7 @@ class ChatNotificationService {
 
     try {
       final decoded = jsonDecode(payload);
-      if (decoded is Map && decoded['type'] == 'chat_message') {
+      if (decoded is Map) {
         _onTap?.call(Map<String, dynamic>.from(decoded));
       }
     } on FormatException {

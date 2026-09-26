@@ -18,6 +18,7 @@ class Notification extends Model
         'announcement_id',
         'member_membership_id',
         'type',
+        'deduplication_key',
         'title',
         'message',
         'body',

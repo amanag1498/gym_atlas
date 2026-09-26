@@ -208,7 +208,7 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
       _handleNotificationOpen,
     );
     _foregroundNotificationSubscription = FirebaseMessaging.onMessage.listen(
-      _showForegroundChatNotification,
+      _showForegroundNotification,
     );
     FirebaseMessaging.instance
         .getInitialMessage()
@@ -232,7 +232,7 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
     _handleNotificationData(message.data);
   }
 
-  void _showForegroundChatNotification(RemoteMessage message) {
+  void _showForegroundNotification(RemoteMessage message) {
     final notification = message.notification;
     _chatNotificationService
         .show(
@@ -241,9 +241,7 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
           data: message.data,
         )
         .catchError((Object exception) {
-          debugPrint(
-            '[notifications] foreground chat alert skipped: $exception',
-          );
+          debugPrint('[notifications] foreground alert skipped: $exception');
         });
   }
 

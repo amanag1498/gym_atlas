@@ -128,7 +128,8 @@ class DeliverNotificationOutbox implements ShouldQueue
             'data' => [
                 ...($notification->data ?? []),
                 'notification_id' => $notification->id,
-                'type' => $notification->type,
+                'notification_type' => $notification->type,
+                'type' => $notification->data['type'] ?? $notification->type,
             ],
         ]);
 
@@ -149,7 +150,8 @@ class DeliverNotificationOutbox implements ShouldQueue
             ->deliverable()
             ->where('user_id', $notification->user_id)
             ->where('app_role', $appRole)
-            ->count();
+            ->distinct()
+            ->count('token');
         $delivery = NotificationDelivery::query()->firstOrCreate([
             'notification_id' => $notification->id,
             'transport' => NotificationTransport::Firebase->value,
@@ -194,7 +196,8 @@ class DeliverNotificationOutbox implements ShouldQueue
             data: [
                 ...($notification->data ?? []),
                 'notification_id' => $notification->id,
-                'type' => $notification->type,
+                'notification_type' => $notification->type,
+                'type' => $notification->data['type'] ?? $notification->type,
             ],
             appRole: $appRole,
         );

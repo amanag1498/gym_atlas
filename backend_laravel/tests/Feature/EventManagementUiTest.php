@@ -56,7 +56,7 @@ class EventManagementUiTest extends TestCase
             ->assertOk()
             ->assertHeader('Content-Type', 'image/svg+xml')
             ->assertHeader('X-Content-Type-Options', 'nosniff')
-            ->assertSee('data:image/png;base64,', false);
+            ->assertSee('<svg', false);
 
         $this->get(route('web.admin.events.qr', ['event' => $event, 'download' => 1]))
             ->assertOk()

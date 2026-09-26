@@ -8,7 +8,6 @@ use App\Jobs\DeliverNotificationOutbox;
 use App\Jobs\PublishRealtimeEvent;
 use App\Models\CommunicationAutomationRule;
 use App\Models\CommunicationOutbox;
-use App\Models\NotificationChannelPreference;
 use App\Models\NotificationDelivery;
 use App\Models\User;
 use App\Models\UserFcmToken;
@@ -49,6 +48,62 @@ class UnifiedNotificationDeliveryFeatureTest extends TestCase
             'idempotency_key' => 'notification:'.$notification->id.':deliver',
             'status' => 'pending',
         ]);
+    }
+
+    public function test_equivalent_notifications_created_together_share_one_feed_item_and_delivery(): void
+    {
+        Queue::fake();
+        $user = User::factory()->create(['active_role' => 'member']);
+        $service = app(NotificationService::class);
+
+        $first = $service->create(
+            user: $user,
+            type: 'gym_announcement',
+            title: 'Schedule update',
+            body: 'The evening batch starts at 6 PM.',
+            data: ['route' => '/notifications', 'app_role' => 'member'],
+        );
+        $second = $service->create(
+            user: $user,
+            type: 'gym_announcement',
+            title: 'Schedule update',
+            body: 'The evening batch starts at 6 PM.',
+            data: ['app_role' => 'member', 'route' => '/notifications'],
+        );
+
+        $this->assertSame($first->id, $second->id);
+        $this->assertSame(1, $user->notifications()->count());
+        $this->assertSame(1, CommunicationOutbox::query()->where('aggregate_id', $first->id)->count());
+        $this->assertSame(1, NotificationDelivery::query()
+            ->where('notification_id', $first->id)
+            ->where('transport', NotificationTransport::Database->value)
+            ->count());
+    }
+
+    public function test_explicit_event_key_stays_idempotent_across_delivery_windows(): void
+    {
+        Queue::fake();
+        $user = User::factory()->create(['active_role' => 'member']);
+        $service = app(NotificationService::class);
+
+        $first = $service->create(
+            user: $user,
+            type: 'trainer_message',
+            title: 'New message',
+            body: 'Your plan is ready.',
+            idempotencyKey: 'chat_message:42:recipient:'.$user->id,
+        );
+        $this->travel(10)->minutes();
+        $second = $service->create(
+            user: $user,
+            type: 'trainer_message',
+            title: 'New message',
+            body: 'Your plan is ready.',
+            idempotencyKey: 'chat_message:42:recipient:'.$user->id,
+        );
+
+        $this->assertSame($first->id, $second->id);
+        $this->assertSame(1, $user->notifications()->count());
     }
 
     public function test_outbox_sends_realtime_and_firebase_once_even_when_job_is_replayed(): void

@@ -8,6 +8,7 @@ use App\Models\Gym;
 use App\Models\MemberProfile;
 use App\Models\User;
 use App\Models\UserAppPresence;
+use App\Models\UserFcmToken;
 use App\Services\Users\AppPresenceService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -123,6 +124,42 @@ class AppPresenceFeatureTest extends TestCase
             'user_id' => $member->id,
             'device_key' => 'presence-only-device',
         ]);
+    }
+
+    public function test_registering_a_refreshed_token_revokes_the_previous_token_for_that_installation(): void
+    {
+        $member = $this->user(RoleName::Member->value, 'presence-token-refresh@example.com');
+        UserFcmToken::query()->create([
+            'user_id' => $member->id,
+            'token' => 'old-fcm-token',
+            'platform' => 'android',
+            'app_role' => 'member',
+            'device_key' => 'same-installation',
+            'last_seen_at' => now(),
+        ]);
+        UserFcmToken::query()->create([
+            'user_id' => $member->id,
+            'token' => 'legacy-fcm-token-without-device-id',
+            'platform' => 'android',
+            'app_role' => 'member',
+            'device_name' => 'Gym Atlas Android',
+            'last_seen_at' => now(),
+        ]);
+
+        $this->actingAs($member, 'sanctum')
+            ->postJson('/api/public/fcm-tokens', [
+                'token' => 'new-fcm-token',
+                'platform' => 'android',
+                'app_role' => 'member',
+                'device_name' => 'Gym Atlas Android',
+                'device_id' => 'same-installation',
+            ])
+            ->assertOk();
+
+        $this->assertNotNull(UserFcmToken::query()->where('token', 'old-fcm-token')->value('revoked_at'));
+        $this->assertNotNull(UserFcmToken::query()->where('token', 'legacy-fcm-token-without-device-id')->value('revoked_at'));
+        $this->assertNull(UserFcmToken::query()->where('token', 'new-fcm-token')->value('revoked_at'));
+        $this->assertSame(1, UserFcmToken::query()->deliverable()->where('user_id', $member->id)->count());
     }
 
     public function test_recent_signed_out_device_does_not_make_an_old_remaining_install_active(): void

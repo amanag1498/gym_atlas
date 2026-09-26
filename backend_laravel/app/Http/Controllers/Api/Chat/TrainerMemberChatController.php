@@ -13,7 +13,6 @@ use App\Models\ChatSafetyAction;
 use App\Models\MemberProfile;
 use App\Models\TrainerProfile;
 use App\Models\User;
-use App\Services\Firebase\FcmNotificationService;
 use App\Services\Member\MemberAppService;
 use App\Services\Members\GymMemberAccessService;
 use App\Services\Notification\NotificationService;
@@ -28,7 +27,6 @@ use Illuminate\Validation\ValidationException;
 class TrainerMemberChatController extends Controller
 {
     public function __construct(
-        private readonly FcmNotificationService $fcmNotificationService,
         private readonly NotificationService $notificationService,
         private readonly MemberAppService $memberAppService,
         private readonly RealtimePublisher $realtimePublisher,
@@ -610,10 +608,14 @@ class TrainerMemberChatController extends Controller
             ? RoleName::Trainer->value
             : RoleName::Member->value;
 
-        $this->fcmNotificationService->sendToUser(
+        $this->notificationService->create(
             user: $recipient,
+            type: NotificationType::TrainerMessage->value,
             title: $senderName.' sent you a message',
             body: $message->body,
+            gymId: $isIndependentRelationship ? null : $scope?->gym_id,
+            branchId: $isIndependentRelationship ? null : $scope?->branch_id,
+            createdByUserId: $message->sender_id,
             data: [
                 'type' => 'chat_message',
                 'room' => $message->room,
@@ -626,8 +628,9 @@ class TrainerMemberChatController extends Controller
                 'gym_id' => $isIndependentRelationship ? null : $scope?->gym_id,
                 'branch_id' => $isIndependentRelationship ? null : $scope?->branch_id,
                 'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                'app_role' => $appRole,
             ],
-            appRole: $appRole,
+            idempotencyKey: 'chat_message:'.$message->id.':recipient:'.$recipient->id,
         );
     }
 

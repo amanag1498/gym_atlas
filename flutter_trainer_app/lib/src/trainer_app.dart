@@ -83,7 +83,7 @@ class _TrainerAppState extends State<TrainerApp> {
       _handleNotificationOpen,
     );
     _foregroundNotificationSubscription = FirebaseMessaging.onMessage.listen(
-      _showForegroundChatNotification,
+      _showForegroundNotification,
     );
     FirebaseMessaging.instance
         .getInitialMessage()
@@ -107,7 +107,7 @@ class _TrainerAppState extends State<TrainerApp> {
     _handleNotificationData(message.data);
   }
 
-  void _showForegroundChatNotification(RemoteMessage message) {
+  void _showForegroundNotification(RemoteMessage message) {
     final notification = message.notification;
     _chatNotificationService
         .show(
@@ -116,9 +116,7 @@ class _TrainerAppState extends State<TrainerApp> {
           data: message.data,
         )
         .catchError((Object exception) {
-          debugPrint(
-            '[notifications] foreground chat alert skipped: $exception',
-          );
+          debugPrint('[notifications] foreground alert skipped: $exception');
         });
   }
 

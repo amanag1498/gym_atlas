@@ -75,6 +75,21 @@ class FcmNotificationService
             return false;
         }
 
+        $isChat = ($data['type'] ?? null) === 'chat_message';
+        $collapseId = (string) ($data['deduplication_key'] ?? $data['notification_id'] ?? $data['message_id'] ?? '');
+        $androidNotification = [
+            'channel_id' => $isChat ? 'chat_messages' : 'gym_atlas_notifications',
+            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+        ];
+        if ($collapseId !== '') {
+            $androidNotification['tag'] = 'gym_atlas_'.substr($collapseId, 0, 64);
+        }
+
+        $apnsHeaders = ['apns-priority' => '10'];
+        if ($collapseId !== '') {
+            $apnsHeaders['apns-collapse-id'] = substr($collapseId, 0, 64);
+        }
+
         try {
             $response = Http::withToken($accessToken)
                 ->acceptJson()
@@ -88,15 +103,11 @@ class FcmNotificationService
                         'data' => $this->stringData($data),
                         'android' => [
                             'priority' => 'HIGH',
-                            'notification' => [
-                                'channel_id' => 'chat_messages',
-                                'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-                            ],
+                            ...($collapseId !== '' ? ['collapse_key' => substr($collapseId, 0, 64)] : []),
+                            'notification' => $androidNotification,
                         ],
                         'apns' => [
-                            'headers' => [
-                                'apns-priority' => '10',
-                            ],
+                            'headers' => $apnsHeaders,
                             'payload' => [
                                 'aps' => [
                                     'sound' => 'default',
