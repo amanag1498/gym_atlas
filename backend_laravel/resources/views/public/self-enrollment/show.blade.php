@@ -1,9 +1,14 @@
 <x-public.layouts.enrollment
     :page-title="'Join '.$gym->name"
     :page-description="'Complete your member enrollment for '.$gym->name.'.'"
-    :social-image="$gym->logo_url"
+    :social-image="$gym->logo_url ?: asset('images/public-site/brand/atlas-mark-512.png')"
 >
     @php
+        $gymHasLogo = filled($gym->logo_url);
+        $gymLogoUrl = $gymHasLogo
+            ? $gym->logo_url
+            : asset('images/public-site/brand/atlas-mark-512.png');
+        $gymLogoAlt = $gymHasLogo ? $gym->name.' logo' : 'Gym Atlas logo';
         $errorFields = array_keys($errors->toArray());
         $initialStep = 1;
         $stepFields = [
@@ -32,7 +37,7 @@
             <div class="absolute -right-24 top-10 h-72 w-72 rounded-full bg-teal-400/20 blur-3xl"></div>
             <div class="relative"><span class="inline-flex rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[.18em] text-teal-200">Member enrollment</span></div>
             <div class="relative py-14">
-                @if($gym->logo_url)<img src="{{ $gym->logo_url }}" alt="{{ $gym->name }} logo" class="h-28 w-28 rounded-[2rem] border-4 border-white/15 bg-white object-cover shadow-2xl">@else<div class="flex h-28 w-28 items-center justify-center rounded-[2rem] border border-white/15 bg-white/10 text-4xl text-teal-300 shadow-2xl"><i class="ti ti-building-store"></i></div>@endif
+                <img src="{{ $gymLogoUrl }}" alt="{{ $gymLogoAlt }}" class="h-28 w-28 rounded-[2rem] border-4 border-white/15 bg-white shadow-2xl {{ $gymHasLogo ? 'object-cover' : 'object-contain p-3' }}">
                 <h1 class="mt-7 max-w-md text-4xl font-bold tracking-[-.04em]">{{ $gym->name }}</h1>
                 <p class="mt-3 flex items-center gap-2 text-sm text-slate-300"><i class="ti ti-map-pin text-teal-300"></i>{{ $branchLabel }}</p>
                 <div class="mt-8 flex flex-wrap gap-2 text-xs font-medium text-slate-300">@foreach(['Contact','Goals','Profile','Review'] as $label)<span class="rounded-full border border-white/10 bg-white/5 px-3 py-2">{{ $label }}</span>@endforeach</div>
@@ -45,7 +50,7 @@
                 @if($gym->cover_image_url)<div class="absolute inset-0 bg-cover bg-center opacity-20" style="background-image: url('{{ $gym->cover_image_url }}')"></div>@endif
                 <div class="absolute inset-0 bg-gradient-to-b from-slate-950/40 to-slate-950"></div>
                 <div class="relative flex items-center gap-4">
-                    @if($gym->logo_url)<img src="{{ $gym->logo_url }}" alt="{{ $gym->name }} logo" class="h-16 w-16 rounded-2xl border-2 border-white/15 bg-white object-cover shadow-lg">@else<div class="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-2xl text-teal-300"><i class="ti ti-building-store"></i></div>@endif
+                    <img src="{{ $gymLogoUrl }}" alt="{{ $gymLogoAlt }}" class="h-16 w-16 rounded-2xl border-2 border-white/15 bg-white shadow-lg {{ $gymHasLogo ? 'object-cover' : 'object-contain p-2' }}">
                     <div class="min-w-0"><p class="text-[10px] font-bold uppercase tracking-[.18em] text-teal-300">Member enrollment</p><h1 class="mt-1 truncate text-2xl font-bold">{{ $gym->name }}</h1><p class="mt-1 truncate text-xs text-slate-300">{{ $branchLabel }}</p></div>
                 </div>
             </header>

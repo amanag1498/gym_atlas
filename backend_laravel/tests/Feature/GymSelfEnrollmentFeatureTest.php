@@ -63,6 +63,12 @@ class GymSelfEnrollmentFeatureTest extends TestCase
             ->assertDownload('gym-atlas-enrollment-'.$link->id.'-poster.svg')
             ->assertSee($gym->name, false)
             ->assertSee('Open your camera and scan to continue', false);
+
+        $this->get(route('public.self-enrollment.show', $link->token))
+            ->assertOk()
+            ->assertSee(asset('images/public-site/brand/atlas-mark-512.png'), false)
+            ->assertSee('Gym Atlas logo')
+            ->assertDontSee('ti-building-store', false);
     }
 
     public function test_new_visitor_creates_reusable_account_and_active_gym_profile_without_invitation(): void
