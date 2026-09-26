@@ -15,7 +15,7 @@ import 'package:flutter_member_app/src/features/member/member_repository.dart';
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   testWidgets(
-    'member overview targets exist and settings lists feature replays',
+    'member overview targets exist and settings hides guide replay controls',
     (tester) async {
       final client = MemberApiClient();
       final session =
@@ -88,13 +88,9 @@ void main() {
         await tester.tap(find.text('Skip'));
         await tester.pumpAndSettle();
       }
-      await tester.tap(find.text('Replay guides'));
-      await tester.pumpAndSettle();
-      for (final guide in memberGuides) {
-        expect(find.text(guide.title), findsAtLeastNWidgets(1));
-      }
-      expect(find.text('Replay all guides'), findsOneWidget);
-      expect(find.text('Turn guides off'), findsOneWidget);
+      expect(find.text('Replay guides'), findsNothing);
+      expect(find.text('Replay all guides'), findsNothing);
+      expect(find.text('Turn guides off'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

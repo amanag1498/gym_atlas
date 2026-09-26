@@ -48,5 +48,7 @@ class AppServiceProvider extends ServiceProvider
             ->by('chat-reader:'.$request->integer('user_id')));
         RateLimiter::for('biometric-device', fn (Request $request): Limit => Limit::perMinute(600)
             ->by('biometric-device:'.(string) $request->route('deviceUuid')));
+        RateLimiter::for('smart-attendance-hub', fn (Request $request): Limit => Limit::perMinute(120)
+            ->by('smart-attendance-hub:'.(string) $request->route('hubUuid')));
     }
 }

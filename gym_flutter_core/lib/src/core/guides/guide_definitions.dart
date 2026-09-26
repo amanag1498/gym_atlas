@@ -45,7 +45,7 @@ const memberGuides = <GuideDefinition>[
     GuideStep(
       'settings',
       'You control your account',
-      'Open Settings for privacy, consent, communication preferences and Replay guides.',
+      'Open Settings for privacy, consent and communication preferences.',
     ),
   ]),
   GuideDefinition('member_workouts_v1', 'Workout Books', 'Train → Workout Book', [
@@ -283,11 +283,6 @@ const memberGuides = <GuideDefinition>[
   ]),
   GuideDefinition('member_settings_v1', 'Settings and privacy', 'Settings', [
     GuideStep(
-      'guides',
-      'Replay help anytime',
-      'Replay all guides, replay one feature, or turn automatic guides off without affecting app features.',
-    ),
-    GuideStep(
       'account',
       'Account and membership',
       'Open profile, membership and activity history from the account section.',
@@ -408,7 +403,7 @@ const trainerGuides = <GuideDefinition>[
     GuideStep(
       'settings',
       'Settings and privacy',
-      'Manage your account and consent, or choose Replay guides whenever you need a reminder.',
+      'Manage your account, support links and consent choices from Settings.',
     ),
   ]),
   GuideDefinition(
@@ -582,11 +577,6 @@ const trainerGuides = <GuideDefinition>[
     ),
   ]),
   GuideDefinition('trainer_settings_v1', 'Settings and privacy', 'Settings', [
-    GuideStep(
-      'guides',
-      'Replay help anytime',
-      'Replay all guides, replay one feature, or turn automatic guides off without affecting app features.',
-    ),
     GuideStep(
       'profile',
       'Open your profile',

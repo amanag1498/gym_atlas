@@ -2,16 +2,28 @@
 
 namespace App\Http\Controllers\Api\Member;
 
+use App\Enums\NotificationType;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\SmartAttendance\SmartAttendanceCheckInRequest;
 use App\Http\Resources\Attendance\AttendanceLogResource;
 use App\Models\AttendanceLog;
+use App\Models\Branch;
+use App\Models\SmartAttendanceHub;
+use App\Models\User;
+use App\Services\Attendance\AttendanceService;
 use App\Services\Member\MemberAppService;
+use App\Services\Notification\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Validation\ValidationException;
 
 class AttendanceController extends Controller
 {
-    public function __construct(private readonly MemberAppService $memberAppService) {}
+    public function __construct(
+        private readonly MemberAppService $memberAppService,
+        private readonly AttendanceService $attendanceService,
+        private readonly NotificationService $notificationService,
+    ) {}
 
     public function biometricProfile(Request $request)
     {
@@ -65,6 +77,101 @@ class AttendanceController extends Controller
                 ? 'Biometric attendance is ready. Check in using the enrolled scanner at your gym.'
                 : 'Ask your gym to enroll and enable your biometric scanner profile.',
         ], 'Member biometric attendance profile fetched successfully.');
+    }
+
+    public function smartCheckIn(SmartAttendanceCheckInRequest $request)
+    {
+        $user = $request->user();
+        $this->memberAppService->assertRequestedGymContextAccessible($user);
+        $selectedGymId = $this->memberAppService->selectedGymIdFor($user);
+        $profile = $this->memberAppService->memberProfileFor($user);
+        $attendanceStatus = $this->memberAppService->attendanceStatusFor($user, $profile);
+
+        if (($attendanceStatus['enabled'] ?? false) !== true || ! $profile || ! $profile->gym) {
+            throw ValidationException::withMessages([
+                'member_id' => [$attendanceStatus['message'] ?? 'Attendance is unavailable for the selected gym.'],
+            ]);
+        }
+
+        $hub = SmartAttendanceHub::query()
+            ->with(['gym', 'branch'])
+            ->where('public_id', $request->validated('hub_public_id'))
+            ->first();
+
+        if (! $hub || (int) $hub->gym_id !== (int) $selectedGymId || ! $hub->is_active || $hub->status !== 'online') {
+            throw ValidationException::withMessages([
+                'hub_public_id' => ['No active Smart Attendance Hub matched the selected gym.'],
+            ]);
+        }
+
+        $branch = $hub->branch;
+        if (! $branch) {
+            $branch = $profile->branch ?: Branch::query()->find($profile->branch_id);
+        }
+
+        if (! $branch || (int) $branch->gym_id !== (int) $hub->gym_id) {
+            throw ValidationException::withMessages([
+                'branch_id' => ['Smart Attendance is unavailable because the hub is not linked to a valid branch context.'],
+            ]);
+        }
+
+        $metadata = array_filter([
+            'hub_public_id' => $hub->public_id,
+            'protocol_version' => $request->integer('protocol_version'),
+            'rssi' => $request->has('rssi') ? $request->integer('rssi') : null,
+            'detected_at' => $request->validated('detected_at'),
+            'source' => $request->validated('source'),
+            'metadata' => $request->validated('metadata'),
+        ], fn ($value): bool => $value !== null);
+
+        $log = $this->attendanceService->recordSmartAttendanceCheckIn(
+            gym: $hub->gym,
+            branch: $branch,
+            member: $user,
+            hub: $hub,
+            detectionMetadata: $metadata,
+        )->load(['gym', 'branch']);
+        $this->sendSmartAttendanceWelcomeNotification($user, $log, $hub);
+        [, $attendanceDayEnd] = $this->attendanceService->localDayBounds($hub->gym, $branch, $log->checked_in_at);
+        $attendanceTimezone = $branch->timezone ?: $hub->gym->timezone ?: config('app.timezone');
+        if (! in_array($attendanceTimezone, timezone_identifiers_list(), true)) {
+            $attendanceTimezone = 'UTC';
+        }
+
+        return $this->success([
+            'attendance' => AttendanceLogResource::make($log),
+            'check_in_status' => $this->memberAppService->attendanceStatusFor($user, $profile->fresh(['gym', 'branch'])),
+            'attendance_date' => $log->checked_in_at->copy()->timezone($attendanceTimezone)->toDateString(),
+            'duplicate_suppression_until' => $attendanceDayEnd->toIso8601String(),
+        ], 'Smart Attendance check-in recorded successfully.', 201);
+    }
+
+    private function sendSmartAttendanceWelcomeNotification(User $member, AttendanceLog $log, SmartAttendanceHub $hub): void
+    {
+        $gymName = $log->gym?->name ?? $hub->gym?->name ?? 'your gym';
+        $branchName = $log->branch?->name ?? $hub->branch?->name;
+        $time = $log->checked_in_at?->timezone(config('app.timezone'))->format('g:i A');
+        $body = $time
+            ? "Welcome to {$gymName}. Your Smart Attendance check-in was recorded at {$time}."
+            : "Welcome to {$gymName}. Your Smart Attendance check-in was recorded.";
+
+        $this->notificationService->create(
+            user: $member,
+            type: NotificationType::SmartAttendanceCheckIn->value,
+            title: 'Welcome to '.$gymName,
+            body: $body,
+            gymId: $log->gym_id,
+            branchId: $log->branch_id,
+            data: [
+                'app_role' => 'member',
+                'attendance_log_id' => $log->id,
+                'smart_attendance_hub_id' => $hub->id,
+                'hub_public_id' => $hub->public_id,
+                'gym_name' => $gymName,
+                'branch_name' => $branchName,
+                'deep_link' => '/home?section=attendance',
+            ],
+        );
     }
 
     public function history(Request $request)

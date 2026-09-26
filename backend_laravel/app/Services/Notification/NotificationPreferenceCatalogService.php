@@ -105,6 +105,7 @@ class NotificationPreferenceCatalogService
                 $this->item(NotificationType::ChallengeUpdate->value, 'Community', 'Challenge updates', 'Placeholder for challenge, leaderboard, and event updates.', false, true),
                 $this->item(NotificationType::ProgressPhotoReminder->value, 'Progress', 'Progress reminders', 'Get nudges to upload fresh progress and stay consistent.', false),
                 $this->item(NotificationType::AttendanceInactivity->value, 'Attendance', 'Attendance reminders', 'Receive reminders if your gym visits slow down.'),
+                $this->item(NotificationType::SmartAttendanceCheckIn->value, 'Attendance', 'Smart Attendance check-ins', 'Get a welcome confirmation when Gym Atlas checks you in automatically.'),
                 $this->item(NotificationType::TrialBooking->value, 'Trials', 'Trial reminders', 'Stay updated on trial requests and follow-ups.', false),
                 $this->item(NotificationType::EventPublished->value, 'Events', 'New events', 'Discover newly published gym and global events.'),
                 $this->item(NotificationType::EventReminder->value, 'Events', 'Booked event reminders', 'Get reminders before events you have booked.'),

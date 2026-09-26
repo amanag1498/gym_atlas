@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:gym_flutter_core/guides.dart';
 import 'package:go_router/go_router.dart';
@@ -23,6 +24,9 @@ import 'features/member/member_events_screen.dart';
 import 'features/member/gym_self_enrollment_screen.dart';
 import 'features/member/member_repository.dart';
 import 'features/member/shared_workout_plan_screen.dart';
+import 'features/smart_attendance/smart_attendance_ble_scanner.dart';
+import 'features/smart_attendance/smart_attendance_check_in_cache.dart';
+import 'features/smart_attendance/smart_attendance_controller.dart';
 
 class MemberApp extends StatefulWidget {
   const MemberApp({super.key});
@@ -31,7 +35,7 @@ class MemberApp extends StatefulWidget {
   State<MemberApp> createState() => _MemberAppState();
 }
 
-class _MemberAppState extends State<MemberApp> {
+class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
   late final SecureStorageService storage;
   late final MemberApiClient apiClient;
   late final AuthService authService;
@@ -39,6 +43,7 @@ class _MemberAppState extends State<MemberApp> {
   late final MemberSessionController sessionController;
   late final AppRuntimeController runtimeController;
   late final MemberRepository memberRepository;
+  late final SmartAttendanceController smartAttendanceController;
   late final ChatNotificationService _chatNotificationService;
   late final GoRouter router;
   StreamSubscription<RemoteMessage>? _foregroundNotificationSubscription;
@@ -58,6 +63,7 @@ class _MemberAppState extends State<MemberApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     storage = const SecureStorageService();
     apiClient = MemberApiClient();
     runtimeController = AppRuntimeController(
@@ -73,6 +79,13 @@ class _MemberAppState extends State<MemberApp> {
       fcmTokenService: fcmTokenService,
     );
     memberRepository = MemberRepository(apiClient);
+    smartAttendanceController = SmartAttendanceController(
+      scanner: MethodChannelSmartAttendanceBleScanner(),
+      checkInClient: memberRepository,
+      successCache: const SecureSmartAttendanceCheckInCache(),
+      selectedGymIdProvider: storage.readSelectedGymId,
+      memberIdProvider: () => sessionController.user?.id,
+    );
     _chatNotificationService = ChatNotificationService();
     router = GoRouter(
       refreshListenable: sessionController,
@@ -172,6 +185,7 @@ class _MemberAppState extends State<MemberApp> {
     sessionController.addListener(_openPendingEventIfReady);
     sessionController.addListener(_openPendingTrialRequestsIfReady);
     sessionController.addListener(_openPendingHomeSectionIfReady);
+    sessionController.addListener(_syncSmartAttendanceScan);
     _chatNotificationService.initialize(_handleNotificationData).catchError((
       Object exception,
     ) {
@@ -269,6 +283,48 @@ class _MemberAppState extends State<MemberApp> {
     unawaited(_openPendingChatIfReady());
   }
 
+  void _syncSmartAttendanceScan() {
+    final shouldScan =
+        sessionController.isAuthenticated &&
+        sessionController.hasRequiredConsent &&
+        sessionController.hasConsent('biometric_attendance');
+    if (!shouldScan) {
+      if (smartAttendanceController.scanning) {
+        unawaited(smartAttendanceController.stopScan());
+      }
+      return;
+    }
+
+    if (!smartAttendanceController.scanning ||
+        smartAttendanceController.backgroundScanning) {
+      unawaited(smartAttendanceController.startForegroundScan());
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    final shouldScan =
+        sessionController.isAuthenticated &&
+        sessionController.hasRequiredConsent &&
+        sessionController.hasConsent('biometric_attendance');
+    if (!shouldScan) {
+      return;
+    }
+
+    if (state == AppLifecycleState.resumed) {
+      unawaited(smartAttendanceController.startForegroundScan());
+      return;
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.android &&
+        (state == AppLifecycleState.paused ||
+            state == AppLifecycleState.inactive ||
+            state == AppLifecycleState.hidden)) {
+      unawaited(smartAttendanceController.startBackgroundScan());
+    }
+  }
+
   Future<void> _openPendingChatIfReady() async {
     if (!_pendingChatLaunch ||
         _openingPendingChat ||
@@ -360,14 +416,17 @@ class _MemberAppState extends State<MemberApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _foregroundNotificationSubscription?.cancel();
     _notificationOpenSubscription?.cancel();
     sessionController.removeListener(_openPendingChatIfReady);
     sessionController.removeListener(_openPendingEventIfReady);
     sessionController.removeListener(_openPendingTrialRequestsIfReady);
     sessionController.removeListener(_openPendingHomeSectionIfReady);
+    sessionController.removeListener(_syncSmartAttendanceScan);
     router.dispose();
     runtimeController.dispose();
+    smartAttendanceController.dispose();
     sessionController.dispose();
     super.dispose();
   }
@@ -380,6 +439,9 @@ class _MemberAppState extends State<MemberApp> {
           value: sessionController,
         ),
         Provider<MemberRepository>.value(value: memberRepository),
+        ChangeNotifierProvider<SmartAttendanceController>.value(
+          value: smartAttendanceController,
+        ),
       ],
       child: MaterialApp.router(
         debugShowCheckedModeBanner: false,

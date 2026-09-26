@@ -1,18 +1,20 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 import 'guide_definitions.dart';
 
 /// Guide surfaces intentionally contrast with the light app underneath them.
 abstract final class GuideColors {
-  static const surface = Color(0xFF0C1427);
-  static const surfaceHighlight = Color(0xFF192B4D);
-  static const border = Color(0xFF384E76);
-  static const text = Color(0xFFF5F8FF);
-  static const secondary = Color(0xFFBAC9E3);
-  static const accent = Color(0xFF465FFF);
-  static const accentDeep = Color(0xFF3641F5);
-  static const spotlight = Color(0xFFACC8FF);
-  static const scrim = Color(0xFF020817);
+  static const surface = Color(0xD911141D);
+  static const surfaceHighlight = Color(0xB52C2A25);
+  static const border = Color(0x52FFFFFF);
+  static const text = Color(0xFFFCFBF7);
+  static const secondary = Color(0xFFD8D2C5);
+  static const accent = Color(0xFFE8D6B1);
+  static const accentDeep = Color(0xFFB99053);
+  static const spotlight = Color(0xFFFFF3D4);
+  static const scrim = Color(0xFF080706);
 }
 
 /// Presentation only: the controller owns navigation, persistence and analytics.
@@ -52,236 +54,263 @@ class GuideTooltip extends StatelessWidget {
     final quietButtonStyle = TextButton.styleFrom(
       foregroundColor: GuideColors.secondary,
       disabledForegroundColor: GuideColors.secondary.withValues(alpha: .45),
-      minimumSize: const Size(48, 52),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      textStyle: textTheme.labelLarge?.copyWith(
-        fontSize: 14,
-        fontWeight: FontWeight.w600,
+      minimumSize: const Size(48, 48),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      textStyle: textTheme.labelMedium?.copyWith(
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
       ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
     );
-    return Card(
-      margin: EdgeInsets.zero,
-      elevation: 24,
-      shadowColor: GuideColors.scrim.withValues(alpha: .55),
-      color: GuideColors.surface,
-      surfaceTintColor: Colors.transparent,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(28),
-        side: const BorderSide(color: GuideColors.border),
-      ),
-      child: Ink(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [GuideColors.surfaceHighlight, GuideColors.surface],
-            stops: [0, .8],
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(26),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: GuideColors.surface,
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: GuideColors.border),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: .35),
+                blurRadius: 30,
+                offset: const Offset(0, 16),
+              ),
+              BoxShadow(
+                color: GuideColors.accent.withValues(alpha: .10),
+                blurRadius: 24,
+                offset: const Offset(0, 0),
+              ),
+            ],
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withValues(alpha: .12),
+                GuideColors.surfaceHighlight,
+                Colors.white.withValues(alpha: .05),
+              ],
+              stops: const [0, .52, 1],
+            ),
           ),
-        ),
-        child: FocusTraversalGroup(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 22),
-                  child: Semantics(
-                    liveRegion: true,
-                    namesRoute: true,
-                    label:
-                        '${index + 1} of ${guide.steps.length}. ${step.title}. ${step.description}',
-                    child: ExcludeSemantics(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+          child: Material(
+            type: MaterialType.transparency,
+            child: FocusTraversalGroup(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
+                      child: Semantics(
+                        liveRegion: true,
+                        namesRoute: true,
+                        label:
+                            '${index + 1} of ${guide.steps.length}. ${step.title}. ${step.description}',
+                        child: ExcludeSemantics(
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: GuideColors.spotlight.withValues(
-                                    alpha: .09,
-                                  ),
-                                  borderRadius: BorderRadius.circular(13),
-                                  border: Border.all(
-                                    color: GuideColors.spotlight.withValues(
-                                      alpha: .18,
-                                    ),
-                                  ),
-                                ),
-                                child: Icon(
-                                  _icon,
-                                  size: 22,
-                                  color: GuideColors.spotlight,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      guide.title,
-                                      style: textTheme.labelMedium?.copyWith(
-                                        color: GuideColors.secondary,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                        height: 1.4,
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    width: 34,
+                                    height: 34,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(
+                                        alpha: .08,
+                                      ),
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(
+                                          alpha: .14,
+                                        ),
                                       ),
                                     ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      '${index + 1} of ${guide.steps.length}',
-                                      style: textTheme.labelLarge?.copyWith(
-                                        color: GuideColors.spotlight,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                        height: 1.3,
-                                      ),
+                                    child: Icon(
+                                      _icon,
+                                      size: 18,
+                                      color: GuideColors.spotlight,
                                     ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 18),
-                          Row(
-                            children: [
-                              for (var i = 0; i < guide.steps.length; i++)
-                                Expanded(
-                                  child: Padding(
-                                    padding: EdgeInsets.only(
-                                      right: i == guide.steps.length - 1
-                                          ? 0
-                                          : 5,
-                                    ),
-                                    child: Container(
-                                      height: 3,
-                                      decoration: BoxDecoration(
-                                        color: i <= index
-                                            ? GuideColors.spotlight
-                                            : GuideColors.spotlight.withValues(
-                                                alpha: .14,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          guide.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: textTheme.labelMedium
+                                              ?.copyWith(
+                                                color: GuideColors.secondary,
+                                                fontSize: 11,
+                                                letterSpacing: .3,
+                                                fontWeight: FontWeight.w700,
+                                                height: 1.25,
                                               ),
-                                        borderRadius: BorderRadius.circular(2),
-                                      ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${index + 1} / ${guide.steps.length}',
+                                          style: textTheme.labelSmall?.copyWith(
+                                            color: GuideColors.spotlight,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
+                                            height: 1.2,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  for (var i = 0; i < guide.steps.length; i++)
+                                    Expanded(
+                                      child: Padding(
+                                        padding: EdgeInsets.only(
+                                          right: i == guide.steps.length - 1
+                                              ? 0
+                                              : 4,
+                                        ),
+                                        child: Container(
+                                          height: 2,
+                                          decoration: BoxDecoration(
+                                            color: i <= index
+                                                ? GuideColors.accent
+                                                : Colors.white.withValues(
+                                                    alpha: .14,
+                                                  ),
+                                            borderRadius: BorderRadius.circular(
+                                              2,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              Text(
+                                step.title,
+                                style: textTheme.titleMedium?.copyWith(
+                                  color: GuideColors.text,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.18,
                                 ),
+                              ),
+                              const SizedBox(height: 7),
+                              Text(
+                                step.description,
+                                style: textTheme.bodyMedium?.copyWith(
+                                  color: GuideColors.secondary,
+                                  fontSize: 13,
+                                  height: 1.42,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
                             ],
                           ),
-                          const SizedBox(height: 22),
-                          Text(
-                            step.title,
-                            style: textTheme.headlineSmall?.copyWith(
-                              color: GuideColors.text,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                              height: 1.2,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            step.description,
-                            style: textTheme.bodyLarge?.copyWith(
-                              color: GuideColors.secondary,
-                              fontSize: 15,
-                              height: 1.55,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
-              Divider(
-                height: 1,
-                thickness: 1,
-                color: GuideColors.spotlight.withValues(alpha: .12),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 16, 16),
-                child: Wrap(
-                  alignment: WrapAlignment.spaceBetween,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 4,
-                  runSpacing: 8,
-                  children: [
-                    TextButton(
-                      style: quietButtonStyle,
-                      onPressed: onSkip,
-                      child: const Text('Skip'),
-                    ),
-                    if (index > 0)
-                      TextButton(
-                        style: quietButtonStyle,
-                        onPressed: onBack,
-                        child: const Text('Back'),
-                      ),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        gradient: LinearGradient(
-                          colors: onNext == null
-                              ? [
-                                  GuideColors.border,
-                                  GuideColors.surfaceHighlight,
-                                ]
-                              : [GuideColors.accent, GuideColors.accentDeep],
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 4, 10, 10),
+                    child: Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 2,
+                      runSpacing: 6,
+                      children: [
+                        TextButton(
+                          style: quietButtonStyle,
+                          onPressed: onSkip,
+                          child: const Text('Skip'),
                         ),
-                        boxShadow: onNext == null
-                            ? []
-                            : [
-                                BoxShadow(
-                                  color: GuideColors.accent.withValues(
-                                    alpha: .22,
-                                  ),
-                                  blurRadius: 18,
-                                  offset: const Offset(0, 5),
-                                ),
-                              ],
-                      ),
-                      child: FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          foregroundColor: GuideColors.text,
-                          disabledForegroundColor: GuideColors.secondary,
-                          backgroundColor: Colors.transparent,
-                          disabledBackgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          minimumSize: const Size(112, 52),
-                          padding: const EdgeInsets.symmetric(horizontal: 18),
-                          textStyle: textTheme.labelLarge?.copyWith(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
+                        if (index > 0)
+                          TextButton(
+                            style: quietButtonStyle,
+                            onPressed: onBack,
+                            child: const Text('Back'),
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(999),
+                            gradient: LinearGradient(
+                              colors: onNext == null
+                                  ? [
+                                      Colors.white.withValues(alpha: .10),
+                                      Colors.white.withValues(alpha: .06),
+                                    ]
+                                  : [
+                                      GuideColors.accent,
+                                      GuideColors.accentDeep,
+                                    ],
+                            ),
+                            boxShadow: onNext == null
+                                ? []
+                                : [
+                                    BoxShadow(
+                                      color: GuideColors.accent.withValues(
+                                        alpha: .24,
+                                      ),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 6),
+                                    ),
+                                  ],
+                          ),
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              foregroundColor: const Color(0xFF17120A),
+                              disabledForegroundColor: GuideColors.secondary,
+                              backgroundColor: Colors.transparent,
+                              disabledBackgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              minimumSize: const Size(96, 48),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 15,
+                              ),
+                              textStyle: textTheme.labelMedium?.copyWith(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                            autofocus: true,
+                            onPressed: onNext,
+                            iconAlignment: IconAlignment.end,
+                            icon: Icon(
+                              index == guide.steps.length - 1
+                                  ? Icons.check_rounded
+                                  : Icons.arrow_forward_rounded,
+                              size: 17,
+                            ),
+                            label: Text(
+                              index == guide.steps.length - 1
+                                  ? 'Finish'
+                                  : 'Next',
+                            ),
                           ),
                         ),
-                        autofocus: true,
-                        onPressed: onNext,
-                        iconAlignment: IconAlignment.end,
-                        icon: Icon(
-                          index == guide.steps.length - 1
-                              ? Icons.check_rounded
-                              : Icons.arrow_forward_rounded,
-                          size: 18,
-                        ),
-                        label: Text(
-                          index == guide.steps.length - 1 ? 'Finish' : 'Next',
-                        ),
-                      ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

@@ -1,8 +1,10 @@
 import 'package:dio/dio.dart';
 
 import '../../core/api_client.dart';
+import '../smart_attendance/smart_attendance_check_in_client.dart';
+import '../smart_attendance/smart_attendance_detection.dart';
 
-class MemberRepository {
+class MemberRepository implements SmartAttendanceCheckInClient {
   MemberRepository(this._client);
 
   final MemberApiClient _client;
@@ -62,6 +64,29 @@ class MemberRepository {
       _client.get('/member/attendance/status');
   Future<Map<String, dynamic>> fetchBiometricAttendanceProfile() async =>
       _client.get('/member/attendance/biometric-profile');
+
+  @override
+  Future<SmartAttendanceCheckInResponse> recordSmartAttendanceCheckIn(
+    SmartAttendanceDetection detection,
+  ) async {
+    final response = await _client.post(
+      '/member/attendance/smart-check-in',
+      data: {
+        'hub_public_id': detection.publicId,
+        'protocol_version': detection.protocolVersion,
+        if (detection.rssi != null) 'rssi': detection.rssi,
+        'detected_at': detection.detectedAt.toIso8601String(),
+        'source': detection.source,
+        'metadata': {
+          'transport': detection.source.contains('background')
+              ? 'background_ble'
+              : 'foreground_ble',
+        },
+      },
+    );
+    return SmartAttendanceCheckInResponse.fromApi(response);
+  }
+
   Future<Map<String, dynamic>> fetchMembership() async =>
       _client.get('/member/membership');
   Future<Map<String, dynamic>> leaveCurrentGym() async =>

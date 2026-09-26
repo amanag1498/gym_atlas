@@ -105,5 +105,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Gym Atlas uses Bluetooth only to detect nearby Smart Attendance hubs while the app is open.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Gym Atlas uses Bluetooth only to detect nearby Smart Attendance hubs while the app is open.</string>
 </dict>
 </plist>

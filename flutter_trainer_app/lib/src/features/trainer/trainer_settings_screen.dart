@@ -76,10 +76,6 @@ class TrainerSettingsScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const GuideTarget(
-                id: 'trainer_settings_v1/guides',
-                child: GuideSettingsTile(),
-              ),
               const _SettingsTopBar(
                 title: 'Settings',
                 subtitle: 'Manage your account, coaching, and support options.',

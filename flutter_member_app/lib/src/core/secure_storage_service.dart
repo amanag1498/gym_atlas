@@ -14,6 +14,8 @@ class SecureStorageService {
   static const _roleKey = 'member_active_role';
   static const _trialRequestsKey = 'member_trial_requests';
   static const _selectedGymIdKey = 'member_selected_gym_id';
+  static const _smartAttendanceSuccessCacheKey =
+      'member_smart_attendance_success_cache';
 
   final FlutterSecureStorage _storage;
 
@@ -99,6 +101,7 @@ class SecureStorageService {
       _storage.delete(key: _roleKey),
       _storage.delete(key: _trialRequestsKey),
       _storage.delete(key: _selectedGymIdKey),
+      _storage.delete(key: _smartAttendanceSuccessCacheKey),
     ]);
   }
 }

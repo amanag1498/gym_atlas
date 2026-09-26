@@ -10,6 +10,7 @@ use App\Models\Branch;
 use App\Models\Gym;
 use App\Models\MemberMembership;
 use App\Models\MemberProfile;
+use App\Models\SmartAttendanceHub;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -77,6 +78,20 @@ class AttendanceService
         );
     }
 
+    public function recordSmartAttendanceCheckIn(Gym $gym, Branch $branch, User $member, SmartAttendanceHub $hub, array $detectionMetadata = []): AttendanceLog
+    {
+        return $this->recordCheckIn(
+            gym: $gym,
+            branch: $branch,
+            member: $member,
+            checkedInBy: null,
+            method: AttendanceCheckInMethod::SmartAttendance->value,
+            sourceDevice: 'Smart Attendance Hub '.$hub->public_id,
+            smartAttendanceHub: $hub,
+            smartAttendanceDetection: $detectionMetadata === [] ? null : $detectionMetadata,
+        );
+    }
+
     private function recordCheckIn(
         Gym $gym,
         Branch $branch,
@@ -88,11 +103,13 @@ class AttendanceService
         mixed $checkedInAt = null,
         ?BiometricDevice $biometricDevice = null,
         ?BiometricDeviceEvent $biometricDeviceEvent = null,
+        ?SmartAttendanceHub $smartAttendanceHub = null,
+        ?array $smartAttendanceDetection = null,
     ): AttendanceLog {
         $checkedAt = ($checkedInAt ? Carbon::parse($checkedInAt) : now())
             ->setTimezone(config('app.timezone'));
 
-        return DB::transaction(function () use ($gym, $branch, $member, $checkedInBy, $method, $notes, $sourceDevice, $checkedAt, $biometricDevice, $biometricDeviceEvent): AttendanceLog {
+        return DB::transaction(function () use ($gym, $branch, $member, $checkedInBy, $method, $notes, $sourceDevice, $checkedAt, $biometricDevice, $biometricDeviceEvent, $smartAttendanceHub, $smartAttendanceDetection): AttendanceLog {
             $gym = Gym::query()->findOrFail($gym->id);
             $branch = Branch::query()->findOrFail($branch->id);
             $member = User::query()->findOrFail($member->id);
@@ -205,6 +222,8 @@ class AttendanceService
                 'scan_reference_hash' => $biometricDeviceEvent ? hash('sha256', $biometricDevice->id.':'.$biometricDeviceEvent->payload_hash) : null,
                 'biometric_device_id' => $biometricDevice?->id,
                 'biometric_device_event_id' => $biometricDeviceEvent?->id,
+                'smart_attendance_hub_id' => $smartAttendanceHub?->id,
+                'smart_attendance_detection' => $smartAttendanceDetection,
                 'occurred_at_device' => $biometricDeviceEvent?->occurred_at_device,
                 'received_at' => $biometricDeviceEvent?->received_at,
             ]);

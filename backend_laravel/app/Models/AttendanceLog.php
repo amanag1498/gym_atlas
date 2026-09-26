@@ -23,6 +23,8 @@ class AttendanceLog extends Model
         'scan_reference_hash',
         'biometric_device_id',
         'biometric_device_event_id',
+        'smart_attendance_hub_id',
+        'smart_attendance_detection',
         'occurred_at_device',
         'received_at',
     ];
@@ -33,6 +35,7 @@ class AttendanceLog extends Model
             'checked_in_at' => 'datetime',
             'occurred_at_device' => 'datetime',
             'received_at' => 'datetime',
+            'smart_attendance_detection' => 'array',
         ];
     }
 
@@ -44,6 +47,11 @@ class AttendanceLog extends Model
     public function biometricDeviceEvent(): BelongsTo
     {
         return $this->belongsTo(BiometricDeviceEvent::class);
+    }
+
+    public function smartAttendanceHub(): BelongsTo
+    {
+        return $this->belongsTo(SmartAttendanceHub::class);
     }
 
     public function gym(): BelongsTo

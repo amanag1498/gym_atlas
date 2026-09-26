@@ -120,8 +120,8 @@ void main() {
       await tester.tapAt(tester.getCenter(find.text('Unrelated action')));
       await tester.pump();
       expect(taps, 0);
-      final card = tester.getRect(find.byType(Card));
-      expect(card.bottom, lessThanOrEqualTo(512));
+      final tooltip = tester.getRect(find.byType(BackdropFilter));
+      expect(tooltip.bottom, lessThanOrEqualTo(512));
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(find.byType(GuideOverlay), findsNothing);
@@ -170,7 +170,11 @@ void main() {
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
     expect(find.text('Last action'), findsOneWidget);
-    expect(find.text('3 of 3'), findsOneWidget);
+    expect(find.text('3 / 3'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('3 of 3. Last action. Learn the last action.'),
+      findsOneWidget,
+    );
     await tester.tap(find.text('Back'));
     await tester.pumpAndSettle();
     expect(find.text('First action'), findsOneWidget);

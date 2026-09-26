@@ -156,6 +156,11 @@ class Gym extends Model
         return $this->hasMany(BiometricDevice::class);
     }
 
+    public function smartAttendanceHubs(): HasMany
+    {
+        return $this->hasMany(SmartAttendanceHub::class);
+    }
+
     public function cityRecord(): BelongsTo
     {
         return $this->belongsTo(City::class, 'city_id');

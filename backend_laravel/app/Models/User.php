@@ -270,6 +270,11 @@ class User extends Authenticatable
         return $this->hasMany(UserAppPresence::class);
     }
 
+    public function createdSmartAttendanceHubs(): HasMany
+    {
+        return $this->hasMany(SmartAttendanceHub::class, 'created_by_user_id');
+    }
+
     public function scheduledReminders(): HasMany
     {
         return $this->hasMany(ScheduledReminder::class);

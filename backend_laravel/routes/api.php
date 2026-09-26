@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\Gym\Admin\GymProfileController;
 use App\Http\Controllers\Api\Gym\Admin\MemberController as GymMemberController;
 use App\Http\Controllers\Api\Gym\Admin\ReportController as GymReportController;
 use App\Http\Controllers\Api\Gym\Admin\SettingController as GymSettingController;
+use App\Http\Controllers\Api\Gym\Admin\SmartAttendanceHubController as GymSmartAttendanceHubController;
 use App\Http\Controllers\Api\Gym\Admin\StaffController as GymStaffController;
 use App\Http\Controllers\Api\Gym\Admin\TrainerController as GymTrainerController;
 use App\Http\Controllers\Api\Gym\Admin\TrialRequestController as GymTrialRequestController;
@@ -83,6 +84,7 @@ use App\Http\Controllers\Api\Public\NotificationController as PublicNotification
 use App\Http\Controllers\Api\Public\PublicContextController;
 use App\Http\Controllers\Api\Public\TrialRequestController as PublicTrialRequestController;
 use App\Http\Controllers\Api\Realtime\RealtimeContextController;
+use App\Http\Controllers\Api\SmartAttendance\HubGatewayController as SmartAttendanceHubGatewayController;
 use App\Http\Controllers\Api\Trainer\AnnouncementController as TrainerAnnouncementController;
 use App\Http\Controllers\Api\Trainer\AssignedMemberController as TrainerAssignedMemberController;
 use App\Http\Controllers\Api\Trainer\DietPlanController as TrainerDietPlanController;
@@ -111,6 +113,11 @@ Route::prefix('biometric/devices/{deviceUuid}')->middleware('throttle:biometric-
     Route::post('heartbeat', [DeviceGatewayController::class, 'heartbeat']);
     Route::get('commands', [DeviceGatewayController::class, 'commands']);
     Route::post('commands/{command}/acknowledge', [DeviceGatewayController::class, 'acknowledgeCommand']);
+});
+Route::prefix('smart-attendance/hubs/{hubUuid}')->middleware('throttle:smart-attendance-hub')->group(function (): void {
+    Route::post('activate', [SmartAttendanceHubGatewayController::class, 'activate']);
+    Route::post('heartbeat', [SmartAttendanceHubGatewayController::class, 'heartbeat']);
+    Route::get('config', [SmartAttendanceHubGatewayController::class, 'config']);
 });
 Route::post('integrations/essl/ebioserver/{deviceUuid}/{webhookToken}', EbioServerWebhookController::class)
     ->middleware('throttle:biometric-device')
@@ -545,6 +552,16 @@ Route::prefix('gym')
             ->middleware('permission:attendance.manage');
         Route::post('biometric-enrollments/{link}/revoke', [GymBiometricDeviceController::class, 'revoke'])
             ->middleware('permission:attendance.manage');
+        Route::get('smart-attendance-hubs', [GymSmartAttendanceHubController::class, 'index'])
+            ->middleware('permission:attendance.manage');
+        Route::post('smart-attendance-hubs', [GymSmartAttendanceHubController::class, 'store'])
+            ->middleware('permission:attendance.manage');
+        Route::put('smart-attendance-hubs/{hub}', [GymSmartAttendanceHubController::class, 'update'])
+            ->middleware('permission:attendance.manage');
+        Route::post('smart-attendance-hubs/{hub}/toggle', [GymSmartAttendanceHubController::class, 'toggle'])
+            ->middleware('permission:attendance.manage');
+        Route::post('smart-attendance-hubs/{hub}/rotate-secret', [GymSmartAttendanceHubController::class, 'rotateSecret'])
+            ->middleware('permission:attendance.manage');
         Route::get('membership-plans', [MembershipPlanController::class, 'index'])
             ->middleware('permission:membership_plan.view|membership_plan.manage');
         Route::post('membership-plans', [MembershipPlanController::class, 'store'])
@@ -918,6 +935,8 @@ Route::prefix('member')
             ->middleware('consent:biometric_attendance');
         Route::get('attendance/status', [MemberAttendanceController::class, 'status'])
             ->middleware('consent:biometric_attendance');
+        Route::post('attendance/smart-check-in', [MemberAttendanceController::class, 'smartCheckIn'])
+            ->middleware(['consent:biometric_attendance', 'throttle:30,1']);
         Route::get('attendance/history', [MemberAttendanceController::class, 'history'])
             ->middleware('consent:biometric_attendance');
         Route::get('workout-plans', [MemberWorkoutController::class, 'plans'])

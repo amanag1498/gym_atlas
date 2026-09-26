@@ -22,6 +22,8 @@ class AttendanceLogResource extends JsonResource
             'source_device' => $this->source_device,
             'biometric_device_id' => $this->biometric_device_id,
             'biometric_device_event_id' => $this->biometric_device_event_id,
+            'smart_attendance_hub_id' => $this->smart_attendance_hub_id,
+            'smart_attendance_detection' => $this->smart_attendance_detection,
             'occurred_at_device' => $this->occurred_at_device?->toIso8601String(),
             'received_at' => $this->received_at?->toIso8601String(),
             'gym' => $this->whenLoaded('gym', fn (): array => [

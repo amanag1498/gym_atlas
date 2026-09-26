@@ -14,7 +14,7 @@ import 'package:flutter_trainer_app/src/core/token_storage.dart';
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   testWidgets(
-    'trainer overview targets exist and settings lists feature replays',
+    'trainer overview targets exist and settings hides guide replay controls',
     (tester) async {
       final client = TrainerApiClient();
       final session =
@@ -80,13 +80,9 @@ void main() {
         await tester.tap(find.text('Skip'));
         await tester.pumpAndSettle();
       }
-      await tester.tap(find.text('Replay guides'));
-      await tester.pumpAndSettle();
-      for (final guide in trainerGuides) {
-        expect(find.text(guide.title), findsAtLeastNWidgets(1));
-      }
-      expect(find.text('Replay all guides'), findsOneWidget);
-      expect(find.text('Turn guides off'), findsOneWidget);
+      expect(find.text('Replay guides'), findsNothing);
+      expect(find.text('Replay all guides'), findsNothing);
+      expect(find.text('Turn guides off'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

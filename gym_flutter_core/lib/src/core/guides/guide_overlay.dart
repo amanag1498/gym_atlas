@@ -447,8 +447,8 @@ class _GuideOverlayState extends State<GuideOverlay>
             final useAbove = above > below;
             final available = math.max(above, below);
             final minimumCardHeight = media.textScaler.scale(16) > 24
-                ? 240
-                : 180;
+                ? 220
+                : 148;
             final spotlight = available >= minimumCardHeight ? hole : null;
             final top = spotlight == null || useAbove
                 ? safe.top
@@ -487,9 +487,9 @@ class _GuideOverlayState extends State<GuideOverlay>
                           : 160,
                     ),
                     curve: Curves.easeOutCubic,
-                    left: safe.left + math.max(0, (safe.width - 420) / 2),
+                    left: safe.left + math.max(0, (safe.width - 348) / 2),
                     top: top,
-                    width: math.min(420, safe.width),
+                    width: math.min(348, safe.width),
                     child: ConstrainedBox(
                       constraints: BoxConstraints(maxHeight: maxHeight),
                       child: GuideTooltip(
@@ -536,11 +536,11 @@ class _SpotlightPainter extends CustomPainter {
     }
     canvas.drawPath(
       path,
-      Paint()..color = GuideColors.scrim.withValues(alpha: .72),
+      Paint()..color = GuideColors.scrim.withValues(alpha: .54),
     );
     if (rect != null && !rect!.isEmpty) {
       final ring = RRect.fromRectAndRadius(rect!, const Radius.circular(12));
-      for (final (width, opacity) in [(10.0, .06), (5.0, .12), (1.5, .95)]) {
+      for (final (width, opacity) in [(10.0, .05), (5.0, .10), (1.5, .88)]) {
         canvas.drawRRect(
           ring,
           Paint()

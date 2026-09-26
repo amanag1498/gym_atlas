@@ -99,10 +99,6 @@ class MemberSettingsScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const GuideTarget(
-                id: 'member_settings_v1/guides',
-                child: GuideSettingsTile(),
-              ),
               const _SettingsTopBar(
                 title: 'Settings',
                 subtitle: 'Manage your account, training, and support options.',

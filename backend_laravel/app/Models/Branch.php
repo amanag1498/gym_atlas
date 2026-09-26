@@ -52,6 +52,11 @@ class Branch extends Model
         return $this->belongsTo(Gym::class);
     }
 
+    public function smartAttendanceHubs(): HasMany
+    {
+        return $this->hasMany(SmartAttendanceHub::class);
+    }
+
     public function cityRecord(): BelongsTo
     {
         return $this->belongsTo(City::class, 'city_id');

@@ -13,6 +13,7 @@ enum NotificationType: string
     case TrainerAssignment = 'trainer_assignment';
     case NewMemberAssigned = 'new_member_assigned';
     case AttendanceInactivity = 'attendance_inactivity';
+    case SmartAttendanceCheckIn = 'smart_attendance_check_in';
     case WorkoutReminder = 'workout_reminder';
     case MissedWorkoutAlert = 'missed_workout_alert';
     case WorkoutStreak = 'workout_streak';
