@@ -102,7 +102,7 @@ class MainActivity : Activity() {
 
         root.addView(label("Gym Atlas", 13, Color.rgb(142, 154, 180), true))
         root.addView(label("Atlas Smart Hub", 30, Color.WHITE, true).apply { setPadding(0, dp(4), 0, 0) })
-        root.addView(label("Provision this entrance device, broadcast the Smart Attendance BLE signal, and keep backend heartbeat alive.", 15, Color.rgb(202, 211, 226), false).apply { setPadding(0, dp(10), 0, dp(18)) })
+        root.addView(label("Provision this entrance device once, then broadcast the Smart Attendance BLE signal with or without internet.", 15, Color.rgb(202, 211, 226), false).apply { setPadding(0, dp(10), 0, dp(18)) })
 
         val statusCard = card()
         statusText = label("Not running", 18, Color.WHITE, true)
@@ -257,7 +257,7 @@ class MainActivity : Activity() {
     private fun renderStatus(status: HubRuntimeStatus) {
         statusText.text = when {
             status.serviceRunning && status.bleAdvertising && status.backendConnected -> "Hub online"
-            status.serviceRunning && status.bleAdvertising -> "Broadcasting, backend pending"
+            status.serviceRunning && status.bleAdvertising -> "Hub broadcasting offline"
             status.serviceRunning -> "Service running"
             status.provisioned -> "Provisioned"
             else -> "Not provisioned"
@@ -266,7 +266,11 @@ class MainActivity : Activity() {
         branchText.text = "Branch\n${status.branchName ?: "Gym-wide or not activated"}"
         publicIdText.text = "Hub public ID\n${status.publicId ?: "Not activated"}"
         bleText.text = "BLE broadcasting\n${if (status.bleAdvertising) "On" else "Off"}"
-        backendText.text = "Backend connectivity\n${if (status.backendConnected) "Connected" else "Not connected"}"
+        backendText.text = "Backend connectivity\n${when {
+            status.backendConnected -> "Connected"
+            status.bleAdvertising -> "Offline — BLE continues"
+            else -> "Not connected"
+        }}"
         heartbeatText.text = "Last heartbeat\n${status.lastHeartbeatAt ?: "Never"}"
         errorText.text = status.lastError?.let { "\n$it" } ?: ""
     }

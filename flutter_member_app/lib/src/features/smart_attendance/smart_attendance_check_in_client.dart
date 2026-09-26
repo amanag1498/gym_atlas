@@ -4,6 +4,11 @@ abstract class SmartAttendanceCheckInClient {
   Future<SmartAttendanceCheckInResponse> recordSmartAttendanceCheckIn(
     SmartAttendanceDetection detection,
   );
+
+  Future<void> recordSmartAttendanceCheckOut({
+    required int attendanceLogId,
+    required DateTime lastPresenceAt,
+  });
 }
 
 class SmartAttendanceCheckInResponse {
@@ -13,6 +18,11 @@ class SmartAttendanceCheckInResponse {
     this.gymId,
     this.attendanceDate,
     this.duplicateSuppressionUntil,
+    this.attendanceLogId,
+    this.checkedInAt,
+    this.lastPresenceAt,
+    this.checkedOutAt,
+    this.attendanceWindowEndsAt,
   });
 
   final bool checkedInToday;
@@ -20,9 +30,14 @@ class SmartAttendanceCheckInResponse {
   final int? gymId;
   final String? attendanceDate;
   final DateTime? duplicateSuppressionUntil;
+  final int? attendanceLogId;
+  final DateTime? checkedInAt;
+  final DateTime? lastPresenceAt;
+  final DateTime? checkedOutAt;
+  final DateTime? attendanceWindowEndsAt;
 
   bool get recordedSmartAttendance =>
-      checkedInToday && checkInMethod == 'smart_attendance';
+      attendanceLogId != null && checkInMethod == 'smart_attendance';
 
   factory SmartAttendanceCheckInResponse.fromApi(
     Map<String, dynamic> response,
@@ -45,6 +60,19 @@ class SmartAttendanceCheckInResponse {
       attendanceDate: data['attendance_date']?.toString(),
       duplicateSuppressionUntil: DateTime.tryParse(
         data['duplicate_suppression_until']?.toString() ?? '',
+      ),
+      attendanceLogId: (attendance['id'] as num?)?.toInt(),
+      checkedInAt: DateTime.tryParse(
+        attendance['checked_in_at']?.toString() ?? '',
+      ),
+      lastPresenceAt: DateTime.tryParse(
+        attendance['last_presence_at']?.toString() ?? '',
+      ),
+      checkedOutAt: DateTime.tryParse(
+        attendance['checked_out_at']?.toString() ?? '',
+      ),
+      attendanceWindowEndsAt: DateTime.tryParse(
+        attendance['attendance_window_ends_at']?.toString() ?? '',
       ),
     );
   }

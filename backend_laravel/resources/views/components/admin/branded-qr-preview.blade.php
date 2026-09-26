@@ -11,7 +11,11 @@
     $gradient = $tone === 'enrollment'
         ? 'from-emerald-950 via-teal-800 to-slate-950'
         : 'from-indigo-950 via-brand-600 to-slate-950';
-    $imageSize = $size === 'sm' ? 'h-40 w-40' : 'h-44 w-44';
+    $imageSize = match ($size) {
+        'sm' => 'h-40 w-40',
+        'lg' => 'h-48 w-48',
+        default => 'h-44 w-44',
+    };
 @endphp
 
 <div {{ $attributes->class(["relative overflow-hidden rounded-[1.6rem] bg-gradient-to-br {$gradient} p-3 shadow-xl shadow-slate-950/15"]) }}>

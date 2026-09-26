@@ -27,6 +27,7 @@ import 'features/member/shared_workout_plan_screen.dart';
 import 'features/smart_attendance/smart_attendance_ble_scanner.dart';
 import 'features/smart_attendance/smart_attendance_check_in_cache.dart';
 import 'features/smart_attendance/smart_attendance_controller.dart';
+import 'features/smart_attendance/smart_attendance_session_store.dart';
 
 class MemberApp extends StatefulWidget {
   const MemberApp({super.key});
@@ -83,6 +84,7 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
       scanner: MethodChannelSmartAttendanceBleScanner(),
       checkInClient: memberRepository,
       successCache: const SecureSmartAttendanceCheckInCache(),
+      sessionStore: const SecureSmartAttendanceSessionStore(),
       selectedGymIdProvider: storage.readSelectedGymId,
       memberIdProvider: () => sessionController.user?.id,
     );
@@ -317,7 +319,8 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
       return;
     }
 
-    if (defaultTargetPlatform == TargetPlatform.android &&
+    if ((defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS) &&
         (state == AppLifecycleState.paused ||
             state == AppLifecycleState.inactive ||
             state == AppLifecycleState.hidden)) {

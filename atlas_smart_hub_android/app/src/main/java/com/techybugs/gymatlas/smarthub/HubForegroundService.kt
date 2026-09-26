@@ -64,10 +64,23 @@ class HubForegroundService : Service() {
             return
         }
 
+        if (HubStartupPolicy.canBroadcastOffline(credentials)) {
+            val bluetoothEnabled = bluetoothEnabled()
+            publish(HubStartupPolicy.initialStatus(credentials, bluetoothEnabled))
+            if (bluetoothEnabled) {
+                runCatching { startBle(credentials.publicId) }
+                    .onFailure { error ->
+                        publish(runtimeStatus.copy(lastError = error.message ?: "BLE advertising could not start."))
+                    }
+            }
+            sendHeartbeat()
+            return
+        }
+
         runCatching {
             val activated = backend.activate(credentials, BuildInfo.firmwareVersion)
             store.save(activated)
-            if (advertiser.bluetoothEnabled()) {
+            if (bluetoothEnabled()) {
                 startBle(activated.publicId)
             }
             val status = backend.heartbeat(activated, BuildInfo.firmwareVersion, advertiser.isAdvertising)
@@ -76,7 +89,7 @@ class HubForegroundService : Service() {
                     gymName = activated.gymName,
                     branchName = activated.branchName,
                     publicId = activated.publicId,
-                    lastError = if (advertiser.bluetoothEnabled()) null else "Bluetooth is turned off.",
+                    lastError = if (bluetoothEnabled()) null else "Bluetooth is turned off.",
                 )
             )
         }.onFailure { error ->
@@ -89,7 +102,7 @@ class HubForegroundService : Service() {
                     publicId = credentials.publicId,
                     gymName = credentials.gymName,
                     branchName = credentials.branchName,
-                    lastError = error.message ?: "Activation failed.",
+                    lastError = error.message ?: "Initial activation requires internet.",
                 )
             )
         }
@@ -102,7 +115,7 @@ class HubForegroundService : Service() {
                 credentials = backend.activate(credentials, BuildInfo.firmwareVersion)
                 store.save(credentials)
             }
-            if (!advertiser.bluetoothEnabled()) {
+            if (!bluetoothEnabled()) {
                 advertiser.stop()
             } else if (!advertiser.hasActiveRequest && credentials.publicId != null) {
                 startBle(credentials.publicId)
@@ -110,13 +123,19 @@ class HubForegroundService : Service() {
             val status = backend.heartbeat(credentials, BuildInfo.firmwareVersion, advertiser.isAdvertising)
             publish(status.copy(gymName = credentials.gymName, branchName = credentials.branchName, publicId = credentials.publicId))
         }.onFailure { error ->
+            val canKeepBroadcasting = HubStartupPolicy.canBroadcastOffline(credentials)
             publish(
                 runtimeStatus.copy(
                     provisioned = true,
                     serviceRunning = true,
                     bleAdvertising = advertiser.isAdvertising,
                     backendConnected = false,
-                    lastError = error.message ?: "Heartbeat failed at ${Instant.now()}",
+                    lastError = when {
+                        !canKeepBroadcasting -> error.message ?: "Activation failed at ${Instant.now()}"
+                        !bluetoothEnabled() -> "Bluetooth is turned off or its permission is unavailable."
+                        advertiser.isAdvertising -> null
+                        else -> runtimeStatus.lastError
+                    },
                 )
             )
         }
@@ -139,6 +158,9 @@ class HubForegroundService : Service() {
         }
     }
 
+    private fun bluetoothEnabled(): Boolean =
+        runCatching { advertiser.bluetoothEnabled() }.getOrDefault(false)
+
     private fun publish(status: HubRuntimeStatus) {
         runtimeStatus = status.copy(serviceRunning = status.serviceRunning || executor?.isShutdown == false)
         getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(notificationText(runtimeStatus)))
@@ -147,9 +169,9 @@ class HubForegroundService : Service() {
 
     private fun notificationText(status: HubRuntimeStatus): String {
         return when {
-            status.lastError != null -> "Needs attention: ${status.lastError.take(80)}"
             status.bleAdvertising && status.backendConnected -> "Broadcasting ${status.publicId ?: "hub"} and connected"
-            status.bleAdvertising -> "Broadcasting BLE signal"
+            status.bleAdvertising -> "Broadcasting BLE signal offline"
+            status.lastError != null -> "Needs attention: ${status.lastError.take(80)}"
             else -> "Smart Hub service running"
         }
     }
@@ -177,5 +199,5 @@ class HubForegroundService : Service() {
 }
 
 object BuildInfo {
-    const val firmwareVersion = "atlas-smart-hub-android-0.1.0"
+    const val firmwareVersion = "atlas-smart-hub-android-0.2.0"
 }

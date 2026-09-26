@@ -1102,10 +1102,15 @@ class _AttendanceHistoryRow extends StatelessWidget {
       if (method.isNotEmpty) method,
     ].join(' • ');
     final checkedInAt = _formatDateTime(entry['checked_in_at']);
+    final checkedOutAt = entry['checked_out_at'] != null
+        ? _formatDateTime(entry['checked_out_at'])
+        : entry['check_in_method'] == 'smart_attendance'
+        ? 'Active visit'
+        : 'Not recorded';
 
     return Semantics(
       label:
-          '$gymName, $checkedInAt'
+          '$gymName, in $checkedInAt, out $checkedOutAt'
           '${supportingDetails.isEmpty ? '' : ', $supportingDetails'}',
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 9),
@@ -1127,7 +1132,7 @@ class _AttendanceHistoryRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    checkedInAt,
+                    'In $checkedInAt • Out $checkedOutAt',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppColors.textSecondary,
                       fontWeight: FontWeight.w700,

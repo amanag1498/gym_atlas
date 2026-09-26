@@ -8,6 +8,9 @@ import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
+import android.content.BroadcastReceiver
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -65,7 +68,7 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     override fun onDestroy() {
-        smartAttendanceScanner?.stop(null)
+        smartAttendanceScanner?.detach()
         super.onDestroy()
     }
 
@@ -200,6 +203,24 @@ private class SmartAttendanceBleScanner(private val context: Context) : EventCha
     private var scanCallback: ScanCallback? = null
     private var currentBackgroundMode = false
     private val serviceUuid = ParcelUuid(UUID.fromString(ATLAS_SERVICE_UUID))
+    private var receiverRegistered = false
+    private val backgroundReceiver = object : BroadcastReceiver() {
+        override fun onReceive(receiverContext: Context?, intent: Intent?) {
+            if (intent?.action != SmartAttendanceScanContract.ACTION_DETECTION) return
+            val data = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getByteArrayExtra(SmartAttendanceScanContract.EXTRA_SERVICE_DATA)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getByteArrayExtra(SmartAttendanceScanContract.EXTRA_SERVICE_DATA)
+            } ?: return
+            emitPayload(
+                data,
+                intent.getIntExtra(SmartAttendanceScanContract.EXTRA_RSSI, 0),
+                intent.getLongExtra(SmartAttendanceScanContract.EXTRA_DETECTED_AT, System.currentTimeMillis()),
+                "android_background_ble",
+            )
+        }
+    }
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         eventSink = events
@@ -227,13 +248,32 @@ private class SmartAttendanceBleScanner(private val context: Context) : EventCha
             result.error("bluetooth_off", "Bluetooth is turned off.", null)
             return
         }
+        if (background) {
+            stopLocalScan()
+            registerBackgroundReceiver()
+            context.startForegroundService(Intent(context, SmartAttendanceScanService::class.java))
+            SmartAttendanceDetectionQueue.drain(context).forEach { queued ->
+                emitPayload(
+                    queued.getValue(SmartAttendanceScanContract.EXTRA_SERVICE_DATA) as ByteArray,
+                    queued.getValue(SmartAttendanceScanContract.EXTRA_RSSI) as Int,
+                    queued.getValue(SmartAttendanceScanContract.EXTRA_DETECTED_AT) as Long,
+                    "android_background_ble",
+                )
+            }
+            currentBackgroundMode = true
+            result.success(null)
+            return
+        }
+
+        drainQueuedDetections()
+        stopBackgroundService()
         val scanner = adapter.bluetoothLeScanner
         if (scanner == null) {
             result.error("scanner_unavailable", "BLE scanner is unavailable.", null)
             return
         }
 
-        stop(null)
+        stopLocalScan()
         val callback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, scanResult: ScanResult) {
                 emit(scanResult)
@@ -263,24 +303,82 @@ private class SmartAttendanceBleScanner(private val context: Context) : EventCha
 
     @SuppressLint("MissingPermission")
     fun stop(result: MethodChannel.Result?) {
+        stopLocalScan()
+        stopBackgroundService()
+        result?.success(null)
+    }
+
+    fun detach() {
+        stopLocalScan()
+        unregisterBackgroundReceiver()
+        eventSink = null
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun stopLocalScan() {
         val callback = scanCallback
         if (callback != null && hasScanPermission()) {
             bluetoothAdapter?.bluetoothLeScanner?.stopScan(callback)
         }
         scanCallback = null
         currentBackgroundMode = false
-        result?.success(null)
+    }
+
+    private fun registerBackgroundReceiver() {
+        if (receiverRegistered) return
+        val filter = IntentFilter(SmartAttendanceScanContract.ACTION_DETECTION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(backgroundReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            context.registerReceiver(backgroundReceiver, filter)
+        }
+        receiverRegistered = true
+    }
+
+    private fun unregisterBackgroundReceiver() {
+        if (!receiverRegistered) return
+        runCatching { context.unregisterReceiver(backgroundReceiver) }
+        receiverRegistered = false
+    }
+
+    private fun stopBackgroundService() {
+        context.startService(
+            Intent(context, SmartAttendanceScanService::class.java)
+                .setAction(SmartAttendanceScanService.ACTION_STOP),
+        )
+        unregisterBackgroundReceiver()
+    }
+
+    private fun drainQueuedDetections() {
+        SmartAttendanceDetectionQueue.drain(context).forEach { queued ->
+            emitPayload(
+                queued.getValue(SmartAttendanceScanContract.EXTRA_SERVICE_DATA) as ByteArray,
+                queued.getValue(SmartAttendanceScanContract.EXTRA_RSSI) as Int,
+                queued.getValue(SmartAttendanceScanContract.EXTRA_DETECTED_AT) as Long,
+                "android_background_ble",
+            )
+        }
     }
 
     private fun emit(result: ScanResult) {
         val serviceData = result.scanRecord?.getServiceData(serviceUuid)
+        emitPayload(
+            serviceData,
+            result.rssi,
+            System.currentTimeMillis(),
+            if (currentBackgroundMode) "android_background_ble" else "android_foreground_ble",
+        )
+    }
+
+    private fun emitPayload(serviceData: ByteArray?, rssi: Int, detectedAt: Long, source: String) {
         eventSink?.success(
             mapOf(
                 "serviceUuid" to ATLAS_SERVICE_UUID,
                 "serviceData" to serviceData,
-                "rssi" to result.rssi,
-                "detectedAt" to System.currentTimeMillis(),
-                "source" to if (currentBackgroundMode) "android_background_ble" else "android_foreground_ble",
+                "rssi" to rssi,
+                "detectedAt" to detectedAt,
+                "source" to source,
             ),
         )
     }
@@ -295,7 +393,7 @@ private class SmartAttendanceBleScanner(private val context: Context) : EventCha
     }
 
     companion object {
-        private const val ATLAS_SERVICE_UUID = "8b0f9c60-4f6d-4b40-9e8d-2d5d3f73a1a1"
+        private const val ATLAS_SERVICE_UUID = SmartAttendanceScanContract.ATLAS_SERVICE_UUID
         private const val BACKGROUND_REPORT_DELAY_MS = 15000L
     }
 }

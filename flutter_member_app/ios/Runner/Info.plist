@@ -86,6 +86,7 @@
 	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
+		<string>bluetooth-central</string>
 		<string>remote-notification</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
@@ -106,8 +107,8 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Gym Atlas uses Bluetooth only to detect nearby Smart Attendance hubs while the app is open.</string>
+	<string>Gym Atlas uses Bluetooth to detect nearby Smart Attendance hubs and maintain visit in and out times, including while the app is in the background.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>Gym Atlas uses Bluetooth only to detect nearby Smart Attendance hubs while the app is open.</string>
+	<string>Gym Atlas uses Bluetooth to detect nearby Smart Attendance hubs and maintain visit in and out times, including while the app is in the background.</string>
 </dict>
 </plist>

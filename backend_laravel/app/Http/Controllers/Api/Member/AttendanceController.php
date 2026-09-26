@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Member;
 use App\Enums\NotificationType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SmartAttendance\SmartAttendanceCheckInRequest;
+use App\Http\Requests\SmartAttendance\SmartAttendanceCheckOutRequest;
 use App\Http\Resources\Attendance\AttendanceLogResource;
 use App\Models\AttendanceLog;
 use App\Models\Branch;
@@ -130,8 +131,11 @@ class AttendanceController extends Controller
             member: $user,
             hub: $hub,
             detectionMetadata: $metadata,
+            detectedAt: $request->validated('detected_at'),
         )->load(['gym', 'branch']);
-        $this->sendSmartAttendanceWelcomeNotification($user, $log, $hub);
+        if ($log->wasRecentlyCreated) {
+            $this->sendSmartAttendanceWelcomeNotification($user, $log, $hub);
+        }
         [, $attendanceDayEnd] = $this->attendanceService->localDayBounds($hub->gym, $branch, $log->checked_in_at);
         $attendanceTimezone = $branch->timezone ?: $hub->gym->timezone ?: config('app.timezone');
         if (! in_array($attendanceTimezone, timezone_identifiers_list(), true)) {
@@ -143,7 +147,30 @@ class AttendanceController extends Controller
             'check_in_status' => $this->memberAppService->attendanceStatusFor($user, $profile->fresh(['gym', 'branch'])),
             'attendance_date' => $log->checked_in_at->copy()->timezone($attendanceTimezone)->toDateString(),
             'duplicate_suppression_until' => $attendanceDayEnd->toIso8601String(),
-        ], 'Smart Attendance check-in recorded successfully.', 201);
+        ], $log->wasRecentlyCreated
+            ? 'Smart Attendance check-in recorded successfully.'
+            : 'Smart Attendance presence updated successfully.', $log->wasRecentlyCreated ? 201 : 200);
+    }
+
+    public function smartCheckOut(SmartAttendanceCheckOutRequest $request)
+    {
+        $this->memberAppService->assertRequestedGymContextAccessible($request->user());
+        $selectedGymId = $this->memberAppService->selectedGymIdFor($request->user());
+        $log = AttendanceLog::query()->findOrFail($request->integer('attendance_log_id'));
+        if ((int) $log->gym_id !== (int) $selectedGymId) {
+            throw ValidationException::withMessages([
+                'attendance_log_id' => ['The Smart Attendance visit was not found for the selected gym.'],
+            ]);
+        }
+        $log = $this->attendanceService->finalizeSmartAttendanceVisit(
+            $log,
+            $request->user(),
+            $request->validated('last_presence_at'),
+        )->load(['gym', 'branch']);
+
+        return $this->success([
+            'attendance' => AttendanceLogResource::make($log),
+        ], 'Smart Attendance out time saved successfully.');
     }
 
     private function sendSmartAttendanceWelcomeNotification(User $member, AttendanceLog $log, SmartAttendanceHub $hub): void

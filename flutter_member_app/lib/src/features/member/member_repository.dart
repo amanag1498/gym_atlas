@@ -87,6 +87,20 @@ class MemberRepository implements SmartAttendanceCheckInClient {
     return SmartAttendanceCheckInResponse.fromApi(response);
   }
 
+  @override
+  Future<void> recordSmartAttendanceCheckOut({
+    required int attendanceLogId,
+    required DateTime lastPresenceAt,
+  }) async {
+    await _client.post(
+      '/member/attendance/smart-check-out',
+      data: {
+        'attendance_log_id': attendanceLogId,
+        'last_presence_at': lastPresenceAt.toIso8601String(),
+      },
+    );
+  }
+
   Future<Map<String, dynamic>> fetchMembership() async =>
       _client.get('/member/membership');
   Future<Map<String, dynamic>> leaveCurrentGym() async =>

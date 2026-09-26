@@ -937,6 +937,8 @@ Route::prefix('member')
             ->middleware('consent:biometric_attendance');
         Route::post('attendance/smart-check-in', [MemberAttendanceController::class, 'smartCheckIn'])
             ->middleware(['consent:biometric_attendance', 'throttle:30,1']);
+        Route::post('attendance/smart-check-out', [MemberAttendanceController::class, 'smartCheckOut'])
+            ->middleware(['consent:biometric_attendance', 'throttle:30,1']);
         Route::get('attendance/history', [MemberAttendanceController::class, 'history'])
             ->middleware('consent:biometric_attendance');
         Route::get('workout-plans', [MemberWorkoutController::class, 'plans'])

@@ -44,6 +44,10 @@ Schedule::command('biometric:dispatch-ebioserver')
     ->everyMinute()
     ->name('ebioserver-command-dispatch')
     ->withoutOverlapping();
+Schedule::command('attendance:finalize-smart-visits')
+    ->everyMinute()
+    ->name('smart-attendance-visit-finalization')
+    ->withoutOverlapping();
 Schedule::call(fn () => app(ReminderService::class)->runDueReminders())
     ->dailyAt('09:00')
     ->name('membership-and-attendance-email-reminders')

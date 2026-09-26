@@ -5,6 +5,7 @@ import 'package:flutter_member_app/src/features/smart_attendance/smart_attendanc
 import 'package:flutter_member_app/src/features/smart_attendance/smart_attendance_check_in_client.dart';
 import 'package:flutter_member_app/src/features/smart_attendance/smart_attendance_controller.dart';
 import 'package:flutter_member_app/src/features/smart_attendance/smart_attendance_detection.dart';
+import 'package:flutter_member_app/src/features/smart_attendance/smart_attendance_session_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -108,6 +109,7 @@ void main() {
 
       expect(client.calls, hasLength(1));
       expect(client.calls.single.publicId, 'SAHABC123DEF4567');
+      expect(client.calls.single.detectedAt, DateTime(2026, 9, 26, 10));
       expect(
         cache.successfulKeys,
         contains('42|7|SAHABC123DEF4567|2026-09-26'),
@@ -119,30 +121,33 @@ void main() {
     },
   );
 
-  test('successful same-day cache skips repeated api calls', () async {
-    final scanner = _FakeScanner();
-    final client = _FakeCheckInClient();
-    final cache = _FakeSuccessCache()
-      ..successfulKeys.add('42|7|SAHABC123DEF4567|2026-09-26');
-    final now = DateTime(2026, 9, 26, 10);
-    final controller = SmartAttendanceController(
-      scanner: scanner,
-      checkInClient: client,
-      successCache: cache,
-      selectedGymIdProvider: () async => 7,
-      memberIdProvider: () => 42,
-      requestPermissions: () async => true,
-      clock: () => now,
-      presenceWindow: Duration.zero,
-      requestDebounce: Duration.zero,
-    );
+  test(
+    'successful same-day cache does not suppress presence updates',
+    () async {
+      final scanner = _FakeScanner();
+      final client = _FakeCheckInClient();
+      final cache = _FakeSuccessCache()
+        ..successfulKeys.add('42|7|SAHABC123DEF4567|2026-09-26');
+      final now = DateTime(2026, 9, 26, 10);
+      final controller = SmartAttendanceController(
+        scanner: scanner,
+        checkInClient: client,
+        successCache: cache,
+        selectedGymIdProvider: () async => 7,
+        memberIdProvider: () => 42,
+        requestPermissions: () async => true,
+        clock: () => now,
+        presenceWindow: Duration.zero,
+        requestDebounce: Duration.zero,
+      );
 
-    await controller.startForegroundScan();
-    scanner.emit(_detection('SAHABC123DEF4567', now));
-    await _pumpAsync();
+      await controller.startForegroundScan();
+      scanner.emit(_detection('SAHABC123DEF4567', now));
+      await _pumpAsync();
 
-    expect(client.calls, isEmpty);
-  });
+      expect(client.calls, hasLength(1));
+    },
+  );
 
   test(
     'parallel foreground detections do not create parallel check-ins',
@@ -203,6 +208,49 @@ void main() {
     scanner.emit(_detection('SAHABC123DEF4567', now));
     await _pumpAsync();
     expect(client.calls, hasLength(1));
+  });
+
+  test('presence session saves the latest timestamp as out time', () async {
+    final scanner = _FakeScanner();
+    final client = _SessionCheckInClient();
+    final store = _FakeSessionStore();
+    var now = DateTime(2026, 9, 26, 10);
+    final controller = SmartAttendanceController(
+      scanner: scanner,
+      checkInClient: client,
+      sessionStore: store,
+      selectedGymIdProvider: () async => 7,
+      memberIdProvider: () => 42,
+      requestPermissions: () async => true,
+      clock: () => now,
+      presenceWindow: Duration.zero,
+      requestDebounce: Duration.zero,
+      absenceTimeout: const Duration(hours: 2),
+    );
+
+    await controller.startForegroundScan();
+    scanner.emit(_detection('SAHABC123DEF4567', now));
+    await _pumpAsync();
+    expect(controller.activeSession?.checkedInAt, now);
+
+    now = now.add(const Duration(minutes: 45));
+    scanner.emit(_detection('SAHABC123DEF4567', now));
+    await _pumpAsync();
+    expect(controller.activeSession?.lastPresenceAt, now);
+
+    final expectedOutTime = now;
+    now = now.add(const Duration(hours: 2, minutes: 1));
+    await controller.startForegroundScan();
+
+    expect(client.checkOutCalls, [expectedOutTime]);
+    expect(controller.activeSession?.checkedOutAt, expectedOutTime);
+    expect(store.session?.checkedOutAt, expectedOutTime);
+
+    now = now.add(const Duration(minutes: 30));
+    scanner.emit(_detection('SAHABC123DEF4567', now));
+    await _pumpAsync();
+    expect(controller.activeSession?.checkedOutAt, isNull);
+    expect(controller.activeSession?.lastPresenceAt, now);
   });
 }
 
@@ -274,8 +322,15 @@ class _FakeCheckInClient implements SmartAttendanceCheckInClient {
       checkedInToday: true,
       checkInMethod: 'smart_attendance',
       gymId: 7,
+      attendanceLogId: 91,
     );
   }
+
+  @override
+  Future<void> recordSmartAttendanceCheckOut({
+    required int attendanceLogId,
+    required DateTime lastPresenceAt,
+  }) async {}
 }
 
 class _SlowCheckInClient implements SmartAttendanceCheckInClient {
@@ -296,9 +351,16 @@ class _SlowCheckInClient implements SmartAttendanceCheckInClient {
         checkedInToday: true,
         checkInMethod: 'smart_attendance',
         gymId: 7,
+        attendanceLogId: 91,
       ),
     );
   }
+
+  @override
+  Future<void> recordSmartAttendanceCheckOut({
+    required int attendanceLogId,
+    required DateTime lastPresenceAt,
+  }) async {}
 }
 
 class _FakeSuccessCache implements SmartAttendanceCheckInCache {
@@ -333,5 +395,50 @@ class _FakeSuccessCache implements SmartAttendanceCheckInCache {
     final month = local.month.toString().padLeft(2, '0');
     final day = local.day.toString().padLeft(2, '0');
     return '$memberId|$gymId|${hubPublicId.toUpperCase()}|${local.year}-$month-$day';
+  }
+}
+
+class _SessionCheckInClient implements SmartAttendanceCheckInClient {
+  final checkOutCalls = <DateTime>[];
+  DateTime? firstPresence;
+
+  @override
+  Future<SmartAttendanceCheckInResponse> recordSmartAttendanceCheckIn(
+    SmartAttendanceDetection detection,
+  ) async {
+    firstPresence ??= detection.detectedAt;
+    return SmartAttendanceCheckInResponse(
+      checkedInToday: true,
+      checkInMethod: 'smart_attendance',
+      gymId: 7,
+      attendanceLogId: 91,
+      checkedInAt: firstPresence,
+      lastPresenceAt: detection.detectedAt,
+      attendanceWindowEndsAt: firstPresence!.add(const Duration(hours: 6)),
+    );
+  }
+
+  @override
+  Future<void> recordSmartAttendanceCheckOut({
+    required int attendanceLogId,
+    required DateTime lastPresenceAt,
+  }) async {
+    expect(attendanceLogId, 91);
+    checkOutCalls.add(lastPresenceAt);
+  }
+}
+
+class _FakeSessionStore implements SmartAttendanceSessionStore {
+  SmartAttendanceSession? session;
+
+  @override
+  Future<void> clear() async => session = null;
+
+  @override
+  Future<SmartAttendanceSession?> read() async => session;
+
+  @override
+  Future<void> write(SmartAttendanceSession session) async {
+    this.session = session;
   }
 }

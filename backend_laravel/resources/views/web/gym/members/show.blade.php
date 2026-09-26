@@ -382,6 +382,7 @@
                             <thead>
                                 <tr>
                                     <th>Date</th>
+                                    <th>Out time</th>
                                     <th>Branch</th>
                                     <th>Checked In By</th>
                                 </tr>
@@ -390,12 +391,13 @@
                                 @forelse ($attendanceHistory->take(5) as $log)
                                     <tr>
                                         <td>{{ optional($log->checked_in_at)->format('d M Y H:i') }}</td>
+                                        <td>{{ optional($log->checked_out_at)->format('d M Y H:i') ?? ($log->check_in_method === 'smart_attendance' ? 'Active' : '—') }}</td>
                                         <td>{{ $log->branch?->name ?? 'N/A' }}</td>
                                         <td>{{ $log->checkedInByUser?->name ?? 'System' }}</td>
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="3">No attendance history found.</td>
+                                        <td colspan="4">No attendance history found.</td>
                                     </tr>
                                 @endforelse
                             </tbody>

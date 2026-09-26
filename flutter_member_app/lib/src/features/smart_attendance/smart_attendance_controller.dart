@@ -8,24 +8,29 @@ import 'smart_attendance_ble_scanner.dart';
 import 'smart_attendance_check_in_cache.dart';
 import 'smart_attendance_check_in_client.dart';
 import 'smart_attendance_detection.dart';
+import 'smart_attendance_session_store.dart';
 
 class SmartAttendanceController extends ChangeNotifier {
   SmartAttendanceController({
     required SmartAttendanceBleScanner scanner,
     SmartAttendanceCheckInClient? checkInClient,
     SmartAttendanceCheckInCache? successCache,
+    SmartAttendanceSessionStore? sessionStore,
     Future<int?> Function()? selectedGymIdProvider,
     int? Function()? memberIdProvider,
     Future<bool> Function()? requestPermissions,
     DateTime Function()? clock,
     Duration duplicateWindow = const Duration(seconds: 12),
     Duration presenceWindow = const Duration(milliseconds: 2400),
-    Duration requestDebounce = const Duration(seconds: 45),
+    Duration requestDebounce = const Duration(seconds: 15),
     Duration presenceContinuityTimeout = const Duration(seconds: 30),
+    Duration attendanceWindow = const Duration(hours: 6),
+    Duration absenceTimeout = const Duration(hours: 2),
     int minimumRssi = -78,
   }) : _scanner = scanner,
        _checkInClient = checkInClient,
        _successCache = successCache,
+       _sessionStore = sessionStore,
        _selectedGymIdProvider = selectedGymIdProvider,
        _memberIdProvider = memberIdProvider,
        _requestPermissions = requestPermissions,
@@ -34,11 +39,14 @@ class SmartAttendanceController extends ChangeNotifier {
        _presenceWindow = presenceWindow,
        _requestDebounce = requestDebounce,
        _presenceContinuityTimeout = presenceContinuityTimeout,
+       _attendanceWindow = attendanceWindow,
+       _absenceTimeout = absenceTimeout,
        _minimumRssi = minimumRssi;
 
   final SmartAttendanceBleScanner _scanner;
   final SmartAttendanceCheckInClient? _checkInClient;
   final SmartAttendanceCheckInCache? _successCache;
+  final SmartAttendanceSessionStore? _sessionStore;
   final Future<int?> Function()? _selectedGymIdProvider;
   final int? Function()? _memberIdProvider;
   final Future<bool> Function()? _requestPermissions;
@@ -47,6 +55,8 @@ class SmartAttendanceController extends ChangeNotifier {
   final Duration _presenceWindow;
   final Duration _requestDebounce;
   final Duration _presenceContinuityTimeout;
+  final Duration _attendanceWindow;
+  final Duration _absenceTimeout;
   final int _minimumRssi;
   final List<SmartAttendanceDetection> _detections = [];
   final List<SmartAttendanceScanDiagnostic> _diagnostics = [];
@@ -58,6 +68,9 @@ class SmartAttendanceController extends ChangeNotifier {
 
   StreamSubscription<SmartAttendanceDetection>? _detectionSub;
   StreamSubscription<SmartAttendanceScanDiagnostic>? _diagnosticSub;
+  Timer? _sessionTimer;
+  SmartAttendanceSession? _session;
+  bool _sessionLoaded = false;
   bool _scanning = false;
   bool _permissionDenied = false;
   bool _checkInInFlight = false;
@@ -71,6 +84,7 @@ class SmartAttendanceController extends ChangeNotifier {
   bool get backgroundScanning => _backgroundScanning;
   String? get lastError => _lastError;
   String? get lastCheckInMessage => _lastCheckInMessage;
+  SmartAttendanceSession? get activeSession => _session;
   SmartAttendanceDetection? get latestDetection =>
       _detections.isEmpty ? null : _detections.last;
   List<SmartAttendanceDetection> get detections =>
@@ -89,6 +103,7 @@ class SmartAttendanceController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    await _restoreAndReconcileSession();
 
     _detectionSub ??= _scanner.detections.listen(
       _handleDetection,
@@ -122,6 +137,7 @@ class SmartAttendanceController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    await _restoreAndReconcileSession();
 
     _detectionSub ??= _scanner.detections.listen(
       _handleDetection,
@@ -152,6 +168,7 @@ class SmartAttendanceController extends ChangeNotifier {
       _backgroundScanning = false;
       _firstQualifiedDetectionByHub.clear();
       _lastQualifiedDetectionByHub.clear();
+      _sessionTimer?.cancel();
       notifyListeners();
     }
   }
@@ -198,6 +215,22 @@ class SmartAttendanceController extends ChangeNotifier {
       return;
     }
 
+    final currentSession = _session;
+    final startsNewVisit =
+        currentSession == null || !now.isBefore(currentSession.windowEndsAt);
+    final requestDetection = startsNewVisit
+        ? SmartAttendanceDetection(
+            publicId: detection.publicId,
+            protocolVersion: detection.protocolVersion,
+            rssi: detection.rssi,
+            detectedAt: firstSeen,
+            source: detection.source,
+            rawServiceData: detection.rawServiceData,
+          )
+        : detection;
+
+    _recordLocalPresence(detection, now);
+
     final lastAttempt = _lastRequestAttemptByHub[hubKey];
     if (lastAttempt != null && now.difference(lastAttempt) < _requestDebounce) {
       return;
@@ -219,25 +252,10 @@ class SmartAttendanceController extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    if (memberId != null && selectedGymId != null) {
-      final alreadySuccessful =
-          await _successCache?.wasSuccessful(
-            memberId: memberId,
-            gymId: selectedGymId,
-            hubPublicId: hubKey,
-            localDate: now,
-          ) ??
-          false;
-      if (alreadySuccessful) {
-        _inFlightHubs.remove(hubKey);
-        _checkInInFlight = _inFlightHubs.isNotEmpty;
-        notifyListeners();
-        return;
-      }
-    }
-
     try {
-      final response = await client.recordSmartAttendanceCheckIn(detection);
+      final response = await client.recordSmartAttendanceCheckIn(
+        requestDetection,
+      );
       final resolvedGymId = response.gymId ?? selectedGymId;
       if (response.recordedSmartAttendance &&
           memberId != null &&
@@ -250,6 +268,34 @@ class SmartAttendanceController extends ChangeNotifier {
           attendanceDate: response.attendanceDate,
           validUntil: response.duplicateSuppressionUntil,
         );
+        final attendanceLogId = response.attendanceLogId;
+        if (attendanceLogId != null) {
+          final checkedInAt =
+              response.checkedInAt ?? requestDetection.detectedAt;
+          final responseLastPresence =
+              response.lastPresenceAt ?? requestDetection.detectedAt;
+          final current = _session;
+          final hasNewerLocalPresence =
+              current != null &&
+              current.attendanceLogId == attendanceLogId &&
+              current.lastPresenceAt.isAfter(responseLastPresence);
+          _session = SmartAttendanceSession(
+            attendanceLogId: attendanceLogId,
+            memberId: memberId,
+            gymId: resolvedGymId,
+            hubPublicId: hasNewerLocalPresence ? current.hubPublicId : hubKey,
+            checkedInAt: checkedInAt,
+            lastPresenceAt: hasNewerLocalPresence
+                ? current.lastPresenceAt
+                : responseLastPresence,
+            windowEndsAt:
+                response.attendanceWindowEndsAt ??
+                checkedInAt.add(_attendanceWindow),
+            checkedOutAt: hasNewerLocalPresence ? null : response.checkedOutAt,
+          );
+          await _persistSession();
+          _scheduleSessionTimer();
+        }
         _lastCheckInMessage = 'Smart Attendance check-in recorded.';
       }
     } catch (error) {
@@ -258,6 +304,130 @@ class SmartAttendanceController extends ChangeNotifier {
       _inFlightHubs.remove(hubKey);
       _checkInInFlight = _inFlightHubs.isNotEmpty;
       notifyListeners();
+    }
+  }
+
+  void _recordLocalPresence(SmartAttendanceDetection detection, DateTime now) {
+    final session = _session;
+    if (session == null || !now.isBefore(session.windowEndsAt)) {
+      return;
+    }
+    final detectedAt = detection.detectedAt.isAfter(now)
+        ? now
+        : detection.detectedAt;
+    if (detectedAt.isBefore(session.lastPresenceAt)) {
+      return;
+    }
+    _session = session.copyWith(
+      hubPublicId: detection.publicId.toUpperCase(),
+      lastPresenceAt: detectedAt,
+      clearCheckedOutAt: true,
+    );
+    unawaited(_persistSession());
+    _scheduleSessionTimer();
+  }
+
+  Future<void> _restoreAndReconcileSession() async {
+    if (!_sessionLoaded) {
+      _sessionLoaded = true;
+      _session = await _sessionStore?.read();
+    }
+    final session = _session;
+    if (session == null) return;
+
+    final memberId = _memberIdProvider?.call();
+    final gymId = await _selectedGymIdProvider?.call();
+    if (memberId == null ||
+        gymId == null ||
+        session.memberId != memberId ||
+        session.gymId != gymId) {
+      _session = null;
+      await _sessionStore?.clear();
+      return;
+    }
+
+    final now = _clock();
+    if (!now.isBefore(session.windowEndsAt)) {
+      await _finalizeSession(clearAfterSuccess: true);
+      return;
+    }
+    if (session.checkedOutAt == null &&
+        !now.isBefore(session.lastPresenceAt.add(_absenceTimeout))) {
+      await _finalizeSession(clearAfterSuccess: false);
+      return;
+    }
+    _scheduleSessionTimer();
+  }
+
+  void _scheduleSessionTimer() {
+    _sessionTimer?.cancel();
+    final session = _session;
+    if (session == null) return;
+    final now = _clock();
+    final deadline = session.checkedOutAt == null
+        ? session.lastPresenceAt.add(_absenceTimeout)
+        : session.windowEndsAt;
+    final effectiveDeadline = deadline.isBefore(session.windowEndsAt)
+        ? deadline
+        : session.windowEndsAt;
+    final delay = effectiveDeadline.difference(now);
+    _sessionTimer = Timer(
+      delay.isNegative ? Duration.zero : delay,
+      () => unawaited(
+        _finalizeSession(
+          clearAfterSuccess: !_clock().isBefore(session.windowEndsAt),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _finalizeSession({required bool clearAfterSuccess}) async {
+    final session = _session;
+    final client = _checkInClient;
+    if (session == null || client == null) return;
+    try {
+      await client.recordSmartAttendanceCheckOut(
+        attendanceLogId: session.attendanceLogId,
+        lastPresenceAt: session.lastPresenceAt,
+      );
+      if (clearAfterSuccess || !_clock().isBefore(session.windowEndsAt)) {
+        final current = _session;
+        if (current != null &&
+            current.attendanceLogId == session.attendanceLogId &&
+            !current.lastPresenceAt.isAfter(session.lastPresenceAt)) {
+          _session = null;
+          await _sessionStore?.clear();
+        } else {
+          _scheduleSessionTimer();
+        }
+      } else {
+        final current = _session;
+        if (current != null &&
+            current.attendanceLogId == session.attendanceLogId &&
+            current.lastPresenceAt.isAfter(session.lastPresenceAt)) {
+          _scheduleSessionTimer();
+        } else {
+          _session = session.copyWith(checkedOutAt: session.lastPresenceAt);
+          await _persistSession();
+          _scheduleSessionTimer();
+        }
+      }
+      _lastCheckInMessage = 'Smart Attendance out time saved.';
+    } catch (error) {
+      _lastError = _friendlyError(error);
+      _sessionTimer?.cancel();
+      _sessionTimer = Timer(
+        const Duration(minutes: 5),
+        () => unawaited(_finalizeSession(clearAfterSuccess: clearAfterSuccess)),
+      );
+    }
+    notifyListeners();
+  }
+
+  Future<void> _persistSession() async {
+    final session = _session;
+    if (session != null) {
+      await _sessionStore?.write(session);
     }
   }
 
@@ -302,6 +472,7 @@ class SmartAttendanceController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _sessionTimer?.cancel();
     _detectionSub?.cancel();
     _diagnosticSub?.cancel();
     _scanner.stopScan();

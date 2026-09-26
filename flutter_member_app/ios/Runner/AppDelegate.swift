@@ -23,7 +23,9 @@ import UIKit
     ).setMethodCallHandler { call, result in
       switch call.method {
       case "startForegroundScan":
-        scanner.start(result: result)
+        scanner.start(result: result, background: false)
+      case "startBackgroundScan":
+        scanner.start(result: result, background: true)
       case "stopScan":
         scanner.stop(result: result)
       default:
@@ -42,9 +44,14 @@ import UIKit
 private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, CBCentralManagerDelegate {
   private let serviceUuid = CBUUID(string: "8b0f9c60-4f6d-4b40-9e8d-2d5d3f73a1a1")
   private var eventSink: FlutterEventSink?
-  private lazy var centralManager = CBCentralManager(delegate: self, queue: nil)
+  private lazy var centralManager = CBCentralManager(
+    delegate: self,
+    queue: nil,
+    options: [CBCentralManagerOptionRestoreIdentifierKey: "com.techybugs.gymatlas.member.smart-attendance"]
+  )
   private var pendingStartResult: FlutterResult?
   private var wantsScanning = false
+  private var backgroundMode = false
 
   func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
     eventSink = events
@@ -56,8 +63,9 @@ private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, C
     return nil
   }
 
-  func start(result: @escaping FlutterResult) {
+  func start(result: @escaping FlutterResult, background: Bool) {
     wantsScanning = true
+    backgroundMode = background
     if centralManager.state == .poweredOn {
       centralManager.scanForPeripherals(
         withServices: [serviceUuid],
@@ -78,6 +86,7 @@ private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, C
 
   func stop(result: FlutterResult?) {
     wantsScanning = false
+    backgroundMode = false
     centralManager.stopScan()
     pendingStartResult = nil
     result?(nil)
@@ -98,6 +107,11 @@ private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, C
     }
   }
 
+  func centralManager(_ central: CBCentralManager, willRestoreState dict: [String: Any]) {
+    wantsScanning = true
+    backgroundMode = true
+  }
+
   func centralManager(
     _ central: CBCentralManager,
     didDiscover peripheral: CBPeripheral,
@@ -110,7 +124,7 @@ private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, C
       "serviceData": serviceData?[serviceUuid]?.map { Int($0) },
       "rssi": RSSI.intValue,
       "detectedAt": Int(Date().timeIntervalSince1970 * 1000),
-      "source": "ios_foreground_ble",
+      "source": backgroundMode ? "ios_background_ble" : "ios_foreground_ble",
     ])
   }
 

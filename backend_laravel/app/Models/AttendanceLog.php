@@ -18,6 +18,9 @@ class AttendanceLog extends Model
         'checked_in_by',
         'check_in_method',
         'checked_in_at',
+        'last_presence_at',
+        'checked_out_at',
+        'attendance_window_ends_at',
         'notes',
         'source_device',
         'scan_reference_hash',
@@ -33,6 +36,9 @@ class AttendanceLog extends Model
     {
         return [
             'checked_in_at' => 'datetime',
+            'last_presence_at' => 'datetime',
+            'checked_out_at' => 'datetime',
+            'attendance_window_ends_at' => 'datetime',
             'occurred_at_device' => 'datetime',
             'received_at' => 'datetime',
             'smart_attendance_detection' => 'array',

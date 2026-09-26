@@ -250,6 +250,34 @@ class SmartAttendanceHubFeatureTest extends TestCase
         ]);
     }
 
+    public function test_member_can_check_in_while_an_activated_hub_is_offline_from_the_backend(): void
+    {
+        [$owner, $member, $gym, $branch] = $this->makeGymScope();
+        $create = $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/gym/smart-attendance-hubs', [
+                'branch_id' => $branch->id,
+                'name' => 'Offline Entrance Hub',
+                'platform' => 'android',
+            ], ['X-Gym-Id' => (string) $gym->id, 'X-Branch-Id' => (string) $branch->id])
+            ->assertCreated();
+
+        $hub = SmartAttendanceHub::query()->findOrFail($create->json('data.hub.id'));
+        $hub->forceFill([
+            'status' => 'online',
+            'last_seen_at' => now()->subMinutes(10),
+        ])->save();
+        $this->assertSame('offline', $hub->fresh()->effectiveStatus());
+
+        $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/attendance/smart-check-in', [
+                'hub_public_id' => $hub->public_id,
+                'protocol_version' => 1,
+                'source' => 'android_foreground_ble',
+            ], ['X-Gym-Id' => (string) $gym->id, 'X-Branch-Id' => (string) $branch->id])
+            ->assertCreated()
+            ->assertJsonPath('data.attendance.smart_attendance_hub_id', $hub->id);
+    }
+
     public function test_member_smart_attendance_rejects_hub_from_another_selected_gym(): void
     {
         [, $member, $gym, $branch] = $this->makeGymScope();
@@ -277,7 +305,7 @@ class SmartAttendanceHubFeatureTest extends TestCase
         ]);
     }
 
-    public function test_member_smart_attendance_uses_existing_duplicate_protection(): void
+    public function test_member_smart_attendance_updates_presence_within_six_hour_window(): void
     {
         [$owner, $member, $gym, $branch] = $this->makeGymScope();
         $create = $this->actingAs($owner, 'sanctum')
@@ -288,21 +316,92 @@ class SmartAttendanceHubFeatureTest extends TestCase
             ], ['X-Gym-Id' => (string) $gym->id, 'X-Branch-Id' => (string) $branch->id])
             ->assertCreated();
         $this->markHubOnline((int) $create->json('data.hub.id'));
-        $payload = ['hub_public_id' => $create->json('data.hub.public_id'), 'protocol_version' => 1];
+        $firstPresence = now()->subMinutes(5)->startOfSecond();
+        $payload = [
+            'hub_public_id' => $create->json('data.hub.public_id'),
+            'protocol_version' => 1,
+            'detected_at' => $firstPresence->toIso8601String(),
+        ];
         $headers = ['X-Gym-Id' => (string) $gym->id, 'X-Branch-Id' => (string) $branch->id];
 
-        $this->actingAs($member, 'sanctum')->postJson('/api/member/attendance/smart-check-in', $payload, $headers)->assertCreated();
+        $first = $this->actingAs($member, 'sanctum')->postJson('/api/member/attendance/smart-check-in', $payload, $headers)->assertCreated();
+        $lastPresence = now()->startOfSecond();
+        $payload['detected_at'] = $lastPresence->toIso8601String();
         $this->actingAs($member, 'sanctum')
             ->postJson('/api/member/attendance/smart-check-in', $payload, $headers)
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors('member_id');
+            ->assertOk()
+            ->assertJsonPath('data.attendance.id', $first->json('data.attendance.id'));
 
         $this->assertSame(1, SmartAttendanceHub::query()->findOrFail($create->json('data.hub.id'))->attendanceLogs()->count());
+        $this->assertDatabaseHas('attendance_logs', [
+            'id' => $first->json('data.attendance.id'),
+            'last_presence_at' => $lastPresence->format('Y-m-d H:i:s'),
+            'checked_out_at' => null,
+        ]);
         $this->assertDatabaseCount('notifications', 1);
         $this->assertDatabaseHas('notifications', [
             'user_id' => $member->id,
             'type' => NotificationType::SmartAttendanceCheckIn->value,
         ]);
+
+        $this->travel(6)->hours();
+        $nextWindow = $this->actingAs($member, 'sanctum')->postJson('/api/member/attendance/smart-check-in', [
+            'hub_public_id' => $create->json('data.hub.public_id'),
+            'protocol_version' => 1,
+            'detected_at' => now()->toIso8601String(),
+        ], $headers)->assertCreated();
+        $this->assertNotSame($first->json('data.attendance.id'), $nextWindow->json('data.attendance.id'));
+        $this->assertSame(2, SmartAttendanceHub::query()->findOrFail($create->json('data.hub.id'))->attendanceLogs()->count());
+    }
+
+    public function test_member_smart_attendance_saves_last_presence_as_out_time_and_can_reopen_window(): void
+    {
+        [$owner, $member, $gym, $branch] = $this->makeGymScope();
+        $create = $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/gym/smart-attendance-hubs', [
+                'branch_id' => $branch->id,
+                'name' => 'Session Hub',
+                'platform' => 'android',
+            ], ['X-Gym-Id' => (string) $gym->id, 'X-Branch-Id' => (string) $branch->id])
+            ->assertCreated();
+        $this->markHubOnline((int) $create->json('data.hub.id'));
+        $headers = ['X-Gym-Id' => (string) $gym->id, 'X-Branch-Id' => (string) $branch->id];
+        $firstPresence = now()->subHours(3)->startOfSecond();
+        $lastPresence = now()->subHours(2)->subMinute()->startOfSecond();
+
+        $checkIn = $this->actingAs($member, 'sanctum')->postJson('/api/member/attendance/smart-check-in', [
+            'hub_public_id' => $create->json('data.hub.public_id'),
+            'protocol_version' => 1,
+            'detected_at' => $firstPresence->toIso8601String(),
+        ], $headers)->assertCreated();
+        $this->actingAs($member, 'sanctum')->postJson('/api/member/attendance/smart-check-in', [
+            'hub_public_id' => $create->json('data.hub.public_id'),
+            'protocol_version' => 1,
+            'detected_at' => $lastPresence->toIso8601String(),
+        ], $headers)->assertOk();
+
+        $this->artisan('attendance:finalize-smart-visits')->assertSuccessful();
+        $this->assertDatabaseHas('attendance_logs', [
+            'id' => $checkIn->json('data.attendance.id'),
+            'checked_out_at' => $lastPresence->format('Y-m-d H:i:s'),
+        ]);
+
+        $returnPresence = now()->startOfSecond();
+        $this->actingAs($member, 'sanctum')->postJson('/api/member/attendance/smart-check-in', [
+            'hub_public_id' => $create->json('data.hub.public_id'),
+            'protocol_version' => 1,
+            'detected_at' => $returnPresence->toIso8601String(),
+        ], $headers)
+            ->assertOk()
+            ->assertJsonPath('data.attendance.id', $checkIn->json('data.attendance.id'))
+            ->assertJsonPath('data.attendance.checked_out_at', null);
+
+        $this->actingAs($member, 'sanctum')->postJson('/api/member/attendance/smart-check-out', [
+            'attendance_log_id' => $checkIn->json('data.attendance.id'),
+            'last_presence_at' => $returnPresence->toIso8601String(),
+        ], $headers)
+            ->assertOk()
+            ->assertJsonPath('data.attendance.checked_out_at', $returnPresence->toIso8601String());
     }
 
     public function test_member_smart_attendance_rejects_hub_before_device_activation(): void

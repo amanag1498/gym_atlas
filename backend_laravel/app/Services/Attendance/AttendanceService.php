@@ -78,7 +78,7 @@ class AttendanceService
         );
     }
 
-    public function recordSmartAttendanceCheckIn(Gym $gym, Branch $branch, User $member, SmartAttendanceHub $hub, array $detectionMetadata = []): AttendanceLog
+    public function recordSmartAttendanceCheckIn(Gym $gym, Branch $branch, User $member, SmartAttendanceHub $hub, array $detectionMetadata = [], mixed $detectedAt = null): AttendanceLog
     {
         return $this->recordCheckIn(
             gym: $gym,
@@ -87,6 +87,7 @@ class AttendanceService
             checkedInBy: null,
             method: AttendanceCheckInMethod::SmartAttendance->value,
             sourceDevice: 'Smart Attendance Hub '.$hub->public_id,
+            checkedInAt: $detectedAt,
             smartAttendanceHub: $hub,
             smartAttendanceDetection: $detectionMetadata === [] ? null : $detectionMetadata,
         );
@@ -193,7 +194,34 @@ class AttendanceService
                 ]);
             }
 
-            if ($gym->prevent_duplicate_same_day_checkins) {
+            if ($method === AttendanceCheckInMethod::SmartAttendance->value && $smartAttendanceHub) {
+                $existingSmartVisit = AttendanceLog::query()
+                    ->where('gym_id', $gym->id)
+                    ->where('branch_id', $branch->id)
+                    ->where('member_id', $member->id)
+                    ->where('check_in_method', AttendanceCheckInMethod::SmartAttendance->value)
+                    ->where('checked_in_at', '<=', $checkedAt)
+                    ->where('attendance_window_ends_at', '>', $checkedAt)
+                    ->latest('checked_in_at')
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($existingSmartVisit) {
+                    $latestPresence = $existingSmartVisit->last_presence_at;
+                    if ($latestPresence === null || $checkedAt->gt($latestPresence)) {
+                        $existingSmartVisit->forceFill([
+                            'last_presence_at' => $checkedAt,
+                            'checked_out_at' => null,
+                            'smart_attendance_detection' => $this->mergeSmartDetection(
+                                $existingSmartVisit->smart_attendance_detection,
+                                $smartAttendanceDetection,
+                            ),
+                        ])->save();
+                    }
+
+                    return $existingSmartVisit->fresh();
+                }
+            } elseif ($gym->prevent_duplicate_same_day_checkins) {
                 $localStart = Carbon::parse($localDate, $timezone)->startOfDay()->setTimezone(config('app.timezone'));
                 $localEnd = Carbon::parse($localDate, $timezone)->endOfDay()->setTimezone(config('app.timezone'));
                 $alreadyCheckedIn = AttendanceLog::query()
@@ -217,6 +245,10 @@ class AttendanceService
                 'checked_in_by' => $checkedInBy?->id,
                 'check_in_method' => $method,
                 'checked_in_at' => $checkedAt,
+                'last_presence_at' => $method === AttendanceCheckInMethod::SmartAttendance->value ? $checkedAt : null,
+                'attendance_window_ends_at' => $method === AttendanceCheckInMethod::SmartAttendance->value
+                    ? $checkedAt->copy()->addHours(6)
+                    : null,
                 'notes' => $notes,
                 'source_device' => $sourceDevice ?: Str::limit((string) request()->userAgent(), 255, ''),
                 'scan_reference_hash' => $biometricDeviceEvent ? hash('sha256', $biometricDevice->id.':'.$biometricDeviceEvent->payload_hash) : null,
@@ -228,6 +260,92 @@ class AttendanceService
                 'received_at' => $biometricDeviceEvent?->received_at,
             ]);
         });
+    }
+
+    public function finalizeSmartAttendanceVisit(AttendanceLog $log, User $member, mixed $lastPresenceAt = null): AttendanceLog
+    {
+        return DB::transaction(function () use ($log, $member, $lastPresenceAt): AttendanceLog {
+            $log = AttendanceLog::query()->lockForUpdate()->findOrFail($log->id);
+            if ((int) $log->member_id !== (int) $member->id
+                || $log->check_in_method !== AttendanceCheckInMethod::SmartAttendance->value) {
+                throw ValidationException::withMessages([
+                    'attendance_log_id' => ['The Smart Attendance visit was not found.'],
+                ]);
+            }
+
+            $reportedPresence = $lastPresenceAt ? Carbon::parse($lastPresenceAt)->setTimezone(config('app.timezone')) : null;
+            $storedPresence = $log->last_presence_at ?: $log->checked_in_at;
+            $windowEnd = $log->attendance_window_ends_at ?: $log->checked_in_at->copy()->addHours(6);
+            if ($reportedPresence !== null && $storedPresence->gt($reportedPresence)) {
+                return $log;
+            }
+            $checkoutAt = collect([$storedPresence, $reportedPresence])
+                ->filter()
+                ->sortByDesc(fn (Carbon $value): int => $value->getTimestamp())
+                ->first() ?: $log->checked_in_at;
+            if ($checkoutAt->gt($windowEnd)) {
+                $checkoutAt = $windowEnd;
+            }
+            if ($checkoutAt->lt($log->checked_in_at)) {
+                $checkoutAt = $log->checked_in_at;
+            }
+
+            $log->forceFill([
+                'last_presence_at' => $checkoutAt,
+                'checked_out_at' => $checkoutAt,
+                'attendance_window_ends_at' => $windowEnd,
+            ])->save();
+
+            return $log->fresh();
+        });
+    }
+
+    public function finalizeStaleSmartAttendanceVisits(): int
+    {
+        $count = 0;
+        AttendanceLog::query()
+            ->where('check_in_method', AttendanceCheckInMethod::SmartAttendance->value)
+            ->whereNull('checked_out_at')
+            ->whereNotNull('last_presence_at')
+            ->where(function ($query): void {
+                $query->where('last_presence_at', '<=', now()->subHours(2))
+                    ->orWhere('attendance_window_ends_at', '<=', now());
+            })
+            ->orderBy('id')
+            ->chunkById(200, function ($logs) use (&$count): void {
+                foreach ($logs as $log) {
+                    $finalized = DB::transaction(function () use ($log): bool {
+                        $locked = AttendanceLog::query()->lockForUpdate()->find($log->id);
+                        if (! $locked || $locked->checked_out_at !== null || $locked->last_presence_at === null) {
+                            return false;
+                        }
+                        if ($locked->last_presence_at->gt(now()->subHours(2))
+                            && ($locked->attendance_window_ends_at === null || $locked->attendance_window_ends_at->gt(now()))) {
+                            return false;
+                        }
+
+                        $locked->forceFill(['checked_out_at' => $locked->last_presence_at])->save();
+
+                        return true;
+                    });
+                    if ($finalized) {
+                        $count++;
+                    }
+                }
+            });
+
+        return $count;
+    }
+
+    private function mergeSmartDetection(?array $current, ?array $latest): ?array
+    {
+        if ($latest === null) {
+            return $current;
+        }
+
+        return array_replace($current ?? [], [
+            'last_presence' => $latest,
+        ]);
     }
 
     private function attendanceTimezone(Gym $gym, Branch $branch): string

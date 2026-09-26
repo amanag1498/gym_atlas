@@ -44,6 +44,11 @@ class GymSelfEnrollmentFeatureTest extends TestCase
 
         $this->get(route('web.gym.self-enrollment.index', ['gym' => $gym->id]))
             ->assertOk()
+            ->assertSee('Enrollment QR codes')
+            ->assertSee('Download poster')
+            ->assertSee('Copy link')
+            ->assertSee('Preview page')
+            ->assertSee('Link settings')
             ->assertSee(route('web.gym.self-enrollment.qr', ['gym' => $gym->id, 'link' => $link]), false);
 
         $route = route('web.gym.self-enrollment.qr', ['gym' => $gym->id, 'link' => $link]);

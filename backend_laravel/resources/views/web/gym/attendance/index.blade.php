@@ -172,6 +172,7 @@
                                 <tr>
                                     <th>Member</th>
                                     <th>Time</th>
+                                    <th>Out time</th>
                                     <th>Branch</th>
                                     <th>Method</th>
                                     <th>Recorded By</th>
@@ -189,6 +190,16 @@
                                         <td>
                                             <div class="font-medium text-slate-900 dark:text-slate-100">{{ optional($log->checked_in_at)->format('d M Y') }}</div>
                                             <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ optional($log->checked_in_at)->format('h:i A') }}</div>
+                                        </td>
+                                        <td>
+                                            @if ($log->checked_out_at)
+                                                <div class="font-medium text-slate-900 dark:text-slate-100">{{ $log->checked_out_at->format('d M Y') }}</div>
+                                                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $log->checked_out_at->format('h:i A') }}</div>
+                                            @elseif ($log->check_in_method === 'smart_attendance')
+                                                <x-status-badge label="ACTIVE" tone="success" />
+                                            @else
+                                                <span class="text-slate-400">—</span>
+                                            @endif
                                         </td>
                                         <td>{{ $log->branch?->name ?? 'N/A' }}</td>
                                         <td><x-status-badge :label="strtoupper((string) $log->check_in_method)" :tone="$log->check_in_method === 'biometric' ? 'info' : ($log->check_in_method === 'qr' ? 'success' : 'warning')" /></td>
