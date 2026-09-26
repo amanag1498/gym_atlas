@@ -328,7 +328,7 @@ class MemberAppService
             if ($profile !== null && $gymId !== null) {
                 $profile->forceFill([
                     'status' => 'inactive',
-                    'membership_status' => 'cancelled',
+                    'membership_status' => 'left_gym',
                     'membership_expires_on' => null,
                     'is_active' => false,
                     'assigned_trainer_user_id' => null,

@@ -43,7 +43,7 @@ class MemberLeaveGymFeatureTest extends TestCase
             'user_id' => $member->id,
             'gym_id' => $gym->id,
             'branch_id' => $branch->id,
-            'membership_status' => 'cancelled',
+            'membership_status' => 'left_gym',
             'is_active' => false,
         ]);
         $this->assertDatabaseHas('member_profiles', [
@@ -77,6 +77,7 @@ class MemberLeaveGymFeatureTest extends TestCase
 
     public function test_gym_admin_can_remove_member_from_gym_without_deleting_history(): void
     {
+        $this->withoutVite();
         $this->seed(PermissionSeeder::class);
         [$owner, $member, $gym, $branch, $membership] = $this->makeActiveGymMember();
 
@@ -99,7 +100,7 @@ class MemberLeaveGymFeatureTest extends TestCase
         $this->assertDatabaseHas('member_profiles', [
             'user_id' => $member->id,
             'gym_id' => $gym->id,
-            'membership_status' => 'cancelled',
+            'membership_status' => 'left_gym',
             'is_active' => false,
         ]);
         $this->assertDatabaseMissing('gym_user', [
@@ -111,6 +112,23 @@ class MemberLeaveGymFeatureTest extends TestCase
             'branch_id' => $branch->id,
         ]);
         $this->assertTrue($member->fresh()->hasRole(RoleName::Member->value));
+
+        $scope = ['gym' => $gym->id, 'branch' => $branch->id];
+        $this->actingAs($owner)
+            ->get(route('web.gym.members.index', $scope))
+            ->assertOk()
+            ->assertSee($member->name)
+            ->assertSee('Left gym');
+        $this->actingAs($owner)
+            ->get(route('web.gym.members.index', $scope + ['status' => 'left_gym']))
+            ->assertOk()
+            ->assertSee($member->name);
+        $this->actingAs($owner)
+            ->get(route('web.gym.members.show', $scope + ['member' => $member->id]))
+            ->assertOk()
+            ->assertSee('Left gym')
+            ->assertSee('historical member record')
+            ->assertDontSee('Remove From Gym');
     }
 
     public function test_gym_api_delete_member_uses_safe_remove_flow(): void
@@ -134,7 +152,7 @@ class MemberLeaveGymFeatureTest extends TestCase
         $this->assertDatabaseHas('member_profiles', [
             'user_id' => $member->id,
             'gym_id' => $gym->id,
-            'membership_status' => 'cancelled',
+            'membership_status' => 'left_gym',
             'is_active' => false,
         ]);
         $this->assertTrue($member->fresh()->hasRole(RoleName::Member->value));

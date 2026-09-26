@@ -143,6 +143,7 @@ class AuditTimelineService
                 'frozen' => 'Membership frozen',
                 'expired' => 'Membership expired',
                 'cancelled' => 'Membership cancelled',
+                'left_gym' => 'Member left gym',
                 default => 'Member status changed',
             };
         }

@@ -281,7 +281,9 @@ class MemberMembershipLifecycleService
                 ->where('member_id', $member->id)
                 ->currentFirst()
                 ->first();
-            $membershipStatus = $latest?->status ?? 'inactive';
+            $membershipStatus = $profile->membership_status === 'left_gym' && $latest?->status === MembershipStatus::Cancelled->value
+                ? 'left_gym'
+                : ($latest?->status ?? 'inactive');
             $changed = $profile->status !== 'inactive'
                 || $profile->is_active
                 || $profile->membership_status !== $membershipStatus

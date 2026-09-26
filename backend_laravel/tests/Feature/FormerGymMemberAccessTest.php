@@ -42,13 +42,19 @@ class FormerGymMemberAccessTest extends TestCase
         $this->assertDatabaseHas('member_memberships', ['id' => $membership->id, 'status' => 'cancelled']);
 
         $headers = ['X-Gym-Id' => (string) $gym->id, 'X-Branch-Id' => (string) $branch->id];
-        $this->actingAs($owner, 'sanctum')->getJson('/api/gym/members/'.$member->id, $headers)->assertNotFound();
+        $this->actingAs($owner, 'sanctum')->getJson('/api/gym/members/'.$member->id, $headers)->assertOk();
+        $this->actingAs($owner, 'sanctum')->getJson('/api/gym/members', $headers)
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $member->id)
+            ->assertJsonPath('data.0.member_profile.membership_status', 'cancelled');
         $this->actingAs($owner, 'sanctum')->putJson('/api/gym/members/'.$member->id, ['name' => 'Blocked'], $headers)->assertNotFound();
         $this->actingAs($owner, 'sanctum')->getJson('/api/gym/members/'.$member->id.'/payments?gym_id='.$gym->id, $headers)->assertNotFound();
         $this->actingAs($owner, 'sanctum')->getJson('/api/gym/members/'.$member->id.'/attendance', $headers)->assertNotFound();
 
         $webScope = ['gym' => $gym->id, 'branch' => $branch->id, 'member' => $member->id];
-        $this->actingAs($owner)->get(route('web.gym.members.show', $webScope))->assertNotFound();
+        $this->actingAs($owner)->get(route('web.gym.members.show', $webScope))
+            ->assertOk()
+            ->assertSee('historical member record');
         $this->actingAs($owner)->get(route('web.gym.members.edit', $webScope))->assertNotFound();
         $this->actingAs($owner)->get(route('web.gym.members.payments', $webScope))->assertNotFound();
         $this->actingAs($owner)->get(route('web.gym.members.attendance', $webScope))->assertNotFound();
@@ -106,7 +112,9 @@ class FormerGymMemberAccessTest extends TestCase
 
         $this->actingAs($ownerA, 'sanctum')
             ->getJson('/api/gym/members/'.$member->id, ['X-Gym-Id' => (string) $gymA->id, 'X-Branch-Id' => (string) $branchA->id])
-            ->assertNotFound();
+            ->assertOk()
+            ->assertJsonPath('data.member.id', $member->id)
+            ->assertJsonPath('data.member.member_profile.membership_status', 'cancelled');
     }
 
     /** @return array{User, User, User, Gym, Branch, MembershipPlan, MemberMembership} */

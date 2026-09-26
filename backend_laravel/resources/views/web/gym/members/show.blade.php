@@ -11,6 +11,9 @@
         $hasCurrentMembership = $currentMembership !== null;
         $dueAmount = (float) ($currentMembership?->due_amount ?? 0);
         $creditAmount = abs(min($dueAmount, 0));
+        $memberStatusLabel = $memberProfile->membership_status === 'left_gym'
+            ? 'Left gym'
+            : str((string) ($memberProfile->membership_status ?? 'active'))->replace('_', ' ')->title();
     @endphp
 
     <div class="space-y-6">
@@ -26,7 +29,7 @@
                         {{ $currentMembership?->membershipPlan?->name ?? 'No active plan' }}
                     </p>
                     <div class="mt-5 flex flex-wrap gap-3">
-                        <x-status-badge :label="ucfirst($memberProfile->membership_status ?? 'active')" tone="info" />
+                        <x-status-badge :label="$memberStatusLabel" :tone="$hasOperationalAccess ? 'info' : 'neutral'" />
                         @if ($hasCurrentMembership)
                             <x-status-badge :label="ucfirst((string) $currentMembership->payment_status)" :tone="match((string) $currentMembership->payment_status) { 'paid' => 'success', 'partial' => 'warning', 'overdue' => 'danger', 'overpaid' => 'verified', default => 'neutral' }" />
                         @endif
@@ -37,7 +40,7 @@
                 </div>
                 <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
                     <div class="rounded-[24px] border border-white/10 bg-white/8 p-4 backdrop-blur">
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-100/80">Current billing state</p>
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-100/80">{{ $hasOperationalAccess ? 'Current billing state' : 'Latest billing record' }}</p>
                         <div class="mt-2 text-2xl font-semibold tracking-tight">
                             @if (! $hasCurrentMembership)
                                 No membership
@@ -63,7 +66,13 @@
                 </div>
             </div>
 
+            @if (! $hasOperationalAccess)
+                <div class="border-b border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100 lg:px-6">
+                    This is a historical member record. Gym access, attendance, billing actions, biometrics, and trainer assignment remain disabled until the member is enrolled again.
+                </div>
+            @endif
             <div class="flex flex-wrap gap-3 px-5 py-4 lg:px-6">
+                @if ($hasOperationalAccess)
                 <a href="{{ route('web.gym.members.edit', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}" class="panel-btn-secondary">Edit / Trainer</a>
                 <a href="{{ route('web.gym.members.biometrics.show', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}" class="panel-btn-secondary">Manage Biometrics</a>
                 @if ($canManageMemberships)
@@ -77,6 +86,9 @@
                     @csrf
                     <x-action-button type="submit" variant="danger">Remove From Gym</x-action-button>
                 </form>
+                @else
+                    <a href="{{ route('web.gym.members.index', request()->only(['gym', 'branch'])) }}" class="panel-btn-secondary">Back to Members</a>
+                @endif
             </div>
         </section>
 
@@ -95,7 +107,9 @@
                             <h3 class="panel-section-title">Profile Snapshot</h3>
                             <p class="panel-section-copy">Only the operational details needed most often.</p>
                         </div>
-                        <a href="{{ route('web.gym.members.edit', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}" class="panel-btn-secondary">Open Full Edit</a>
+                        @if ($hasOperationalAccess)
+                            <a href="{{ route('web.gym.members.edit', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}" class="panel-btn-secondary">Open Full Edit</a>
+                        @endif
                     </div>
                     <div class="mt-5 grid gap-3 md:grid-cols-2">
                         <div class="panel-card-muted p-4">
@@ -248,7 +262,9 @@
                             <h3 class="panel-section-title">Recent Payments</h3>
                             <p class="panel-section-copy">Only the latest payment records needed for support and billing checks.</p>
                         </div>
-                        <a href="{{ route('web.gym.members.payments', ['member' => $member->id] + request()->query()) }}" class="panel-btn-secondary">Payment History</a>
+                        @if ($hasOperationalAccess)
+                            <a href="{{ route('web.gym.members.payments', ['member' => $member->id] + request()->query()) }}" class="panel-btn-secondary">Payment History</a>
+                        @endif
                     </div>
                     <div class="mt-5 space-y-3">
                         @forelse ($paymentHistory->take(4) as $payment)

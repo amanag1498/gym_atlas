@@ -82,7 +82,7 @@
 
                 <form method="GET" class="grid gap-3 px-5 py-4 md:grid-cols-2 xl:grid-cols-6">
                     <x-form-input name="search" label="Search" :value="request('search')" />
-                    <x-form-select name="status" label="Status" :options="['' => 'All statuses', 'active' => 'Active', 'inactive' => 'Inactive', 'expired' => 'Expired', 'expiring_soon' => 'Expiring Soon', 'due_payment' => 'Due Payment', 'overdue' => 'Overdue']" :selected="request('status')" />
+                    <x-form-select name="status" label="Status" :options="['' => 'All statuses', 'active' => 'Active', 'frozen' => 'Frozen', 'inactive' => 'Inactive', 'expired' => 'Expired', 'cancelled' => 'Cancelled', 'left_gym' => 'Left gym', 'expiring_soon' => 'Expiring Soon', 'due_payment' => 'Due Payment', 'overdue' => 'Overdue']" :selected="request('status')" />
                     <x-form-select name="trainer_id" label="Trainer" :options="['' => 'All trainers'] + $trainers->pluck('name', 'id')->all()" :selected="request('trainer_id')" />
                     <x-form-select name="branch_id" label="Branch" :options="['' => 'All branches'] + $branches->pluck('name', 'id')->all()" :selected="request('branch_id')" />
                     <x-form-select name="plan_id" label="Plan" :options="['' => 'All plans'] + $plans->pluck('name', 'id')->all()" :selected="request('plan_id')" />
@@ -177,6 +177,10 @@
                                 @forelse ($members as $member)
                                     @php
                                         $profile = $member->memberProfile;
+                                        $hasOperationalAccess = $profile?->is_active && in_array($profile?->membership_status, ['active', 'frozen'], true);
+                                        $memberStatusLabel = $profile?->membership_status === 'left_gym'
+                                            ? 'Left gym'
+                                            : str((string) ($profile?->membership_status ?? 'active'))->replace('_', ' ')->title();
                                         $latestMembership = $member->memberMemberships->first();
                                         $engagement = $member->engagement_score ?? $profile?->engagement_score ?? null;
                                         $engagementScore = (int) ($engagement['score'] ?? 0);
@@ -215,7 +219,7 @@
                                                     @endif
                                                 </div>
                                                 <div class="mt-2 flex flex-wrap gap-1.5">
-                                                    <x-status-badge :label="ucfirst($profile?->membership_status ?? 'active')" />
+                                                    <x-status-badge :label="$memberStatusLabel" :tone="$profile?->membership_status === 'left_gym' ? 'neutral' : 'info'" />
                                                     @if ($latestMembership)
                                                         <x-status-badge :label="ucfirst((string) $latestMembership->payment_status)" :tone="match((string) $latestMembership->payment_status) { 'paid' => 'success', 'partial' => 'warning', 'overdue' => 'danger', default => 'neutral' }" />
                                                     @endif
@@ -263,13 +267,17 @@
                                         <td>
                                             <div class="flex min-w-[24rem] flex-wrap gap-1.5">
                                                 <a href="{{ route('web.gym.members.show', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}" class="panel-btn-primary !rounded-xl !px-3 !py-2 !text-xs">Profile</a>
-                                                <a href="{{ route('web.gym.members.edit', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}" class="panel-btn-secondary !rounded-xl !px-3 !py-2 !text-xs">Edit / Trainer</a>
-                                                <a href="{{ route('web.gym.payments.create', ['member_id' => $member->id] + request()->query()) }}" class="panel-btn-secondary !rounded-xl !px-3 !py-2 !text-xs">Payment</a>
-                                                <a href="{{ route('web.gym.attendance.manual', ['member_id' => $member->id] + request()->query()) }}" class="panel-btn-secondary !rounded-xl !px-3 !py-2 !text-xs">Attendance</a>
-                                                <form method="POST" action="{{ route('web.gym.members.remove-from-gym', ['member' => $member->id] + request()->query()) }}" data-confirm-submit data-confirm-title="Remove member from gym?" data-confirm-message="This will cancel active gym access and make the member independent. Payment, attendance, membership, and workout history stay available for audit." data-confirm-button="Remove From Gym">
-                                                    @csrf
-                                                    <button type="submit" class="panel-btn-danger !rounded-xl !px-3 !py-2 !text-xs">Remove</button>
-                                                </form>
+                                                @if ($hasOperationalAccess)
+                                                    <a href="{{ route('web.gym.members.edit', ['member' => $member->id] + request()->only(['gym', 'branch'])) }}" class="panel-btn-secondary !rounded-xl !px-3 !py-2 !text-xs">Edit / Trainer</a>
+                                                    <a href="{{ route('web.gym.payments.create', ['member_id' => $member->id] + request()->query()) }}" class="panel-btn-secondary !rounded-xl !px-3 !py-2 !text-xs">Payment</a>
+                                                    <a href="{{ route('web.gym.attendance.manual', ['member_id' => $member->id] + request()->query()) }}" class="panel-btn-secondary !rounded-xl !px-3 !py-2 !text-xs">Attendance</a>
+                                                    <form method="POST" action="{{ route('web.gym.members.remove-from-gym', ['member' => $member->id] + request()->query()) }}" data-confirm-submit data-confirm-title="Remove member from gym?" data-confirm-message="This will cancel active gym access and make the member independent. Payment, attendance, membership, and workout history stay available for audit." data-confirm-button="Remove From Gym">
+                                                        @csrf
+                                                        <button type="submit" class="panel-btn-danger !rounded-xl !px-3 !py-2 !text-xs">Remove</button>
+                                                    </form>
+                                                @else
+                                                    <span class="inline-flex items-center rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-300">History only</span>
+                                                @endif
                                             </div>
                                         </td>
                                     </tr>

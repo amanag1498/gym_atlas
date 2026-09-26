@@ -144,7 +144,7 @@ class MemberController extends Controller
         $gym = $this->gymWebPanelService->resolveGym($request);
         $this->gymWebPanelService->assertPermission($request, PermissionName::MembersView->value, $gym);
         $memberProfile = MemberProfile::query()->where('user_id', $member->id)->where('gym_id', $gym->id)->firstOrFail();
-        $this->assertMemberBranchScope($request, $gym, $memberProfile);
+        $this->assertHistoricalMemberBranchScope($request, $gym, $memberProfile);
         $branchIds = $this->gymWebPanelService->selectedBranchIds($request, $gym);
         $memberships = MemberMembership::query()
             ->with(['membershipPlan', 'payments.receiver', 'customFeeAuditLogs.changer'])
@@ -228,6 +228,7 @@ class MemberController extends Controller
             'consentState' => $this->consentService->state($member),
             'whatsappConsents' => $member->whatsappConsents->where('gym_id', $gym->id)->values(),
             'memberAppPresence' => $this->appPresenceService->summary($member, 'member'),
+            'hasOperationalAccess' => $this->gymMemberAccessService->isAccessible($memberProfile),
         ]);
     }
 
@@ -616,10 +617,7 @@ class MemberController extends Controller
 
         $query = User::query()
             ->with($with)
-            ->whereHas('memberProfile', function ($builder) use ($gym): void {
-                $builder->where('gym_id', $gym->id);
-                $this->gymMemberAccessService->scopeAccessibleProfiles($builder);
-            })
+            ->whereHas('memberProfile', fn ($builder) => $builder->where('gym_id', $gym->id))
             ->latest('id');
 
         if ($branch = $this->gymWebPanelService->resolveBranch($request, $gym)) {
@@ -944,6 +942,13 @@ class MemberController extends Controller
     private function assertMemberBranchScope(Request $request, $gym, MemberProfile $profile): void
     {
         $this->gymMemberAccessService->assertAccessible($profile);
+
+        $this->assertHistoricalMemberBranchScope($request, $gym, $profile);
+    }
+
+    private function assertHistoricalMemberBranchScope(Request $request, $gym, MemberProfile $profile): void
+    {
+        abort_unless((int) $profile->gym_id === (int) $gym->id, 404);
 
         if ($request->user()?->active_role === RoleName::GymOwner->value) {
             return;

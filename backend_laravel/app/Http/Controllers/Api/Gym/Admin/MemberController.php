@@ -54,10 +54,7 @@ class MemberController extends Controller
                     ->where('gym_id', $gym->id)
                     ->with('membershipPlan'),
             ])
-            ->whereHas('memberProfile', function ($builder) use ($gym): void {
-                $builder->where('gym_id', $gym->id);
-                $this->gymMemberAccessService->scopeAccessibleProfiles($builder);
-            })
+            ->whereHas('memberProfile', fn ($builder) => $builder->where('gym_id', $gym->id))
             ->latest('id');
 
         $query->whereHas('memberProfile', fn ($builder) => $builder->whereIn('branch_id', $branchIds));
@@ -161,7 +158,7 @@ class MemberController extends Controller
     {
         $gym = $this->resolveGym($request);
         $profile = MemberProfile::query()->where('user_id', $member->id)->where('gym_id', $gym->id)->firstOrFail();
-        $this->assertMemberAccessible($request, $gym, $profile);
+        $this->assertMemberReadable($request, $gym, $profile);
         $branch = $this->scopeResolver->resolveBranch($request);
         $branchIds = $branch
             ? [$branch->id]
@@ -348,6 +345,12 @@ class MemberController extends Controller
     private function assertMemberAccessible(Request $request, Gym $gym, MemberProfile $profile): void
     {
         $this->gymMemberAccessService->assertAccessible($profile);
+        $this->assertMemberReadable($request, $gym, $profile);
+    }
+
+    private function assertMemberReadable(Request $request, Gym $gym, MemberProfile $profile): void
+    {
+        abort_unless((int) $profile->gym_id === (int) $gym->id, 404);
         abort_unless(in_array((int) $profile->branch_id, $this->accessibleBranchIds($request, $gym), true), 403);
     }
 
