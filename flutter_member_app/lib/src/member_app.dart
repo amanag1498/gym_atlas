@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:app_links/app_links.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -46,7 +47,9 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
   late final MemberRepository memberRepository;
   late final SmartAttendanceController smartAttendanceController;
   late final ChatNotificationService _chatNotificationService;
+  late final AppLinks _appLinks;
   late final GoRouter router;
+  StreamSubscription<Uri>? _appLinkSubscription;
   StreamSubscription<RemoteMessage>? _foregroundNotificationSubscription;
   StreamSubscription<RemoteMessage>? _notificationOpenSubscription;
   int _chatLaunchSequence = 0;
@@ -89,6 +92,7 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
       memberIdProvider: () => sessionController.user?.id,
     );
     _chatNotificationService = ChatNotificationService();
+    _appLinks = AppLinks();
     router = GoRouter(
       refreshListenable: sessionController,
       routes: <GoRoute>[
@@ -188,6 +192,12 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
     sessionController.addListener(_openPendingTrialRequestsIfReady);
     sessionController.addListener(_openPendingHomeSectionIfReady);
     sessionController.addListener(_syncSmartAttendanceScan);
+    _appLinkSubscription = _appLinks.uriLinkStream.listen(
+      _openAppLink,
+      onError: (Object exception) {
+        debugPrint('[app-links] incoming link skipped: $exception');
+      },
+    );
     _chatNotificationService.initialize(_handleNotificationData).catchError((
       Object exception,
     ) {
@@ -226,6 +236,16 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
   Future<void> _start() async {
     await runtimeController.initialize();
     await sessionController.bootstrap();
+  }
+
+  void _openAppLink(Uri uri) {
+    final destination = memberDeepLinkDestination(uri);
+    if (destination == null) {
+      debugPrint('[app-links] unsupported link ignored: $uri');
+      return;
+    }
+
+    router.go(destination);
   }
 
   void _handleNotificationOpen(RemoteMessage message) {
@@ -417,6 +437,7 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _appLinkSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _foregroundNotificationSubscription?.cancel();
     _notificationOpenSubscription?.cancel();

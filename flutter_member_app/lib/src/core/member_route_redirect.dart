@@ -30,8 +30,12 @@ String? memberRouteRedirect({
     return '/login';
   }
 
-  if (requiresConsent && path != '/consent') return '/consent';
-  if (!requiresConsent && path == '/consent') return '/home';
+  if (requiresConsent && path != '/consent') {
+    return destination == null
+        ? '/consent'
+        : _routeWithContinuation('/consent', destination);
+  }
+  if (!requiresConsent && path == '/consent') return destination ?? '/home';
 
   if (path == '/' || path == '/login') {
     return destination ?? '/home';
@@ -69,7 +73,28 @@ String? _savedDestination(Uri uri) {
   );
 }
 
-String? _supportedDestination(Uri uri) => _validatedDestination(uri);
+String? _supportedDestination(Uri uri) => memberDeepLinkDestination(uri);
+
+/// Converts an HTTPS, custom-scheme, or internal Gym Atlas link into a safe
+/// member-app destination. Unknown hosts, schemes, and routes are rejected.
+String? memberDeepLinkDestination(Uri uri) {
+  Uri candidate = uri;
+  if (uri.hasScheme || uri.hasAuthority) {
+    if (uri.scheme == 'https' &&
+        const {'gymatlas.in', 'www.gymatlas.in'}.contains(uri.host)) {
+      candidate = Uri(path: uri.path, query: uri.query);
+    } else if (uri.scheme == 'gymatlasmember') {
+      final path = uri.host.isEmpty
+          ? uri.path
+          : '/${[uri.host, ...uri.pathSegments].join('/')}';
+      candidate = Uri(path: path, query: uri.query);
+    } else {
+      return null;
+    }
+  }
+
+  return _validatedDestination(candidate);
+}
 
 String? _validatedDestination(Uri? candidate) {
   if (candidate == null ||
@@ -106,9 +131,7 @@ String? _validatedDestination(Uri? candidate) {
     ).toString();
   }
 
-  if (segments.first == 'join' &&
-      segments.last.isNotEmpty &&
-      candidate.query.isEmpty) {
+  if (segments.first == 'join' && segments.last.isNotEmpty) {
     return '/join/${Uri.encodeComponent(segments.last)}';
   }
 

@@ -115,6 +115,58 @@ void main() {
       );
     });
 
+    test('preserves enrollment through required consent', () {
+      expect(
+        memberRouteRedirect(
+          uri: Uri.parse('/login?continue=%2Fjoin%2Fa-token'),
+          initializing: false,
+          isAuthenticated: true,
+          requiresConsent: true,
+        ),
+        '/consent?continue=%2Fjoin%2Fa-token',
+      );
+      expect(
+        memberRouteRedirect(
+          uri: Uri.parse('/consent?continue=%2Fjoin%2Fa-token'),
+          initializing: false,
+          isAuthenticated: true,
+        ),
+        '/join/a-token',
+      );
+    });
+
+    test('normalizes enrollment app links from every supported format', () {
+      expect(
+        memberDeepLinkDestination(
+          Uri.parse('https://gymatlas.in/join/a-token'),
+        ),
+        '/join/a-token',
+      );
+      expect(
+        memberDeepLinkDestination(Uri.parse('gymatlasmember:///join/a-token')),
+        '/join/a-token',
+      );
+      expect(
+        memberDeepLinkDestination(Uri.parse('gymatlasmember://join/a-token')),
+        '/join/a-token',
+      );
+      expect(
+        memberDeepLinkDestination(
+          Uri.parse('https://gymatlas.in/join/a-token?gym=1'),
+        ),
+        '/join/a-token',
+      );
+    });
+
+    test('rejects enrollment links from another web host', () {
+      expect(
+        memberDeepLinkDestination(
+          Uri.parse('https://malicious.example/join/a-token'),
+        ),
+        isNull,
+      );
+    });
+
     test('supports legacy login join parameters', () {
       expect(
         memberRouteRedirect(
