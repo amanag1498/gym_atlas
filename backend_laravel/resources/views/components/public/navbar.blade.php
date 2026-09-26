@@ -48,18 +48,14 @@
 
 <header class="public-header" data-public-header>
     <div class="public-header-inner public-container-wide">
-        <a class="public-brand" href="{{ route('public.home') }}" aria-label="Atlas home">
+        <a class="public-brand" href="{{ route('public.home') }}" aria-label="Gym Atlas home">
             <img
-                class="public-brand-image"
-                src="{{ asset('images/public-site/brand/atlas-mark-64.png') }}"
-                width="40"
-                height="40"
-                alt=""
+                class="public-brand-lockup"
+                src="{{ asset('images/brand/gym-atlas-lockup.png') }}"
+                width="180"
+                height="60"
+                alt="Gym Atlas — Discipline in Motion"
             >
-            <span class="public-brand-copy">
-                <span class="public-brand-name">ATLAS</span>
-                <span class="public-brand-tagline">Fitness, connected</span>
-            </span>
         </a>
 
         <button

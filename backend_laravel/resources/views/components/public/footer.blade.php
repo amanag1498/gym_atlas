@@ -48,19 +48,15 @@
 
         <div class="public-footer-main">
             <div class="public-footer-brand-column">
-                <a class="public-brand public-brand-footer" href="{{ route('public.home') }}" aria-label="Atlas home">
+                <a class="public-brand public-brand-footer" href="{{ route('public.home') }}" aria-label="Gym Atlas home">
                     <img
-                        class="public-brand-image"
-                        src="{{ asset('images/public-site/brand/atlas-mark-64.png') }}"
-                        width="44"
-                        height="44"
+                        class="public-brand-lockup public-brand-lockup-on-dark"
+                        src="{{ asset('images/brand/generated/gym-atlas-lockup-on-dark.png') }}"
+                        width="220"
+                        height="73"
                         loading="lazy"
-                        alt=""
+                        alt="Gym Atlas — Discipline in Motion"
                     >
-                    <span class="public-brand-copy">
-                        <span class="public-brand-name">ATLAS</span>
-                        <span class="public-brand-tagline">Fitness, connected</span>
-                    </span>
                 </a>
                 <p>Members and trainers can start independently, while gyms add connected operational and coaching context.</p>
                 <div class="public-footer-audience-links" aria-label="Quick actions">
@@ -85,7 +81,7 @@
         </div>
 
         <div class="public-footer-bottom">
-            <p>© {{ date('Y') }} Atlas by Techybugs. All rights reserved.</p>
+            <p>© {{ date('Y') }} Gym Atlas by Techybugs. All rights reserved.</p>
             <p class="public-footer-status"><span aria-hidden="true"></span>Built for the complete fitness ecosystem</p>
         </div>
     </div>

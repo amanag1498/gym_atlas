@@ -3,15 +3,15 @@
     'pageDescription' => null,
     'canonical' => null,
     'socialImage' => null,
-    'socialImageAlt' => 'Atlas fitness platform',
+    'socialImageAlt' => 'Gym Atlas fitness platform',
     'robots' => 'index, follow',
     'schemas' => [],
 ])
 
 @php
-    $siteName = 'Atlas';
-    $defaultDescription = 'Discover gyms, manage fitness operations, coach members and track progress with the connected Atlas fitness ecosystem.';
-    $resolvedTitle = filled($pageTitle) ? trim($pageTitle).' | '.$siteName : $siteName.' | Fitness, connected';
+    $siteName = 'Gym Atlas';
+    $defaultDescription = 'Discover gyms, manage fitness operations, coach members and track progress with the connected Gym Atlas fitness ecosystem.';
+    $resolvedTitle = filled($pageTitle) ? trim($pageTitle).' | '.$siteName : $siteName.' | Discipline in Motion';
     $resolvedDescription = filled($pageDescription) ? trim($pageDescription) : $defaultDescription;
     $resolvedCanonical = $canonical ?: request()->url();
     $resolvedSocialImage = $socialImage ?: asset('images/public-site/social/atlas-platform-social.jpg');
@@ -20,7 +20,7 @@
         '@type' => 'Organization',
         'name' => $siteName,
         'url' => route('public.home'),
-        'logo' => asset('images/public-site/brand/atlas-mark-512.png'),
+        'logo' => asset('images/brand/gym-atlas-mark.png'),
         'contactPoint' => [
             '@type' => 'ContactPoint',
             'contactType' => 'customer support',

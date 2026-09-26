@@ -7,13 +7,13 @@ use Tests\TestCase;
 
 class BrandedQrCodeServiceTest extends TestCase
 {
-    public function test_compact_code_contains_the_atlas_mark_and_valid_svg(): void
+    public function test_compact_code_is_a_valid_dependency_light_svg(): void
     {
         $svg = app(BrandedQrCodeService::class)->code('https://gymatlas.in/events/test-token');
 
         $this->assertNotFalse(simplexml_load_string($svg));
         $this->assertStringContainsString('viewBox="0 0 816 816"', $svg);
-        $this->assertStringContainsString('data:image/png;base64,', $svg);
+        $this->assertStringNotContainsString('data:image/', $svg);
         $this->assertStringContainsString('#1e2987', $svg);
     }
 

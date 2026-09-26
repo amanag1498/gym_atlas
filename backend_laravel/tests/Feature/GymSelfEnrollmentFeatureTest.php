@@ -56,7 +56,7 @@ class GymSelfEnrollmentFeatureTest extends TestCase
             ->assertOk()
             ->assertHeader('Content-Type', 'image/svg+xml')
             ->assertHeader('X-Content-Type-Options', 'nosniff')
-            ->assertSee('data:image/png;base64,', false);
+            ->assertDontSee('data:image/', false);
 
         $this->get(route('web.gym.self-enrollment.qr', ['gym' => $gym->id, 'link' => $link, 'download' => 1]))
             ->assertOk()
@@ -85,9 +85,9 @@ class GymSelfEnrollmentFeatureTest extends TestCase
         $page = $this->get(route('public.self-enrollment.show', $link->token));
         $page
             ->assertOk()
-            ->assertSee('Choose how to continue')
+            ->assertSee('How would you like to join?')
             ->assertSee('Atlas account')
-            ->assertSee('Contact details')
+            ->assertSee('Let’s start with you')
             ->assertSee($branch->name)
             ->assertSee('new-gym-logo.png', false)
             ->assertSee('data-enrollment-shell', false)
@@ -312,7 +312,7 @@ class GymSelfEnrollmentFeatureTest extends TestCase
         $response
             ->assertOk()
             ->assertSee('data-initial-step="5"', false)
-            ->assertSee('Check the highlighted step.')
+            ->assertSee('Check the highlighted details.')
             ->assertSee('The consent field must be accepted.');
     }
 

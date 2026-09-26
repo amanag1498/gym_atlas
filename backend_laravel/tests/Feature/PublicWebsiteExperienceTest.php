@@ -25,7 +25,7 @@ class PublicWebsiteExperienceTest extends TestCase
             ->assertSee('aria-label="Footer navigation"', false)
             ->assertSee('Skip to main content')
             ->assertSee('id="public-main-content"', false)
-            ->assertSee('Fitness, connected')
+            ->assertSee('Gym Atlas — Discipline in Motion')
             ->assertSee('<meta name="description"', false)
             ->assertSee('<meta property="og:title"', false)
             ->assertSee('<meta property="og:image"', false)
@@ -339,7 +339,7 @@ class PublicWebsiteExperienceTest extends TestCase
             $html = $this->get(route($routeName))->assertOk()->getContent();
             $this->assertStringNotContainsString('images.unsplash.com', $html, "{$routeName} must not depend on placeholder Unsplash imagery.");
             preg_match_all(
-                '~(?:src|content)=["\'](?:https?://[^/]+)?(/images/(?:product|public-site)/[^"\']+)["\']~',
+                '~(?:src|content)=["\'](?:https?://[^/]+)?(/images/(?:brand|product|public-site)/[^"\']+)["\']~',
                 $html,
                 $matches,
             );
@@ -353,7 +353,8 @@ class PublicWebsiteExperienceTest extends TestCase
 
         $this->assertNotEmpty($assetPaths, 'Expected rendered pages to reference the local Atlas visual library.');
         $this->assertGreaterThanOrEqual(8, count($assetPaths), 'The product story should retain its visual coverage.');
-        $this->assertContains('/images/public-site/brand/atlas-mark-64.png', $assetPaths);
+        $this->assertContains('/images/brand/gym-atlas-lockup.png', $assetPaths);
+        $this->assertContains('/images/brand/generated/gym-atlas-lockup-on-dark.png', $assetPaths);
         $this->assertContains('/images/public-site/social/atlas-platform-social.jpg', $assetPaths);
         $this->assertContains('/images/product/member/dashboard-720.webp', $assetPaths);
         $this->assertContains('/images/product/trainer/dashboard-720.webp', $assetPaths);

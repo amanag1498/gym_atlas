@@ -43,9 +43,6 @@ class BrandedQrCodeService
             margin: 48,
             foregroundColor: new Color(...$palette['primary']),
             backgroundColor: new Color(255, 255, 255),
-            logoPath: public_path('images/public-site/brand/atlas-mark-512.png'),
-            logoResizeToWidth: 96,
-            logoResizeToHeight: 96,
         ))->build()->getString();
     }
 

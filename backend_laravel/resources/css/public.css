@@ -803,6 +803,17 @@ body.public-site.public-navigation-open {
     box-shadow: 0 9px 20px rgba(70, 95, 255, 0.2);
 }
 
+.public-brand-lockup {
+    display: block;
+    width: clamp(8.75rem, 12vw, 11.25rem);
+    height: auto;
+    object-fit: contain;
+}
+
+.public-brand-lockup-on-dark {
+    width: min(13.75rem, 100%);
+}
+
 .public-brand-copy {
     display: grid;
     gap: 0.05rem;
@@ -2176,6 +2187,315 @@ textarea.form-control {
 select.form-control option {
     color: #0f172a !important;
     background: #ffffff !important;
+}
+
+/* Public member enrollment */
+.atlas-enrollment-page main {
+    background:
+        radial-gradient(circle at 92% 8%, rgba(20, 184, 166, .09), transparent 22rem),
+        linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.atlas-enrollment-card {
+    isolation: isolate;
+}
+
+.atlas-enrollment-page .form-control {
+    width: 100%;
+    min-height: 3.65rem;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: .9rem !important;
+    background: #f8fafc !important;
+    padding: .8rem 1rem;
+    font-size: 1rem;
+    line-height: 1.4;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8), 0 1px 2px rgba(15, 23, 42, .03);
+    transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.atlas-enrollment-page textarea.form-control {
+    min-height: 7rem;
+    resize: vertical;
+}
+
+.atlas-enrollment-page .form-control:hover {
+    border-color: #94a3b8 !important;
+    background: #ffffff !important;
+}
+
+.atlas-enrollment-page .form-control:focus {
+    border-color: #0f766e !important;
+    background: #ffffff !important;
+    box-shadow: 0 0 0 4px rgba(13, 148, 136, .12) !important;
+    outline: none;
+}
+
+.atlas-enrollment-page .form-control.enroll-control-invalid {
+    border-color: #e11d48 !important;
+    background: #fff7f8 !important;
+    box-shadow: 0 0 0 4px rgba(225, 29, 72, .1) !important;
+}
+
+.enroll-field label,
+.enroll-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    margin-bottom: .55rem;
+    color: #1e293b;
+    font-size: .875rem;
+    font-weight: 700;
+}
+
+.enroll-field label span,
+.enroll-label span {
+    color: #94a3b8;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.enroll-field-error {
+    margin-top: .45rem;
+    color: #be123c;
+    font-size: .78rem;
+    font-weight: 600;
+}
+
+.enroll-step-heading {
+    display: flex;
+    align-items: center;
+    gap: .9rem;
+    padding-bottom: .25rem;
+}
+
+.enroll-step-heading h3 {
+    margin: 0;
+    color: #0f172a;
+    font-size: 1.25rem;
+    font-weight: 750;
+    letter-spacing: -.025em;
+}
+
+.enroll-step-heading p {
+    margin: .2rem 0 0;
+    color: #64748b;
+    font-size: .875rem;
+    line-height: 1.5;
+}
+
+.enroll-step-icon {
+    display: inline-flex;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #ccfbf1;
+    border-radius: .9rem;
+    background: linear-gradient(145deg, #f0fdfa, #ecfeff);
+    color: #0f766e;
+    font-size: 1.25rem;
+}
+
+.enroll-choice-card {
+    position: relative;
+    display: flex;
+    min-height: 5.5rem;
+    cursor: pointer;
+    align-items: flex-start;
+    gap: .8rem;
+    border: 1px solid #dbe3ec;
+    border-radius: 1rem;
+    background: #ffffff;
+    padding: 1rem;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, .035);
+    transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.enroll-choice-card:hover {
+    border-color: #99f6e4;
+    transform: translateY(-1px);
+}
+
+.enroll-choice-card > input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+
+.enroll-choice-card:has(input:focus-visible) {
+    outline: 3px solid rgba(13, 148, 136, .22);
+    outline-offset: 2px;
+}
+
+.enroll-choice-card:has(input:checked) {
+    border-color: #14b8a6;
+    background: #f0fdfa;
+    box-shadow: 0 8px 20px rgba(13, 148, 136, .1);
+}
+
+.enroll-choice-check {
+    display: inline-flex;
+    width: 1.45rem;
+    height: 1.45rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid #cbd5e1;
+    border-radius: .45rem;
+    color: transparent;
+    font-size: .9rem;
+}
+
+.enroll-choice-card:has(input:checked) .enroll-choice-check {
+    border-color: #0f766e;
+    background: #0f766e;
+    color: #ffffff;
+}
+
+.enroll-choice-card strong {
+    display: block;
+    color: #0f172a;
+    font-size: .9rem;
+}
+
+.enroll-choice-card small {
+    display: block;
+    margin-top: .25rem;
+    color: #64748b;
+    font-size: .78rem;
+    line-height: 1.45;
+}
+
+.enroll-segment {
+    display: flex;
+    min-height: 3.2rem;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #dbe3ec;
+    border-radius: .85rem;
+    background: #f8fafc;
+    color: #475569;
+    font-size: .8rem;
+    font-weight: 700;
+    text-transform: capitalize;
+    transition: all 160ms ease;
+}
+
+.enroll-segment:has(input:checked) {
+    border-color: #0f766e;
+    background: #0f766e;
+    color: #ffffff;
+    box-shadow: 0 8px 18px rgba(15, 118, 110, .18);
+}
+
+.enroll-segment:has(input:focus-visible) {
+    outline: 3px solid rgba(13, 148, 136, .22);
+    outline-offset: 2px;
+}
+
+.enroll-review-grid {
+    border-radius: 1rem;
+    background: #f8fafc;
+    padding: .35rem;
+}
+
+.enroll-review-item {
+    border: 1px solid #e2e8f0;
+    border-radius: .8rem;
+    background: #ffffff;
+    padding: .85rem;
+}
+
+.enroll-consent-card {
+    display: flex;
+    cursor: pointer;
+    align-items: flex-start;
+    gap: .85rem;
+    border: 1px solid #99f6e4;
+    border-radius: 1rem;
+    background: #f0fdfa;
+    padding: 1rem;
+}
+
+.enroll-consent-card input {
+    width: 1.15rem;
+    height: 1.15rem;
+    flex: 0 0 auto;
+    margin-top: .15rem;
+    accent-color: #0f766e;
+}
+
+.enroll-consent-card strong,
+.enroll-consent-card small {
+    display: block;
+}
+
+.enroll-consent-card strong {
+    color: #134e4a;
+    font-size: .88rem;
+}
+
+.enroll-consent-card small {
+    margin-top: .2rem;
+    color: #476865;
+    font-size: .78rem;
+    line-height: 1.55;
+}
+
+.enroll-consent-secondary {
+    border-color: #e2e8f0;
+    background: #ffffff;
+}
+
+.enroll-consent-secondary strong {
+    color: #334155;
+}
+
+.enroll-consent-secondary small {
+    color: #64748b;
+}
+
+@media (max-width: 639px) {
+    .atlas-enrollment-page .atlas-enrollment-card {
+        border-radius: 1.35rem;
+    }
+
+    .enroll-actions {
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
+        margin-right: -1.25rem;
+        margin-bottom: -1.25rem;
+        margin-left: -1.25rem;
+        padding: 1rem 1.25rem calc(1rem + env(safe-area-inset-bottom));
+        background: rgba(255, 255, 255, .94);
+        box-shadow: 0 -12px 30px rgba(15, 23, 42, .08);
+        backdrop-filter: blur(16px);
+    }
+
+    .enroll-actions .public-button {
+        width: 100%;
+        min-height: 3.15rem;
+    }
+
+    .enroll-step-heading {
+        align-items: flex-start;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .atlas-enrollment-page *,
+    .atlas-enrollment-page *::before,
+    .atlas-enrollment-page *::after {
+        scroll-behavior: auto !important;
+        transition-duration: .01ms !important;
+    }
 }
 
 .public-story-panel .form-control {

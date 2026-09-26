@@ -1,4 +1,4 @@
-<x-public.layouts.app page-title="Atlas Gym Ecosystem" page-description="Train independently with personal workouts, diet plans and progress, then optionally connect with gyms, trainers and gym operations through one fitness ecosystem.">
+<x-public.layouts.app page-title="Gym Atlas Ecosystem" page-description="Train independently with personal workouts, diet plans and progress, then optionally connect with gyms, trainers and gym operations through one fitness ecosystem.">
     @php
         $roles = [
             [
