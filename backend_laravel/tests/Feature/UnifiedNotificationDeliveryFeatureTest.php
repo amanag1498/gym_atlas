@@ -219,6 +219,42 @@ class UnifiedNotificationDeliveryFeatureTest extends TestCase
         ]);
     }
 
+    public function test_stale_notification_backlog_is_not_sent_as_a_late_push(): void
+    {
+        Queue::fake();
+        config()->set('services.firebase.notification_max_age_minutes', 60);
+        $user = User::factory()->create(['active_role' => 'member']);
+        UserFcmToken::query()->create([
+            'user_id' => $user->id,
+            'token' => 'member-device-token',
+            'platform' => 'ios',
+            'app_role' => 'member',
+            'last_seen_at' => now(),
+        ]);
+        $notification = app(NotificationService::class)->create(
+            user: $user,
+            type: 'attendance_inactivity',
+            title: 'Old reminder',
+            body: 'This push is no longer timely.',
+            data: ['app_role' => 'member'],
+        );
+        $notification->forceFill(['created_at' => now()->subMinutes(61)])->save();
+        $outbox = CommunicationOutbox::query()->where('aggregate_id', $notification->id)->firstOrFail();
+        $fcm = Mockery::mock(FcmNotificationService::class);
+        $fcm->shouldNotReceive('isConfigured');
+        $fcm->shouldNotReceive('sendToUser');
+
+        (new DeliverNotificationOutbox($outbox->id))->handle($fcm);
+
+        $this->assertDatabaseHas('notification_deliveries', [
+            'notification_id' => $notification->id,
+            'transport' => NotificationTransport::Firebase->value,
+            'status' => NotificationDeliveryStatus::Skipped->value,
+            'error_code' => 'notification_expired',
+            'target_count' => 1,
+        ]);
+    }
+
     public function test_read_state_is_reflected_in_database_delivery(): void
     {
         Queue::fake();

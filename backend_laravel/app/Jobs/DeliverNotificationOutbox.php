@@ -165,6 +165,19 @@ class DeliverNotificationOutbox implements ShouldQueue
             return;
         }
 
+        $maxAgeMinutes = max(1, (int) config('services.firebase.notification_max_age_minutes', 60));
+        if ($notification->created_at?->lt(now()->subMinutes($maxAgeMinutes))) {
+            $delivery->forceFill([
+                'status' => NotificationDeliveryStatus::Skipped->value,
+                'attempt_count' => $delivery->attempt_count + 1,
+                'target_count' => $targetCount,
+                'error_code' => 'notification_expired',
+                'error_message' => "Notification was older than {$maxAgeMinutes} minutes when Firebase delivery resumed.",
+            ])->save();
+
+            return;
+        }
+
         if ($targetCount === 0) {
             $delivery->forceFill([
                 'status' => NotificationDeliveryStatus::Skipped->value,

@@ -59,6 +59,7 @@ return [
         'web_app_id' => env('FIREBASE_WEB_APP_ID'),
         'messaging_sender_id' => env('FIREBASE_MESSAGING_SENDER_ID'),
         'storage_bucket' => env('FIREBASE_STORAGE_BUCKET'),
+        'notification_max_age_minutes' => (int) env('FIREBASE_NOTIFICATION_MAX_AGE_MINUTES', 60),
         'apple_sign_in_enabled' => (bool) env('FIREBASE_APPLE_SIGN_IN_ENABLED', false),
         'token_stale_days' => (int) env('FIREBASE_TOKEN_STALE_DAYS', 60),
     ],

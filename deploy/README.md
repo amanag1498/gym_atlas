@@ -192,6 +192,10 @@ php artisan communications:dispatch-outbox
 php artisan queue:monitor notifications,whatsapp,webhooks,default --max=100
 ```
 
+Firebase jobs older than `FIREBASE_NOTIFICATION_MAX_AGE_MINUTES` (60 by
+default) are marked expired instead of sending a stale backlog after an
+outage.
+
 Laravel scheduler:
 
 ```bash
