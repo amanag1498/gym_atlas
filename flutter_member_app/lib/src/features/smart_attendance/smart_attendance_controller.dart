@@ -81,6 +81,13 @@ class SmartAttendanceController extends ChangeNotifier {
   String? _backendSyncError;
   String? _lastError;
   String? _lastCheckInMessage;
+  String _logicState = 'Waiting for a nearby Atlas hub.';
+  int _localPresenceUpdateCount = 0;
+  DateTime? _lastLocalPresenceAt;
+  DateTime? _lastAttendanceRequestAt;
+  String _lastAttendanceRequestResult = 'Not sent';
+  DateTime? _lastCheckoutRequestAt;
+  String _lastCheckoutRequestResult = 'Not sent';
 
   bool get scanning => _scanning;
   bool get permissionDenied => _permissionDenied;
@@ -92,6 +99,13 @@ class SmartAttendanceController extends ChangeNotifier {
   String? get backendSyncError => _backendSyncError;
   String? get lastError => _lastError;
   String? get lastCheckInMessage => _lastCheckInMessage;
+  String get logicState => _logicState;
+  int get localPresenceUpdateCount => _localPresenceUpdateCount;
+  DateTime? get lastLocalPresenceAt => _lastLocalPresenceAt;
+  DateTime? get lastAttendanceRequestAt => _lastAttendanceRequestAt;
+  String get lastAttendanceRequestResult => _lastAttendanceRequestResult;
+  DateTime? get lastCheckoutRequestAt => _lastCheckoutRequestAt;
+  String get lastCheckoutRequestResult => _lastCheckoutRequestResult;
   SmartAttendanceSession? get activeSession => _session;
   SmartAttendanceDetection? get latestDetection =>
       _detections.isEmpty ? null : _detections.last;
@@ -124,6 +138,9 @@ class SmartAttendanceController extends ChangeNotifier {
       return;
     }
     await _restoreAndReconcileSession();
+    if (_scanning && !_backgroundScanning) {
+      return;
+    }
 
     _detectionSub ??= _scanner.detections.listen(
       _handleDetection,
@@ -157,6 +174,9 @@ class SmartAttendanceController extends ChangeNotifier {
       return;
     }
     await _restoreAndReconcileSession();
+    if (_scanning && _backgroundScanning) {
+      return;
+    }
 
     _detectionSub ??= _scanner.detections.listen(
       _handleDetection,
@@ -219,6 +239,8 @@ class SmartAttendanceController extends ChangeNotifier {
     if (rssi != null && rssi < _minimumRssi) {
       _firstQualifiedDetectionByHub.remove(hubKey);
       _lastQualifiedDetectionByHub.remove(hubKey);
+      _logicState =
+          'Signal is too weak ($rssi dBm; minimum $_minimumRssi dBm).';
       return;
     }
 
@@ -231,12 +253,15 @@ class SmartAttendanceController extends ChangeNotifier {
     _lastQualifiedDetectionByHub[hubKey] = now;
     final firstSeen = _firstQualifiedDetectionByHub[hubKey] ?? now;
     if (now.difference(firstSeen) < _presenceWindow) {
+      _logicState = 'Confirming continuous hub presence for 2.4 seconds.';
       return;
     }
 
     final currentSession = _session;
     final startsNewVisit =
         currentSession == null || !now.isBefore(currentSession.windowEndsAt);
+    final reopensCheckedOutVisit =
+        !startsNewVisit && currentSession.checkedOutAt != null;
     final requestDetection = startsNewVisit
         ? SmartAttendanceDetection(
             publicId: detection.publicId,
@@ -248,7 +273,19 @@ class SmartAttendanceController extends ChangeNotifier {
           )
         : detection;
 
-    _recordLocalPresence(detection, now);
+    if (!reopensCheckedOutVisit) {
+      _recordLocalPresence(detection, now);
+    }
+
+    // Once the first check-in has been confirmed, detections only advance the
+    // locally persisted last-presence timestamp. The backend is contacted
+    // again only when reopening a checked-out visit or starting a new window.
+    if (!startsNewVisit && !reopensCheckedOutVisit) {
+      _logicState =
+          'Visit confirmed. Presence is updating on this phone; no check-in request sent.';
+      notifyListeners();
+      return;
+    }
 
     final lastAttempt = _lastRequestAttemptByHub[hubKey];
     if (lastAttempt != null && now.difference(lastAttempt) < _requestDebounce) {
@@ -261,6 +298,12 @@ class SmartAttendanceController extends ChangeNotifier {
     _inFlightHubs.add(hubKey);
     _lastRequestAttemptByHub[hubKey] = now;
     _checkInInFlight = true;
+    _lastAttendanceRequestAt = now;
+    _lastAttendanceRequestResult = reopensCheckedOutVisit
+        ? 'Sending visit reopen'
+        : 'Sending first check-in';
+    _logicState = _lastAttendanceRequestResult;
+    _lastError = null;
     notifyListeners();
 
     final memberId = _memberIdProvider?.call();
@@ -316,9 +359,17 @@ class SmartAttendanceController extends ChangeNotifier {
           _scheduleSessionTimer();
         }
         _lastCheckInMessage = 'Smart Attendance check-in recorded.';
+        _lastAttendanceRequestResult = reopensCheckedOutVisit
+            ? 'Visit reopened successfully'
+            : 'First check-in confirmed';
+        _logicState = reopensCheckedOutVisit
+            ? 'Visit reopened. Local presence tracking resumed.'
+            : 'Visit confirmed. Local presence tracking is active.';
       }
     } catch (error) {
       _lastError = _friendlyError(error);
+      _lastAttendanceRequestResult = 'Failed: $_lastError';
+      _logicState = 'Check-in request failed. Waiting to retry.';
     } finally {
       _inFlightHubs.remove(hubKey);
       _checkInInFlight = _inFlightHubs.isNotEmpty;
@@ -342,6 +393,8 @@ class SmartAttendanceController extends ChangeNotifier {
       lastPresenceAt: detectedAt,
       clearCheckedOutAt: true,
     );
+    _localPresenceUpdateCount++;
+    _lastLocalPresenceAt = detectedAt;
     unawaited(_persistSession());
     _scheduleSessionTimer();
   }
@@ -404,6 +457,11 @@ class SmartAttendanceController extends ChangeNotifier {
     final session = _session;
     final client = _checkInClient;
     if (session == null || client == null) return;
+    _lastCheckoutRequestAt = _clock();
+    _lastCheckoutRequestResult = 'Sending last presence as out time';
+    _logicState = 'Two-hour absence reached. Saving out time.';
+    _lastError = null;
+    notifyListeners();
     try {
       await client.recordSmartAttendanceCheckOut(
         attendanceLogId: session.attendanceLogId,
@@ -432,8 +490,14 @@ class SmartAttendanceController extends ChangeNotifier {
         }
       }
       _lastCheckInMessage = 'Smart Attendance out time saved.';
+      _lastCheckoutRequestResult = 'Out time saved successfully';
+      _logicState = clearAfterSuccess
+          ? 'Six-hour window closed.'
+          : 'Out time saved. Waiting for a return before the window ends.';
     } catch (error) {
       _lastError = _friendlyError(error);
+      _lastCheckoutRequestResult = 'Failed: $_lastError';
+      _logicState = 'Out-time save failed. Retrying in five minutes.';
       _sessionTimer?.cancel();
       _sessionTimer = Timer(
         const Duration(minutes: 5),

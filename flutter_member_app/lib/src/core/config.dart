@@ -11,7 +11,7 @@ class MemberConfig {
 
   static const appBuildNumber = int.fromEnvironment(
     'APP_BUILD_NUMBER',
-    defaultValue: 17,
+    defaultValue: 18,
   );
 
   static const appVersion = String.fromEnvironment(

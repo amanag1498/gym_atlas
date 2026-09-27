@@ -6,10 +6,12 @@ class SmartAttendanceDebugOverlay extends StatefulWidget {
   const SmartAttendanceDebugOverlay({
     super.key,
     required this.controller,
+    required this.navigatorKey,
     required this.child,
   });
 
   final SmartAttendanceController controller;
+  final GlobalKey<NavigatorState> navigatorKey;
   final Widget child;
 
   @override
@@ -182,8 +184,13 @@ class _SmartAttendanceDebugOverlayState
   }
 
   Future<void> _showDetails(BuildContext context) {
+    final navigatorContext = widget.navigatorKey.currentState?.overlay?.context;
+    if (navigatorContext == null) {
+      return Future<void>.value();
+    }
     return showModalBottomSheet<void>(
-      context: context,
+      context: navigatorContext,
+      useRootNavigator: true,
       isScrollControlled: true,
       showDragHandle: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -282,6 +289,60 @@ class _SmartAttendanceDebugDetails extends StatelessWidget {
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 20),
+        if (controller.lastError != null || controller.backendSyncError != null)
+          _DebugErrorSection(
+            scannerError: controller.lastError,
+            backendError: controller.backendSyncError,
+          ),
+        _DebugSection(
+          title: 'Live decision',
+          children: [
+            _DebugValue(label: 'Current action', value: controller.logicState),
+            _DebugValue(
+              label: 'First check-in request',
+              value: controller.lastAttendanceRequestResult,
+            ),
+            _DebugValue(
+              label: 'Request time',
+              value: controller.lastAttendanceRequestAt == null
+                  ? 'Never'
+                  : _time(controller.lastAttendanceRequestAt!),
+            ),
+            _DebugValue(
+              label: 'Local updates',
+              value: '${controller.localPresenceUpdateCount}',
+            ),
+            _DebugValue(
+              label: 'Latest local update',
+              value: controller.lastLocalPresenceAt == null
+                  ? 'None yet'
+                  : _time(controller.lastLocalPresenceAt!),
+            ),
+            _DebugValue(
+              label: 'Out-time request',
+              value: controller.lastCheckoutRequestResult,
+            ),
+            _DebugValue(
+              label: 'Out-time attempt',
+              value: controller.lastCheckoutRequestAt == null
+                  ? 'Never'
+                  : _time(controller.lastCheckoutRequestAt!),
+            ),
+          ],
+        ),
+        const _DebugSection(
+          title: 'Rules in this build',
+          children: [
+            _DebugValue(label: 'Presence confirmation', value: '2.4 seconds'),
+            _DebugValue(label: 'Minimum signal', value: '-78 dBm'),
+            _DebugValue(label: 'Attendance window', value: '6 hours'),
+            _DebugValue(label: 'No-signal out time', value: '2 hours'),
+            _DebugValue(
+              label: 'Backend check-ins',
+              value: 'First confirmation and visit reopen only',
+            ),
+          ],
+        ),
         _DebugSection(
           title: 'Scanner',
           children: [
@@ -416,6 +477,48 @@ class _SmartAttendanceDebugDetails extends StatelessWidget {
     String two(int number) => number.toString().padLeft(2, '0');
     return '${two(local.day)}/${two(local.month)}/${local.year} '
         '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
+  }
+}
+
+class _DebugErrorSection extends StatelessWidget {
+  const _DebugErrorSection({this.scannerError, this.backendError});
+
+  final String? scannerError;
+  final String? backendError;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFE9EC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFDA4AF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Errors requiring attention',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: const Color(0xFF9F1239),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          if (scannerError != null) ...[
+            const SizedBox(height: 10),
+            const Text('Scanner / attendance'),
+            SelectableText(scannerError!),
+          ],
+          if (backendError != null) ...[
+            const SizedBox(height: 10),
+            const Text('Backend telemetry'),
+            SelectableText(backendError!),
+          ],
+        ],
+      ),
+    );
   }
 }
 

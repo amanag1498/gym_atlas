@@ -50,6 +50,7 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
   late final ChatNotificationService _chatNotificationService;
   late final AppLinks _appLinks;
   late final GoRouter router;
+  late final GlobalKey<NavigatorState> _rootNavigatorKey;
   StreamSubscription<Uri>? _appLinkSubscription;
   StreamSubscription<RemoteMessage>? _foregroundNotificationSubscription;
   StreamSubscription<RemoteMessage>? _notificationOpenSubscription;
@@ -66,6 +67,9 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
   bool _openingPendingHomeSection = false;
   String? _lastHandledAppLink;
   DateTime? _lastHandledAppLinkAt;
+  String? _lastSmartAttendanceReportSignature;
+  DateTime? _lastSmartAttendanceReportAt;
+  bool _smartAttendanceReportInFlight = false;
 
   @override
   void initState() {
@@ -96,7 +100,9 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
     );
     _chatNotificationService = ChatNotificationService();
     _appLinks = AppLinks();
+    _rootNavigatorKey = GlobalKey<NavigatorState>();
     router = GoRouter(
+      navigatorKey: _rootNavigatorKey,
       refreshListenable: sessionController,
       routes: <GoRoute>[
         GoRoute(
@@ -382,24 +388,44 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
   }
 
   Future<void> _reportSmartAttendanceState() async {
+    final signature = [
+      smartAttendanceController.bluetoothPermissionStatus,
+      smartAttendanceController.scanning,
+      smartAttendanceController.backgroundScanning,
+    ].join('|');
+    final now = DateTime.now();
+    final lastReportAt = _lastSmartAttendanceReportAt;
+    if (_smartAttendanceReportInFlight ||
+        (_lastSmartAttendanceReportSignature == signature &&
+            lastReportAt != null &&
+            now.difference(lastReportAt) < const Duration(minutes: 10))) {
+      return;
+    }
+    _smartAttendanceReportInFlight = true;
     smartAttendanceController.markBackendSyncStarted();
-    final success = await fcmTokenService.registerPresence(
-      appRole: 'member',
-      bluetoothPermissionStatus:
-          smartAttendanceController.bluetoothPermissionStatus,
-      smartAttendanceScanning: smartAttendanceController.scanning,
-      smartAttendanceMode: smartAttendanceController.scanning
-          ? (smartAttendanceController.backgroundScanning
-                ? 'background'
-                : 'foreground')
-          : 'stopped',
-      smartAttendanceLastDetectionAt:
-          smartAttendanceController.latestDetection?.detectedAt,
-    );
-    smartAttendanceController.markBackendSyncFinished(
-      success: success,
-      error: fcmTokenService.lastPresenceError,
-    );
+    try {
+      final success = await fcmTokenService.registerPresence(
+        appRole: 'member',
+        bluetoothPermissionStatus:
+            smartAttendanceController.bluetoothPermissionStatus,
+        smartAttendanceScanning: smartAttendanceController.scanning,
+        smartAttendanceMode: smartAttendanceController.scanning
+            ? (smartAttendanceController.backgroundScanning
+                  ? 'background'
+                  : 'foreground')
+            : 'stopped',
+        smartAttendanceLastDetectionAt:
+            smartAttendanceController.latestDetection?.detectedAt,
+      );
+      _lastSmartAttendanceReportSignature = signature;
+      _lastSmartAttendanceReportAt = now;
+      smartAttendanceController.markBackendSyncFinished(
+        success: success,
+        error: fcmTokenService.lastPresenceError,
+      );
+    } finally {
+      _smartAttendanceReportInFlight = false;
+    }
   }
 
   Future<void> _openPendingChatIfReady() async {
@@ -543,6 +569,7 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
               }
               return SmartAttendanceDebugOverlay(
                 controller: smartAttendanceController,
+                navigatorKey: _rootNavigatorKey,
                 child: content,
               );
             },

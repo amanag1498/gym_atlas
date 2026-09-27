@@ -61,6 +61,19 @@ void main() {
     expect(scanner.backgroundStarted, isTrue);
   });
 
+  test('starting the same scan mode twice is idempotent', () async {
+    final scanner = _FakeScanner();
+    final controller = SmartAttendanceController(
+      scanner: scanner,
+      requestPermissions: () async => true,
+    );
+
+    await controller.startForegroundScan();
+    await controller.startForegroundScan();
+
+    expect(scanner.foregroundStartCalls, 1);
+  });
+
   test('permission denial prevents scanning', () async {
     final scanner = _FakeScanner();
     final controller = SmartAttendanceController(
@@ -239,6 +252,9 @@ void main() {
     scanner.emit(_detection('SAHABC123DEF4567', now));
     await _pumpAsync();
     expect(controller.activeSession?.lastPresenceAt, now);
+    expect(client.checkInCalls, 1);
+    expect(controller.localPresenceUpdateCount, 1);
+    expect(controller.logicState, contains('no check-in request sent'));
 
     final expectedOutTime = now;
     now = now.add(const Duration(hours: 2, minutes: 1));
@@ -248,9 +264,18 @@ void main() {
     expect(controller.activeSession?.checkedOutAt, expectedOutTime);
     expect(store.session?.checkedOutAt, expectedOutTime);
 
+    client.failNextCheckIn = true;
     now = now.add(const Duration(minutes: 30));
     scanner.emit(_detection('SAHABC123DEF4567', now));
     await _pumpAsync();
+    expect(client.checkInCalls, 2);
+    expect(controller.activeSession?.checkedOutAt, expectedOutTime);
+
+    client.failNextCheckIn = false;
+    now = now.add(const Duration(minutes: 1));
+    scanner.emit(_detection('SAHABC123DEF4567', now));
+    await _pumpAsync();
+    expect(client.checkInCalls, 3);
     expect(controller.activeSession?.checkedOutAt, isNull);
     expect(controller.activeSession?.lastPresenceAt, now);
   });
@@ -281,6 +306,7 @@ class _FakeScanner implements SmartAttendanceBleScanner {
       StreamController<SmartAttendanceScanDiagnostic>.broadcast();
   bool started = false;
   bool backgroundStarted = false;
+  int foregroundStartCalls = 0;
 
   @override
   Stream<SmartAttendanceDetection> get detections => _detections.stream;
@@ -292,6 +318,7 @@ class _FakeScanner implements SmartAttendanceBleScanner {
 
   @override
   Future<void> startForegroundScan() async {
+    foregroundStartCalls++;
     started = true;
     backgroundStarted = false;
   }
@@ -403,11 +430,17 @@ class _FakeSuccessCache implements SmartAttendanceCheckInCache {
 class _SessionCheckInClient implements SmartAttendanceCheckInClient {
   final checkOutCalls = <DateTime>[];
   DateTime? firstPresence;
+  int checkInCalls = 0;
+  bool failNextCheckIn = false;
 
   @override
   Future<SmartAttendanceCheckInResponse> recordSmartAttendanceCheckIn(
     SmartAttendanceDetection detection,
   ) async {
+    checkInCalls++;
+    if (failNextCheckIn) {
+      throw Exception('temporary reopen failure');
+    }
     firstPresence ??= detection.detectedAt;
     return SmartAttendanceCheckInResponse(
       checkedInToday: true,
