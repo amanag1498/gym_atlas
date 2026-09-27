@@ -144,7 +144,7 @@ class SmartAttendanceHubFeatureTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.hub.public_id', $publicId)
             ->assertJsonPath('data.hub.status', 'online')
-            ->assertJsonPath('data.ble.protocol_version', 1)
+            ->assertJsonPath('data.ble.protocol_version', 2)
             ->assertJsonMissing(['device_secret' => $secret]);
 
         $this->assertDatabaseHas('smart_attendance_hubs', [
@@ -219,7 +219,7 @@ class SmartAttendanceHubFeatureTest extends TestCase
         $this->actingAs($member, 'sanctum')
             ->postJson('/api/member/attendance/smart-check-in', [
                 'hub_public_id' => strtolower($create->json('data.hub.public_id')),
-                'protocol_version' => 1,
+                'protocol_version' => 2,
                 'rssi' => -58,
                 'detected_at' => now()->toIso8601String(),
                 'source' => 'android_foreground_ble',
@@ -228,7 +228,7 @@ class SmartAttendanceHubFeatureTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.attendance.check_in_method', 'smart_attendance')
             ->assertJsonPath('data.attendance.smart_attendance_hub_id', $create->json('data.hub.id'))
-            ->assertJsonPath('data.attendance.smart_attendance_detection.protocol_version', 1)
+            ->assertJsonPath('data.attendance.smart_attendance_detection.protocol_version', 2)
             ->assertJsonPath('data.attendance.smart_attendance_detection.rssi', -58)
             ->assertJsonPath('data.check_in_status.checked_in_today', true)
             ->assertJsonPath('data.check_in_status.check_in_method', 'smart_attendance')

@@ -16,7 +16,7 @@ class SmartAttendanceCheckInRequest extends FormRequest
     {
         return [
             'hub_public_id' => ['required', 'string', 'max:20', 'regex:/^[A-Z0-9_-]+$/'],
-            'protocol_version' => ['required', 'integer', Rule::in([1])],
+            'protocol_version' => ['required', 'integer', Rule::in([1, 2])],
             'rssi' => ['nullable', 'integer', 'between:-127,20'],
             'detected_at' => ['nullable', 'date', 'after_or_equal:-6 hours', 'before_or_equal:+5 minutes'],
             'source' => ['nullable', 'string', 'max:80'],

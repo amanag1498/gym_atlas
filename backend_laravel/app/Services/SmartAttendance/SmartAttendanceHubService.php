@@ -140,7 +140,7 @@ class SmartAttendanceHubService
             'server_time' => now()->toIso8601String(),
             'heartbeat_interval_seconds' => 60,
             'ble' => [
-                'protocol_version' => 1,
+                'protocol_version' => 2,
                 'public_id' => $hub->public_id,
             ],
         ];
