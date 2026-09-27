@@ -12,7 +12,7 @@
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <x-stat-card label="Listing Records" :value="$gyms->total()" hint="Public-enabled gyms" tone="sky" />
             <x-stat-card label="Verified" :value="$currentGyms->where('is_verified', true)->count()" hint="Verified on this page" tone="emerald" />
-            <x-stat-card label="Pricing Visible" :value="$currentGyms->where('show_pricing', true)->count()" hint="Pricing shown publicly" tone="violet" />
+            <x-stat-card label="Needs Approval" :value="$listingStats['listing_pending']" hint="Blocked from discovery" tone="rose" />
             <x-stat-card label="Contact Visible" :value="$currentGyms->where('contact_visible', true)->count()" hint="Public contact allowed" tone="amber" />
         </div>
 
@@ -43,6 +43,12 @@
                         label="Verified"
                         :selected="request('verified')"
                         :options="['' => 'All', '1' => 'Verified', '0' => 'Unverified']"
+                    />
+                    <x-form-select
+                        name="listing_status"
+                        label="Listing Approval"
+                        :selected="request('listing_status')"
+                        :options="['' => 'All approvals', 'pending' => 'Pending review', 'approved' => 'Approved', 'rejected' => 'Rejected']"
                     />
                     <div class="md:col-span-2 xl:col-span-4 flex flex-wrap gap-2 pt-1">
                         <x-action-button type="submit">Apply Filters</x-action-button>
@@ -113,6 +119,13 @@
                                     <td>
                                         <div class="flex flex-wrap justify-end gap-2">
                                             <x-action-button as="a" href="{{ route('web.admin.gyms.show', $gym) }}" variant="secondary">View</x-action-button>
+                                            @if (($gym->public_listing_approval_status ?? 'pending') !== 'approved')
+                                                <form method="POST" action="{{ route('web.admin.gyms.listing', $gym) }}" data-confirm-submit data-confirm-title="Approve this public listing?" data-confirm-message="The gym will become searchable once every discovery requirement is satisfied." data-confirm-button="Approve Listing">
+                                                    @csrf
+                                                    <input type="hidden" name="public_listing_approval_status" value="approved">
+                                                    <x-action-button type="submit">Approve</x-action-button>
+                                                </form>
+                                            @endif
                                             <x-action-button as="a" href="{{ url('/api/public/discovery/gyms/'.$gym->slug) }}" variant="secondary" target="_blank">Preview</x-action-button>
                                             <form method="POST" action="{{ route('web.admin.gyms.feature', $gym) }}" data-confirm-submit data-confirm-title="{{ $gym->is_featured ? 'Remove featured status?' : 'Feature this gym?' }}" data-confirm-message="Update featured placement for this gym." data-confirm-button="{{ $gym->is_featured ? 'Unfeature' : 'Feature' }}">
                                                 @csrf

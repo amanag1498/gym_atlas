@@ -80,6 +80,10 @@ class ListingController extends Controller
             $query->where('is_verified', $request->boolean('verified'));
         }
 
+        if ($request->filled('listing_status')) {
+            $query->where('public_listing_approval_status', $request->string('listing_status')->toString());
+        }
+
         if ($request->filled('search')) {
             $search = '%'.$request->string('search')->trim().'%';
             $query->where(fn ($builder) => $builder

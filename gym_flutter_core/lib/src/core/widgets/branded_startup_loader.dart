@@ -126,7 +126,6 @@ class _LoaderContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final pulse = (math.sin(progress * math.pi * 2) + 1) / 2;
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
@@ -163,8 +162,28 @@ class _LoaderContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 24),
-        AtlasBrandLockup(audience: audience, markSize: 42),
-        const SizedBox(height: 30),
+        Text(
+          'GYM ATLAS',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineSmall?.copyWith(
+            color: const Color(0xFF07152F),
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.8,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          audience.toLowerCase() == 'trainer'
+              ? 'COACH'
+              : 'DISCIPLINE IN MOTION',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: const Color(0xFF3567D9),
+            fontWeight: FontWeight.w800,
+            letterSpacing: audience.toLowerCase() == 'trainer' ? 3.2 : 2.2,
+          ),
+        ),
+        const SizedBox(height: 28),
         Text(
           'Getting things ready',
           textAlign: TextAlign.center,

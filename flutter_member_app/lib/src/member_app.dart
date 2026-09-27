@@ -63,6 +63,8 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
   bool _openingPendingTrialRequests = false;
   String? _pendingHomeSection;
   bool _openingPendingHomeSection = false;
+  String? _lastHandledAppLink;
+  DateTime? _lastHandledAppLinkAt;
 
   @override
   void initState() {
@@ -234,8 +236,17 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
   }
 
   Future<void> _start() async {
+    final initialLink = await _appLinks.getInitialLink().catchError((
+      Object exception,
+    ) {
+      debugPrint('[app-links] initial link skipped: $exception');
+      return null;
+    });
     await runtimeController.initialize();
     await sessionController.bootstrap();
+    if (initialLink != null) {
+      _openAppLink(initialLink);
+    }
   }
 
   void _openAppLink(Uri uri) {
@@ -244,6 +255,15 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
       debugPrint('[app-links] unsupported link ignored: $uri');
       return;
     }
+
+    final now = DateTime.now();
+    if (_lastHandledAppLink == destination &&
+        _lastHandledAppLinkAt != null &&
+        now.difference(_lastHandledAppLinkAt!) < const Duration(seconds: 2)) {
+      return;
+    }
+    _lastHandledAppLink = destination;
+    _lastHandledAppLinkAt = now;
 
     router.go(destination);
   }

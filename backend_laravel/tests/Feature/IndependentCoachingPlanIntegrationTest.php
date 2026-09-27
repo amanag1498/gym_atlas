@@ -725,7 +725,9 @@ class IndependentCoachingPlanIntegrationTest extends TestCase
 
         $this->actingAs($owner, 'sanctum')
             ->getJson('/api/gym/members/'.$member->id, $headers)
-            ->assertNotFound();
+            ->assertOk()
+            ->assertJsonPath('data.member.id', $member->id)
+            ->assertJsonPath('data.member.member_profile.membership_status', 'cancelled');
         $this->actingAs($oldGymTrainer, 'sanctum')
             ->getJson('/api/trainer/assigned-members/'.$member->id)
             ->assertUnprocessable();

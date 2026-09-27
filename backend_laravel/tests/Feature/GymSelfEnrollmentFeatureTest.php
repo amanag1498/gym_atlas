@@ -86,6 +86,9 @@ class GymSelfEnrollmentFeatureTest extends TestCase
         $page
             ->assertOk()
             ->assertSee('How would you like to join?')
+            ->assertSee('Gym Atlas already installed?')
+            ->assertSee('gymatlasmember://join/'.$link->token, false)
+            ->assertSee('intent://join/'.$link->token, false)
             ->assertSee('Atlas account')
             ->assertSee('Let’s start with you')
             ->assertSee($branch->name)

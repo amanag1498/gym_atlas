@@ -61,6 +61,19 @@ class PlatformListingManagementTest extends TestCase
             'public_listing_approval_status' => 'approved',
         ]);
 
+        $pendingGym = Gym::query()->create([
+            'owner_user_id' => $owner->id,
+            'name' => 'Pending Discovery Gym',
+            'slug' => 'pending-discovery-gym',
+            'city' => 'Mumbai',
+            'status' => 'active',
+            'approval_status' => 'approved',
+            'is_active' => true,
+            'public_listing_enabled' => true,
+            'public_listing_approval_status' => 'pending',
+            'is_verified' => true,
+        ]);
+
         $this->post('/admin/login', [
             'email' => 'listing-admin@example.com',
             'password' => 'secret123',
@@ -69,7 +82,26 @@ class PlatformListingManagementTest extends TestCase
         $this->get(route('web.admin.listings.index'))
             ->assertOk()
             ->assertSee('Public Listings')
-            ->assertSee('Discovery Gym');
+            ->assertSee('Discovery Gym')
+            ->assertSee('Pending Discovery Gym')
+            ->assertSee('Approve');
+
+        $this->getJson('/api/public/discovery/gyms')
+            ->assertOk()
+            ->assertJsonMissing(['slug' => 'pending-discovery-gym']);
+
+        $this->post(route('web.admin.gyms.listing', $pendingGym), [
+            'public_listing_approval_status' => 'approved',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('gyms', [
+            'id' => $pendingGym->id,
+            'public_listing_approval_status' => 'approved',
+            'public_listing_approved_by_user_id' => $admin->id,
+        ]);
+        $this->getJson('/api/public/discovery/gyms')
+            ->assertOk()
+            ->assertJsonFragment(['slug' => 'pending-discovery-gym']);
 
         $this->get(route('web.admin.featured-gyms.index'))->assertOk()->assertSee('Featured Gyms');
         $this->get(route('web.admin.promoted-gyms.index'))->assertOk()->assertSee('Promoted Gyms');

@@ -5,6 +5,7 @@
 
     $gymSchedule = OperatingHours::normalize($gym->timings ?? [], $gym->weekly_off ?? []);
     $approvalStatus = $gym->approval_status ?: $gym->status ?: 'pending';
+    $listingApproved = ($gym->public_listing_approval_status ?? 'pending') === 'approved';
     $branchScheduleSummary = static fn ($branch) => collect(OperatingHours::DAYS)
         ->map(fn ($day) => OperatingHours::dayLabel($day).': '.OperatingHours::formatDaySlots(OperatingHours::normalize($branch->timings ?? [], $branch->weekly_off ?? [])[$day] ?? []))
         ->implode(' | ');
@@ -332,6 +333,22 @@
 
                 <x-premium-card class="p-5">
                     <h3 class="panel-section-title">Public Listing Settings</h3>
+                    @if (! $listingApproved)
+                        <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100">
+                            <div class="font-semibold">This gym is blocked from Find a Gym</div>
+                            <p class="mt-1 leading-6">Listing approval is a separate platform review after gym verification. Approve it when the public profile is ready to appear in member search.</p>
+                            <form method="POST" action="{{ route('web.admin.gyms.listing', $gym) }}" class="mt-3" data-confirm-submit data-confirm-title="Approve this public listing?" data-confirm-message="The gym will become searchable once every discovery requirement is satisfied." data-confirm-button="Approve Listing">
+                                @csrf
+                                <input type="hidden" name="public_listing_approval_status" value="approved">
+                                <x-action-button type="submit">Approve Listing</x-action-button>
+                            </form>
+                        </div>
+                    @else
+                        <div class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-100">
+                            <div class="font-semibold">Listing approved</div>
+                            <p class="mt-1 leading-6">It can appear in Find a Gym while the gym, operational access, public listing, and platform billing remain active.</p>
+                        </div>
+                    @endif
                     <div class="mt-4 space-y-3">
                         <div class="panel-card-muted flex items-center justify-between gap-3 px-4 py-3">
                             <span class="text-sm text-slate-600 dark:text-slate-300">Listing Enabled</span>

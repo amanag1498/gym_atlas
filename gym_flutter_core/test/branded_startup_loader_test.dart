@@ -12,7 +12,7 @@ void main() {
 
     expect(find.byType(AnimatedBuilder), findsWidgets);
     expect(find.byType(CustomPaint), findsWidgets);
-    expect(find.byType(AtlasBrandMark), findsWidgets);
+    expect(find.byType(AtlasBrandMark), findsOneWidget);
     expect(find.text('Getting things ready'), findsOneWidget);
     expect(find.text('Preparing your training space'), findsOneWidget);
     expect(find.text('GYM ATLAS'), findsOneWidget);

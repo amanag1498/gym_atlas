@@ -292,7 +292,7 @@ class MultiGymMemberContextFeatureTest extends TestCase
             'user_id' => $member->id,
             'gym_id' => $gymB->id,
             'is_active' => false,
-            'membership_status' => 'cancelled',
+            'membership_status' => 'left_gym',
             'assigned_trainer_user_id' => null,
         ]);
     }

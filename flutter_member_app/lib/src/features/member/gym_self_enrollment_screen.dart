@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:gym_flutter_core/gym_flutter_core.dart' show AtlasBrandMark;
 import 'package:provider/provider.dart';
 
 import '../../core/user_facing_error.dart';
@@ -151,7 +152,7 @@ class _GymSelfEnrollmentScreenState extends State<GymSelfEnrollmentScreen> {
       subtitle: 'Atlas self-enrollment',
       body: SafeArea(
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const LoadingStateView(label: 'Checking your gym invitation...')
             : _error != null && _preview == null
             ? ErrorStateView(message: _error!, onRetry: _load)
             : _buildContent(),
@@ -187,35 +188,58 @@ class _GymSelfEnrollmentScreenState extends State<GymSelfEnrollmentScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                PremiumCard(
+                Container(
                   padding: const EdgeInsets.all(AppSpacing.lg),
-                  borderRadius: 28,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF07152F), Color(0xFF173B73)],
+                    ),
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF07152F).withValues(alpha: 0.22),
+                        blurRadius: 30,
+                        offset: const Offset(0, 18),
+                      ),
+                    ],
+                  ),
                   child: Column(
                     children: [
+                      _GymEnrollmentLogo(imageUrl: gym['logo_url']?.toString()),
+                      const SizedBox(height: AppSpacing.md),
                       Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [
-                              AppColors.primaryBright,
-                              AppColors.primary,
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(24),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 11,
+                          vertical: 6,
                         ),
-                        child: const Icon(
-                          Icons.storefront_rounded,
-                          color: Colors.white,
-                          size: 34,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.14),
+                          ),
+                        ),
+                        child: const Text(
+                          'VERIFIED ENROLLMENT LINK',
+                          style: TextStyle(
+                            color: Color(0xFFA7F3D0),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.md),
+                      const SizedBox(height: 12),
                       Text(
                         gym['name']?.toString() ?? 'Gym',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.w800),
+                            ?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                            ),
                       ),
                       const SizedBox(height: 6),
                       Text(
@@ -223,13 +247,55 @@ class _GymSelfEnrollmentScreenState extends State<GymSelfEnrollmentScreen> {
                             'Choose the branch you are joining',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
+                          color: const Color(0xFFCBD5E1),
                         ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
+                if (blocked || already) ...[
+                  PremiumCard(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          blocked
+                              ? Icons.support_agent_rounded
+                              : Icons.check_circle_rounded,
+                          color: blocked
+                              ? AppColors.warning
+                              : AppColors.success,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                blocked
+                                    ? 'Previous membership found'
+                                    : 'You already belong to this gym',
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w800),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                blocked
+                                    ? 'Your old record is protected. Ask the gym desk to start a new membership cycle.'
+                                    : 'Continue to switch the app to this gym.',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: AppColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
                 PremiumCard(
                   padding: const EdgeInsets.all(AppSpacing.lg),
                   borderRadius: 28,
@@ -237,7 +303,7 @@ class _GymSelfEnrollmentScreenState extends State<GymSelfEnrollmentScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Your Atlas profile',
+                        'Confirm your details',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w800,
                         ),
@@ -394,7 +460,9 @@ class _GymSelfEnrollmentScreenState extends State<GymSelfEnrollmentScreen> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'No approval or second account is required.',
+                  blocked
+                      ? 'Only this gym can reactivate an old membership record.'
+                      : 'Your existing Gym Atlas account stays the same.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppColors.textSecondary,
@@ -423,6 +491,37 @@ class _GymSelfEnrollmentScreenState extends State<GymSelfEnrollmentScreen> {
             '${selected.year.toString().padLeft(4, '0')}-${selected.month.toString().padLeft(2, '0')}-${selected.day.toString().padLeft(2, '0')}';
       });
     }
+  }
+}
+
+class _GymEnrollmentLogo extends StatelessWidget {
+  const _GymEnrollmentLogo({this.imageUrl});
+
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolved = imageUrl?.trim();
+    if (resolved == null || resolved.isEmpty) {
+      return const AtlasBrandMark(size: 76);
+    }
+
+    return Container(
+      width: 76,
+      height: 76,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Image.network(
+        resolved,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const AtlasBrandMark(size: 68),
+      ),
+    );
   }
 }
 

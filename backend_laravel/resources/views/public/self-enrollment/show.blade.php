@@ -14,7 +14,7 @@
         $stepFields = [
             1 => ['name', 'email', 'phone', 'branch_id', 'website'],
             2 => ['fitness_goal_ids', 'fitness_goal_ids.*'],
-            3 => ['gender', 'experience_level', 'height_cm', 'weight_kg'],
+            3 => ['date_of_birth', 'gender', 'experience_level', 'height_cm', 'weight_kg'],
             4 => ['injury_notes', 'medical_notes', 'emergency_contact_name', 'emergency_contact_phone'],
             5 => ['consent', 'whatsapp_marketing_consent'],
         ];
@@ -28,6 +28,8 @@
             }
         }
         $branchLabel = $link->branch?->name ?? ($branches->count() > 1 ? 'Multiple branches' : ($branches->first()?->name ?? 'Gym membership'));
+        $appDeepLink = 'gymatlasmember://join/'.$link->token;
+        $androidIntentLink = 'intent://join/'.$link->token.'#Intent;scheme=gymatlasmember;package=com.techybugs.gymatlas.member;S.browser_fallback_url='.rawurlencode(route('public.member-app')).';end';
     @endphp
 
     <div class="atlas-enrollment-page min-h-screen bg-slate-100 lg:grid lg:grid-cols-[minmax(20rem,.72fr)_minmax(0,1.28fr)]">
@@ -58,6 +60,14 @@
             <div class="mx-auto max-w-3xl px-4 pb-8 sm:px-8 lg:flex lg:min-h-screen lg:items-center lg:px-12 lg:py-12">
                 <div class="-mt-7 w-full lg:mt-0">
                     @if($errors->any())<div class="mb-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 shadow-sm" role="alert"><div class="flex gap-3"><i class="ti ti-alert-circle mt-0.5 text-lg" aria-hidden="true"></i><div><strong>Check the highlighted details.</strong><ul class="mt-1 list-disc pl-5">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div></div></div>@endif
+
+                    <div class="mb-4 flex flex-col gap-3 rounded-2xl border border-indigo-200 bg-indigo-50 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between" data-app-handoff>
+                        <div class="flex min-w-0 items-center gap-3">
+                            <img src="{{ asset('images/public-site/brand/atlas-mark-64.png') }}" alt="" class="h-11 w-11 shrink-0 rounded-xl shadow-sm">
+                            <div class="min-w-0"><div class="font-semibold text-slate-950">Gym Atlas already installed?</div><p class="mt-0.5 text-sm text-slate-600">Continue securely in the app with this gym already selected.</p></div>
+                        </div>
+                        <a href="{{ $appDeepLink }}" data-open-member-app data-android-intent="{{ $androidIntentLink }}" class="public-button public-button-primary shrink-0 justify-center">Open Gym Atlas <i class="ti ti-arrow-up-right" aria-hidden="true"></i></a>
+                    </div>
 
                     <section class="atlas-enrollment-card overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,.10)]">
                         <div class="border-b border-slate-200/80 bg-white p-5 sm:p-7">
@@ -155,6 +165,9 @@
                 existingTab.classList.add(...(!showNew ? ['bg-slate-950', 'text-white', 'shadow-sm'] : ['text-slate-600']));
             };
             newTab.addEventListener('click', () => selectLane('new')); existingTab.addEventListener('click', () => selectLane('existing'));
+
+            const appButton = document.querySelector('[data-open-member-app]');
+            if (appButton && /Android/i.test(navigator.userAgent)) appButton.href = appButton.dataset.androidIntent;
 
             const form = document.getElementById('new-enrollment-form');
             const steps = [...form.querySelectorAll('.enroll-step')];
