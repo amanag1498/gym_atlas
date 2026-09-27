@@ -71,6 +71,7 @@ Minimum production values to review:
 - `QUEUE_CONNECTION=database`
 - `CACHE_STORE=database`
 - `SESSION_DRIVER=database`
+- `REDIS_PREFIX=gym-atlas-database-`
 - `GOOGLE_CLIENT_IDS=...`
 - `FIREBASE_*` values
 
@@ -99,6 +100,13 @@ If Talkee already has Redis on the VPS, moving these to Redis is better:
 - `QUEUE_CONNECTION=redis`
 - `CACHE_STORE=redis`
 - `SESSION_DRIVER=redis`
+
+Sharing the Redis server is supported, but Gym Atlas must have its own key
+prefix. Set `REDIS_PREFIX=gym-atlas-database-` even when both applications use
+the same Redis host and logical database. A separate `REDIS_DB` is additional
+isolation, but only choose its number after confirming that the other
+application does not use it. Rebuild the configuration cache after changing
+any Redis setting.
 
 ## Realtime Server Deployment
 
@@ -204,9 +212,23 @@ running, the same database outbox rows could be enqueued once per minute. A
 very large `notifications` queue with a much smaller number of pending
 `communication_outbox` rows indicates this condition.
 
-Deploy the reservation fix before clearing the duplicated Redis jobs. Stop the
-worker, clear only the `notifications` queue, then rebuild it from the durable
-database outbox:
+First compare the effective Redis settings in Gym Atlas and every other Laravel
+application using the same Redis server:
+
+```bash
+cd /var/www/gym-atlas/backend_laravel
+php artisan tinker --execute="dump(['connection' => config('queue.connections.redis.connection'), 'database' => config('database.redis.default.database'), 'prefix' => config('database.redis.options.prefix')]);"
+```
+
+Run the same command from the other application's Laravel directory. Do not
+clear or start the Gym Atlas Redis worker if both applications report the same
+database and prefix. Give Gym Atlas the explicit
+`REDIS_PREFIX=gym-atlas-database-`, rebuild its configuration cache, and leave
+the old shared queue untouched until its ownership has been established.
+
+When the Gym Atlas prefix is confirmed unique, deploy the reservation fix,
+stop the worker, clear only the isolated `notifications` queue, then rebuild it
+from the durable database outbox:
 
 ```bash
 systemctl stop gymatlas-queue
