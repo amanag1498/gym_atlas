@@ -73,11 +73,28 @@ class HubBackendClient {
             val stream = if (statusCode in 200..299) connection.inputStream else connection.errorStream
             val responseText = stream?.let { BufferedReader(InputStreamReader(it)).use(BufferedReader::readText) }.orEmpty()
             if (statusCode !in 200..299) {
-                throw IllegalStateException("Backend returned $statusCode: ${responseText.ifBlank { connection.responseMessage }}")
+                throw IllegalStateException(hubBackendError(statusCode, responseText, connection.responseMessage))
             }
             return JSONObject(responseText)
         } finally {
             connection.disconnect()
         }
+    }
+}
+
+internal fun hubBackendError(statusCode: Int, responseText: String, responseMessage: String?): String {
+    val body = runCatching { JSONObject(responseText) }.getOrNull()
+    val validationMessage = body?.optJSONObject("errors")?.keys()?.asSequence()?.firstOrNull()?.let { key ->
+        body.optJSONObject("errors")?.optJSONArray(key)?.optString(0)
+    }
+    val message = validationMessage
+        ?: body?.optString("message")?.takeIf { it.isNotBlank() }
+        ?: responseMessage?.takeIf { it.isNotBlank() }
+
+    return when (statusCode) {
+        401, 403 -> message ?: "The Hub UUID or Device secret is not valid. Copy the current values from Gym Admin."
+        404 -> message ?: "This Smart Attendance hub was not found. Create it in Gym Admin first."
+        409, 422 -> message ?: "The hub could not be activated with these details."
+        else -> message ?: "Gym Atlas could not activate the hub (HTTP $statusCode)."
     }
 }

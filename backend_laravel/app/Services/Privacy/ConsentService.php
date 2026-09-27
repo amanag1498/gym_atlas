@@ -32,8 +32,8 @@ class ConsentService
         ],
         'biometric_attendance' => [
             'required' => false,
-            'title' => 'Biometric attendance',
-            'description' => 'Use biometric identifiers for gym attendance when your gym offers this feature.',
+            'title' => 'Attendance access',
+            'description' => 'Use Bluetooth Smart Attendance and, when your gym offers it, biometric identifiers to record gym visits.',
         ],
         'location_data' => [
             'required' => false,

@@ -1,15 +1,33 @@
 package com.techybugs.gymatlas.smarthub
 
+import java.math.BigInteger
+
 object AtlasBleProtocol {
-    private val publicIdPattern = Regex("^[A-Z0-9_-]+$")
+    private val publicIdPattern = Regex("^SAH[A-Z0-9]{${HubContracts.PUBLIC_ID_SUFFIX_LENGTH}}$")
+    private val radix = BigInteger.valueOf(36)
+    private val byteRadix = BigInteger.valueOf(256)
 
     fun payload(publicId: String): ByteArray {
-        val normalized = publicId.trim()
-        val publicIdBytes = normalized.toByteArray(Charsets.UTF_8)
-        require(normalized.isNotEmpty()) { "Hub public ID is missing. Activate the hub before broadcasting." }
-        require(publicIdBytes.size <= HubContracts.PUBLIC_ID_MAX_BYTES) { "Hub public ID exceeds the BLE V1 limit." }
-        require(publicIdPattern.matches(normalized)) { "Hub public ID contains unsupported BLE characters." }
+        val normalized = publicId.trim().uppercase()
+        require(publicIdPattern.matches(normalized)) {
+            "Hub public ID must use the current SAH plus 13 letter-or-number format."
+        }
 
-        return byteArrayOf(HubContracts.PROTOCOL_VERSION.toByte()) + publicIdBytes
+        var value = BigInteger.ZERO
+        normalized.removePrefix("SAH").forEach { character ->
+            val digit = Character.digit(character, 36)
+            require(digit >= 0) { "Hub public ID contains unsupported BLE characters." }
+            value = value.multiply(radix).add(BigInteger.valueOf(digit.toLong()))
+        }
+
+        val compactId = ByteArray(HubContracts.COMPACT_PUBLIC_ID_BYTES)
+        for (index in compactId.indices.reversed()) {
+            val result = value.divideAndRemainder(byteRadix)
+            compactId[index] = result[1].toInt().toByte()
+            value = result[0]
+        }
+        require(value == BigInteger.ZERO) { "Hub public ID exceeds the compact BLE limit." }
+
+        return byteArrayOf(HubContracts.PROTOCOL_VERSION.toByte()) + compactId
     }
 }

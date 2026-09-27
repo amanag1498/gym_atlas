@@ -2,6 +2,8 @@
 
 Status: frozen for Smart Attendance Phase 4. Later phases may add a new protocol version, but Phase 5 Member foreground scanning must implement this V1 contract exactly.
 
+Deployment note: Member clients still accept V1 for backward compatibility. Atlas Smart Hub Android 0.2.2 and later transmit V2 because the full V1 service-data value exceeds Android's 31-byte legacy scan-response limit when paired with the 128-bit service UUID.
+
 ## Purpose
 
 BLE V1 lets a trusted entrance hub tell the Gym Atlas Member app, “you are near a provisioned Smart Attendance hub.” The BLE packet is only a discovery signal. It is not proof of attendance by itself and it must not contain member data, gym data, secrets, API tokens, or anything that can authorize an attendance write.

@@ -175,7 +175,7 @@ BLE V1 advertises one global Atlas Service UUID, compact hub public ID, and prot
 
 ### Phase 3 implementation note
 
-The temporary Android hub app lives in `atlas_smart_hub_android/`. It is a standalone Kotlin Android app named Atlas Smart Hub, separate from the Member and Trainer Flutter apps. It provisions against the Phase 1 hub endpoints, stores credentials with Android Keystore-backed AES/GCM storage, starts a foreground service, broadcasts the Atlas BLE service UUID with protocol v1 and public hub ID in scan-response service data, and sends heartbeat every 60 seconds.
+The temporary Android hub app lives in `atlas_smart_hub_android/`. It is a standalone Kotlin Android app named Atlas Smart Hub, separate from the Member and Trainer Flutter apps. It provisions against the Phase 1 hub endpoints, stores credentials with Android Keystore-backed AES/GCM storage, starts a foreground service, broadcasts the Atlas BLE service UUID with compact protocol V2 public-ID data, and sends heartbeat every 60 seconds. V2 replaced the oversized V1 Android packet after physical-device validation returned `ADVERTISE_FAILED_DATA_TOO_LARGE`.
 
 The app intentionally does not perform member identification, member scanning, attendance writes, offline queues, rotating BLE proofs, or Member app integration. Those remain later phases.
 
@@ -197,7 +197,7 @@ Scan for Atlas BLE Service UUID, parse protocol version and public hub ID, and e
 
 ### Phase 5 implementation note
 
-The Member app foreground BLE detection layer lives in `flutter_member_app/lib/src/features/smart_attendance/`. It includes a V1 BLE parser, platform-channel scanner, and controller with local duplicate suppression. Android and iOS foreground platform bridges emit raw BLE service data and RSSI into Dart; Dart owns protocol validation using `docs/smart-attendance-ble-v1.md`. Phase 5 does not call a backend attendance/check-in endpoint and does not write attendance.
+The Member app foreground BLE detection layer lives in `flutter_member_app/lib/src/features/smart_attendance/`. It includes backward-compatible V1 parsing and the compact V2 parser, a platform-channel scanner, and a controller with local duplicate suppression. Android and iOS foreground platform bridges emit raw BLE service data and RSSI into Dart; Dart owns protocol validation using `docs/smart-attendance-ble-v1.md` and `docs/smart-attendance-ble-v2.md`. Phase 5 does not call a backend attendance/check-in endpoint and does not write attendance.
 
 ## Phase 6 — Backend member validation endpoint
 

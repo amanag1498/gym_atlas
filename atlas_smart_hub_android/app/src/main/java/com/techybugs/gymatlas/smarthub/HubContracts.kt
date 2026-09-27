@@ -8,8 +8,9 @@ object HubContracts {
     const val DEVICE_TOKEN_HEADER = "X-GymAtlas-Device-Token"
     const val HEARTBEAT_INTERVAL_SECONDS = 60L
     const val ATLAS_BLE_SERVICE_UUID = "8b0f9c60-4f6d-4b40-9e8d-2d5d3f73a1a1"
-    const val PROTOCOL_VERSION = 1
-    const val PUBLIC_ID_MAX_BYTES = 20
+    const val PROTOCOL_VERSION = 2
+    const val PUBLIC_ID_SUFFIX_LENGTH = 13
+    const val COMPACT_PUBLIC_ID_BYTES = 9
 
     const val ACTION_STATUS_CHANGED = "com.techybugs.gymatlas.smarthub.STATUS_CHANGED"
     const val EXTRA_STATUS = "status"

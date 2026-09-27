@@ -113,7 +113,7 @@ class MethodChannelSmartAttendanceBleScanner
         SmartAttendanceScanDiagnostic(
           message: raw == null
               ? 'Atlas hub signal found, but scan response service data was missing.'
-              : 'Atlas hub signal ignored because the BLE payload did not match V1.',
+              : 'Atlas hub signal ignored because the BLE payload was not supported.',
           detectedAt: detectedAt,
           rssi: rssi,
           source: source,

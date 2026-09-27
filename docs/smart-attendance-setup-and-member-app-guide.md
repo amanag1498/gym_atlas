@@ -71,7 +71,7 @@ Gym Admin will eventually label the hub **Offline** while the entrance phone has
 
 1. Sign in to the **Gym Atlas** Member app.
 2. Select the same gym that owns the entrance hub.
-3. Complete required consent and enable the attendance-related consent shown by the app.
+3. Open **Settings → Privacy & consent** and keep **Attendance access** enabled. This single choice covers Smart Attendance and biometric attendance. It is enabled by default for new sign-ins and can be changed later.
 4. Grant **Nearby devices** access on Android 12 or newer. On Android 11 or older, grant location access because those Android versions gate BLE scanning behind the location permission.
 5. Turn on Bluetooth and internet access.
 6. Open the Member app and approach the entrance hub. Stay near it for a few seconds so the proximity and signal checks can complete.
@@ -83,8 +83,8 @@ On Android, background mode runs as a foreground BLE service with an ongoing Sma
 
 1. Sign in to the **Gym Atlas** Member app.
 2. Select the same gym that owns the entrance hub.
-3. Complete required consent and enable the attendance-related consent shown by the app.
-4. Allow Bluetooth access when iOS asks.
+3. Open **Settings → Privacy & consent** and keep **Attendance access** enabled. This single choice covers Smart Attendance and biometric attendance. It is enabled by default for new sign-ins and can be changed later.
+4. Allow Bluetooth access when iOS asks. Gym Atlas requests it automatically when Attendance access is enabled and Bluetooth access has not been granted.
 5. Turn on Bluetooth and internet access.
 6. Open Gym Atlas once after installation and remain nearby for a few seconds while the first presence is recorded.
 7. Confirm the new entry in attendance history and the welcome notification when notifications are enabled.
@@ -153,7 +153,7 @@ Select **Disable** in Gym Admin, then stop broadcasting or clear saved credentia
 
 ## Current security boundary
 
-BLE V1 broadcasts a stable public hub ID. Backend authentication, gym/member scoping, membership validation, and duplicate protection prevent the BLE packet itself from writing attendance, but a copied V1 signal can still be replayed near or away from the entrance. Use Smart Attendance V1 as a convenience attendance signal. Phase 13 rotating authenticated proofs are required before treating BLE presence as strong anti-spoofing evidence.
+BLE V2 broadcasts a compact encoding of the stable public hub ID. Backend authentication, gym/member scoping, membership validation, and duplicate protection prevent the BLE packet itself from writing attendance, but a copied signal can still be replayed near or away from the entrance. Use Smart Attendance as a convenience attendance signal. Rotating authenticated proofs are required before treating BLE presence as strong anti-spoofing evidence.
 
 Never share the Hub UUID and device secret with members. Store them only in the Atlas Smart Hub app, rotate the secret after suspected exposure, and disable devices that are lost or retired.
 

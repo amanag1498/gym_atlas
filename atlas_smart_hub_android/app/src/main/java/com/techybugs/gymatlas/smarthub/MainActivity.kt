@@ -39,6 +39,8 @@ class MainActivity : Activity() {
     private lateinit var baseUrlInput: EditText
     private lateinit var uuidInput: EditText
     private lateinit var secretInput: EditText
+    private lateinit var provisionButton: Button
+    private lateinit var actionText: TextView
     private lateinit var statusText: TextView
     private lateinit var gymText: TextView
     private lateinit var branchText: TextView
@@ -48,6 +50,7 @@ class MainActivity : Activity() {
     private lateinit var heartbeatText: TextView
     private lateinit var errorText: TextView
     private var startAfterPermission = false
+    private var activationInProgress = false
 
     private val statusReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -133,11 +136,15 @@ class MainActivity : Activity() {
         formCard.addView(uuidInput)
         formCard.addView(secretInput)
 
-        val provisionButton = primaryButton("Activate and start hub") { provisionAndStart() }
+        provisionButton = primaryButton("Activate and start hub") { provisionAndStart() }
+        actionText = label("Ready to activate.", 13, Color.rgb(148, 163, 184), false).apply {
+            setPadding(0, dp(10), 0, 0)
+        }
         val startButton = secondaryButton("Start saved hub") { startService() }
         val stopButton = secondaryButton("Stop broadcasting") { stopService() }
         val clearButton = dangerButton("Clear saved credentials") { clearCredentials() }
         formCard.addView(provisionButton)
+        formCard.addView(actionText)
         formCard.addView(startButton)
         formCard.addView(stopButton)
         formCard.addView(clearButton)
@@ -179,10 +186,15 @@ class MainActivity : Activity() {
     }
 
     private fun provisionAndStart() {
+        if (activationInProgress) return
+        baseUrlInput.error = null
+        uuidInput.error = null
+        secretInput.error = null
         val baseUrl = baseUrlInput.text.toString().trim().ifBlank { HubContracts.DEFAULT_BASE_URL }.trimEnd('/')
         val parsedBaseUrl = Uri.parse(baseUrl)
         if (parsedBaseUrl.scheme != "https" || parsedBaseUrl.host.isNullOrBlank()) {
-            renderStatus(HubRuntimeStatus(lastError = "Use a valid HTTPS backend URL."))
+            baseUrlInput.error = "Enter a valid HTTPS URL"
+            setActivationState(false, "Check the backend URL and try again.", true)
             return
         }
         val credentials = HubCredentials(
@@ -190,22 +202,33 @@ class MainActivity : Activity() {
             hubUuid = uuidInput.text.toString().trim(),
             deviceSecret = secretInput.text.toString().trim(),
         )
+        if (credentials.hubUuid.isBlank()) {
+            uuidInput.error = "Hub UUID is required"
+        }
+        if (credentials.deviceSecret.isBlank()) {
+            secretInput.error = "Device secret is required"
+        }
         if (credentials.hubUuid.isBlank() || credentials.deviceSecret.isBlank()) {
-            renderStatus(HubRuntimeStatus(lastError = "Hub UUID and device secret are required."))
+            setActivationState(false, "Enter the Hub UUID and Device secret from Gym Admin.", true)
             return
         }
-        renderStatus(HubRuntimeStatus(provisioned = true, lastError = "Activating with backend..."))
+        setActivationState(true, "Contacting Gym Atlas and validating this hub…", false)
         worker.execute {
             runCatching {
                 val activated = backend.activate(credentials, BuildInfo.firmwareVersion)
                 store.save(activated)
                 main.post {
+                    setActivationState(false, "Hub activated. Starting Bluetooth broadcast…", false)
                     loadSavedCredentials()
                     renderStatus(HubRuntimeStatus(provisioned = true, backendConnected = true, publicId = activated.publicId, gymName = activated.gymName, branchName = activated.branchName))
                     startService()
                 }
             }.onFailure { error ->
-                main.post { renderStatus(HubRuntimeStatus(provisioned = true, lastError = error.message ?: "Activation failed.")) }
+                main.post {
+                    val message = error.message ?: "Activation failed. Check the details and try again."
+                    setActivationState(false, message, true)
+                    renderStatus(HubRuntimeStatus(provisioned = store.load() != null, lastError = message))
+                }
             }
         }
     }
@@ -213,12 +236,14 @@ class MainActivity : Activity() {
     private fun startService() {
         val saved = store.load()
         if (saved == null) {
+            setActivationState(false, "Activate this phone before starting the hub.", true)
             renderStatus(HubRuntimeStatus(lastError = "Provision the hub before starting."))
             return
         }
         val missingPermissions = missingBluetoothPermissions()
         if (missingPermissions.isNotEmpty()) {
             startAfterPermission = true
+            setActivationState(false, "Allow Nearby devices so this phone can broadcast the hub signal.", false)
             requestPermissions((missingPermissions + missingNotificationPermission()).toTypedArray(), HUB_PERMISSION_REQUEST)
             return
         }
@@ -229,6 +254,7 @@ class MainActivity : Activity() {
         val saved = store.load() ?: return
         store.setShouldRun(true)
         startForegroundService(Intent(this, HubForegroundService::class.java))
+        setActivationState(false, "Hub service started. Waiting for Bluetooth broadcast status…", false)
         renderStatus(HubRuntimeStatus(provisioned = true, serviceRunning = true, publicId = saved.publicId, gymName = saved.gymName, branchName = saved.branchName))
     }
 
@@ -273,6 +299,13 @@ class MainActivity : Activity() {
         }}"
         heartbeatText.text = "Last heartbeat\n${status.lastHeartbeatAt ?: "Never"}"
         errorText.text = status.lastError?.let { "\n$it" } ?: ""
+        if (!activationInProgress) {
+            when {
+                status.lastError != null -> setActivationState(false, status.lastError, true)
+                status.bleAdvertising && status.backendConnected -> setActivationState(false, "Active: Bluetooth broadcasting and backend connected.", false)
+                status.bleAdvertising -> setActivationState(false, "Active offline: Bluetooth broadcasting continues.", false)
+            }
+        }
     }
 
     private fun requestRuntimePermissions() {
@@ -306,8 +339,24 @@ class MainActivity : Activity() {
         if (missingBluetoothPermissions().isEmpty()) {
             launchHubService()
         } else {
+            setActivationState(false, "Bluetooth access was not granted. Allow Nearby devices in Android Settings, then tap Start saved hub.", true)
             renderStatus(HubRuntimeStatus(provisioned = store.load() != null, lastError = "Bluetooth permissions are required to keep the hub running."))
         }
+    }
+
+    private fun setActivationState(inProgress: Boolean, message: String, isError: Boolean) {
+        activationInProgress = inProgress
+        provisionButton.isEnabled = !inProgress
+        provisionButton.text = if (inProgress) "Activating…" else "Activate and start hub"
+        actionText.text = message
+        actionText.setTextColor(
+            when {
+                isError -> Color.rgb(252, 165, 165)
+                inProgress -> Color.rgb(147, 197, 253)
+                message.startsWith("Active") || message.startsWith("Hub activated") -> Color.rgb(110, 231, 183)
+                else -> Color.rgb(202, 211, 226)
+            }
+        )
     }
 
     private fun bluetoothState(): String {

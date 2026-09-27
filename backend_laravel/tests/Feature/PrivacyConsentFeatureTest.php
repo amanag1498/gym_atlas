@@ -32,6 +32,10 @@ class PrivacyConsentFeatureTest extends TestCase
         $health = collect($service->state($user)['items'])
             ->firstWhere('purpose', 'health_and_fitness_data');
         $this->assertTrue($health['granted']);
+        $attendance = collect($service->state($user)['items'])
+            ->firstWhere('purpose', 'biometric_attendance');
+        $this->assertSame('Attendance access', $attendance['title']);
+        $this->assertStringContainsString('Bluetooth Smart Attendance', $attendance['description']);
 
         $service->withdraw($user, 'health_and_fitness_data', $request);
         $state = $service->state($user);
@@ -57,6 +61,7 @@ class PrivacyConsentFeatureTest extends TestCase
 
         $this->assertTrue($state['core_account']['granted']);
         $this->assertTrue($state['health_and_fitness_data']['granted']);
+        $this->assertTrue($state['biometric_attendance']['granted']);
         $this->assertTrue($state['whatsapp']['granted']);
         $this->assertFalse($state['notifications']['granted']);
         $this->assertCount(2, $user->consentRecords()->where('purpose', 'notifications')->get());

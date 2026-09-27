@@ -199,5 +199,5 @@ class HubForegroundService : Service() {
 }
 
 object BuildInfo {
-    const val firmwareVersion = "atlas-smart-hub-android-0.2.0"
+    const val firmwareVersion = "atlas-smart-hub-android-0.2.2"
 }

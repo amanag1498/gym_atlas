@@ -193,7 +193,7 @@ class _MemberConsentScreenState extends State<MemberConsentScreen> {
                                 ),
                               ),
                               subtitle: Text(
-                                'Health sync, nearby gyms, photos and updates. Leave this off if you prefer—you can still continue.',
+                                'Health sync, Smart Attendance, nearby gyms, photos and updates. Leave this off if you prefer—you can still continue.',
                                 style: theme.textTheme.bodyMedium?.copyWith(
                                   color: AppColors.textSecondary,
                                   height: 1.4,

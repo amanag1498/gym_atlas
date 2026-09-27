@@ -30,15 +30,14 @@ Internet is required once to activate the entrance phone and receive its public 
 
 While the entrance phone is offline, the app shows **Hub broadcasting offline** and Gym Admin eventually shows the hub as **Offline** because it cannot receive heartbeats. BLE check-in detection continues. The Member phone still needs its own internet connection to send the attendance request to Laravel. When the hub internet connection returns, its next scheduled heartbeat restores backend connectivity automatically.
 
-## BLE V1 protocol
+## BLE protocol
 
-The frozen BLE V1 contract is documented in `../docs/smart-attendance-ble-v1.md`. This app implements that contract:
+The deployed packet is documented in `../docs/smart-attendance-ble-v2.md`. The Member app continues to parse the original V1 packet during rollout:
 
 - Service UUID: `8b0f9c60-4f6d-4b40-9e8d-2d5d3f73a1a1`
 - Main advertisement: Atlas service UUID only.
-- Scan response service data: first byte protocol version, then UTF-8 public hub ID.
-- Protocol version: `1`.
-- Public hub ID limit: 20 bytes.
+- Scan response service data: protocol byte `2`, then the 13-character public-ID suffix packed as nine base-36 bytes.
+- Total service-data value: 10 bytes, which fits the 31-byte legacy BLE scan-response limit alongside a 128-bit UUID.
 - No gym name, branch name, member data, API token, or device secret is advertised.
 
 ## Build
