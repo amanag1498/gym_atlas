@@ -8,7 +8,13 @@ class MemberApiClient {
     : _dio = Dio(
         BaseOptions(
           baseUrl: MemberConfig.apiBaseUrl,
-          headers: const <String, Object?>{'Accept': 'application/json'},
+          headers: <String, Object?>{
+            'Accept': 'application/json',
+            'X-Atlas-App': 'member',
+            'X-Client-Platform': _platformHeader,
+            'X-App-Version-Code': MemberConfig.appBuildNumber.toString(),
+            'X-App-Version': MemberConfig.appVersion,
+          },
         ),
       ),
       _onUnauthorized = onUnauthorized {
@@ -36,6 +42,19 @@ class MemberApiClient {
 
   final Dio _dio;
   Future<void> Function()? _onUnauthorized;
+
+  static String get _platformHeader {
+    if (kIsWeb) return 'web';
+
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android => 'android',
+      TargetPlatform.iOS => 'ios',
+      TargetPlatform.macOS ||
+      TargetPlatform.windows ||
+      TargetPlatform.linux => 'desktop',
+      TargetPlatform.fuchsia => 'android',
+    };
+  }
 
   Dio get dio => _dio;
 

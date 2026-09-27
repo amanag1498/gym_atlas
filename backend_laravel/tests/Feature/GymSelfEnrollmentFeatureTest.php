@@ -73,6 +73,12 @@ class GymSelfEnrollmentFeatureTest extends TestCase
 
     public function test_new_visitor_creates_reusable_account_and_active_gym_profile_without_invitation(): void
     {
+        config()->set('services.firebase.project_id', 'gym-atlas-test');
+        config()->set('services.firebase.web_api_key', 'test-web-api-key');
+        config()->set('services.firebase.web_app_id', 'test-web-app-id');
+        config()->set('services.firebase.messaging_sender_id', '123456789');
+        config()->set('services.firebase.apple_sign_in_enabled', false);
+
         [$gym, $branch, $link] = $this->gymFixture('new');
         $gym->update(['logo_url' => 'https://cdn.example.com/new-gym-logo.png']);
         $goal = FitnessGoal::query()->create([
@@ -90,6 +96,11 @@ class GymSelfEnrollmentFeatureTest extends TestCase
             ->assertSee('gymatlasmember://join/'.$link->token, false)
             ->assertSee('intent://join/'.$link->token, false)
             ->assertSee('Atlas account')
+            ->assertSee('Continue with Google')
+            ->assertSee("'X-Atlas-App':'member'", false)
+            ->assertSee("'X-Client-Platform':'web'", false)
+            ->assertDontSee('id="existing-apple"', false)
+            ->assertSee('This sign-in option is not enabled yet. Use Google or open the Gym Atlas app.')
             ->assertSee('Let’s start with you')
             ->assertSee($branch->name)
             ->assertSee('new-gym-logo.png', false)

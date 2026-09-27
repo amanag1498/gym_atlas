@@ -86,6 +86,19 @@ class AppAvailabilityTest extends TestCase
             ->assertJsonPath('errors.code', 'app_upgrade_required');
     }
 
+    public function test_force_upgrade_allows_member_web_enrollment_auth_headers(): void
+    {
+        $this->setSetting('force_upgrade_enabled', true);
+
+        $this->withHeaders([
+            'X-Atlas-App' => 'member',
+            'X-Client-Platform' => 'web',
+            'X-App-Version-Code' => '0',
+        ])->postJson('/api/public/auth/firebase/login', [])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('id_token');
+    }
+
     public function test_force_upgrade_does_not_block_public_web_discovery_without_app_headers(): void
     {
         $this->setSetting('force_upgrade_enabled', true);

@@ -26,6 +26,7 @@ class GymSelfEnrollmentController extends Controller
                 : collect([$link->branch]),
             'fitnessGoals' => FitnessGoal::query()->active()->ordered()->get(),
             'firebaseConfig' => $this->firebaseWebConfig(),
+            'firebaseAppleSignInEnabled' => (bool) config('services.firebase.apple_sign_in_enabled'),
         ]);
     }
 

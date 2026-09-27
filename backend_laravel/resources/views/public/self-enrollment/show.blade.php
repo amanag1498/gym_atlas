@@ -32,8 +32,8 @@
         $androidIntentLink = 'intent://join/'.$link->token.'#Intent;scheme=gymatlasmember;package=com.techybugs.gymatlas.member;S.browser_fallback_url='.rawurlencode(route('public.member-app')).';end';
     @endphp
 
-    <div class="atlas-enrollment-page min-h-screen bg-slate-100 lg:grid lg:grid-cols-[minmax(20rem,.72fr)_minmax(0,1.28fr)]">
-        <aside class="relative hidden min-h-screen overflow-hidden bg-slate-950 p-12 text-white lg:flex lg:flex-col lg:justify-between">
+    <div class="atlas-enrollment-page min-h-screen bg-slate-100">
+        <aside class="hidden" aria-hidden="true">
             @if($gym->cover_image_url)<div class="absolute inset-0 bg-cover bg-center opacity-25" style="background-image: url('{{ $gym->cover_image_url }}')"></div>@endif
             <div class="absolute inset-0 bg-gradient-to-b from-slate-950/30 via-slate-950/75 to-slate-950"></div>
             <div class="absolute -right-24 top-10 h-72 w-72 rounded-full bg-teal-400/20 blur-3xl"></div>
@@ -57,20 +57,35 @@
                 </div>
             </header>
 
-            <div class="mx-auto max-w-3xl px-4 pb-8 sm:px-8 lg:flex lg:min-h-screen lg:items-center lg:px-12 lg:py-12">
+            <div class="mx-auto max-w-5xl px-4 pb-8 sm:px-8 lg:flex lg:min-h-screen lg:items-center lg:px-10 lg:py-10">
                 <div class="-mt-7 w-full lg:mt-0">
                     @if($errors->any())<div class="mb-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 shadow-sm" role="alert"><div class="flex gap-3"><i class="ti ti-alert-circle mt-0.5 text-lg" aria-hidden="true"></i><div><strong>Check the highlighted details.</strong><ul class="mt-1 list-disc pl-5">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div></div></div>@endif
 
-                    <div class="mb-4 flex flex-col gap-3 rounded-2xl border border-indigo-200 bg-indigo-50 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between" data-app-handoff>
+                    <section class="atlas-enrollment-hero mb-4">
+                        <div class="atlas-enrollment-hero-main">
+                            <img src="{{ $gymLogoUrl }}" alt="{{ $gymLogoAlt }}" class="atlas-enrollment-logo {{ $gymHasLogo ? 'object-cover' : 'object-contain p-3' }}">
+                            <div class="min-w-0">
+                                <p class="atlas-enrollment-kicker">Gym Atlas enrollment</p>
+                                <h1>{{ $gym->name }}</h1>
+                                <p><i class="ti ti-map-pin" aria-hidden="true"></i>{{ $branchLabel }}</p>
+                            </div>
+                        </div>
+                        <div class="atlas-enrollment-hero-meta">
+                            <span><i class="ti ti-shield-check" aria-hidden="true"></i>Secure profile</span>
+                            <span><i class="ti ti-clock" aria-hidden="true"></i>2 minute setup</span>
+                        </div>
+                    </section>
+
+                    <div class="atlas-app-handoff mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" data-app-handoff>
                         <div class="flex min-w-0 items-center gap-3">
-                            <img src="{{ asset('images/public-site/brand/atlas-mark-64.png') }}" alt="" class="h-11 w-11 shrink-0 rounded-xl shadow-sm">
-                            <div class="min-w-0"><div class="font-semibold text-slate-950">Gym Atlas already installed?</div><p class="mt-0.5 text-sm text-slate-600">Continue securely in the app with this gym already selected.</p></div>
+                            <img src="{{ asset('images/public-site/brand/atlas-mark-64.png') }}" alt="" class="h-10 w-10 shrink-0 rounded-xl shadow-sm">
+                            <div class="min-w-0"><div class="font-semibold text-slate-950">Gym Atlas already installed?</div><p class="mt-0.5 text-sm text-slate-600">Open the app with this gym ready to join.</p></div>
                         </div>
                         <a href="{{ $appDeepLink }}" data-open-member-app data-android-intent="{{ $androidIntentLink }}" class="public-button public-button-primary shrink-0 justify-center">Open Gym Atlas <i class="ti ti-arrow-up-right" aria-hidden="true"></i></a>
                     </div>
 
                     <section class="atlas-enrollment-card overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,.10)]">
-                        <div class="border-b border-slate-200/80 bg-white p-5 sm:p-7">
+                        <div class="border-b border-slate-200/80 bg-white p-5 sm:p-6">
                             <div class="flex items-start justify-between gap-4"><div><p class="text-[11px] font-bold uppercase tracking-[.2em] text-teal-700">Secure enrollment</p><h2 class="mt-1 text-2xl font-bold tracking-[-.035em] text-slate-950">How would you like to join?</h2><p class="mt-2 text-sm leading-6 text-slate-500">Create a profile, or use your existing Gym Atlas account.</p></div><div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-xl text-teal-700"><i class="ti ti-shield-check" aria-hidden="true"></i></div></div>
                             <div class="mt-5 grid grid-cols-2 rounded-2xl border border-slate-200 bg-slate-100/80 p-1.5" role="tablist" aria-label="Enrollment method">
                                 <button id="new-member-tab" type="button" role="tab" aria-selected="true" aria-controls="new-member-lane" class="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 py-2.5 text-sm font-semibold text-white shadow-sm"><i class="ti ti-user-plus" aria-hidden="true"></i>New member</button>
@@ -78,7 +93,7 @@
                             </div>
                         </div>
 
-                        <div id="new-member-lane" role="tabpanel" aria-labelledby="new-member-tab" class="p-5 sm:p-7">
+                        <div id="new-member-lane" role="tabpanel" aria-labelledby="new-member-tab" class="p-5 sm:p-6">
                             <div class="mb-3 flex items-center justify-between text-xs font-semibold"><span id="enroll-step-label" class="rounded-full bg-teal-50 px-3 py-1.5 text-teal-800">Step 1 of 5</span><span id="enroll-step-name" class="text-slate-500">Contact</span></div>
                             <div class="mb-7 grid grid-cols-5 gap-1.5" aria-label="Enrollment progress">@foreach(['Contact','Goals','Profile','Health','Review'] as $step)<div class="enroll-progress h-1.5 rounded-full bg-slate-200 transition-colors duration-300" data-progress="{{ $loop->iteration }}" role="progressbar" aria-valuemin="1" aria-valuemax="5" aria-label="{{ $step }}"></div>@endforeach</div>
 
@@ -130,12 +145,12 @@
                             </form>
                         </div>
 
-                        <div id="existing-member-lane" role="tabpanel" aria-labelledby="existing-member-tab" class="p-5 sm:p-7" hidden>
+                        <div id="existing-member-lane" role="tabpanel" aria-labelledby="existing-member-tab" class="p-5 sm:p-6" hidden>
                             <div class="mx-auto max-w-lg py-3 text-center">
                                 <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-2xl text-teal-700"><i class="ti ti-user-check"></i></div>
                                 <h3 class="mt-4 text-xl font-bold text-slate-950">Use your saved profile</h3>
                                 <p class="mt-1 text-sm text-slate-500">Sign in and confirm. No form required.</p>
-                                <div class="mt-5 grid gap-2 sm:grid-cols-2">@if($firebaseConfig)<button id="existing-google" type="button" class="public-button public-button-primary justify-center"><i class="ti ti-brand-google"></i> Google</button><button id="existing-apple" type="button" class="public-button justify-center border border-slate-300 bg-white text-slate-900"><i class="ti ti-brand-apple"></i> Apple</button>@else<a href="gymatlasmember:///join/{{ $link->token }}" class="public-button public-button-primary justify-center sm:col-span-2">Open Member App</a>@endif</div>
+                                <div class="mt-5 grid gap-2 {{ $firebaseConfig && $firebaseAppleSignInEnabled ? 'sm:grid-cols-2' : '' }}">@if($firebaseConfig)<button id="existing-google" type="button" class="public-button public-button-primary justify-center"><i class="ti ti-brand-google"></i> Continue with Google</button>@if($firebaseAppleSignInEnabled)<button id="existing-apple" type="button" class="public-button justify-center border border-slate-300 bg-white text-slate-900"><i class="ti ti-brand-apple"></i> Apple</button>@endif @else<a href="gymatlasmember:///join/{{ $link->token }}" class="public-button public-button-primary justify-center sm:col-span-2">Open Member App</a>@endif</div>
                             </div>
                             <p id="existing-status" class="mt-4 rounded-xl border px-4 py-3 text-sm" role="status" hidden></p>
                             <div id="existing-preview" class="mt-5 border-t border-slate-200 pt-5" hidden>
@@ -211,9 +226,18 @@
             const app = initializeApp(@json($firebaseConfig)); const auth = getAuth(app); let atlasToken = null;
             const status = document.getElementById('existing-status'); const preview = document.getElementById('existing-preview'); const googleButton = document.getElementById('existing-google'); const appleButton = document.getElementById('existing-apple'); const joinButton = document.getElementById('existing-join');
             const showStatus = (message, error = false) => { status.hidden = false; status.textContent = message; status.classList.remove('border-rose-200','bg-rose-50','text-rose-800','border-emerald-200','bg-emerald-50','text-emerald-800'); status.classList.add(...(error ? ['border-rose-200','bg-rose-50','text-rose-800'] : ['border-emerald-200','bg-emerald-50','text-emerald-800'])); };
-            const api = async (path, options = {}) => { const response = await fetch(path, {headers:{'Accept':'application/json','Content-Type':'application/json', ...(atlasToken ? {'Authorization':'Bearer ' + atlasToken} : {})}, ...options}); const body = await response.json(); if (!response.ok) throw new Error(body.message || Object.values(body.errors || {}).flat()[0] || 'Request failed.'); return body; };
-            const signIn = async provider => { googleButton.disabled = true; appleButton.disabled = true; try { showStatus('Signing in…'); const credential = await signInWithPopup(auth, provider); const idToken = await credential.user.getIdToken(true); const login = await api('/api/public/auth/firebase/login', {method:'POST', body:JSON.stringify({id_token:idToken, device_name:'gym-enrollment-web', app_type:'member'})}); atlasToken = login.data.token; if (login.data.user?.active_role !== 'member') await api('/api/public/auth/active-role', {method:'POST',body:JSON.stringify({active_role:'member'})}); const result = await api('/api/member/self-enrollment/{{ $link->token }}/preview'); const data = result.data; document.getElementById('existing-name').textContent = data.profile.name; document.getElementById('existing-email').textContent = data.profile.email; const labels = [(data.profile.fitness_goals || []).map(item => item.name).join(', '), data.profile.experience_level].filter(Boolean); const summary = document.getElementById('existing-summary'); summary.innerHTML=''; labels.forEach(text => { const chip=document.createElement('span'); chip.className='rounded-full bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-800'; chip.textContent=text; summary.appendChild(chip); }); preview.hidden = false; showStatus(data.already_enrolled ? 'Already enrolled at this gym.' : data.requires_gym_assistance ? 'Ask the gym desk to reactivate your membership.' : 'Profile found. Confirm to join.'); joinButton.disabled = data.already_enrolled || data.requires_gym_assistance; } catch (error) { showStatus(error.message, true); } finally { googleButton.disabled = false; appleButton.disabled = false; } };
-            googleButton.addEventListener('click', () => signIn(new GoogleAuthProvider())); const apple = new OAuthProvider('apple.com'); apple.addScope('email'); apple.addScope('name'); appleButton.addEventListener('click', () => signIn(apple));
+            const enrollmentHeaders = {'Accept':'application/json','Content-Type':'application/json','X-Atlas-App':'member','X-Client-Platform':'web','X-App-Version-Code':'0'};
+            const api = async (path, options = {}) => { const response = await fetch(path, {headers:{...enrollmentHeaders, ...(atlasToken ? {'Authorization':'Bearer ' + atlasToken} : {})}, ...options}); const body = await response.json(); if (!response.ok) throw new Error(body.message || Object.values(body.errors || {}).flat()[0] || 'Request failed.'); return body; };
+            const mapFirebaseError = error => {
+                const code = error?.code || '';
+                if (code.includes('popup-closed-by-user') || code.includes('cancelled') || code.includes('canceled')) return 'Sign-in cancelled.';
+                if (code.includes('operation-not-allowed')) return 'This sign-in option is not enabled yet. Use Google or open the Gym Atlas app.';
+                if (code.includes('unauthorized-domain')) return 'This website is not authorized for Firebase sign-in yet.';
+                return error?.message?.replace(/^Firebase:\s*/, '').replace(/\s*\(auth\/[^)]+\)\.?$/, '') || 'Sign-in failed. Please try again.';
+            };
+            const setAuthButtons = disabled => { googleButton.disabled = disabled; if (appleButton) appleButton.disabled = disabled; };
+            const signIn = async provider => { setAuthButtons(true); try { showStatus('Signing in…'); const credential = await signInWithPopup(auth, provider); const idToken = await credential.user.getIdToken(true); const login = await api('/api/public/auth/firebase/login', {method:'POST', body:JSON.stringify({id_token:idToken, device_name:'gym-enrollment-web', app_type:'member'})}); atlasToken = login.data.token; if (login.data.user?.active_role !== 'member') await api('/api/public/auth/active-role', {method:'POST',body:JSON.stringify({active_role:'member'})}); const result = await api('/api/member/self-enrollment/{{ $link->token }}/preview'); const data = result.data; document.getElementById('existing-name').textContent = data.profile.name; document.getElementById('existing-email').textContent = data.profile.email; const labels = [(data.profile.fitness_goals || []).map(item => item.name).join(', '), data.profile.experience_level].filter(Boolean); const summary = document.getElementById('existing-summary'); summary.innerHTML=''; labels.forEach(text => { const chip=document.createElement('span'); chip.className='rounded-full bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-800'; chip.textContent=text; summary.appendChild(chip); }); preview.hidden = false; showStatus(data.already_enrolled ? 'Already enrolled at this gym.' : data.requires_gym_assistance ? 'Ask the gym desk to reactivate your membership.' : 'Profile found. Confirm to join.'); joinButton.disabled = data.already_enrolled || data.requires_gym_assistance; } catch (error) { showStatus(mapFirebaseError(error), true); } finally { setAuthButtons(false); } };
+            googleButton.addEventListener('click', () => signIn(new GoogleAuthProvider())); if (appleButton) { const apple = new OAuthProvider('apple.com'); apple.addScope('email'); apple.addScope('name'); appleButton.addEventListener('click', () => signIn(apple)); }
             joinButton.addEventListener('click', async () => { joinButton.disabled = true; try { const branch = document.getElementById('existing-branch'); const body = {consent:true,whatsapp_marketing_consent:document.getElementById('existing-marketing').checked,reuse_profile:document.getElementById('reuse-profile').checked,branch_id:branch ? Number(branch.value) || null : {{ $link->branch_id ?? 'null' }}}; if (branch && !body.branch_id) throw new Error('Choose a branch.'); const result = await api('/api/member/self-enrollment/{{ $link->token }}', {method:'POST',body:JSON.stringify(body)}); showStatus(result.message); preview.hidden = true; } catch(error) { showStatus(error.message,true); joinButton.disabled = false; } });
         </script>
     @endif
