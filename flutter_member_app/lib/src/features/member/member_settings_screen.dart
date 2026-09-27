@@ -83,8 +83,6 @@ class MemberSettingsScreen extends StatelessWidget {
     final email = user?.email.trim().isNotEmpty == true
         ? user!.email
         : 'member account';
-    final attendanceAccessEnabled = session.hasConsent('biometric_attendance');
-
     return AppGradientScaffold(
       title: 'Settings',
       body: SafeArea(
@@ -132,16 +130,9 @@ class MemberSettingsScreen extends StatelessWidget {
                       _SettingsRow(
                         icon: Icons.fact_check_outlined,
                         title: 'Activity History',
-                        subtitle: 'View gym check-ins and attendance',
+                        subtitle:
+                            'Check-ins, attendance, and automatic gym visits',
                         onPressed: onOpenAttendance,
-                      ),
-                      _SettingsRow(
-                        icon: Icons.bluetooth_searching_rounded,
-                        title: 'Smart Attendance',
-                        subtitle: attendanceAccessEnabled
-                            ? 'On — detects your gym’s nearby attendance hub'
-                            : 'Off — tap to enable attendance access',
-                        onPressed: () => _openConsentManager(context, session),
                       ),
                     ],
                   ),

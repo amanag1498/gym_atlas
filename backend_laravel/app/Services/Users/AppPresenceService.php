@@ -39,7 +39,7 @@ class AppPresenceService
             'device_key' => $deviceKey,
         ]);
 
-        $presence->fill([
+        $attributes = [
             'platform' => $this->nullableString($payload['platform'] ?? null, 40),
             'device_name' => $this->nullableString($payload['device_name'] ?? null, 255),
             'app_version' => $this->nullableString($payload['app_version'] ?? null, 80),
@@ -47,7 +47,23 @@ class AppPresenceService
             'last_seen_at' => $now,
             'uninstall_suspected_at' => null,
             'revoked_at' => null,
-        ])->save();
+        ];
+        if (Schema::hasColumn('user_app_presences', 'bluetooth_permission_status')) {
+            if (array_key_exists('bluetooth_permission_status', $payload)) {
+                $attributes['bluetooth_permission_status'] = $this->nullableString($payload['bluetooth_permission_status'], 30);
+            }
+            if (array_key_exists('smart_attendance_scanning', $payload)) {
+                $attributes['smart_attendance_scanning'] = (bool) $payload['smart_attendance_scanning'];
+            }
+            if (array_key_exists('smart_attendance_mode', $payload)) {
+                $attributes['smart_attendance_mode'] = $this->nullableString($payload['smart_attendance_mode'], 30);
+            }
+            if (array_key_exists('smart_attendance_last_detection_at', $payload)) {
+                $attributes['smart_attendance_last_detection_at'] = $payload['smart_attendance_last_detection_at'];
+            }
+        }
+
+        $presence->fill($attributes)->save();
 
         return $presence;
     }
@@ -137,6 +153,7 @@ class AppPresenceService
                 'platforms' => [],
                 'app_versions' => [],
                 'latest' => null,
+                'bluetooth_permission' => $this->bluetoothPermissionSummary(collect()),
             ];
         }
 
@@ -176,7 +193,48 @@ class AppPresenceService
             'platforms' => $summaryPresences->pluck('platform')->filter()->unique()->values()->all(),
             'app_versions' => $summaryPresences->pluck('app_version')->filter()->unique()->values()->all(),
             'latest' => $latest,
+            'bluetooth_permission' => $this->bluetoothPermissionSummary($summaryPresences),
         ];
+    }
+
+    /** @param Collection<int, UserAppPresence> $presences */
+    private function bluetoothPermissionSummary(Collection $presences): array
+    {
+        $reported = $presences->first(
+            fn (UserAppPresence $presence): bool => filled($presence->bluetooth_permission_status)
+        );
+        $status = $reported?->bluetooth_permission_status;
+
+        return match ($status) {
+            'granted', 'limited' => [
+                'status' => $status,
+                'label' => 'Enabled',
+                'tone' => 'success',
+                'description' => 'Bluetooth access is available for automatic attendance.',
+                'reported_at' => $reported?->last_seen_at,
+            ],
+            'denied', 'permanently_denied', 'restricted' => [
+                'status' => $status,
+                'label' => 'Not enabled',
+                'tone' => 'danger',
+                'description' => 'Bluetooth access is blocking automatic attendance on the latest reporting device.',
+                'reported_at' => $reported?->last_seen_at,
+            ],
+            'unavailable' => [
+                'status' => $status,
+                'label' => 'Unavailable',
+                'tone' => 'warning',
+                'description' => 'Bluetooth attendance is unavailable on the latest reporting device.',
+                'reported_at' => $reported?->last_seen_at,
+            ],
+            default => [
+                'status' => 'unknown',
+                'label' => 'Not reported',
+                'tone' => 'neutral',
+                'description' => 'Open an updated member app to report Bluetooth access.',
+                'reported_at' => null,
+            ],
+        };
     }
 
     private function normalizeRole(mixed $role): string

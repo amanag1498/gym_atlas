@@ -17,6 +17,10 @@ class UserAppPresence extends Model
         'platform',
         'device_name',
         'app_version',
+        'bluetooth_permission_status',
+        'smart_attendance_scanning',
+        'smart_attendance_mode',
+        'smart_attendance_last_detection_at',
         'first_seen_at',
         'last_seen_at',
         'last_push_success_at',
@@ -28,6 +32,8 @@ class UserAppPresence extends Model
     {
         return [
             'first_seen_at' => 'datetime',
+            'smart_attendance_scanning' => 'boolean',
+            'smart_attendance_last_detection_at' => 'datetime',
             'last_seen_at' => 'datetime',
             'last_push_success_at' => 'datetime',
             'uninstall_suspected_at' => 'datetime',

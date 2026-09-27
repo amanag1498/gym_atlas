@@ -162,7 +162,7 @@
                                 </div>
                                 <x-status-badge :label="$memberAppPresence['label']" :tone="$memberAppPresence['tone']" />
                             </div>
-                            <div class="grid gap-3 text-sm text-slate-600 dark:text-slate-300 sm:grid-cols-3">
+                            <div class="grid gap-3 text-sm text-slate-600 dark:text-slate-300 sm:grid-cols-2 xl:grid-cols-4">
                                 <div>
                                     <span class="block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Last app open</span>
                                     <span class="mt-1 block font-semibold text-slate-950 dark:text-white">{{ $memberAppPresence['last_seen_at']?->format('d M Y h:i A') ?? 'Never' }}</span>
@@ -174,6 +174,11 @@
                                 <div>
                                     <span class="block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Platform</span>
                                     <span class="mt-1 block font-semibold text-slate-950 dark:text-white">{{ collect($memberAppPresence['platforms'])->map(fn ($platform) => str($platform)->upper())->implode(', ') ?: 'Unknown' }}</span>
+                                </div>
+                                <div>
+                                    <span class="block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Bluetooth access</span>
+                                    <span class="mt-1 block"><x-status-badge :label="$memberAppPresence['bluetooth_permission']['label']" :tone="$memberAppPresence['bluetooth_permission']['tone']" /></span>
+                                    <span class="mt-1 block text-xs text-slate-500 dark:text-slate-400">{{ $memberAppPresence['bluetooth_permission']['reported_at']?->format('d M Y h:i A') ?? 'Awaiting app report' }}</span>
                                 </div>
                             </div>
                         </div>

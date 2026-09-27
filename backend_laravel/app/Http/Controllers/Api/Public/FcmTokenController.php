@@ -99,6 +99,10 @@ class FcmTokenController extends Controller
             'device_id' => ['nullable', 'string', 'max:120'],
             'device_key' => ['nullable', 'string', 'max:120'],
             'app_version' => ['nullable', 'string', 'max:80'],
+            'bluetooth_permission_status' => ['nullable', 'string', 'in:unknown,granted,limited,denied,permanently_denied,restricted,unavailable'],
+            'smart_attendance_scanning' => ['nullable', 'boolean'],
+            'smart_attendance_mode' => ['nullable', 'string', 'in:foreground,background,stopped'],
+            'smart_attendance_last_detection_at' => ['nullable', 'date'],
         ]);
 
         $presence = $this->appPresenceService->recordSeen($request->user(), $validated);

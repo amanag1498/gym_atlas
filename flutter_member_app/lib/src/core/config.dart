@@ -11,11 +11,11 @@ class MemberConfig {
 
   static const appBuildNumber = int.fromEnvironment(
     'APP_BUILD_NUMBER',
-    defaultValue: 16,
+    defaultValue: 17,
   );
 
   static const appVersion = String.fromEnvironment(
     'APP_VERSION',
-    defaultValue: '1.0.6',
+    defaultValue: '1.0.7',
   );
 }

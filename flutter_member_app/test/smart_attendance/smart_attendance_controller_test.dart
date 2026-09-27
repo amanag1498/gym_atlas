@@ -56,6 +56,7 @@ void main() {
 
     expect(controller.scanning, isTrue);
     expect(controller.backgroundScanning, isTrue);
+    expect(controller.bluetoothPermissionStatus, 'granted');
     expect(scanner.started, isTrue);
     expect(scanner.backgroundStarted, isTrue);
   });
@@ -71,6 +72,7 @@ void main() {
 
     expect(controller.scanning, isFalse);
     expect(controller.permissionDenied, isTrue);
+    expect(controller.bluetoothPermissionStatus, 'denied');
     expect(scanner.started, isFalse);
   });
 

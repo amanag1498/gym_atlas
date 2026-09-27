@@ -28,6 +28,7 @@ import 'features/member/shared_workout_plan_screen.dart';
 import 'features/smart_attendance/smart_attendance_ble_scanner.dart';
 import 'features/smart_attendance/smart_attendance_check_in_cache.dart';
 import 'features/smart_attendance/smart_attendance_controller.dart';
+import 'features/smart_attendance/smart_attendance_debug_overlay.dart';
 import 'features/smart_attendance/smart_attendance_session_store.dart';
 
 class MemberApp extends StatefulWidget {
@@ -330,14 +331,14 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
         sessionController.hasConsent('biometric_attendance');
     if (!shouldScan) {
       if (smartAttendanceController.scanning) {
-        unawaited(smartAttendanceController.stopScan());
+        unawaited(_stopSmartAttendance());
       }
       return;
     }
 
     if (!smartAttendanceController.scanning ||
         smartAttendanceController.backgroundScanning) {
-      unawaited(smartAttendanceController.startForegroundScan());
+      unawaited(_startSmartAttendance(background: false));
     }
   }
 
@@ -353,7 +354,7 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
     }
 
     if (state == AppLifecycleState.resumed) {
-      unawaited(smartAttendanceController.startForegroundScan());
+      unawaited(_startSmartAttendance(background: false));
       return;
     }
 
@@ -362,8 +363,38 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
         (state == AppLifecycleState.paused ||
             state == AppLifecycleState.inactive ||
             state == AppLifecycleState.hidden)) {
-      unawaited(smartAttendanceController.startBackgroundScan());
+      unawaited(_startSmartAttendance(background: true));
     }
+  }
+
+  Future<void> _startSmartAttendance({required bool background}) async {
+    if (background) {
+      await smartAttendanceController.startBackgroundScan();
+    } else {
+      await smartAttendanceController.startForegroundScan();
+    }
+    await _reportSmartAttendanceState();
+  }
+
+  Future<void> _stopSmartAttendance() async {
+    await smartAttendanceController.stopScan();
+    await _reportSmartAttendanceState();
+  }
+
+  Future<void> _reportSmartAttendanceState() {
+    return fcmTokenService.registerPresence(
+      appRole: 'member',
+      bluetoothPermissionStatus:
+          smartAttendanceController.bluetoothPermissionStatus,
+      smartAttendanceScanning: smartAttendanceController.scanning,
+      smartAttendanceMode: smartAttendanceController.scanning
+          ? (smartAttendanceController.backgroundScanning
+                ? 'background'
+                : 'foreground')
+          : 'stopped',
+      smartAttendanceLastDetectionAt:
+          smartAttendanceController.latestDetection?.detectedAt,
+    );
   }
 
   Future<void> _openPendingChatIfReady() async {
@@ -494,13 +525,22 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
           controller: runtimeController,
           audience: 'Member',
           child: Consumer<MemberSessionController>(
-            builder: (context, session, _) => GuideScope(
-              account: session.isAuthenticated && session.hasRequiredConsent
-                  ? 'member:${session.user!.id}'
-                  : null,
-              guides: memberGuides,
-              child: child ?? const SizedBox.shrink(),
-            ),
+            builder: (context, session, _) {
+              final content = GuideScope(
+                account: session.isAuthenticated && session.hasRequiredConsent
+                    ? 'member:${session.user!.id}'
+                    : null,
+                guides: memberGuides,
+                child: child ?? const SizedBox.shrink(),
+              );
+              if (!kDebugMode || !session.isAuthenticated) {
+                return content;
+              }
+              return SmartAttendanceDebugOverlay(
+                controller: smartAttendanceController,
+                child: content,
+              );
+            },
           ),
         ),
       ),

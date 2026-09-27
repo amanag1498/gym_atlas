@@ -71,12 +71,29 @@ class AppPresenceFeatureTest extends TestCase
             ->assertOk()
             ->assertJsonPath('success', true);
 
+        $this->actingAs($member, 'sanctum')
+            ->postJson('/api/public/app-presence', [
+                'platform' => 'android',
+                'app_role' => 'member',
+                'device_name' => 'Gym Atlas Android',
+                'device_id' => 'install-device-1',
+                'app_version' => '1.2.3',
+                'bluetooth_permission_status' => 'granted',
+                'smart_attendance_scanning' => true,
+                'smart_attendance_mode' => 'background',
+                'smart_attendance_last_detection_at' => now()->subMinute()->toIso8601String(),
+            ])
+            ->assertOk();
+
         $this->assertDatabaseHas('user_app_presences', [
             'user_id' => $member->id,
             'app_role' => 'member',
             'device_key' => 'install-device-1',
             'platform' => 'android',
             'app_version' => '1.2.3',
+            'bluetooth_permission_status' => 'granted',
+            'smart_attendance_scanning' => true,
+            'smart_attendance_mode' => 'background',
         ]);
 
         $this->actingAs($owner)
@@ -85,6 +102,8 @@ class AppPresenceFeatureTest extends TestCase
             ->assertSee('Gym Atlas app status')
             ->assertSee('App active')
             ->assertSee('ANDROID')
+            ->assertSee('Bluetooth access')
+            ->assertSee('Enabled')
             ->assertSee('Presence Member');
 
         $this->actingAs($admin)
@@ -93,6 +112,8 @@ class AppPresenceFeatureTest extends TestCase
             ->assertSee('Gym Atlas app status')
             ->assertSee('App active')
             ->assertSee('1.2.3')
+            ->assertSee('Bluetooth access')
+            ->assertSee('Enabled')
             ->assertSee('Presence Member');
     }
 

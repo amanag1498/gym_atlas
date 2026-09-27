@@ -157,7 +157,7 @@
                                     </div>
                                     <x-status-badge :label="$memberAppPresence['label']" :tone="$memberAppPresence['tone']" />
                                 </div>
-                                <div class="mt-4 grid gap-3 text-sm sm:grid-cols-4">
+                                <div class="mt-4 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-5">
                                     <div>
                                         <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Last app open</div>
                                         <div class="mt-1 font-semibold text-slate-950 dark:text-white">{{ $memberAppPresence['last_seen_at']?->format('d M Y h:i A') ?? 'Never' }}</div>
@@ -173,6 +173,11 @@
                                     <div>
                                         <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">App versions</div>
                                         <div class="mt-1 font-semibold text-slate-950 dark:text-white">{{ collect($memberAppPresence['app_versions'])->implode(', ') ?: 'Unknown' }}</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Bluetooth access</div>
+                                        <div class="mt-1"><x-status-badge :label="$memberAppPresence['bluetooth_permission']['label']" :tone="$memberAppPresence['bluetooth_permission']['tone']" /></div>
+                                        <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $memberAppPresence['bluetooth_permission']['reported_at']?->format('d M Y h:i A') ?? 'Awaiting app report' }}</div>
                                     </div>
                                 </div>
                             </div>

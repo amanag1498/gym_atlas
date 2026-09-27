@@ -75,6 +75,7 @@ class SmartAttendanceController extends ChangeNotifier {
   bool _permissionDenied = false;
   bool _checkInInFlight = false;
   bool _backgroundScanning = false;
+  String _bluetoothPermissionStatus = 'unknown';
   String? _lastError;
   String? _lastCheckInMessage;
 
@@ -82,6 +83,7 @@ class SmartAttendanceController extends ChangeNotifier {
   bool get permissionDenied => _permissionDenied;
   bool get checkInInFlight => _checkInInFlight;
   bool get backgroundScanning => _backgroundScanning;
+  String get bluetoothPermissionStatus => _bluetoothPermissionStatus;
   String? get lastError => _lastError;
   String? get lastCheckInMessage => _lastCheckInMessage;
   SmartAttendanceSession? get activeSession => _session;
@@ -95,8 +97,7 @@ class SmartAttendanceController extends ChangeNotifier {
   Future<void> startForegroundScan() async {
     _lastError = null;
     _permissionDenied = false;
-    final allowed = await (_requestPermissions ?? _defaultPermissionRequest)
-        .call();
+    final allowed = await _requestBluetoothPermission();
     if (!allowed) {
       _permissionDenied = true;
       _scanning = false;
@@ -128,8 +129,7 @@ class SmartAttendanceController extends ChangeNotifier {
   Future<void> startBackgroundScan() async {
     _lastError = null;
     _permissionDenied = false;
-    final allowed = await (_requestPermissions ?? _defaultPermissionRequest)
-        .call();
+    final allowed = await _requestBluetoothPermission();
     if (!allowed) {
       _permissionDenied = true;
       _scanning = false;
@@ -441,8 +441,20 @@ class SmartAttendanceController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> _requestBluetoothPermission() async {
+    final request = _requestPermissions;
+    if (request != null) {
+      final allowed = await request();
+      _bluetoothPermissionStatus = allowed ? 'granted' : 'denied';
+      return allowed;
+    }
+
+    return _defaultPermissionRequest();
+  }
+
   Future<bool> _defaultPermissionRequest() async {
     if (kIsWeb) {
+      _bluetoothPermissionStatus = 'unavailable';
       return false;
     }
 
@@ -455,12 +467,24 @@ class SmartAttendanceController extends ChangeNotifier {
       _ => <Permission>[],
     };
     if (permissions.isEmpty) {
+      _bluetoothPermissionStatus = 'unavailable';
       return false;
     }
     final statuses = await permissions.request();
-    return statuses.values.every(
+    final allowed = statuses.values.every(
       (status) => status.isGranted || status.isLimited,
     );
+    _bluetoothPermissionStatus = switch (statuses.values) {
+      final values when values.any((status) => status.isPermanentlyDenied) =>
+        'permanently_denied',
+      final values when values.any((status) => status.isRestricted) =>
+        'restricted',
+      final values when values.any((status) => status.isDenied) => 'denied',
+      final values when values.any((status) => status.isLimited) => 'limited',
+      _ when allowed => 'granted',
+      _ => 'unknown',
+    };
+    return allowed;
   }
 
   String _friendlyError(Object error) {

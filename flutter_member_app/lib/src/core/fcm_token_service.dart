@@ -29,9 +29,21 @@ class MemberFcmTokenService {
   int _generation = 0;
   bool _active = false;
 
-  Future<void> registerPresence({required String appRole}) async {
+  Future<void> registerPresence({
+    required String appRole,
+    String? bluetoothPermissionStatus,
+    bool? smartAttendanceScanning,
+    String? smartAttendanceMode,
+    DateTime? smartAttendanceLastDetectionAt,
+  }) async {
     try {
-      await _sendPresence(appRole);
+      await _sendPresence(
+        appRole,
+        bluetoothPermissionStatus: bluetoothPermissionStatus,
+        smartAttendanceScanning: smartAttendanceScanning,
+        smartAttendanceMode: smartAttendanceMode,
+        smartAttendanceLastDetectionAt: smartAttendanceLastDetectionAt,
+      );
       debugPrint('[fcm] app presence recorded for $appRole app');
     } catch (exception) {
       debugPrint('[fcm] app presence registration skipped: $exception');
@@ -281,7 +293,13 @@ class MemberFcmTokenService {
     }
   }
 
-  Future<void> _sendPresence(String appRole) async {
+  Future<void> _sendPresence(
+    String appRole, {
+    String? bluetoothPermissionStatus,
+    bool? smartAttendanceScanning,
+    String? smartAttendanceMode,
+    DateTime? smartAttendanceLastDetectionAt,
+  }) async {
     await _client.post(
       '/app-presence',
       data: {
@@ -290,6 +308,16 @@ class MemberFcmTokenService {
         'device_name': _deviceName(),
         'device_id': await _devicePresenceId(),
         if (_appVersion.isNotEmpty) 'app_version': _appVersion,
+        if (bluetoothPermissionStatus != null)
+          'bluetooth_permission_status': bluetoothPermissionStatus,
+        if (smartAttendanceScanning != null)
+          'smart_attendance_scanning': smartAttendanceScanning,
+        if (smartAttendanceMode != null)
+          'smart_attendance_mode': smartAttendanceMode,
+        if (smartAttendanceLastDetectionAt != null)
+          'smart_attendance_last_detection_at': smartAttendanceLastDetectionAt
+              .toUtc()
+              .toIso8601String(),
       },
     );
   }

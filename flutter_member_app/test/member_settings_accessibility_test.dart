@@ -55,8 +55,11 @@ void main() {
     expect(find.text('Profile Overview'), findsNothing);
     expect(find.text('Membership'), findsOneWidget);
     expect(find.text('Activity History'), findsOneWidget);
-    expect(find.text('Smart Attendance'), findsOneWidget);
-    expect(find.text('Off — tap to enable attendance access'), findsOneWidget);
+    expect(find.text('Smart Attendance'), findsNothing);
+    expect(
+      find.text('Check-ins, attendance, and automatic gym visits'),
+      findsOneWidget,
+    );
     expect(find.text('Progress & Reminders'), findsOneWidget);
     expect(find.text('Cloud'), findsNothing);
     expect(tester.takeException(), isNull);
