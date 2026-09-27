@@ -13,22 +13,9 @@
             ['label' => 'Monthly Collection', 'value' => '₹'.number_format((float) $stats['monthly_collection'], 2), 'hint' => 'Collected this month', 'tone' => 'emerald'],
             ['label' => 'Open Dues', 'value' => '₹'.number_format((float) $stats['pending_dues'], 2), 'hint' => $collectionRisk > 0 ? $collectionRisk.'% overdue risk' : 'No overdue pressure', 'tone' => $collectionRisk > 0 ? 'rose' : 'sky'],
             ['label' => 'Active Members', 'value' => $stats['active_members'].' / '.$stats['total_members'], 'hint' => 'Live member base', 'tone' => 'sky'],
-            ['label' => 'Trainer Coverage', 'value' => $trainerCoverage.'%', 'hint' => $stats['members_without_trainer_count'].' without trainer', 'tone' => $stats['members_without_trainer_count'] > 0 ? 'amber' : 'emerald'],
+            ['label' => 'Renewals Due', 'value' => $stats['renewal_candidates'], 'hint' => $stats['expired_yesterday'].' expired yesterday', 'tone' => $stats['renewal_candidates'] > 0 ? 'amber' : 'emerald'],
             ['label' => 'Members in Gym', 'value' => $stats['members_in_gym'], 'hint' => $stats['today_unique_members'].' unique today · '.$stats['today_check_ins'].' visits', 'tone' => 'violet'],
-            ['label' => 'Pending Trials', 'value' => $stats['pending_trial_requests'], 'hint' => 'Lead follow-up queue', 'tone' => $stats['pending_trial_requests'] > 0 ? 'amber' : 'sky'],
-        ];
-        $pulseRows = [
-            ['label' => 'Expiring Soon', 'value' => $stats['expiring_soon'], 'hint' => 'Memberships due within 7 days', 'tone' => 'warning'],
-            ['label' => 'Overdue Memberships', 'value' => $stats['overdue_memberships'], 'hint' => 'High-priority collections', 'tone' => 'danger'],
-            ['label' => 'Custom Fee Reviews', 'value' => $stats['pending_custom_fee_reviews'], 'hint' => 'Pricing exceptions awaiting review', 'tone' => 'warning'],
-            ['label' => 'Inactive Members', 'value' => $stats['inactive_members_count'], 'hint' => 'No recent activity or disabled state', 'tone' => 'danger'],
-            ['label' => 'Attendance Exceptions', 'value' => $stats['attendance_exceptions_count'], 'hint' => 'Open visits that need checkout review', 'tone' => $stats['attendance_exceptions_count'] > 0 ? 'danger' : 'success'],
-        ];
-        $paymentMix = [
-            ['label' => 'Paid', 'value' => $paymentHealth['paid'], 'tone' => 'success'],
-            ['label' => 'Partial', 'value' => $paymentHealth['partial'], 'tone' => 'warning'],
-            ['label' => 'Unpaid', 'value' => $paymentHealth['unpaid'], 'tone' => 'neutral'],
-            ['label' => 'Overdue', 'value' => $paymentHealth['overdue'], 'tone' => 'danger'],
+            ['label' => 'Trainer Coverage', 'value' => $trainerCoverage.'%', 'hint' => $stats['members_without_trainer_count'].' without trainer', 'tone' => $stats['members_without_trainer_count'] > 0 ? 'amber' : 'emerald'],
         ];
     @endphp
 
@@ -84,6 +71,141 @@
             @endforeach
         </div>
 
+        @if ($visibility['memberships_view'] || $visibility['billing'] || $visibility['members_view'])
+            <section aria-labelledby="daily-action-center-heading" class="overflow-hidden rounded-[26px] border border-slate-200/80 bg-white shadow-[0_20px_60px_-42px_rgba(15,23,42,0.45)] dark:border-slate-800 dark:bg-slate-950">
+                <div class="flex flex-col gap-3 border-b border-slate-200/80 px-5 py-5 dark:border-slate-800 lg:flex-row lg:items-end lg:justify-between">
+                    <div>
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-600 dark:text-indigo-400">Today’s action center</p>
+                        <h2 id="daily-action-center-heading" class="mt-1 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">Members who need a decision</h2>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Renew expired access, recover outstanding balances, and close member-service gaps.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <x-status-badge :label="$stats['expired_yesterday'].' expired yesterday'" :tone="$stats['expired_yesterday'] > 0 ? 'danger' : 'success'" />
+                        <x-status-badge :label="$stats['scheduled_renewals'].' renewals scheduled'" tone="info" />
+                        <x-status-badge :label="$stats['members_with_dues'].' members owe payment'" :tone="$stats['members_with_dues'] > 0 ? 'warning' : 'success'" />
+                        @if ($visibility['billing'] && $stats['pending_custom_fee_reviews'] > 0)
+                            <a href="{{ route('web.gym.custom-fees.index', request()->query()) }}"><x-status-badge :label="$stats['pending_custom_fee_reviews'].' pricing reviews'" tone="warning" /></a>
+                        @endif
+                        @if ($visibility['trainers'] && $stats['overloaded_trainers_count'] > 0)
+                            <a href="{{ route('web.gym.trainers.index', request()->query()) }}"><x-status-badge :label="$stats['overloaded_trainers_count'].' overloaded trainers'" tone="danger" /></a>
+                        @endif
+                    </div>
+                </div>
+
+                <div class="grid divide-y divide-slate-200/80 dark:divide-slate-800 xl:grid-cols-3 xl:divide-x xl:divide-y-0">
+                    @if ($visibility['memberships_view'])
+                        <div class="min-w-0 p-5">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <h3 class="font-semibold text-slate-950 dark:text-white">Renewal follow-up</h3>
+                                    <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">Expired members without a replacement cycle.</p>
+                                </div>
+                                <a href="{{ route('web.gym.memberships.expired', request()->query()) }}" class="shrink-0 text-sm font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">View all</a>
+                            </div>
+                            <div class="mt-4 space-y-2.5">
+                                @forelse ($renewalCandidates->take(5) as $profile)
+                                    @php
+                                        $latestMembership = $profile->user?->memberMemberships?->first();
+                                        $expiredOn = $profile->membership_expires_on;
+                                        $expiryLabel = $expiredOn?->isSameDay(now()->subDay())
+                                            ? 'Expired yesterday'
+                                            : ($expiredOn ? 'Expired '.$expiredOn->format('d M') : 'Expired');
+                                    @endphp
+                                    <div class="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3.5 dark:border-slate-800 dark:bg-slate-900/70">
+                                        <div class="flex items-start justify-between gap-3">
+                                            <div class="min-w-0">
+                                                <a href="{{ route('web.gym.members.show', ['member' => $profile->user_id] + request()->query()) }}" class="truncate font-semibold text-slate-950 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-400">{{ $profile->user?->name ?? 'Member' }}</a>
+                                                <p class="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">{{ $latestMembership?->membershipPlan?->name ?? 'Previous plan' }} · {{ $profile->branch?->name ?? 'Branch' }}</p>
+                                            </div>
+                                            <x-status-badge :label="$expiryLabel" tone="danger" />
+                                        </div>
+                                        @if ($visibility['manage_memberships_action'])
+                                            <div class="mt-3 flex justify-end">
+                                                <a href="{{ route('web.gym.members.assign-membership', ['member' => $profile->user_id] + request()->query()) }}" class="text-sm font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">Review and renew →</a>
+                                            </div>
+                                        @endif
+                                    </div>
+                                @empty
+                                    <x-empty-state title="No renewals waiting" message="Members who expire without a replacement cycle will appear here." />
+                                @endforelse
+                            </div>
+                        </div>
+                    @endif
+
+                    @if ($visibility['billing'])
+                        <div class="min-w-0 p-5">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <h3 class="font-semibold text-slate-950 dark:text-white">Collection follow-up</h3>
+                                    <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">Current cycles ₹{{ number_format((float) $stats['current_cycle_dues'], 2) }} · expired cycles ₹{{ number_format((float) $stats['expired_cycle_dues'], 2) }}</p>
+                                </div>
+                                <a href="{{ route('web.gym.dues.index', request()->query()) }}" class="shrink-0 text-sm font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">Open dues</a>
+                            </div>
+                            <div class="mt-4 space-y-2.5">
+                                @forelse ($openDueMemberships->take(5) as $membership)
+                                    @php
+                                        $cycleExpired = $membership->status === 'expired'
+                                            || ($membership->expiry_date && $membership->expiry_date->lt(today()));
+                                    @endphp
+                                    <div class="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3.5 dark:border-slate-800 dark:bg-slate-900/70">
+                                        <div class="flex items-start justify-between gap-3">
+                                            <div class="min-w-0">
+                                                <a href="{{ route('web.gym.members.show', ['member' => $membership->member_id] + request()->query()) }}" class="truncate font-semibold text-slate-950 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-400">{{ $membership->member?->name ?? 'Member' }}</a>
+                                                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $cycleExpired ? 'Expired cycle' : 'Current cycle' }} · due {{ optional($membership->due_date)->format('d M Y') ?: 'date not set' }}</p>
+                                            </div>
+                                            <div class="text-right">
+                                                <div class="font-semibold text-slate-950 dark:text-white">₹{{ number_format((float) $membership->due_amount, 2) }}</div>
+                                                <x-status-badge :label="$cycleExpired ? 'Expired' : ucfirst((string) $membership->payment_status)" :tone="$cycleExpired || $membership->payment_status === 'overdue' ? 'danger' : 'warning'" />
+                                            </div>
+                                        </div>
+                                        @if ($visibility['collect_payment_action'])
+                                            <div class="mt-3 flex justify-end">
+                                                <a href="{{ route('web.gym.payments.create', ['member_membership_id' => $membership->id] + request()->query()) }}" class="text-sm font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">Collect payment →</a>
+                                            </div>
+                                        @endif
+                                    </div>
+                                @empty
+                                    <x-empty-state title="No open dues" message="Outstanding current and expired-cycle balances will appear here." />
+                                @endforelse
+                            </div>
+                        </div>
+                    @endif
+
+                    @if ($visibility['members_view'])
+                        <div class="min-w-0 p-5">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <h3 class="font-semibold text-slate-950 dark:text-white">Member service gaps</h3>
+                                    <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">Coverage and engagement issues that need staff follow-up.</p>
+                                </div>
+                                <a href="{{ route('web.gym.members.index', request()->query()) }}" class="shrink-0 text-sm font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">Members</a>
+                            </div>
+                            <div class="mt-4 space-y-2.5">
+                                @foreach ($membersWithoutTrainer->take(3) as $profile)
+                                    <a href="{{ route('web.gym.members.show', ['member' => $profile->user_id] + request()->query()) }}" class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3.5 transition hover:border-indigo-300 hover:bg-white dark:border-slate-800 dark:bg-slate-900/70 dark:hover:border-indigo-500/40">
+                                        <div class="min-w-0"><div class="truncate font-semibold text-slate-950 dark:text-white">{{ $profile->user?->name ?? 'Member' }}</div><div class="mt-1 text-xs text-slate-500 dark:text-slate-400">Trainer assignment missing</div></div>
+                                        <x-status-badge label="Assign" tone="warning" />
+                                    </a>
+                                @endforeach
+                                @php
+                                    $membersWithoutTrainerIds = $membersWithoutTrainer->take(3)->pluck('id');
+                                @endphp
+                                @foreach ($inactiveMembers->reject(fn ($profile) => $membersWithoutTrainerIds->contains($profile->id))->take(3) as $profile)
+                                    <a href="{{ route('web.gym.members.show', ['member' => $profile->user_id] + request()->query()) }}" class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3.5 transition hover:border-indigo-300 hover:bg-white dark:border-slate-800 dark:bg-slate-900/70 dark:hover:border-indigo-500/40">
+                                        <div class="min-w-0"><div class="truncate font-semibold text-slate-950 dark:text-white">{{ $profile->user?->name ?? 'Member' }}</div><div class="mt-1 text-xs text-slate-500 dark:text-slate-400">No recent attendance activity</div></div>
+                                        <x-status-badge label="Follow up" tone="danger" />
+                                    </a>
+                                @endforeach
+                                @if ($membersWithoutTrainer->isEmpty() && $inactiveMembers->isEmpty())
+                                    <x-empty-state title="Member coverage is clear" message="Trainer gaps and inactive members will appear here." />
+                                @endif
+                            </div>
+                        </div>
+                    @endif
+                </div>
+            </section>
+        @endif
+
         @if ($visibility['attendance'])
             <x-premium-card class="overflow-hidden p-0">
                 <div class="flex flex-col gap-3 border-b border-slate-200/80 px-5 py-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
@@ -94,7 +216,10 @@
                         </div>
                         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Live open visits across the selected gym and branch scope.</p>
                     </div>
-                    <x-action-button as="a" variant="secondary" href="{{ route('web.gym.attendance.index', request()->query()) }}">Open attendance desk</x-action-button>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <x-status-badge :label="$stats['attendance_exceptions_count'].' Attendance Exceptions'" :tone="$stats['attendance_exceptions_count'] > 0 ? 'danger' : 'success'" />
+                        <x-action-button as="a" variant="secondary" href="{{ route('web.gym.attendance.index', request()->query()) }}">Open attendance desk</x-action-button>
+                    </div>
                 </div>
                 <div class="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
                     @forelse ($membersInGym->take(8) as $presence)
@@ -177,109 +302,6 @@
             </section>
         @endif
 
-        <div class="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-            <x-premium-card class="overflow-hidden p-0">
-                <div class="border-b border-slate-200/80 px-5 py-4 dark:border-slate-800">
-                    <h2 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Operational Pulse</h2>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">The shortest path to the decisions that affect daily member experience.</p>
-                </div>
-                <div class="divide-y divide-slate-100 dark:divide-slate-800">
-                    @foreach ($pulseRows as $row)
-                        <div class="grid gap-2 px-5 py-4 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_auto] md:items-center">
-                            <div class="font-medium text-slate-950 dark:text-white">{{ $row['label'] }}</div>
-                            <div class="text-sm text-slate-500 dark:text-slate-400">{{ $row['hint'] }}</div>
-                            <x-status-badge :label="$row['value']" :tone="$row['tone']" />
-                        </div>
-                    @endforeach
-                </div>
-            </x-premium-card>
-
-            <x-premium-card class="overflow-hidden p-0">
-                <div class="border-b border-slate-200/80 px-5 py-4 dark:border-slate-800">
-                    <h2 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Billing Health Mix</h2>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Payment-state balance and engagement distribution in one view.</p>
-                </div>
-                <div class="grid gap-3 p-5 md:grid-cols-2">
-                    <div class="space-y-3">
-                        <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Payment states</div>
-                        <div class="flex flex-wrap gap-2">
-                            @foreach ($paymentMix as $chip)
-                                <x-status-badge :label="$chip['label'].' '.$chip['value']" :tone="$chip['tone']" />
-                            @endforeach
-                        </div>
-                    </div>
-                    <div class="space-y-3">
-                        <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Engagement tiers</div>
-                        <div class="flex flex-wrap gap-2">
-                            <x-status-badge :label="'Excellent '.$stats['excellent_engagement_count']" tone="success" />
-                            <x-status-badge :label="'Good '.$stats['good_engagement_count']" tone="info" />
-                            <x-status-badge :label="'Needs Attention '.$stats['needs_attention_engagement_count']" tone="warning" />
-                            <x-status-badge :label="'High Risk '.$stats['high_risk_engagement_count']" tone="danger" />
-                        </div>
-                    </div>
-                </div>
-            </x-premium-card>
-        </div>
-
-        <div class="grid gap-4 lg:grid-cols-3">
-            <x-premium-card class="p-4">
-                <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Collections focus</p>
-                <h3 class="mt-1 text-base font-semibold tracking-tight text-slate-950 dark:text-white">Renewals and due recovery</h3>
-                <div class="mt-4 space-y-3">
-                    <div class="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/70">
-                        <span class="text-sm text-slate-600 dark:text-slate-300">Expiring soon</span>
-                        <x-status-badge :label="$stats['expiring_soon']" tone="warning" />
-                    </div>
-                    <div class="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/70">
-                        <span class="text-sm text-slate-600 dark:text-slate-300">Overdue memberships</span>
-                        <x-status-badge :label="$stats['overdue_memberships']" tone="danger" />
-                    </div>
-                    <div class="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/70">
-                        <span class="text-sm text-slate-600 dark:text-slate-300">Pending dues</span>
-                        <x-status-badge :label="'₹'.number_format((float) $stats['pending_dues'], 2)" tone="info" />
-                    </div>
-                </div>
-            </x-premium-card>
-
-            <x-premium-card class="p-4">
-                <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">People coverage</p>
-                <h3 class="mt-1 text-base font-semibold tracking-tight text-slate-950 dark:text-white">Trainer and engagement pressure</h3>
-                <div class="mt-4 space-y-3">
-                    <div class="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/70">
-                        <span class="text-sm text-slate-600 dark:text-slate-300">Members without trainer</span>
-                        <x-status-badge :label="$stats['members_without_trainer_count']" tone="warning" />
-                    </div>
-                    <div class="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/70">
-                        <span class="text-sm text-slate-600 dark:text-slate-300">Inactive members</span>
-                        <x-status-badge :label="$stats['inactive_members_count']" tone="danger" />
-                    </div>
-                    <div class="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/70">
-                        <span class="text-sm text-slate-600 dark:text-slate-300">High risk engagement</span>
-                        <x-status-badge :label="$stats['high_risk_engagement_count']" tone="danger" />
-                    </div>
-                </div>
-            </x-premium-card>
-
-            <x-premium-card class="p-4">
-                <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Front desk lane</p>
-                <h3 class="mt-1 text-base font-semibold tracking-tight text-slate-950 dark:text-white">Daily activity signals</h3>
-                <div class="mt-4 space-y-3">
-                    <div class="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/70">
-                        <span class="text-sm text-slate-600 dark:text-slate-300">Today check-ins</span>
-                        <x-status-badge :label="$stats['today_check_ins']" tone="success" />
-                    </div>
-                    <div class="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/70">
-                        <span class="text-sm text-slate-600 dark:text-slate-300">Pending trials</span>
-                        <x-status-badge :label="$stats['pending_trial_requests']" tone="info" />
-                    </div>
-                    <div class="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/70">
-                        <span class="text-sm text-slate-600 dark:text-slate-300">Custom fee reviews</span>
-                        <x-status-badge :label="$stats['pending_custom_fee_reviews']" tone="warning" />
-                    </div>
-                </div>
-            </x-premium-card>
-        </div>
-
         @if (!($onboarding['completed'] ?? false))
             <x-table-wrapper class="overflow-hidden p-0">
                 <div class="flex items-center justify-between gap-3 border-b border-slate-200/80 px-5 py-4 dark:border-slate-800">
@@ -332,73 +354,66 @@
             </x-table-wrapper>
         @endif
 
-        @if ($visibility['billing'])
-            <x-table-wrapper class="overflow-hidden p-0">
-                <div class="flex items-center justify-between gap-3 border-b border-slate-200/80 px-5 py-4 dark:border-slate-800">
-                    <div>
-                        <h2 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Collections Desk</h2>
-                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Renewals, due amounts, and overdue balances that need action first.</p>
-                    </div>
-                    <x-action-button as="a" variant="secondary" href="{{ route('web.gym.payments.index', request()->query()) }}">Open Payments</x-action-button>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="panel-table min-w-[980px]">
-                        <thead>
-                            <tr>
-                                <th>Queue</th>
-                                <th>Member</th>
-                                <th>Plan</th>
-                                <th>Amount</th>
-                                <th>Date</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+        @if ($visibility['memberships_view'] || $visibility['trials'])
+            <section aria-labelledby="forward-planning-heading" class="grid gap-4 xl:grid-cols-2">
+                @if ($visibility['memberships_view'])
+                    <x-table-wrapper class="overflow-hidden p-0">
+                        <div class="flex items-center justify-between gap-3 border-b border-slate-200/80 px-5 py-4 dark:border-slate-800">
+                            <div>
+                                <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-600 dark:text-indigo-400">Next seven days</p>
+                                <h2 id="forward-planning-heading" class="mt-1 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Upcoming membership expiries</h2>
+                            </div>
+                            <a href="{{ route('web.gym.memberships.index', request()->query()) }}" class="text-sm font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">All memberships</a>
+                        </div>
+                        <div class="divide-y divide-slate-100 dark:divide-slate-800">
                             @forelse ($expiringMemberships as $membership)
-                                <tr>
-                                    <td><x-status-badge label="Expiring" tone="warning" /></td>
-                                    <td class="font-medium text-slate-950 dark:text-white">{{ $membership->member?->name ?? 'Member' }}</td>
-                                    <td>{{ $membership->membershipPlan?->name ?? 'Membership' }}</td>
-                                    <td>₹{{ number_format((float) $membership->due_amount, 2) }}</td>
-                                    <td>{{ optional($membership->expiry_date)->format('d M Y') ?: 'No expiry' }}</td>
-                                </tr>
+                                <div class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                                    <div class="min-w-0">
+                                        <a href="{{ route('web.gym.members.show', ['member' => $membership->member_id] + request()->query()) }}" class="truncate font-semibold text-slate-950 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-400">{{ $membership->member?->name ?? 'Member' }}</a>
+                                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $membership->membershipPlan?->name ?? 'Membership' }} · expires {{ optional($membership->expiry_date)->format('d M Y') }}</p>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        <x-status-badge :label="$membership->expiry_date?->isToday() ? 'Expires today' : $membership->expiry_date?->diffForHumans()" tone="warning" />
+                                        @if ($visibility['manage_memberships_action'])
+                                            <a href="{{ route('web.gym.members.assign-membership', ['member' => $membership->member_id] + request()->query()) }}" class="text-sm font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">Plan renewal →</a>
+                                        @endif
+                                    </div>
+                                </div>
                             @empty
-                                <tr>
-                                    <td><x-status-badge label="Expiring" tone="warning" /></td>
-                                    <td colspan="4" class="text-sm text-slate-500 dark:text-slate-400">No memberships expiring within the next seven days.</td>
-                                </tr>
+                                <div class="p-5"><x-empty-state title="No upcoming expiries" message="Active memberships ending within seven days will appear here." /></div>
                             @endforelse
-                            @forelse ($pendingMemberships as $membership)
-                                <tr>
-                                    <td><x-status-badge label="Due" tone="warning" /></td>
-                                    <td class="font-medium text-slate-950 dark:text-white">{{ $membership->member?->name ?? 'Member' }}</td>
-                                    <td>{{ $membership->membershipPlan?->name ?? 'Membership' }}</td>
-                                    <td>₹{{ number_format((float) $membership->due_amount, 2) }}</td>
-                                    <td>{{ optional($membership->due_date)->format('d M Y') ?: 'No due date' }}</td>
-                                </tr>
+                        </div>
+                    </x-table-wrapper>
+                @endif
+
+                @if ($visibility['trials'])
+                    <x-premium-card class="overflow-hidden p-0">
+                        <div class="flex items-center justify-between gap-3 border-b border-slate-200/80 px-5 py-4 dark:border-slate-800">
+                            <div>
+                                <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-600 dark:text-sky-400">Lead pipeline</p>
+                                <h2 class="mt-1 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Trials awaiting contact</h2>
+                            </div>
+                            <a href="{{ route('web.gym.trial-requests.index', ['status' => 'pending'] + request()->query()) }}" class="text-sm font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">Open leads</a>
+                        </div>
+                        <div class="divide-y divide-slate-100 dark:divide-slate-800">
+                            @forelse ($waitingTrials as $trial)
+                                <a href="{{ route('web.gym.trial-requests.show', ['trial' => $trial->id] + request()->query()) }}" class="flex items-center justify-between gap-4 px-5 py-4 transition hover:bg-slate-50 dark:hover:bg-slate-900/70">
+                                    <div class="min-w-0">
+                                        <div class="truncate font-semibold text-slate-950 dark:text-white">{{ $trial->name ?: 'Unnamed lead' }}</div>
+                                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $trial->branch?->name ?? 'Branch' }} · {{ $trial->assignedTrainer?->name ?? 'Trainer unassigned' }}</p>
+                                    </div>
+                                    <div class="shrink-0 text-right">
+                                        <x-status-badge :label="$trial->preferred_date?->isToday() ? 'Today' : ($trial->preferred_date?->format('d M') ?? 'Date pending')" :tone="$trial->preferred_date?->isPast() ? 'danger' : 'warning'" />
+                                        <div class="mt-1 text-xs text-slate-400">{{ $trial->phone ?: 'No phone' }}</div>
+                                    </div>
+                                </a>
                             @empty
-                                <tr>
-                                    <td><x-status-badge label="Due" tone="warning" /></td>
-                                    <td colspan="4" class="text-sm text-slate-500 dark:text-slate-400">No pending collections in the selected scope.</td>
-                                </tr>
+                                <div class="p-5"><x-empty-state title="No pending trial leads" message="New public enquiries and trial requests will appear here." /></div>
                             @endforelse
-                            @forelse ($overdueMemberships as $membership)
-                                <tr>
-                                    <td><x-status-badge label="Overdue" tone="danger" /></td>
-                                    <td class="font-medium text-slate-950 dark:text-white">{{ $membership->member?->name ?? 'Member' }}</td>
-                                    <td>{{ $membership->membershipPlan?->name ?? 'Membership' }}</td>
-                                    <td>₹{{ number_format((float) $membership->due_amount, 2) }}</td>
-                                    <td>{{ optional($membership->due_date)->format('d M Y') ?: 'No due date' }}</td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td><x-status-badge label="Overdue" tone="danger" /></td>
-                                    <td colspan="4" class="text-sm text-slate-500 dark:text-slate-400">No overdue balances in the selected scope.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </x-table-wrapper>
+                        </div>
+                    </x-premium-card>
+                @endif
+            </section>
         @endif
 
         <div class="grid gap-4 2xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">

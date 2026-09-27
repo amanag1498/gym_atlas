@@ -7,7 +7,6 @@ use App\Enums\PaymentStatus;
 use App\Enums\PermissionName;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
-use App\Models\Announcement;
 use App\Models\AttendanceLog;
 use App\Models\Branch;
 use App\Models\Gym;
@@ -66,13 +65,9 @@ class DashboardController extends Controller
         $memberCount = (clone $memberQuery)->count();
         $liveMemberCount = (clone $liveMemberQuery)->count();
         $membersWithoutTrainerQuery = (clone $liveMemberQuery)->whereNull('assigned_trainer_user_id');
-        $inactiveMemberQuery = (clone $memberQuery)
-            ->where(function (Builder $query): void {
-                $query
-                    ->where('is_active', false)
-                    ->orWhereDoesntHave('attendanceLogs', fn (Builder $attendance): Builder => $attendance
-                        ->whereDate('checked_in_at', '>=', now()->subDays(14)->toDateString()));
-            });
+        $inactiveMemberQuery = (clone $liveMemberQuery)
+            ->whereDoesntHave('attendanceLogs', fn (Builder $attendance): Builder => $attendance
+                ->whereDate('checked_in_at', '>=', now()->subDays(14)->toDateString()));
         $overloadedTrainers = TrainerProfile::query()
             ->with('user')
             ->withCount([
@@ -90,20 +85,69 @@ class DashboardController extends Controller
             ->filter(fn (TrainerProfile $profile): bool => (int) ($profile->assigned_members_count ?? 0) > 25)
             ->take(6)
             ->values();
-        $pendingCustomFeeMemberships = (clone $membershipQuery)
-            ->with(['member', 'membershipPlan'])
-            ->where('custom_fee_enabled', true)
-            ->whereNull('approved_by_admin_id')
-            ->latest('updated_at')
-            ->take(6)
-            ->get();
         $expiringMemberships = (clone $membershipQuery)
             ->with(['member', 'membershipPlan'])
+            ->where('status', 'active')
             ->whereBetween('expiry_date', [now()->toDateString(), now()->addDays(7)->toDateString()])
             ->orderBy('expiry_date')
             ->take(8)
             ->get();
+        $renewalCandidatesQuery = (clone $memberQuery)
+            ->where(function (Builder $query): void {
+                $query->where('membership_status', 'expired')
+                    ->orWhere(function (Builder $elapsed): void {
+                        $elapsed->whereNotNull('membership_expires_on')
+                            ->whereDate('membership_expires_on', '<', now()->toDateString());
+                    });
+            })
+            ->whereDoesntHave('user.memberMemberships', function (Builder $query) use ($gym): void {
+                $query->where('gym_id', $gym->id)
+                    ->where(function (Builder $operational): void {
+                        $operational->where('status', 'frozen')
+                            ->orWhere(function (Builder $active): void {
+                                $active->where('status', 'active')
+                                    ->whereDate('expiry_date', '>=', now()->toDateString());
+                            });
+                    });
+            });
+        $renewalCandidates = (clone $renewalCandidatesQuery)
+            ->with([
+                'user.memberMemberships' => fn ($query) => $query
+                    ->with('membershipPlan')
+                    ->where('gym_id', $gym->id)
+                    ->currentFirst()
+                    ->limit(1),
+                'branch',
+            ])
+            ->orderByDesc('membership_expires_on')
+            ->take(8)
+            ->get();
+        $openDueMemberships = (clone $membershipQuery)
+            ->with(['member', 'membershipPlan', 'branch'])
+            ->where('due_amount', '>', 0)
+            ->orderByRaw("case when payment_status = 'overdue' then 0 when due_date < ? then 1 else 2 end", [now()->toDateString()])
+            ->orderBy('due_date')
+            ->take(10)
+            ->get();
+        $currentCycleDueAmount = (float) (clone $membershipQuery)
+            ->where('due_amount', '>', 0)
+            ->where(function (Builder $query): void {
+                $query->where('status', 'frozen')
+                    ->orWhere(function (Builder $active): void {
+                        $active->where('status', 'active')
+                            ->whereDate('expiry_date', '>=', now()->toDateString());
+                    });
+            })
+            ->sum('due_amount');
+        $expiredCycleDueAmount = (float) (clone $membershipQuery)
+            ->where('due_amount', '>', 0)
+            ->where(function (Builder $query): void {
+                $query->where('status', 'expired')
+                    ->orWhereDate('expiry_date', '<', now()->toDateString());
+            })
+            ->sum('due_amount');
         $waitingTrials = (clone $trialQuery)
+            ->with(['branch', 'assignedTrainer'])
             ->where('status', 'pending')
             ->latest('preferred_date')
             ->take(6)
@@ -156,15 +200,6 @@ class DashboardController extends Controller
             })
             ->distinct('member_id')
             ->count('member_id');
-        $recentAnnouncements = Announcement::query()
-            ->with(['creator', 'branch'])
-            ->where('gym_id', $gym->id)
-            ->where(function (Builder $query) use ($branchIds): void {
-                $query->whereNull('branch_id')->orWhereIn('branch_id', $branchIds);
-            })
-            ->latest('send_at')
-            ->take(6)
-            ->get();
         $recentActivity = ActivityLog::query()
             ->with(['actor', 'branch'])
             ->where('gym_id', $gym->id)
@@ -202,33 +237,9 @@ class DashboardController extends Controller
             })
             ->sortByDesc('members')
             ->values();
-        $trainerLoadBoard = TrainerProfile::query()
-            ->with('user', 'branch')
-            ->withCount([
-                'assignedMembers as assigned_members_count' => fn (Builder $query): Builder => $query
-                    ->where('gym_id', $gym->id)
-                    ->whereIn('branch_id', $branchIds)
-                    ->where('is_active', true)
-                    ->whereIn('membership_status', ['active', 'frozen']),
-                'workoutPlans as active_workout_plans_count' => fn (Builder $query): Builder => $query
-                    ->where('gym_id', $gym->id)
-                    ->whereIn('branch_id', $branchIds)
-                    ->where('status', 'active'),
-                'assignedTrialRequests as assigned_trials_count' => fn (Builder $query): Builder => $query
-                    ->where('gym_id', $gym->id)
-                    ->whereIn('branch_id', $branchIds)
-                    ->where('status', 'pending'),
-            ])
-            ->where('gym_id', $gym->id)
-            ->whereIn('branch_id', $branchIds)
-            ->orderByDesc('assigned_members_count')
-            ->take(8)
-            ->get();
-        $pendingDuesAmount = (float) (clone $membershipQuery)->whereIn('payment_status', [
-            PaymentStatus::Unpaid->value,
-            PaymentStatus::Partial->value,
-            PaymentStatus::Overdue->value,
-        ])->sum('due_amount');
+        $pendingDuesAmount = (float) (clone $membershipQuery)
+            ->where('due_amount', '>', 0)
+            ->sum('due_amount');
         $overdueDuesAmount = (float) (clone $membershipQuery)
             ->where(function (Builder $query): void {
                 $query->where('payment_status', PaymentStatus::Overdue->value)
@@ -266,9 +277,15 @@ class DashboardController extends Controller
             ],
             [
                 'label' => 'Collect Payment',
-                'route' => route('web.gym.payments.index', request()->query()),
+                'route' => route('web.gym.dues.index', request()->query()),
                 'variant' => 'secondary',
                 'visible' => $visibility['collect_payment_action'],
+            ],
+            [
+                'label' => 'Review Renewals',
+                'route' => route('web.gym.memberships.expired', request()->query()),
+                'variant' => 'secondary',
+                'visible' => $visibility['memberships_view'],
             ],
             [
                 'label' => 'Mark Attendance',
@@ -304,15 +321,32 @@ class DashboardController extends Controller
                 'total_members' => $memberCount,
                 'active_members' => $liveMemberCount,
                 'expired_members' => (clone $memberQuery)->where('membership_status', 'expired')->count(),
-                'expiring_soon' => (clone $memberQuery)
-                    ->whereBetween('membership_expires_on', [now()->toDateString(), now()->addDays(7)->toDateString()])
+                'renewal_candidates' => (clone $renewalCandidatesQuery)->count(),
+                'expired_yesterday' => (clone $renewalCandidatesQuery)
+                    ->whereDate('membership_expires_on', now()->subDay()->toDateString())
                     ->count(),
+                'expired_last_7_days' => (clone $renewalCandidatesQuery)
+                    ->whereBetween('membership_expires_on', [now()->subDays(7)->toDateString(), now()->subDay()->toDateString()])
+                    ->count(),
+                'scheduled_renewals' => (clone $membershipQuery)
+                    ->where('status', 'active')
+                    ->whereDate('start_date', '>', now()->toDateString())
+                    ->distinct('member_id')
+                    ->count('member_id'),
+                'expiring_soon' => (clone $membershipQuery)
+                    ->where('status', 'active')
+                    ->whereBetween('expiry_date', [now()->toDateString(), now()->addDays(7)->toDateString()])
+                    ->distinct('member_id')
+                    ->count('member_id'),
                 'today_check_ins' => (clone $attendanceQuery)->whereDate('checked_in_at', now()->toDateString())->count(),
                 'today_unique_members' => (clone $attendanceQuery)->whereDate('checked_in_at', now()->toDateString())->distinct('member_id')->count('member_id'),
                 'members_in_gym' => $membersInGym->count(),
                 'attendance_exceptions_count' => $attendanceExceptionsCount,
                 'pending_dues' => $pendingDuesAmount,
                 'overdue_dues' => $overdueDuesAmount,
+                'current_cycle_dues' => $currentCycleDueAmount,
+                'expired_cycle_dues' => $expiredCycleDueAmount,
+                'members_with_dues' => (clone $membershipQuery)->where('due_amount', '>', 0)->distinct('member_id')->count('member_id'),
                 'monthly_collection' => (float) (clone $paymentQuery)->whereBetween('paid_at', [now()->startOfMonth(), now()->endOfMonth()])->sum('amount'),
                 'custom_fee_members_count' => (clone $membershipQuery)->where('custom_fee_enabled', true)->count(),
                 'total_trainers' => $trainerCount,
@@ -331,48 +365,32 @@ class DashboardController extends Controller
                     ->where('custom_fee_enabled', true)
                     ->whereNull('approved_by_admin_id')
                     ->count(),
-                'overdue_memberships' => (clone $membershipQuery)->where('payment_status', PaymentStatus::Overdue->value)->count(),
+                'overdue_memberships' => (clone $membershipQuery)
+                    ->where('due_amount', '>', 0)
+                    ->where(function (Builder $query): void {
+                        $query->where('payment_status', PaymentStatus::Overdue->value)
+                            ->orWhereDate('due_date', '<', now()->toDateString());
+                    })
+                    ->count(),
                 'unpaid_memberships' => (clone $membershipQuery)->where('payment_status', PaymentStatus::Unpaid->value)->count(),
                 'partial_memberships' => (clone $membershipQuery)->where('payment_status', PaymentStatus::Partial->value)->count(),
             ],
             'onboarding' => $this->onboardingProgressService->gymChecklist($gym),
+            'renewalCandidates' => $renewalCandidates,
+            'openDueMemberships' => $openDueMemberships,
             'recentMembers' => $recentMembers,
-            'pendingMemberships' => (clone $membershipQuery)->with(['member', 'membershipPlan'])->where('due_amount', '>', 0)->latest('due_date')->take(8)->get(),
-            'overdueMemberships' => (clone $membershipQuery)
-                ->with(['member', 'membershipPlan'])
-                ->where(function (Builder $query): void {
-                    $query->where('payment_status', PaymentStatus::Overdue->value)
-                        ->orWhere(function (Builder $nested): void {
-                            $nested->whereNotNull('due_date')
-                                ->whereDate('due_date', '<', now()->toDateString())
-                                ->where('due_amount', '>', 0);
-                        });
-                })
-                ->latest('due_date')
-                ->take(8)
-                ->get(),
-            'recentTrials' => (clone $trialQuery)->latest('id')->take(6)->get(),
             'expiringMemberships' => $expiringMemberships,
             'waitingTrials' => $waitingTrials,
             'inactiveMembers' => $inactiveMembers,
             'membersWithoutTrainer' => $membersWithoutTrainer,
             'overloadedTrainers' => $overloadedTrainers,
-            'pendingCustomFeeMemberships' => $pendingCustomFeeMemberships,
             'recentPayments' => $recentPayments,
             'recentAttendance' => $recentAttendance,
             'membersInGym' => $membersInGym,
-            'recentAnnouncements' => $recentAnnouncements,
             'recentActivity' => $recentActivity,
             'branchSnapshots' => $branchSnapshots,
-            'trainerLoadBoard' => $trainerLoadBoard,
             'visibility' => $visibility,
             'quickActions' => $quickActions,
-            'paymentHealth' => [
-                'unpaid' => (clone $membershipQuery)->where('payment_status', PaymentStatus::Unpaid->value)->count(),
-                'partial' => (clone $membershipQuery)->where('payment_status', PaymentStatus::Partial->value)->count(),
-                'paid' => (clone $membershipQuery)->where('payment_status', PaymentStatus::Paid->value)->count(),
-                'overdue' => (clone $membershipQuery)->where('payment_status', PaymentStatus::Overdue->value)->count(),
-            ],
             'charts' => [
                 'collections' => $collectionTrend,
                 'attendance' => $attendanceTrend,
@@ -428,6 +446,11 @@ class DashboardController extends Controller
                 PermissionName::MembershipsView->value,
                 PermissionName::MembershipsManage->value,
             ], $gym, $branchId),
+            'memberships_view' => $this->gymWebPanelService->canAnyPermission($request, [
+                PermissionName::MembershipsView->value,
+                PermissionName::MembershipsManage->value,
+            ], $gym, $branchId),
+            'manage_memberships_action' => $this->gymWebPanelService->canPermission($request, PermissionName::MembershipsManage->value, $gym, $branchId),
             'collect_payment_action' => $this->gymWebPanelService->canPermission($request, PermissionName::PaymentsManage->value, $gym, $branchId),
             'attendance' => $this->gymWebPanelService->canAnyPermission($request, [
                 PermissionName::AttendanceView->value,

@@ -791,6 +791,28 @@ class WebPanelTest extends TestCase
             'due_date' => now()->subDay()->toDateString(),
             'payment_status' => 'overdue',
         ]);
+        MemberMembership::query()->create([
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_id' => $memberB->id,
+            'membership_plan_id' => $plan->id,
+            'start_date' => now()->subDays(31)->toDateString(),
+            'expiry_date' => now()->subDay()->toDateString(),
+            'status' => 'expired',
+            'default_plan_price' => 3000,
+            'default_joining_fee' => 200,
+            'custom_fee_enabled' => false,
+            'discount_type' => 'fixed',
+            'discount_amount' => 0,
+            'joining_fee_waived' => false,
+            'partial_month_fee' => 0,
+            'pt_custom_fee' => 0,
+            'final_payable_amount' => 3200,
+            'amount_paid' => 2600,
+            'due_amount' => 600,
+            'due_date' => now()->subDay()->toDateString(),
+            'payment_status' => 'overdue',
+        ]);
 
         Payment::query()->create([
             'gym_id' => $gym->id,
@@ -853,11 +875,18 @@ class WebPanelTest extends TestCase
         $this->assertSame(2, $stats['total_members']);
         $this->assertSame(1, $stats['active_members']);
         $this->assertSame(1, $stats['expired_members']);
+        $this->assertSame(1, $stats['renewal_candidates']);
+        $this->assertSame(1, $stats['expired_yesterday']);
+        $this->assertSame(1, $stats['expired_last_7_days']);
+        $this->assertSame(0, $stats['scheduled_renewals']);
         $this->assertSame(1, $stats['expiring_soon']);
         $this->assertSame(1, $stats['today_check_ins']);
         $this->assertSame(1, $stats['members_in_gym']);
-        $this->assertSame(1700.0, $stats['pending_dues']);
-        $this->assertSame(1700.0, $stats['overdue_dues']);
+        $this->assertSame(2300.0, $stats['pending_dues']);
+        $this->assertSame(2300.0, $stats['overdue_dues']);
+        $this->assertSame(1700.0, $stats['current_cycle_dues']);
+        $this->assertSame(600.0, $stats['expired_cycle_dues']);
+        $this->assertSame(2, $stats['members_with_dues']);
         $this->assertSame(1000.0, $stats['monthly_collection']);
         $this->assertSame(1, $stats['custom_fee_members_count']);
         $this->assertSame(1, $stats['total_trainers']);
@@ -872,9 +901,16 @@ class WebPanelTest extends TestCase
         $this->assertSame(1, $charts['attendance']->last()['value']);
         $this->assertSame($branch->name, $charts['branch_members']->first()['label']);
         $this->assertCount(1, $response->viewData('membersInGym'));
+        $this->assertCount(1, $response->viewData('renewalCandidates'));
+        $this->assertSame($memberB->id, $response->viewData('renewalCandidates')->first()->user_id);
+        $this->assertCount(2, $response->viewData('openDueMemberships'));
         $this->assertSame(2, $response->viewData('branchSnapshots')->first()['members']);
         $this->assertSame(1000.0, $response->viewData('branchSnapshots')->first()['monthly_collection']);
         $response->assertSee('Members currently in gym');
+        $response->assertSee('Today’s action center');
+        $response->assertSee('Expired yesterday');
+        $response->assertSee('Upcoming membership expiries');
+        $response->assertSee('Trials awaiting contact');
         $response->assertSee('Attendance Exceptions');
     }
 
