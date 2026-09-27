@@ -105,6 +105,7 @@ class GymSelfEnrollmentFeatureTest extends TestCase
             ->assertSee($branch->name)
             ->assertSee('new-gym-logo.png', false)
             ->assertSee('data-enrollment-shell', false)
+            ->assertSee(asset('css/enrollment.css').'?v='.hash_file('sha256', public_path('css/enrollment.css')), false)
             ->assertSee('data-initial-step="1"', false)
             ->assertDontSee('existing-member-card', false)
             ->assertDontSee('public-header', false)

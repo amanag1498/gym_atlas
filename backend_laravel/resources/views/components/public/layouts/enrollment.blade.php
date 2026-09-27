@@ -28,6 +28,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('tailadmin/fonts/tabler-icons.min.css') }}">
     @vite(['resources/css/public-entry.css'])
+    {{-- Keep enrollment controls in sync with Blade even when a deploy reuses an older Vite build. --}}
+    <link rel="stylesheet" href="{{ asset('css/enrollment.css') }}?v={{ hash_file('sha256', public_path('css/enrollment.css')) }}">
     <style>
         [hidden] { display: none !important; }
         button:disabled { cursor: not-allowed; opacity: .5; }

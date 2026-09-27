@@ -33,60 +33,30 @@
     @endphp
 
     <div class="atlas-enrollment-page min-h-screen bg-slate-100">
-        <aside class="hidden" aria-hidden="true">
-            @if($gym->cover_image_url)<div class="absolute inset-0 bg-cover bg-center opacity-25" style="background-image: url('{{ $gym->cover_image_url }}')"></div>@endif
-            <div class="absolute inset-0 bg-gradient-to-b from-slate-950/30 via-slate-950/75 to-slate-950"></div>
-            <div class="absolute -right-24 top-10 h-72 w-72 rounded-full bg-teal-400/20 blur-3xl"></div>
-            <div class="relative"><span class="inline-flex rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[.18em] text-teal-200">Member enrollment</span></div>
-            <div class="relative py-14">
-                <img src="{{ $gymLogoUrl }}" alt="{{ $gymLogoAlt }}" class="h-28 w-28 rounded-[2rem] border-4 border-white/15 bg-white shadow-2xl {{ $gymHasLogo ? 'object-cover' : 'object-contain p-3' }}">
-                <h1 class="mt-7 max-w-md text-4xl font-bold tracking-[-.04em]">{{ $gym->name }}</h1>
-                <p class="mt-3 flex items-center gap-2 text-sm text-slate-300"><i class="ti ti-map-pin text-teal-300"></i>{{ $branchLabel }}</p>
-                <div class="mt-8 flex flex-wrap gap-2 text-xs font-medium text-slate-300">@foreach(['Contact','Goals','Profile','Review'] as $label)<span class="rounded-full border border-white/10 bg-white/5 px-3 py-2">{{ $label }}</span>@endforeach</div>
-            </div>
-            <div class="relative flex items-center gap-2 text-xs text-slate-400"><img src="{{ asset('images/public-site/brand/atlas-mark-64.png') }}" alt="" class="h-5 w-5 rounded-md"><span>Powered by Gym Atlas</span></div>
-        </aside>
-
-        <main class="min-w-0">
-            <header class="relative overflow-hidden bg-slate-950 px-5 pb-12 pt-7 text-white lg:hidden">
-                @if($gym->cover_image_url)<div class="absolute inset-0 bg-cover bg-center opacity-20" style="background-image: url('{{ $gym->cover_image_url }}')"></div>@endif
-                <div class="absolute inset-0 bg-gradient-to-b from-slate-950/40 to-slate-950"></div>
-                <div class="relative flex items-center gap-4">
-                    <img src="{{ $gymLogoUrl }}" alt="{{ $gymLogoAlt }}" class="h-16 w-16 rounded-2xl border-2 border-white/15 bg-white shadow-lg {{ $gymHasLogo ? 'object-cover' : 'object-contain p-2' }}">
-                    <div class="min-w-0"><p class="text-[10px] font-bold uppercase tracking-[.18em] text-teal-300">Member enrollment</p><h1 class="mt-1 truncate text-2xl font-bold">{{ $gym->name }}</h1><p class="mt-1 truncate text-xs text-slate-300">{{ $branchLabel }}</p></div>
-                </div>
-            </header>
-
-            <div class="mx-auto max-w-5xl px-4 pb-8 sm:px-8 lg:flex lg:min-h-screen lg:items-center lg:px-10 lg:py-10">
-                <div class="-mt-7 w-full lg:mt-0">
+        <div class="atlas-enrollment-surface min-w-0">
+            <div class="atlas-enrollment-workspace mx-auto w-full max-w-3xl px-4 py-6 sm:px-8 sm:py-10">
+                <div class="w-full">
                     @if($errors->any())<div class="mb-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 shadow-sm" role="alert"><div class="flex gap-3"><i class="ti ti-alert-circle mt-0.5 text-lg" aria-hidden="true"></i><div><strong>Check the highlighted details.</strong><ul class="mt-1 list-disc pl-5">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div></div></div>@endif
 
                     <section class="atlas-enrollment-hero mb-4">
                         <div class="atlas-enrollment-hero-main">
-                            <img src="{{ $gymLogoUrl }}" alt="{{ $gymLogoAlt }}" class="atlas-enrollment-logo {{ $gymHasLogo ? 'object-cover' : 'object-contain p-3' }}">
+                            <img src="{{ $gymLogoUrl }}" alt="{{ $gymLogoAlt }}" width="76" height="76" class="atlas-enrollment-logo {{ $gymHasLogo ? 'object-cover' : 'object-contain p-3' }}">
                             <div class="min-w-0">
                                 <p class="atlas-enrollment-kicker">Gym Atlas enrollment</p>
                                 <h1>{{ $gym->name }}</h1>
                                 <p><i class="ti ti-map-pin" aria-hidden="true"></i>{{ $branchLabel }}</p>
                             </div>
                         </div>
-                        <div class="atlas-enrollment-hero-meta">
-                            <span><i class="ti ti-shield-check" aria-hidden="true"></i>Secure profile</span>
-                            <span><i class="ti ti-clock" aria-hidden="true"></i>2 minute setup</span>
-                        </div>
                     </section>
 
-                    <div class="atlas-app-handoff mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" data-app-handoff>
-                        <div class="flex min-w-0 items-center gap-3">
-                            <img src="{{ asset('images/public-site/brand/atlas-mark-64.png') }}" alt="" class="h-10 w-10 shrink-0 rounded-xl shadow-sm">
-                            <div class="min-w-0"><div class="font-semibold text-slate-950">Gym Atlas already installed?</div><p class="mt-0.5 text-sm text-slate-600">Open the app with this gym ready to join.</p></div>
-                        </div>
-                        <a href="{{ $appDeepLink }}" data-open-member-app data-android-intent="{{ $androidIntentLink }}" class="public-button public-button-primary shrink-0 justify-center">Open Gym Atlas <i class="ti ti-arrow-up-right" aria-hidden="true"></i></a>
+                    <div class="atlas-app-handoff mb-4" data-app-handoff>
+                        <p>Gym Atlas already installed?</p>
+                        <a href="{{ $appDeepLink }}" data-open-member-app data-android-intent="{{ $androidIntentLink }}" class="atlas-app-link">Open app <i class="ti ti-arrow-up-right" aria-hidden="true"></i></a>
                     </div>
 
                     <section class="atlas-enrollment-card overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,.10)]">
                         <div class="border-b border-slate-200/80 bg-white p-5 sm:p-6">
-                            <div class="flex items-start justify-between gap-4"><div><p class="text-[11px] font-bold uppercase tracking-[.2em] text-teal-700">Secure enrollment</p><h2 class="mt-1 text-2xl font-bold tracking-[-.035em] text-slate-950">How would you like to join?</h2><p class="mt-2 text-sm leading-6 text-slate-500">Create a profile, or use your existing Gym Atlas account.</p></div><div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-xl text-teal-700"><i class="ti ti-shield-check" aria-hidden="true"></i></div></div>
+                            <div class="flex items-start justify-between gap-4"><div><h2 class="mt-1 text-xl font-bold tracking-[-.035em] text-slate-950">How would you like to join?</h2><p class="mt-2 text-sm leading-6 text-slate-500">Create a profile, or use your existing Gym Atlas account.</p></div><div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-xl text-teal-700"><i class="ti ti-shield-check" aria-hidden="true"></i></div></div>
                             <div class="mt-5 grid grid-cols-2 rounded-2xl border border-slate-200 bg-slate-100/80 p-1.5" role="tablist" aria-label="Enrollment method">
                                 <button id="new-member-tab" type="button" role="tab" aria-selected="true" aria-controls="new-member-lane" class="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 py-2.5 text-sm font-semibold text-white shadow-sm"><i class="ti ti-user-plus" aria-hidden="true"></i>New member</button>
                                 <button id="existing-member-tab" type="button" role="tab" aria-selected="false" aria-controls="existing-member-lane" class="flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600"><i class="ti ti-login-2" aria-hidden="true"></i>Atlas account</button>
@@ -162,7 +132,7 @@
                     <div class="mt-5 flex items-center justify-center gap-2 text-xs text-slate-500 lg:hidden"><img src="{{ asset('images/public-site/brand/atlas-mark-64.png') }}" alt="" class="h-5 w-5 rounded-md"><span>Powered by Gym Atlas</span></div>
                 </div>
             </div>
-        </main>
+        </div>
     </div>
 
     <script>
