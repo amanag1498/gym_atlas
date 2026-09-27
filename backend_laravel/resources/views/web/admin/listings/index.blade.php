@@ -122,7 +122,9 @@
                                             @if (($gym->public_listing_approval_status ?? 'pending') !== 'approved')
                                                 <form method="POST" action="{{ route('web.admin.gyms.listing', $gym) }}" data-confirm-submit data-confirm-title="Approve this public listing?" data-confirm-message="The gym will become searchable once every discovery requirement is satisfied." data-confirm-button="Approve Listing">
                                                     @csrf
-                                                    <input type="hidden" name="public_listing_approval_status" value="approved">
+                                                    <div data-confirm-payload>
+                                                        <input type="hidden" name="public_listing_approval_status" value="approved">
+                                                    </div>
                                                     <x-action-button type="submit">Approve</x-action-button>
                                                 </form>
                                             @endif

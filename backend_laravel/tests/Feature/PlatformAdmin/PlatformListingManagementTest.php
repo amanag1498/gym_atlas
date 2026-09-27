@@ -84,7 +84,13 @@ class PlatformListingManagementTest extends TestCase
             ->assertSee('Public Listings')
             ->assertSee('Discovery Gym')
             ->assertSee('Pending Discovery Gym')
-            ->assertSee('Approve');
+            ->assertSee('Approve')
+            ->assertSee('data-confirm-payload', false);
+
+        $this->get(route('web.admin.gyms.show', $pendingGym))
+            ->assertOk()
+            ->assertSee('Approve Listing')
+            ->assertSee('data-confirm-payload', false);
 
         $this->getJson('/api/public/discovery/gyms')
             ->assertOk()
