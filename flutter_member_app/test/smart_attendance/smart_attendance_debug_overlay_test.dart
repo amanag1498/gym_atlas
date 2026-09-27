@@ -37,10 +37,14 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('SA BG'), findsOneWidget);
-    await tester.tap(
-      find.byKey(const ValueKey('smart-attendance-debug-control')),
+    expect(find.text('SMART ATTENDANCE DEBUG'), findsOneWidget);
+    expect(find.text('BG scan · Bluetooth granted'), findsOneWidget);
+    expect(
+      find.textContaining('Waiting for an Atlas hub signal'),
+      findsNothing,
     );
+    expect(find.text('View live logic'), findsOneWidget);
+    await tester.tap(find.text('View live logic'));
     await tester.pumpAndSettle();
 
     expect(find.text('Smart Attendance diagnostics'), findsOneWidget);

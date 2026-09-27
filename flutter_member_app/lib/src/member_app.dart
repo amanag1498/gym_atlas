@@ -381,8 +381,9 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
     await _reportSmartAttendanceState();
   }
 
-  Future<void> _reportSmartAttendanceState() {
-    return fcmTokenService.registerPresence(
+  Future<void> _reportSmartAttendanceState() async {
+    smartAttendanceController.markBackendSyncStarted();
+    final success = await fcmTokenService.registerPresence(
       appRole: 'member',
       bluetoothPermissionStatus:
           smartAttendanceController.bluetoothPermissionStatus,
@@ -394,6 +395,10 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
           : 'stopped',
       smartAttendanceLastDetectionAt:
           smartAttendanceController.latestDetection?.detectedAt,
+    );
+    smartAttendanceController.markBackendSyncFinished(
+      success: success,
+      error: fcmTokenService.lastPresenceError,
     );
   }
 

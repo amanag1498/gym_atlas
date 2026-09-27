@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'smart_attendance_controller.dart';
 
-class SmartAttendanceDebugOverlay extends StatelessWidget {
+class SmartAttendanceDebugOverlay extends StatefulWidget {
   const SmartAttendanceDebugOverlay({
     super.key,
     required this.controller,
@@ -13,18 +13,28 @@ class SmartAttendanceDebugOverlay extends StatelessWidget {
   final Widget child;
 
   @override
+  State<SmartAttendanceDebugOverlay> createState() =>
+      _SmartAttendanceDebugOverlayState();
+}
+
+class _SmartAttendanceDebugOverlayState
+    extends State<SmartAttendanceDebugOverlay> {
+  bool _expanded = true;
+
+  @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        child,
+        widget.child,
         Positioned(
           right: 12,
           bottom: 92,
           child: SafeArea(
             minimum: const EdgeInsets.only(bottom: 4),
             child: AnimatedBuilder(
-              animation: controller,
+              animation: widget.controller,
               builder: (context, _) {
+                final controller = widget.controller;
                 final active = controller.scanning;
                 final mode = !active
                     ? 'OFF'
@@ -37,58 +47,129 @@ class SmartAttendanceDebugOverlay extends StatelessWidget {
                     ? const Color(0xFF29C987)
                     : const Color(0xFFF5A524);
 
-                return Semantics(
-                  button: true,
-                  label: 'Open Smart Attendance diagnostics',
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      key: const ValueKey('smart-attendance-debug-control'),
-                      borderRadius: BorderRadius.circular(22),
-                      onTap: () => _showDetails(context),
-                      child: Ink(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
+                if (!_expanded) {
+                  return _CollapsedDebugControl(
+                    color: color,
+                    mode: mode,
+                    onTap: () => setState(() => _expanded = true),
+                  );
+                }
+
+                final detection = controller.latestDetection;
+                return Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    key: const ValueKey('smart-attendance-debug-control'),
+                    width: 300,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xF5111827),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: color.withValues(alpha: .65)),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x40000000),
+                          blurRadius: 22,
+                          offset: Offset(0, 8),
                         ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xED111827),
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(
-                            color: color.withValues(alpha: .7),
-                          ),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x33000000),
-                              blurRadius: 16,
-                              offset: Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
                           children: [
                             Container(
-                              width: 8,
-                              height: 8,
+                              width: 9,
+                              height: 9,
                               decoration: BoxDecoration(
                                 color: color,
                                 shape: BoxShape.circle,
                               ),
                             ),
-                            const SizedBox(width: 7),
-                            Text(
-                              'SA $mode',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: .8,
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'SMART ATTENDANCE DEBUG',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: .7,
+                                ),
+                              ),
+                            ),
+                            InkWell(
+                              borderRadius: BorderRadius.circular(16),
+                              onTap: () => setState(() => _expanded = false),
+                              child: const Padding(
+                                padding: EdgeInsets.all(3),
+                                child: Icon(
+                                  Icons.remove_rounded,
+                                  color: Colors.white70,
+                                  size: 18,
+                                ),
                               ),
                             ),
                           ],
                         ),
-                      ),
+                        const SizedBox(height: 10),
+                        Text(
+                          '$mode scan · Bluetooth ${controller.bluetoothPermissionStatus}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          detection == null
+                              ? 'Waiting for an Atlas hub signal'
+                              : '${detection.publicId} · ${detection.rssi ?? '—'} dBm · ${detection.source}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFFCBD5E1),
+                            fontSize: 11,
+                            height: 1.35,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _syncSummary(controller),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: controller.backendSyncStatus == 'failed'
+                                ? const Color(0xFFFDA4AF)
+                                : const Color(0xFF94A3B8),
+                            fontSize: 11,
+                            height: 1.35,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          height: 34,
+                          child: FilledButton.icon(
+                            onPressed: () => _showDetails(context),
+                            icon: const Icon(
+                              Icons.bug_report_outlined,
+                              size: 16,
+                            ),
+                            label: const Text('View live logic'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF3641F5),
+                              foregroundColor: Colors.white,
+                              textStyle: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 );
@@ -109,9 +190,66 @@ class SmartAttendanceDebugOverlay extends StatelessWidget {
       builder: (_) => FractionallySizedBox(
         heightFactor: .82,
         child: AnimatedBuilder(
-          animation: controller,
+          animation: widget.controller,
           builder: (context, _) =>
-              _SmartAttendanceDebugDetails(controller: controller),
+              _SmartAttendanceDebugDetails(controller: widget.controller),
+        ),
+      ),
+    );
+  }
+
+  String _syncSummary(SmartAttendanceController controller) {
+    return switch (controller.backendSyncStatus) {
+      'sending' => 'Backend report: sending…',
+      'synced' =>
+        'Backend report: synced ${_shortTime(controller.lastBackendSyncAt)}',
+      'failed' =>
+        'Backend report failed: ${controller.backendSyncError ?? 'unknown error'}',
+      _ => 'Backend report: not sent yet',
+    };
+  }
+
+  String _shortTime(DateTime? value) {
+    if (value == null) return '';
+    final local = value.toLocal();
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
+  }
+}
+
+class _CollapsedDebugControl extends StatelessWidget {
+  const _CollapsedDebugControl({
+    required this.color,
+    required this.mode,
+    required this.onTap,
+  });
+
+  final Color color;
+  final String mode;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        onTap: onTap,
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: const Color(0xF5111827),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: color.withValues(alpha: .7)),
+          ),
+          child: Text(
+            'Smart Attendance · $mode',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
       ),
     );
@@ -167,6 +305,21 @@ class _SmartAttendanceDebugDetails extends StatelessWidget {
               label: 'Attendance request',
               value: controller.checkInInFlight ? 'Sending' : 'Idle',
             ),
+            _DebugValue(
+              label: 'Backend report',
+              value: controller.backendSyncStatus,
+            ),
+            _DebugValue(
+              label: 'Last backend sync',
+              value: controller.lastBackendSyncAt == null
+                  ? 'Never'
+                  : _time(controller.lastBackendSyncAt!),
+            ),
+            if (controller.backendSyncError != null)
+              _DebugValue(
+                label: 'Backend error',
+                value: controller.backendSyncError!,
+              ),
           ],
         ),
         _DebugSection(

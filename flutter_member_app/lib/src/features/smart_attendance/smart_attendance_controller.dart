@@ -76,6 +76,9 @@ class SmartAttendanceController extends ChangeNotifier {
   bool _checkInInFlight = false;
   bool _backgroundScanning = false;
   String _bluetoothPermissionStatus = 'unknown';
+  String _backendSyncStatus = 'not_sent';
+  DateTime? _lastBackendSyncAt;
+  String? _backendSyncError;
   String? _lastError;
   String? _lastCheckInMessage;
 
@@ -84,6 +87,9 @@ class SmartAttendanceController extends ChangeNotifier {
   bool get checkInInFlight => _checkInInFlight;
   bool get backgroundScanning => _backgroundScanning;
   String get bluetoothPermissionStatus => _bluetoothPermissionStatus;
+  String get backendSyncStatus => _backendSyncStatus;
+  DateTime? get lastBackendSyncAt => _lastBackendSyncAt;
+  String? get backendSyncError => _backendSyncError;
   String? get lastError => _lastError;
   String? get lastCheckInMessage => _lastCheckInMessage;
   SmartAttendanceSession? get activeSession => _session;
@@ -93,6 +99,19 @@ class SmartAttendanceController extends ChangeNotifier {
       List.unmodifiable(_detections);
   List<SmartAttendanceScanDiagnostic> get diagnostics =>
       List.unmodifiable(_diagnostics);
+
+  void markBackendSyncStarted() {
+    _backendSyncStatus = 'sending';
+    _backendSyncError = null;
+    notifyListeners();
+  }
+
+  void markBackendSyncFinished({required bool success, String? error}) {
+    _backendSyncStatus = success ? 'synced' : 'failed';
+    _lastBackendSyncAt = _clock();
+    _backendSyncError = success ? null : error;
+    notifyListeners();
+  }
 
   Future<void> startForegroundScan() async {
     _lastError = null;

@@ -83,7 +83,10 @@ class AppPresenceFeatureTest extends TestCase
                 'smart_attendance_mode' => 'background',
                 'smart_attendance_last_detection_at' => now()->subMinute()->toIso8601String(),
             ])
-            ->assertOk();
+            ->assertOk()
+            ->assertJsonPath('data.bluetooth_permission_status', 'granted')
+            ->assertJsonPath('data.smart_attendance_scanning', true)
+            ->assertJsonPath('data.smart_attendance_mode', 'background');
 
         $this->assertDatabaseHas('user_app_presences', [
             'user_id' => $member->id,

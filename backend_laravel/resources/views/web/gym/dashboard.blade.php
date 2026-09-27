@@ -3,8 +3,8 @@
 @section('content')
     @php
         $visibleQuickActions = collect($quickActions)->filter(fn ($action) => $action['visible'])->values();
-        $trainerCoverage = $stats['total_members'] > 0
-            ? (int) round((($stats['total_members'] - $stats['members_without_trainer_count']) / $stats['total_members']) * 100)
+        $trainerCoverage = $stats['trainer_coverage_base'] > 0
+            ? (int) round((($stats['trainer_coverage_base'] - $stats['members_without_trainer_count']) / $stats['trainer_coverage_base']) * 100)
             : 0;
         $collectionRisk = (float) $stats['pending_dues'] > 0
             ? (int) min(100, round(((float) $stats['overdue_dues'] / (float) $stats['pending_dues']) * 100))
@@ -14,7 +14,7 @@
             ['label' => 'Open Dues', 'value' => '₹'.number_format((float) $stats['pending_dues'], 2), 'hint' => $collectionRisk > 0 ? $collectionRisk.'% overdue risk' : 'No overdue pressure', 'tone' => $collectionRisk > 0 ? 'rose' : 'sky'],
             ['label' => 'Active Members', 'value' => $stats['active_members'].' / '.$stats['total_members'], 'hint' => 'Live member base', 'tone' => 'sky'],
             ['label' => 'Trainer Coverage', 'value' => $trainerCoverage.'%', 'hint' => $stats['members_without_trainer_count'].' without trainer', 'tone' => $stats['members_without_trainer_count'] > 0 ? 'amber' : 'emerald'],
-            ['label' => 'Members in Gym', 'value' => $stats['members_in_gym'], 'hint' => $stats['today_check_ins'].' check-ins today', 'tone' => 'violet'],
+            ['label' => 'Members in Gym', 'value' => $stats['members_in_gym'], 'hint' => $stats['today_unique_members'].' unique today · '.$stats['today_check_ins'].' visits', 'tone' => 'violet'],
             ['label' => 'Pending Trials', 'value' => $stats['pending_trial_requests'], 'hint' => 'Lead follow-up queue', 'tone' => $stats['pending_trial_requests'] > 0 ? 'amber' : 'sky'],
         ];
         $pulseRows = [
@@ -22,6 +22,7 @@
             ['label' => 'Overdue Memberships', 'value' => $stats['overdue_memberships'], 'hint' => 'High-priority collections', 'tone' => 'danger'],
             ['label' => 'Custom Fee Reviews', 'value' => $stats['pending_custom_fee_reviews'], 'hint' => 'Pricing exceptions awaiting review', 'tone' => 'warning'],
             ['label' => 'Inactive Members', 'value' => $stats['inactive_members_count'], 'hint' => 'No recent activity or disabled state', 'tone' => 'danger'],
+            ['label' => 'Attendance Exceptions', 'value' => $stats['attendance_exceptions_count'], 'hint' => 'Open visits that need checkout review', 'tone' => $stats['attendance_exceptions_count'] > 0 ? 'danger' : 'success'],
         ];
         $paymentMix = [
             ['label' => 'Paid', 'value' => $paymentHealth['paid'], 'tone' => 'success'],

@@ -9,13 +9,14 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:gym_flutter_core/fcm_retry_policy.dart';
 
 import 'api_client.dart';
+import 'config.dart';
 
 class MemberFcmTokenService {
   MemberFcmTokenService(this._client, {FlutterSecureStorage? storage})
     : _storage = storage ?? const FlutterSecureStorage();
 
   static const _devicePresenceKey = 'member_device_presence_id';
-  static const _appVersion = String.fromEnvironment('APP_VERSION');
+  static const _appVersion = MemberConfig.appVersion;
 
   final MemberApiClient _client;
   final FlutterSecureStorage _storage;
@@ -28,8 +29,11 @@ class MemberFcmTokenService {
   String? _registeredToken;
   int _generation = 0;
   bool _active = false;
+  String? _lastPresenceError;
 
-  Future<void> registerPresence({
+  String? get lastPresenceError => _lastPresenceError;
+
+  Future<bool> registerPresence({
     required String appRole,
     String? bluetoothPermissionStatus,
     bool? smartAttendanceScanning,
@@ -37,16 +41,31 @@ class MemberFcmTokenService {
     DateTime? smartAttendanceLastDetectionAt,
   }) async {
     try {
-      await _sendPresence(
+      _lastPresenceError = null;
+      final response = await _sendPresence(
         appRole,
         bluetoothPermissionStatus: bluetoothPermissionStatus,
         smartAttendanceScanning: smartAttendanceScanning,
         smartAttendanceMode: smartAttendanceMode,
         smartAttendanceLastDetectionAt: smartAttendanceLastDetectionAt,
       );
+      if (bluetoothPermissionStatus != null) {
+        final data = Map<String, dynamic>.from(
+          response['data'] as Map? ?? const <String, dynamic>{},
+        );
+        if (data['bluetooth_permission_status'] != bluetoothPermissionStatus) {
+          throw StateError(
+            'The server did not confirm Bluetooth permission telemetry. '
+            'Deploy the latest backend migration and API code.',
+          );
+        }
+      }
       debugPrint('[fcm] app presence recorded for $appRole app');
+      return true;
     } catch (exception) {
+      _lastPresenceError = exception.toString();
       debugPrint('[fcm] app presence registration skipped: $exception');
+      return false;
     }
   }
 
@@ -293,14 +312,14 @@ class MemberFcmTokenService {
     }
   }
 
-  Future<void> _sendPresence(
+  Future<Map<String, dynamic>> _sendPresence(
     String appRole, {
     String? bluetoothPermissionStatus,
     bool? smartAttendanceScanning,
     String? smartAttendanceMode,
     DateTime? smartAttendanceLastDetectionAt,
   }) async {
-    await _client.post(
+    return _client.post(
       '/app-presence',
       data: {
         'platform': _platformLabel(),

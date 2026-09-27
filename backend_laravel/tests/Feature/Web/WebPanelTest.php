@@ -736,6 +736,7 @@ class WebPanelTest extends TestCase
 
         $memberA = $this->createMemberFor($gym, $branch, 'dash-a@example.com');
         $memberB = $this->createMemberFor($gym, $branch, 'dash-b@example.com');
+        $formerMember = $this->createMemberFor($gym, $branch, 'dash-left@example.com');
 
         MemberProfile::query()->where('user_id', $memberA->id)->update([
             'assigned_trainer_user_id' => $trainer->id,
@@ -746,6 +747,12 @@ class WebPanelTest extends TestCase
             'is_active' => false,
             'membership_status' => 'expired',
             'membership_expires_on' => now()->subDay()->toDateString(),
+        ]);
+        MemberProfile::query()->where('user_id', $formerMember->id)->update([
+            'is_active' => false,
+            'status' => 'inactive',
+            'membership_status' => 'left_gym',
+            'assigned_trainer_user_id' => null,
         ]);
 
         $plan = MembershipPlan::query()->create([
@@ -797,11 +804,31 @@ class WebPanelTest extends TestCase
             'paid_at' => now(),
             'payment_date' => now(),
         ]);
+        Payment::query()->create([
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_id' => $memberA->id,
+            'member_membership_id' => MemberMembership::query()->where('member_id', $memberA->id)->value('id'),
+            'amount' => 500,
+            'payment_mode' => 'cash',
+            'status' => 'recorded',
+            'payment_status' => 'paid',
+            'paid_at' => now()->subMonth(),
+            'payment_date' => now()->subMonth(),
+        ]);
 
         AttendanceLog::query()->create([
             'gym_id' => $gym->id,
             'branch_id' => $branch->id,
             'member_id' => $memberA->id,
+            'checked_in_by' => $trainer->id,
+            'check_in_method' => 'manual',
+            'checked_in_at' => now(),
+        ]);
+        AttendanceLog::query()->create([
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_id' => $formerMember->id,
             'checked_in_by' => $trainer->id,
             'check_in_method' => 'manual',
             'checked_in_at' => now(),
@@ -834,16 +861,21 @@ class WebPanelTest extends TestCase
         $this->assertSame(1000.0, $stats['monthly_collection']);
         $this->assertSame(1, $stats['custom_fee_members_count']);
         $this->assertSame(1, $stats['total_trainers']);
-        $this->assertSame(2.0, $stats['trainer_member_ratio']);
+        $this->assertSame(1.0, $stats['trainer_member_ratio']);
         $this->assertSame(1, $stats['pending_trial_requests']);
-        $this->assertSame(1, $stats['members_without_trainer_count']);
+        $this->assertSame(0, $stats['members_without_trainer_count']);
+        $this->assertSame(1, $stats['today_unique_members']);
+        $this->assertSame(0, $stats['attendance_exceptions_count']);
         $this->assertCount(30, $charts['collections']);
         $this->assertCount(30, $charts['attendance']);
         $this->assertSame(1000.0, (float) $charts['collections']->last()['value']);
         $this->assertSame(1, $charts['attendance']->last()['value']);
         $this->assertSame($branch->name, $charts['branch_members']->first()['label']);
         $this->assertCount(1, $response->viewData('membersInGym'));
+        $this->assertSame(2, $response->viewData('branchSnapshots')->first()['members']);
+        $this->assertSame(1000.0, $response->viewData('branchSnapshots')->first()['monthly_collection']);
         $response->assertSee('Members currently in gym');
+        $response->assertSee('Attendance Exceptions');
     }
 
     public function test_branch_manager_dashboard_is_branch_scoped(): void

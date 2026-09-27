@@ -40,17 +40,32 @@ class DashboardController extends Controller
         $branchScopeId = count($branchIds) === 1 ? $branchIds[0] : null;
         $visibility = $this->buildVisibility($request, $gym, $branchScopeId);
 
-        $memberQuery = MemberProfile::query()->where('gym_id', $gym->id)->whereIn('branch_id', $branchIds);
-        $membershipQuery = MemberMembership::query()->where('gym_id', $gym->id)->whereIn('branch_id', $branchIds);
+        $currentMemberProfile = fn (Builder $query): Builder => $query
+            ->where('gym_id', $gym->id)
+            ->whereIn('branch_id', $branchIds)
+            ->whereNotIn('membership_status', ['left_gym', 'cancelled']);
+        $memberQuery = $currentMemberProfile(MemberProfile::query());
+        $liveMemberQuery = (clone $memberQuery)
+            ->where('is_active', true)
+            ->whereIn('membership_status', ['active', 'frozen']);
+        $membershipQuery = MemberMembership::query()
+            ->where('gym_id', $gym->id)
+            ->whereIn('branch_id', $branchIds)
+            ->where('status', '!=', 'cancelled')
+            ->whereHas('memberProfile', $currentMemberProfile);
         $paymentQuery = Payment::query()
             ->where('gym_id', $gym->id)
             ->whereIn('branch_id', $branchIds)
             ->where('status', PaymentRecordStatus::Recorded->value);
-        $attendanceQuery = AttendanceLog::query()->where('gym_id', $gym->id)->whereIn('branch_id', $branchIds);
+        $attendanceQuery = AttendanceLog::query()
+            ->where('gym_id', $gym->id)
+            ->whereIn('branch_id', $branchIds)
+            ->whereHas('member.memberProfiles', $currentMemberProfile);
         $trialQuery = TrialRequest::query()->where('gym_id', $gym->id)->whereIn('branch_id', $branchIds);
         $trainerCount = TrainerProfile::query()->where('gym_id', $gym->id)->whereIn('branch_id', $branchIds)->count();
         $memberCount = (clone $memberQuery)->count();
-        $membersWithoutTrainerQuery = (clone $memberQuery)->whereNull('assigned_trainer_user_id');
+        $liveMemberCount = (clone $liveMemberQuery)->count();
+        $membersWithoutTrainerQuery = (clone $liveMemberQuery)->whereNull('assigned_trainer_user_id');
         $inactiveMemberQuery = (clone $memberQuery)
             ->where(function (Builder $query): void {
                 $query
@@ -63,7 +78,9 @@ class DashboardController extends Controller
             ->withCount([
                 'assignedMembers as assigned_members_count' => fn (Builder $query): Builder => $query
                     ->where('gym_id', $gym->id)
-                    ->whereIn('branch_id', $branchIds),
+                    ->whereIn('branch_id', $branchIds)
+                    ->where('is_active', true)
+                    ->whereIn('membership_status', ['active', 'frozen']),
             ])
             ->where('gym_id', $gym->id)
             ->whereIn('branch_id', $branchIds)
@@ -127,6 +144,18 @@ class DashboardController extends Controller
             ->get()
             ->unique('member_id')
             ->values();
+        $attendanceExceptionsCount = (clone $attendanceQuery)
+            ->whereNull('checked_out_at')
+            ->where(function (Builder $query): void {
+                $query->where('checked_in_at', '<', now()->subHours(6))
+                    ->orWhere(function (Builder $smart): void {
+                        $smart->where('check_in_method', 'smart_attendance')
+                            ->whereNotNull('last_presence_at')
+                            ->where('last_presence_at', '<=', now()->subHours(2));
+                    });
+            })
+            ->distinct('member_id')
+            ->count('member_id');
         $recentAnnouncements = Announcement::query()
             ->with(['creator', 'branch'])
             ->where('gym_id', $gym->id)
@@ -148,10 +177,15 @@ class DashboardController extends Controller
         $branchSnapshots = Branch::query()
             ->where('gym_id', $gym->id)
             ->whereIn('id', $branchIds)
-            ->withCount(['memberProfiles', 'trainerProfiles', 'trialRequests', 'attendanceLogs'])
-            ->withSum('payments as recorded_payments_sum_amount', 'amount')
+            ->withCount([
+                'memberProfiles' => fn (Builder $query): Builder => $query
+                    ->whereNotIn('membership_status', ['left_gym', 'cancelled']),
+                'trainerProfiles',
+                'trialRequests',
+                'attendanceLogs',
+            ])
             ->get()
-            ->map(function (Branch $branch) use ($membershipQuery, $attendanceQuery): array {
+            ->map(function (Branch $branch) use ($membershipQuery, $attendanceQuery, $paymentQuery): array {
                 return [
                     'id' => $branch->id,
                     'name' => $branch->name,
@@ -160,7 +194,10 @@ class DashboardController extends Controller
                     'trials' => (int) ($branch->trial_requests_count ?? 0),
                     'today_check_ins' => (clone $attendanceQuery)->where('branch_id', $branch->id)->whereDate('checked_in_at', now()->toDateString())->count(),
                     'pending_dues' => (float) (clone $membershipQuery)->where('branch_id', $branch->id)->sum('due_amount'),
-                    'monthly_collection' => (float) ($branch->recorded_payments_sum_amount ?? 0),
+                    'monthly_collection' => (float) (clone $paymentQuery)
+                        ->where('branch_id', $branch->id)
+                        ->whereBetween('paid_at', [now()->startOfMonth(), now()->endOfMonth()])
+                        ->sum('amount'),
                 ];
             })
             ->sortByDesc('members')
@@ -170,7 +207,9 @@ class DashboardController extends Controller
             ->withCount([
                 'assignedMembers as assigned_members_count' => fn (Builder $query): Builder => $query
                     ->where('gym_id', $gym->id)
-                    ->whereIn('branch_id', $branchIds),
+                    ->whereIn('branch_id', $branchIds)
+                    ->where('is_active', true)
+                    ->whereIn('membership_status', ['active', 'frozen']),
                 'workoutPlans as active_workout_plans_count' => fn (Builder $query): Builder => $query
                     ->where('gym_id', $gym->id)
                     ->whereIn('branch_id', $branchIds)
@@ -263,19 +302,22 @@ class DashboardController extends Controller
             'gym' => $gym,
             'stats' => [
                 'total_members' => $memberCount,
-                'active_members' => (clone $memberQuery)->where('is_active', true)->count(),
+                'active_members' => $liveMemberCount,
                 'expired_members' => (clone $memberQuery)->where('membership_status', 'expired')->count(),
                 'expiring_soon' => (clone $memberQuery)
                     ->whereBetween('membership_expires_on', [now()->toDateString(), now()->addDays(7)->toDateString()])
                     ->count(),
                 'today_check_ins' => (clone $attendanceQuery)->whereDate('checked_in_at', now()->toDateString())->count(),
+                'today_unique_members' => (clone $attendanceQuery)->whereDate('checked_in_at', now()->toDateString())->distinct('member_id')->count('member_id'),
                 'members_in_gym' => $membersInGym->count(),
+                'attendance_exceptions_count' => $attendanceExceptionsCount,
                 'pending_dues' => $pendingDuesAmount,
                 'overdue_dues' => $overdueDuesAmount,
                 'monthly_collection' => (float) (clone $paymentQuery)->whereBetween('paid_at', [now()->startOfMonth(), now()->endOfMonth()])->sum('amount'),
                 'custom_fee_members_count' => (clone $membershipQuery)->where('custom_fee_enabled', true)->count(),
                 'total_trainers' => $trainerCount,
-                'trainer_member_ratio' => $trainerCount > 0 ? round($memberCount / $trainerCount, 2) : null,
+                'trainer_coverage_base' => $liveMemberCount,
+                'trainer_member_ratio' => $trainerCount > 0 ? round($liveMemberCount / $trainerCount, 2) : null,
                 'trial_requests_count' => (clone $trialQuery)->count(),
                 'pending_trial_requests' => (clone $trialQuery)->where('status', 'pending')->count(),
                 'inactive_members_count' => (clone $inactiveMemberQuery)->count(),

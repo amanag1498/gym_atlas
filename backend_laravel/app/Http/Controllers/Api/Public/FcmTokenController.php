@@ -112,6 +112,10 @@ class FcmTokenController extends Controller
             'app_role' => $presence?->app_role ?? ($validated['app_role'] ?? $request->user()->active_role),
             'platform' => $presence?->platform ?? ($validated['platform'] ?? null),
             'last_seen_at' => $presence?->last_seen_at?->toIso8601String(),
+            'bluetooth_permission_status' => $presence?->bluetooth_permission_status,
+            'smart_attendance_scanning' => $presence?->smart_attendance_scanning,
+            'smart_attendance_mode' => $presence?->smart_attendance_mode,
+            'smart_attendance_last_detection_at' => $presence?->smart_attendance_last_detection_at?->toIso8601String(),
         ], 'App presence recorded successfully.');
     }
 
