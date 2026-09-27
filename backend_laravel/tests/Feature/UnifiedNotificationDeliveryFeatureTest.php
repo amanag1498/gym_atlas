@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\NotificationDeliveryStatus;
 use App\Enums\NotificationTransport;
+use App\Enums\RoleName;
 use App\Jobs\DeliverNotificationOutbox;
 use App\Jobs\PublishRealtimeEvent;
 use App\Models\CommunicationAutomationRule;
@@ -13,6 +14,7 @@ use App\Models\User;
 use App\Models\UserFcmToken;
 use App\Services\Firebase\FcmNotificationService;
 use App\Services\Notification\NotificationService;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Mockery;
@@ -21,6 +23,40 @@ use Tests\TestCase;
 class UnifiedNotificationDeliveryFeatureTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_platform_notification_ledger_shows_firebase_delivery_failure(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        $admin = User::factory()->create(['active_role' => RoleName::PlatformAdmin->value]);
+        $admin->assignRole(RoleName::PlatformAdmin->value);
+        $member = User::factory()->create(['active_role' => RoleName::Member->value]);
+        $notification = app(NotificationService::class)->create(
+            user: $member,
+            type: 'smart_attendance_check_in',
+            title: 'Welcome to Test',
+            body: 'Your Smart Attendance check-in was recorded.',
+            data: ['app_role' => 'member'],
+        );
+        NotificationDelivery::query()->updateOrCreate([
+            'notification_id' => $notification->id,
+            'transport' => NotificationTransport::Firebase->value,
+        ], [
+            'user_id' => $member->id,
+            'channel' => 'in_app',
+            'status' => NotificationDeliveryStatus::Failed->value,
+            'attempt_count' => 1,
+            'target_count' => 1,
+            'success_count' => 0,
+            'error_code' => 'firebase_send_failed',
+            'error_message' => 'Firebase rejected all target-device sends.',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('web.admin.notifications.index'))
+            ->assertOk()
+            ->assertSee('FCM · Failed')
+            ->assertSee('Firebase rejected all target-device sends.');
+    }
 
     public function test_creating_a_notification_records_feed_delivery_and_outbox_atomically(): void
     {

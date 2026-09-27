@@ -108,6 +108,27 @@
                                         <div>Created {{ optional($notification->created_at)->format('d M Y, h:i A') ?: '--' }}</div>
                                         <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">Scheduled {{ optional($notification->scheduled_for)->format('d M Y, h:i A') ?: 'Immediate' }}</div>
                                         <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">Read {{ optional($notification->read_at)->format('d M Y, h:i A') ?: 'Not opened' }}</div>
+                                        <div class="mt-3 flex flex-wrap gap-2">
+                                            @foreach ($notification->deliveries->sortBy('transport') as $delivery)
+                                                @php
+                                                    $deliveryTone = match ($delivery->status) {
+                                                        'sent', 'delivered', 'read' => 'success',
+                                                        'failed' => 'danger',
+                                                        'skipped' => 'warning',
+                                                        default => 'neutral',
+                                                    };
+                                                    $deliveryLabel = str($delivery->transport)->upper().' · '.str($delivery->status)->headline();
+                                                @endphp
+                                                <span title="{{ $delivery->error_message ?: $delivery->error_code }}">
+                                                    <x-status-badge :label="$deliveryLabel" :tone="$deliveryTone" />
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                        @if ($notification->deliveries->whereNotNull('error_message')->isNotEmpty())
+                                            <div class="mt-2 text-xs text-rose-600 dark:text-rose-300">
+                                                {{ $notification->deliveries->whereNotNull('error_message')->pluck('error_message')->unique()->implode(' ') }}
+                                            </div>
+                                        @endif
                                     </td>
                                 </tr>
                             @endforeach

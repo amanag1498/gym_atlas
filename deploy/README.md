@@ -170,6 +170,28 @@ Install the provided `systemd` units:
 - `deploy/systemd/gymatlas-queue.service`
 - `deploy/systemd/gymatlas-realtime.service`
 
+The Laravel worker must listen to every named application queue. The provided
+unit prioritizes `notifications`, then `whatsapp`, `webhooks`, and `default`.
+After updating the unit on an existing server, reload systemd and restart the
+worker:
+
+```bash
+cp /var/www/gym-atlas/deploy/systemd/gymatlas-queue.service /etc/systemd/system/gymatlas-queue.service
+systemctl daemon-reload
+systemctl enable --now gymatlas-queue
+systemctl restart gymatlas-queue
+systemctl status gymatlas-queue --no-pager
+```
+
+Confirm Firebase credentials, registered tokens, and queued work:
+
+```bash
+cd /var/www/gym-atlas/backend_laravel
+php artisan notifications:fcm-health
+php artisan communications:dispatch-outbox
+php artisan queue:monitor notifications,whatsapp,webhooks,default --max=100
+```
+
 Laravel scheduler:
 
 ```bash

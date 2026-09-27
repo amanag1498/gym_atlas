@@ -77,7 +77,7 @@ class AnnouncementController extends Controller
     public function notifications(Request $request): View
     {
         $query = Notification::query()
-            ->with(['user', 'gym', 'branch', 'creator', 'announcement'])
+            ->with(['user', 'gym', 'branch', 'creator', 'announcement', 'deliveries'])
             ->when($request->filled('search'), function ($builder) use ($request): void {
                 $search = '%'.$request->string('search')->trim().'%';
                 $builder->where(function ($nested) use ($search): void {
