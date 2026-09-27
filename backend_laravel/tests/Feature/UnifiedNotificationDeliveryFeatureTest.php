@@ -327,5 +327,34 @@ class UnifiedNotificationDeliveryFeatureTest extends TestCase
         $this->artisan('communications:dispatch-outbox')->assertSuccessful();
 
         Queue::assertPushed(DeliverNotificationOutbox::class, fn ($job): bool => $job->outboxId === $outbox->id);
+        $this->assertDatabaseHas('communication_outbox', [
+            'id' => $outbox->id,
+            'status' => 'queued',
+        ]);
+    }
+
+    public function test_repeated_dispatch_commands_only_enqueue_a_pending_outbox_once(): void
+    {
+        Queue::fake();
+        $outbox = CommunicationOutbox::query()->create([
+            'event_type' => 'notification.created',
+            'aggregate_type' => 'notification',
+            'aggregate_id' => 999,
+            'idempotency_key' => 'single-dispatch-test',
+            'status' => 'pending',
+            'attempt_count' => 0,
+            'available_at' => now()->subHour(),
+        ]);
+
+        $this->artisan('communications:dispatch-outbox')->assertSuccessful();
+        $this->artisan('communications:dispatch-outbox')->assertSuccessful();
+
+        Queue::assertPushed(DeliverNotificationOutbox::class, 1);
+        Queue::assertPushed(DeliverNotificationOutbox::class, fn ($job): bool => $job->outboxId === $outbox->id);
+        $this->assertDatabaseHas('communication_outbox', [
+            'id' => $outbox->id,
+            'status' => 'queued',
+        ]);
+        $this->assertNotNull($outbox->fresh()->locked_at);
     }
 }

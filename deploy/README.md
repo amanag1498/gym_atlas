@@ -196,6 +196,46 @@ Firebase jobs older than `FIREBASE_NOTIFICATION_MAX_AGE_MINUTES` (60 by
 default) are marked expired instead of sending a stale backlog after an
 outage.
 
+### Recovering a duplicated notification backlog
+
+Older releases did not reserve an outbox row before placing its delivery job
+on Redis. If the notification worker was stopped while the scheduler kept
+running, the same database outbox rows could be enqueued once per minute. A
+very large `notifications` queue with a much smaller number of pending
+`communication_outbox` rows indicates this condition.
+
+Deploy the reservation fix before clearing the duplicated Redis jobs. Stop the
+worker, clear only the `notifications` queue, then rebuild it from the durable
+database outbox:
+
+```bash
+systemctl stop gymatlas-queue
+cd /var/www/gym-atlas
+git pull origin main
+cd backend_laravel
+composer install --no-dev --optimize-autoloader
+php artisan optimize:clear
+php artisan migrate --force
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+cp /var/www/gym-atlas/deploy/systemd/gymatlas-queue.service /etc/systemd/system/gymatlas-queue.service
+systemctl daemon-reload
+php artisan queue:clear redis --queue=notifications
+php artisan communications:dispatch-outbox --limit=2000
+systemctl enable --now gymatlas-queue
+```
+
+Do not clear `default`, `whatsapp`, or `webhooks` as part of this recovery.
+Confirm that the notification queue falls and the worker remains healthy:
+
+```bash
+php artisan notifications:fcm-health
+php artisan queue:monitor notifications,whatsapp,webhooks,default --max=100
+systemctl status gymatlas-queue --no-pager
+tail -n 100 /var/log/gymatlas-queue-error.log
+```
+
 Laravel scheduler:
 
 ```bash
