@@ -70,11 +70,14 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
   String? _lastSmartAttendanceReportSignature;
   DateTime? _lastSmartAttendanceReportAt;
   bool _smartAttendanceReportInFlight = false;
+  late AppLifecycleState _appLifecycleState;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _appLifecycleState =
+        WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
     storage = const SecureStorageService();
     apiClient = MemberApiClient();
     runtimeController = AppRuntimeController(
@@ -342,15 +345,20 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
       return;
     }
 
+    final useBackgroundMode =
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS) &&
+        _appLifecycleState != AppLifecycleState.resumed;
     if (!smartAttendanceController.scanning ||
-        smartAttendanceController.backgroundScanning) {
-      unawaited(_startSmartAttendance(background: false));
+        smartAttendanceController.backgroundScanning != useBackgroundMode) {
+      unawaited(_startSmartAttendance(background: useBackgroundMode));
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
+    _appLifecycleState = state;
     final shouldScan =
         sessionController.isAuthenticated &&
         sessionController.hasRequiredConsent &&

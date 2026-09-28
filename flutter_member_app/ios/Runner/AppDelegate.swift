@@ -52,9 +52,15 @@ private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, C
   private var pendingStartResult: FlutterResult?
   private var wantsScanning = false
   private var backgroundMode = false
+  private var pendingEvents: [[String: Any]] = []
+  private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
   func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
     eventSink = events
+    for event in pendingEvents {
+      events(event)
+    }
+    pendingEvents.removeAll()
     return nil
   }
 
@@ -67,10 +73,12 @@ private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, C
     wantsScanning = true
     backgroundMode = background
     if centralManager.state == .poweredOn {
-      centralManager.scanForPeripherals(
-        withServices: [serviceUuid],
-        options: [CBCentralManagerScanOptionAllowDuplicatesKey: true]
-      )
+      restartScan()
+      if background {
+        beginBackgroundProcessingWindow()
+      } else {
+        endBackgroundProcessingWindow()
+      }
       result(nil)
       return
     }
@@ -88,6 +96,7 @@ private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, C
     wantsScanning = false
     backgroundMode = false
     centralManager.stopScan()
+    endBackgroundProcessingWindow()
     pendingStartResult = nil
     result?(nil)
   }
@@ -95,10 +104,7 @@ private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, C
   func centralManagerDidUpdateState(_ central: CBCentralManager) {
     guard wantsScanning else { return }
     if central.state == .poweredOn {
-      central.scanForPeripherals(
-        withServices: [serviceUuid],
-        options: [CBCentralManagerScanOptionAllowDuplicatesKey: true]
-      )
+      restartScan()
       pendingStartResult?(nil)
       pendingStartResult = nil
     } else if central.state != .unknown && central.state != .resetting {
@@ -110,6 +116,9 @@ private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, C
   func centralManager(_ central: CBCentralManager, willRestoreState dict: [String: Any]) {
     wantsScanning = true
     backgroundMode = true
+    if central.state == .poweredOn {
+      restartScan()
+    }
   }
 
   func centralManager(
@@ -119,13 +128,56 @@ private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, C
     rssi RSSI: NSNumber
   ) {
     let serviceData = advertisementData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data]
-    eventSink?([
+    var event: [String: Any] = [
       "serviceUuid": serviceUuid.uuidString.lowercased(),
-      "serviceData": serviceData?[serviceUuid]?.map { Int($0) },
       "rssi": RSSI.intValue,
       "detectedAt": Int(Date().timeIntervalSince1970 * 1000),
       "source": backgroundMode ? "ios_background_ble" : "ios_foreground_ble",
-    ])
+    ]
+    event["serviceData"] = serviceData?[serviceUuid]?.map { Int($0) } ?? NSNull()
+
+    if backgroundMode || UIApplication.shared.applicationState != .active {
+      beginBackgroundProcessingWindow()
+    }
+    if let eventSink {
+      eventSink(event)
+    } else {
+      pendingEvents.append(event)
+      if pendingEvents.count > 8 {
+        pendingEvents.removeFirst(pendingEvents.count - 8)
+      }
+    }
+  }
+
+  private func restartScan() {
+    if centralManager.isScanning {
+      centralManager.stopScan()
+    }
+    centralManager.scanForPeripherals(
+      withServices: [serviceUuid],
+      options: [CBCentralManagerScanOptionAllowDuplicatesKey: !backgroundMode]
+    )
+  }
+
+  private func beginBackgroundProcessingWindow() {
+    endBackgroundProcessingWindow()
+    let task = UIApplication.shared.beginBackgroundTask(
+      withName: "GymAtlasSmartAttendance"
+    ) { [weak self] in
+      self?.endBackgroundProcessingWindow()
+    }
+    backgroundTask = task
+    guard task != .invalid else { return }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 20) { [weak self] in
+      guard self?.backgroundTask == task else { return }
+      self?.endBackgroundProcessingWindow()
+    }
+  }
+
+  private func endBackgroundProcessingWindow() {
+    guard backgroundTask != .invalid else { return }
+    UIApplication.shared.endBackgroundTask(backgroundTask)
+    backgroundTask = .invalid
   }
 
   private func stateMessage(_ state: CBManagerState) -> String {
