@@ -54,6 +54,7 @@ private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, C
   private var backgroundMode = false
   private var pendingEvents: [[String: Any]] = []
   private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+  private let serviceDataCachePrefix = "smartAttendance.serviceData."
 
   func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
     eventSink = events
@@ -128,13 +129,32 @@ private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, C
     rssi RSSI: NSNumber
   ) {
     let serviceData = advertisementData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data]
+    let peripheralCacheKey = serviceDataCachePrefix + peripheral.identifier.uuidString
+    let receivedServiceData = serviceData?[serviceUuid]
+    if let receivedServiceData {
+      UserDefaults.standard.set(receivedServiceData, forKey: peripheralCacheKey)
+    }
+    let resolvedServiceData = receivedServiceData
+      ?? UserDefaults.standard.data(forKey: peripheralCacheKey)
+    let usedCachedServiceData = receivedServiceData == nil && resolvedServiceData != nil
+    let source = backgroundMode
+      ? (usedCachedServiceData ? "ios_background_ble_cached" : "ios_background_ble")
+      : "ios_foreground_ble"
     var event: [String: Any] = [
       "serviceUuid": serviceUuid.uuidString.lowercased(),
       "rssi": RSSI.intValue,
       "detectedAt": Int(Date().timeIntervalSince1970 * 1000),
-      "source": backgroundMode ? "ios_background_ble" : "ios_foreground_ble",
+      "source": source,
     ]
-    event["serviceData"] = serviceData?[serviceUuid]?.map { Int($0) } ?? NSNull()
+    event["serviceData"] = resolvedServiceData?.map { Int($0) } ?? NSNull()
+    NSLog(
+      "[SmartAttendance] discovered peripheral=%@ mode=%@ rssi=%d serviceData=%@ cached=%@",
+      peripheral.identifier.uuidString,
+      backgroundMode ? "background" : "foreground",
+      RSSI.intValue,
+      receivedServiceData == nil ? "missing" : "present",
+      usedCachedServiceData ? "yes" : "no"
+    )
 
     if backgroundMode || UIApplication.shared.applicationState != .active {
       beginBackgroundProcessingWindow()
@@ -156,6 +176,11 @@ private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, C
     centralManager.scanForPeripherals(
       withServices: [serviceUuid],
       options: [CBCentralManagerScanOptionAllowDuplicatesKey: !backgroundMode]
+    )
+    NSLog(
+      "[SmartAttendance] scan restarted mode=%@ appState=%ld",
+      backgroundMode ? "background" : "foreground",
+      UIApplication.shared.applicationState.rawValue
     )
   }
 

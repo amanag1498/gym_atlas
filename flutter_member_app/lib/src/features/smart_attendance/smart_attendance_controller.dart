@@ -289,8 +289,9 @@ class SmartAttendanceController extends ChangeNotifier {
     // strong background discovery must therefore be handled as the confirmed
     // presence event; waiting for a second packet can prevent the visit from
     // ever being recorded.
-    final isCoalescedIosBackgroundDetection =
-        detection.source == 'ios_background_ble';
+    final isCoalescedIosBackgroundDetection = detection.source.startsWith(
+      'ios_background_ble',
+    );
     if (!isCoalescedIosBackgroundDetection &&
         now.difference(firstSeen) < _presenceWindow) {
       _logicState = 'Confirming continuous hub presence for 2.4 seconds.';

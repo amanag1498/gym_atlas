@@ -93,6 +93,31 @@ void main() {
     },
   );
 
+  test('iOS background discovery accepts foreground-cached hub data', () async {
+    final scanner = _FakeScanner();
+    final client = _FakeCheckInClient();
+    final now = DateTime(2026, 9, 28, 12);
+    final controller = SmartAttendanceController(
+      scanner: scanner,
+      checkInClient: client,
+      successCache: _FakeSuccessCache(),
+      selectedGymIdProvider: () async => 7,
+      memberIdProvider: () => 42,
+      requestPermissions: () async => true,
+      clock: () => now,
+      presenceWindow: const Duration(seconds: 3),
+      requestDebounce: Duration.zero,
+    );
+
+    await controller.startBackgroundScan();
+    scanner.emit(
+      _detection('SAHABC123DEF4567', now, source: 'ios_background_ble_cached'),
+    );
+    await _pumpAsync();
+
+    expect(client.calls, hasLength(1));
+  });
+
   test('starting the same scan mode twice is idempotent', () async {
     final scanner = _FakeScanner();
     final controller = SmartAttendanceController(
