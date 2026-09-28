@@ -353,6 +353,14 @@ class _SmartAttendanceDebugDetails extends StatelessWidget {
           title: 'Scanner',
           children: [
             _DebugValue(
+              label: 'Hub enabled for selected gym',
+              value: switch (controller.smartAttendanceAvailable) {
+                true => 'Yes',
+                false => 'No — permissions are not requested',
+                null => 'Checking',
+              },
+            ),
+            _DebugValue(
               label: 'Bluetooth permission',
               value: controller.bluetoothPermissionStatus,
             ),

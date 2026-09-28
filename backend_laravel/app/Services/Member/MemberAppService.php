@@ -10,6 +10,7 @@ use App\Models\MemberDailyStep;
 use App\Models\MemberMembership;
 use App\Models\MemberProfile;
 use App\Models\ScheduledReminder;
+use App\Models\SmartAttendanceHub;
 use App\Models\TrialRequest;
 use App\Models\User;
 use App\Models\WorkoutPlan;
@@ -724,10 +725,19 @@ class MemberAppService
             && $branch !== null
             && $branch->is_active
             && $branch->status === 'active';
+        $smartAttendanceAvailable = $enabled && SmartAttendanceHub::query()
+            ->where('gym_id', $gym->id)
+            ->where('is_active', true)
+            ->where('status', 'online')
+            ->where(fn ($query) => $query
+                ->whereNull('branch_id')
+                ->orWhere('branch_id', $branch->id))
+            ->exists();
 
         if (! $enabled) {
             return [
                 'enabled' => false,
+                'smart_attendance_available' => false,
                 'biometric_enabled' => (bool) ($profile?->biometric_enabled ?? false),
                 'biometric_registered' => filled($profile?->biometric_identifier),
                 'checked_in_today' => false,
@@ -760,6 +770,7 @@ class MemberAppService
 
         return [
             'enabled' => true,
+            'smart_attendance_available' => $smartAttendanceAvailable,
             'biometric_enabled' => (bool) ($profile?->biometric_enabled ?? false),
             'biometric_registered' => filled($profile?->biometric_identifier),
             'checked_in_today' => $todayCheckIn !== null,

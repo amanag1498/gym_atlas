@@ -215,6 +215,15 @@ class SmartAttendanceHubFeatureTest extends TestCase
     public function test_member_can_check_in_with_active_smart_attendance_hub_detection(): void
     {
         [$owner, $member, $gym, $branch] = $this->makeGymScope();
+        $attendanceHeaders = [
+            'X-Gym-Id' => (string) $gym->id,
+            'X-Branch-Id' => (string) $branch->id,
+        ];
+        $this->actingAs($member, 'sanctum')
+            ->getJson('/api/member/attendance/status', $attendanceHeaders)
+            ->assertOk()
+            ->assertJsonPath('data.smart_attendance_available', false);
+
         $create = $this->actingAs($owner, 'sanctum')
             ->postJson('/api/gym/smart-attendance-hubs', [
                 'branch_id' => $branch->id,
@@ -222,7 +231,16 @@ class SmartAttendanceHubFeatureTest extends TestCase
                 'platform' => 'android',
             ], ['X-Gym-Id' => (string) $gym->id, 'X-Branch-Id' => (string) $branch->id])
             ->assertCreated();
+        $this->actingAs($member, 'sanctum')
+            ->getJson('/api/member/attendance/status', $attendanceHeaders)
+            ->assertOk()
+            ->assertJsonPath('data.smart_attendance_available', false);
         $this->markHubOnline((int) $create->json('data.hub.id'));
+
+        $this->actingAs($member, 'sanctum')
+            ->getJson('/api/member/attendance/status', $attendanceHeaders)
+            ->assertOk()
+            ->assertJsonPath('data.smart_attendance_available', true);
 
         $this->actingAs($member, 'sanctum')
             ->postJson('/api/member/attendance/smart-check-in', [

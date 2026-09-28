@@ -107,6 +107,7 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
       memberIdProvider: () => sessionController.user?.id,
       accessTokenProvider: () => sessionController.token,
       backgroundApiBaseUrl: MemberConfig.apiBaseUrl,
+      availabilityProvider: memberRepository.hasActiveSmartAttendanceHub,
     );
     _chatNotificationService = ChatNotificationService();
     _appLinks = AppLinks();

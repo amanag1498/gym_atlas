@@ -368,6 +368,7 @@ class AttendanceManagementFeatureTest extends TestCase
             ->getJson('/api/member/attendance/status')
             ->assertOk()
             ->assertJsonPath('data.enabled', false)
+            ->assertJsonPath('data.smart_attendance_available', false)
             ->assertJsonPath('data.message', 'Attendance is paused while your gym membership is frozen.');
     }
 

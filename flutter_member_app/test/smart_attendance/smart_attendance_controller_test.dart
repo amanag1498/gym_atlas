@@ -62,6 +62,30 @@ void main() {
   });
 
   test(
+    'gym without a Hub never requests permissions or starts scanning',
+    () async {
+      final scanner = _FakeScanner();
+      var permissionRequests = 0;
+      final controller = SmartAttendanceController(
+        scanner: scanner,
+        availabilityProvider: () async => false,
+        requestPermissions: () async {
+          permissionRequests++;
+          return true;
+        },
+      );
+
+      await controller.startForegroundScan();
+
+      expect(controller.smartAttendanceAvailable, isFalse);
+      expect(controller.scanning, isFalse);
+      expect(controller.bluetoothPermissionStatus, 'unavailable');
+      expect(permissionRequests, 0);
+      expect(scanner.foregroundStartCalls, 0);
+    },
+  );
+
+  test(
     'iOS background discovery records from its coalesced callback',
     () async {
       final scanner = _FakeScanner();

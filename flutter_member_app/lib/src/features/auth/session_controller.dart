@@ -291,6 +291,7 @@ class MemberSessionController extends ChangeNotifier {
   Future<void> selectGymContext(int? gymId) async {
     _apiClient.setGymContext(gymId);
     await _storage.saveSelectedGymId(gymId);
+    notifyListeners();
   }
 
   Future<void> grantConsent(String purpose) async {

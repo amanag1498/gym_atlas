@@ -20,6 +20,7 @@ class SmartAttendanceController extends ChangeNotifier {
     int? Function()? memberIdProvider,
     String? Function()? accessTokenProvider,
     String? backgroundApiBaseUrl,
+    Future<bool> Function()? availabilityProvider,
     Future<bool> Function()? requestPermissions,
     DateTime Function()? clock,
     Duration duplicateWindow = const Duration(seconds: 12),
@@ -37,6 +38,7 @@ class SmartAttendanceController extends ChangeNotifier {
        _memberIdProvider = memberIdProvider,
        _accessTokenProvider = accessTokenProvider,
        _backgroundApiBaseUrl = backgroundApiBaseUrl,
+       _availabilityProvider = availabilityProvider,
        _requestPermissions = requestPermissions,
        _clock = clock ?? DateTime.now,
        _duplicateWindow = duplicateWindow,
@@ -55,6 +57,7 @@ class SmartAttendanceController extends ChangeNotifier {
   final int? Function()? _memberIdProvider;
   final String? Function()? _accessTokenProvider;
   final String? _backgroundApiBaseUrl;
+  final Future<bool> Function()? _availabilityProvider;
   final Future<bool> Function()? _requestPermissions;
   final DateTime Function() _clock;
   final Duration _duplicateWindow;
@@ -81,6 +84,7 @@ class SmartAttendanceController extends ChangeNotifier {
   bool _permissionDenied = false;
   bool _checkInInFlight = false;
   bool _backgroundScanning = false;
+  bool? _smartAttendanceAvailable;
   String _bluetoothPermissionStatus = 'unknown';
   String _backendSyncStatus = 'not_sent';
   DateTime? _lastBackendSyncAt;
@@ -99,6 +103,7 @@ class SmartAttendanceController extends ChangeNotifier {
   bool get permissionDenied => _permissionDenied;
   bool get checkInInFlight => _checkInInFlight;
   bool get backgroundScanning => _backgroundScanning;
+  bool? get smartAttendanceAvailable => _smartAttendanceAvailable;
   String get bluetoothPermissionStatus => _bluetoothPermissionStatus;
   String get backendSyncStatus => _backendSyncStatus;
   DateTime? get lastBackendSyncAt => _lastBackendSyncAt;
@@ -136,6 +141,7 @@ class SmartAttendanceController extends ChangeNotifier {
   Future<void> startForegroundScan() async {
     _lastError = null;
     _permissionDenied = false;
+    if (!await _ensureSmartAttendanceAvailable()) return;
     final allowed = await _requestBluetoothPermission();
     if (!allowed) {
       _permissionDenied = true;
@@ -184,6 +190,7 @@ class SmartAttendanceController extends ChangeNotifier {
   Future<void> startBackgroundScan() async {
     _lastError = null;
     _permissionDenied = false;
+    if (!await _ensureSmartAttendanceAvailable()) return;
     final allowed = await _requestBluetoothPermission();
     if (!allowed) {
       _permissionDenied = true;
@@ -651,6 +658,37 @@ class SmartAttendanceController extends ChangeNotifier {
     }
 
     return _defaultPermissionRequest();
+  }
+
+  Future<bool> _ensureSmartAttendanceAvailable() async {
+    final provider = _availabilityProvider;
+    if (provider == null) {
+      _smartAttendanceAvailable = true;
+      return true;
+    }
+    try {
+      final available = await provider();
+      _smartAttendanceAvailable = available;
+      if (available) return true;
+      await _scanner.stopScan();
+      _scanning = false;
+      _backgroundScanning = false;
+      _bluetoothPermissionStatus = 'unavailable';
+      _logicState =
+          'Smart Attendance is not enabled for the selected gym. No Bluetooth or Location permission is needed.';
+      notifyListeners();
+      return false;
+    } catch (error) {
+      _smartAttendanceAvailable = null;
+      _scanning = false;
+      _backgroundScanning = false;
+      _bluetoothPermissionStatus = 'unknown';
+      _lastError =
+          'Could not verify Smart Attendance availability. Permissions were not requested.';
+      _logicState = _lastError!;
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<bool> _defaultPermissionRequest() async {

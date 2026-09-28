@@ -62,6 +62,15 @@ class MemberRepository implements SmartAttendanceCheckInClient {
   );
   Future<Map<String, dynamic>> fetchAttendanceStatus() async =>
       _client.get('/member/attendance/status');
+  Future<bool> hasActiveSmartAttendanceHub() async {
+    final response = await fetchAttendanceStatus();
+    final data = Map<String, dynamic>.from(
+      response['data'] as Map? ?? const <String, dynamic>{},
+    );
+    return data['enabled'] == true &&
+        data['smart_attendance_available'] == true;
+  }
+
   Future<Map<String, dynamic>> fetchBiometricAttendanceProfile() async =>
       _client.get('/member/attendance/biometric-profile');
 
