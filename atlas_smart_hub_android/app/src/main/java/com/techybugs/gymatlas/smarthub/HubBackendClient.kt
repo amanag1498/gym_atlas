@@ -17,10 +17,11 @@ class HubBackendClient {
         return credentialsFromResponse(credentials, response)
     }
 
-    fun heartbeat(credentials: HubCredentials, firmwareVersion: String, bleAdvertising: Boolean): HubRuntimeStatus {
+    fun heartbeat(credentials: HubCredentials, firmwareVersion: String, bleAdvertising: Boolean, batteryPercent: Int?): HubRuntimeStatus {
         val response = request(credentials, "POST", "/api/smart-attendance/hubs/${credentials.hubUuid}/heartbeat") {
             put("firmware_version", firmwareVersion)
             put("ble_advertising", bleAdvertising)
+            batteryPercent?.let { put("battery_percent", it) }
         }
         val data = response.optJSONObject("data") ?: JSONObject()
         val hub = data.optJSONObject("hub") ?: JSONObject()
@@ -31,6 +32,8 @@ class HubBackendClient {
             backendConnected = true,
             lastHeartbeatAt = data.optString("server_time", Instant.now().toString()),
             publicId = hub.optString("public_id").takeIf { it.isNotBlank() },
+            branchName = hub.optString("branch_name").takeIf { it.isNotBlank() && it != "null" },
+            batteryPercent = batteryPercent,
         )
     }
 
@@ -47,7 +50,11 @@ class HubBackendClient {
         return current.copy(
             publicId = hub.optString("public_id").takeIf { it.isNotBlank() } ?: current.publicId,
             gymName = gym.optString("name").takeIf { it.isNotBlank() } ?: current.gymName,
-            branchName = branch?.optString("name")?.takeIf { it.isNotBlank() } ?: current.branchName,
+            branchName = if (data.has("branch")) {
+                branch?.optString("name")?.takeIf { it.isNotBlank() }
+            } else {
+                current.branchName
+            },
         )
     }
 
@@ -73,7 +80,7 @@ class HubBackendClient {
             val stream = if (statusCode in 200..299) connection.inputStream else connection.errorStream
             val responseText = stream?.let { BufferedReader(InputStreamReader(it)).use(BufferedReader::readText) }.orEmpty()
             if (statusCode !in 200..299) {
-                throw IllegalStateException(hubBackendError(statusCode, responseText, connection.responseMessage))
+                throw HubBackendException(statusCode, hubBackendError(statusCode, responseText, connection.responseMessage))
             }
             return JSONObject(responseText)
         } finally {
@@ -81,6 +88,8 @@ class HubBackendClient {
         }
     }
 }
+
+class HubBackendException(val statusCode: Int, message: String) : IllegalStateException(message)
 
 internal fun hubBackendError(statusCode: Int, responseText: String, responseMessage: String?): String {
     val body = runCatching { JSONObject(responseText) }.getOrNull()

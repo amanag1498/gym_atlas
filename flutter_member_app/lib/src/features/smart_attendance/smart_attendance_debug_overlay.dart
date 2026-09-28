@@ -194,8 +194,8 @@ class _SmartAttendanceDebugOverlayState
       isScrollControlled: true,
       showDragHandle: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
-      builder: (_) => FractionallySizedBox(
-        heightFactor: .82,
+      builder: (sheetContext) => SizedBox(
+        height: MediaQuery.sizeOf(sheetContext).height * .82,
         child: AnimatedBuilder(
           animation: widget.controller,
           builder: (context, _) =>

@@ -14,6 +14,8 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.provider.Settings
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -23,6 +25,7 @@ import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -48,7 +51,12 @@ class MainActivity : Activity() {
     private lateinit var bleText: TextView
     private lateinit var backendText: TextView
     private lateinit var heartbeatText: TextView
+    private lateinit var statusUpdatedText: TextView
+    private lateinit var batteryText: TextView
     private lateinit var errorText: TextView
+    private lateinit var bluetoothCheckText: TextView
+    private lateinit var permissionCheckText: TextView
+    private lateinit var batteryCheckText: TextView
     private var startAfterPermission = false
     private var activationInProgress = false
 
@@ -67,6 +75,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = SecureCredentialStore(this)
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
         setContentView(buildContent())
         loadSavedCredentials()
         requestRuntimePermissions()
@@ -83,6 +92,8 @@ class MainActivity : Activity() {
             @Suppress("DEPRECATION")
             registerReceiver(statusReceiver, filter)
         }
+        renderSavedState()
+        renderDeviceChecks()
     }
 
     override fun onPause() {
@@ -96,25 +107,35 @@ class MainActivity : Activity() {
     }
 
     private fun buildContent(): View {
-        val scroll = ScrollView(this).apply { setBackgroundColor(Color.rgb(7, 17, 31)) }
+        window.statusBarColor = Color.rgb(5, 12, 25)
+        window.navigationBarColor = Color.rgb(5, 12, 25)
+        val scroll = ScrollView(this).apply { setBackgroundColor(Color.rgb(5, 12, 25)) }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            isFocusableInTouchMode = true
+            requestFocus()
             setPadding(dp(20), dp(24), dp(20), dp(28))
         }
         scroll.addView(root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
-        root.addView(label("Gym Atlas", 13, Color.rgb(142, 154, 180), true))
-        root.addView(label("Atlas Smart Hub", 30, Color.WHITE, true).apply { setPadding(0, dp(4), 0, 0) })
-        root.addView(label("Provision this entrance device once, then broadcast the Smart Attendance BLE signal with or without internet.", 15, Color.rgb(202, 211, 226), false).apply { setPadding(0, dp(10), 0, dp(18)) })
+        root.addView(label("GYM ATLAS  •  SMART ATTENDANCE", 12, Color.rgb(129, 140, 248), true))
+        root.addView(label("Entrance Hub", 32, Color.WHITE, true).apply { setPadding(0, dp(7), 0, 0) })
+        root.addView(label("A clear view of the entrance signal, backend connection, and the exact action needed when something stops.", 15, Color.rgb(177, 189, 211), false).apply { setPadding(0, dp(9), 0, dp(18)) })
 
         val statusCard = card()
-        statusText = label("Not running", 18, Color.WHITE, true)
+        statusText = label("Not running", 20, Color.WHITE, true).apply {
+            setPadding(dp(13), dp(9), dp(13), dp(9))
+            gravity = Gravity.CENTER
+        }
+        statusCard.addView(label("LIVE HUB STATUS", 11, Color.rgb(129, 140, 248), true))
         gymText = valueLine("Gym", "Not activated")
         branchText = valueLine("Branch", "Not activated")
         publicIdText = valueLine("Hub public ID", "Not activated")
         bleText = valueLine("BLE broadcasting", "Off")
         backendText = valueLine("Backend connectivity", "Not checked")
         heartbeatText = valueLine("Last heartbeat", "Never")
+        statusUpdatedText = valueLine("Status updated", "Never")
+        batteryText = valueLine("Entrance phone battery", "Checking")
         errorText = label("", 13, Color.rgb(252, 165, 165), false)
         statusCard.addView(statusText)
         statusCard.addView(gymText)
@@ -123,25 +144,28 @@ class MainActivity : Activity() {
         statusCard.addView(bleText)
         statusCard.addView(backendText)
         statusCard.addView(heartbeatText)
+        statusCard.addView(statusUpdatedText)
+        statusCard.addView(batteryText)
         statusCard.addView(errorText)
+        statusCard.addView(secondaryButton("Refresh live status") { refreshStatus() })
         root.addView(statusCard)
 
         val formCard = card().apply { setPadding(dp(16), dp(16), dp(16), dp(18)) }
-        formCard.addView(label("Provision hub", 18, Color.WHITE, true))
-        formCard.addView(label("Use the UUID and one-time secret from Gym Admin → Smart Attendance.", 13, Color.rgb(202, 211, 226), false).apply { setPadding(0, dp(4), 0, dp(10)) })
-        baseUrlInput = input("Backend base URL", false).apply { setText(HubContracts.DEFAULT_BASE_URL) }
-        uuidInput = input("Hub UUID", false)
-        secretInput = input("Device secret", true)
-        formCard.addView(baseUrlInput)
-        formCard.addView(uuidInput)
-        formCard.addView(secretInput)
+        formCard.addView(label("One-time setup", 19, Color.WHITE, true))
+        formCard.addView(label("Copy both credentials from Gym Admin → Attendance → Smart Attendance. Activation saves them securely on this phone.", 13, Color.rgb(177, 189, 211), false).apply { setPadding(0, dp(5), 0, dp(12)) })
+        baseUrlInput = input("https://gymatlas.in", false).apply { setText(HubContracts.DEFAULT_BASE_URL) }
+        uuidInput = input("Paste Hub UUID", false)
+        secretInput = input("Paste one-time Device secret", true)
+        formCard.addView(field("Backend URL", baseUrlInput))
+        formCard.addView(field("Hub UUID", uuidInput))
+        formCard.addView(field("Device secret", secretInput))
 
         provisionButton = primaryButton("Activate and start hub") { provisionAndStart() }
         actionText = label("Ready to activate.", 13, Color.rgb(148, 163, 184), false).apply {
             setPadding(0, dp(10), 0, 0)
         }
         val startButton = secondaryButton("Start saved hub") { startService() }
-        val stopButton = secondaryButton("Stop broadcasting") { stopService() }
+        val stopButton = secondaryButton("Stop entrance signal") { stopService() }
         val clearButton = dangerButton("Clear saved credentials") { clearCredentials() }
         formCard.addView(provisionButton)
         formCard.addView(actionText)
@@ -151,12 +175,20 @@ class MainActivity : Activity() {
         root.addView(formCard)
 
         val setupCard = card()
-        setupCard.addView(label("Device checks", 18, Color.WHITE, true))
-        setupCard.addView(valueLine("Bluetooth", bluetoothState()))
+        setupCard.addView(label("Phone readiness", 19, Color.WHITE, true))
+        setupCard.addView(label("All three checks should be ready for reliable all-day entrance use.", 13, Color.rgb(177, 189, 211), false).apply { setPadding(0, dp(4), 0, dp(5)) })
+        bluetoothCheckText = valueLine("Bluetooth", bluetoothState())
+        permissionCheckText = valueLine("Nearby devices", permissionState())
+        batteryCheckText = valueLine("Battery background access", batteryOptimizationState())
+        setupCard.addView(bluetoothCheckText)
+        setupCard.addView(permissionCheckText)
+        setupCard.addView(batteryCheckText)
         setupCard.addView(valueLine("BLE advertiser", if (packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) "Available" else "Missing"))
         setupCard.addView(valueLine("Heartbeat interval", "${HubContracts.HEARTBEAT_INTERVAL_SECONDS} seconds"))
         setupCard.addView(valueLine("BLE protocol", "v${HubContracts.PROTOCOL_VERSION}"))
         setupCard.addView(valueLine("Service UUID", HubContracts.ATLAS_BLE_SERVICE_UUID).apply { setOnLongClickListener { copy(HubContracts.ATLAS_BLE_SERVICE_UUID); true } })
+        setupCard.addView(secondaryButton("Open Bluetooth settings") { startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) })
+        setupCard.addView(secondaryButton("Review battery restrictions") { openBatterySettings() })
         root.addView(setupCard)
 
         return scroll
@@ -174,7 +206,7 @@ class MainActivity : Activity() {
         if (saved == null) {
             renderStatus(HubRuntimeStatus())
         } else {
-            renderStatus(
+            renderStatus(store.loadRuntimeStatus() ?:
                 HubRuntimeStatus(
                     provisioned = true,
                     publicId = saved.publicId,
@@ -182,6 +214,24 @@ class MainActivity : Activity() {
                     branchName = saved.branchName,
                 )
             )
+        }
+    }
+
+    private fun refreshStatus() {
+        val saved = store.load()
+        if (saved == null) {
+            setActivationState(false, "Activate this phone before refreshing hub status.", true)
+            return
+        }
+        renderDeviceChecks()
+        if (store.shouldRun()) {
+            startForegroundService(
+                Intent(this, HubForegroundService::class.java)
+                    .setAction(HubForegroundService.ACTION_REFRESH),
+            )
+            setActivationState(false, "Checking Bluetooth, saved configuration, and backend connection…", false)
+        } else {
+            setActivationState(false, "The hub is stopped. Tap Start saved hub to broadcast again.", true)
         }
     }
 
@@ -288,17 +338,34 @@ class MainActivity : Activity() {
             status.provisioned -> "Provisioned"
             else -> "Not provisioned"
         }
+        statusText.background = roundedBackground(
+            when {
+                status.bleAdvertising && status.backendConnected -> Color.rgb(5, 150, 105)
+                status.bleAdvertising -> Color.rgb(2, 132, 199)
+                status.serviceRunning -> Color.rgb(217, 119, 6)
+                else -> Color.rgb(51, 65, 85)
+            },
+            radius = 18,
+        )
         gymText.text = "Gym\n${status.gymName ?: "Not activated"}"
         branchText.text = "Branch\n${status.branchName ?: "Gym-wide or not activated"}"
         publicIdText.text = "Hub public ID\n${status.publicId ?: "Not activated"}"
-        bleText.text = "BLE broadcasting\n${if (status.bleAdvertising) "On" else "Off"}"
+        bleText.text = "Entrance BLE signal\n${if (status.bleAdvertising) "Active${status.advertisingMode?.let { " · $it" }.orEmpty()}" else "Off"}"
         backendText.text = "Backend connectivity\n${when {
             status.backendConnected -> "Connected"
             status.bleAdvertising -> "Offline — BLE continues"
             else -> "Not connected"
         }}"
         heartbeatText.text = "Last heartbeat\n${status.lastHeartbeatAt ?: "Never"}"
+        statusUpdatedText.text = "Status updated\n${status.lastStatusAt ?: "Never"}"
+        batteryText.text = "Entrance phone battery\n${status.batteryPercent?.let { "$it%" } ?: "Unknown"}"
         errorText.text = status.lastError?.let { "\n$it" } ?: ""
+        publicIdText.setOnClickListener {
+            status.publicId?.let {
+                copy(it)
+                setActivationState(false, "Public ID copied.", false)
+            }
+        }
         if (!activationInProgress) {
             when {
                 status.lastError != null -> setActivationState(false, status.lastError, true)
@@ -334,7 +401,9 @@ class MainActivity : Activity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode != HUB_PERMISSION_REQUEST || !startAfterPermission) return
+        if (requestCode != HUB_PERMISSION_REQUEST) return
+        renderDeviceChecks()
+        if (!startAfterPermission) return
         startAfterPermission = false
         if (missingBluetoothPermissions().isEmpty()) {
             launchHubService()
@@ -367,6 +436,26 @@ class MainActivity : Activity() {
         return if (adapter.isEnabled) "On" else "Off"
     }
 
+    private fun permissionState(): String =
+        if (missingBluetoothPermissions().isEmpty()) "Allowed" else "Permission required"
+
+    private fun batteryOptimizationState(): String {
+        val power = getSystemService(android.os.PowerManager::class.java)
+        return if (power?.isIgnoringBatteryOptimizations(packageName) == true) "Unrestricted" else "Restricted — review recommended"
+    }
+
+    private fun renderDeviceChecks() {
+        if (!::bluetoothCheckText.isInitialized) return
+        bluetoothCheckText.text = "Bluetooth\n${bluetoothState()}"
+        permissionCheckText.text = "Nearby devices\n${permissionState()}"
+        batteryCheckText.text = "Battery background access\n${batteryOptimizationState()}"
+    }
+
+    private fun openBatterySettings() {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+        startActivity(intent)
+    }
+
     private fun label(text: String, size: Int, color: Int, bold: Boolean): TextView = TextView(this).apply {
         this.text = text
         textSize = size.toFloat()
@@ -376,13 +465,13 @@ class MainActivity : Activity() {
     }
 
     private fun valueLine(title: String, value: String): TextView = label("$title\n$value", 14, Color.rgb(226, 232, 240), false).apply {
-        setPadding(0, dp(10), 0, 0)
+        setPadding(0, dp(11), 0, dp(2))
     }
 
     private fun card(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(16), dp(16), dp(16), dp(16))
-        setBackgroundColor(Color.rgb(16, 28, 48))
+        background = roundedBackground(Color.rgb(14, 25, 45), stroke = Color.rgb(38, 54, 82), radius = 24)
         val params = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         params.setMargins(0, 0, 0, dp(16))
         layoutParams = params
@@ -394,7 +483,15 @@ class MainActivity : Activity() {
         setTextColor(Color.WHITE)
         setSingleLine(true)
         inputType = if (secret) InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-        setPadding(dp(12), dp(10), dp(12), dp(10))
+        setPadding(dp(14), dp(12), dp(14), dp(12))
+        background = roundedBackground(Color.rgb(8, 18, 34), stroke = Color.rgb(51, 65, 85), radius = 14)
+    }
+
+    private fun field(title: String, input: EditText): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(0, dp(8), 0, 0)
+        addView(label(title, 12, Color.rgb(148, 163, 184), true).apply { setPadding(dp(2), 0, 0, dp(6)) })
+        addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
     private fun primaryButton(text: String, action: () -> Unit): Button = button(text, Color.rgb(54, 65, 245), Color.WHITE, action)
@@ -404,12 +501,19 @@ class MainActivity : Activity() {
     private fun button(text: String, bg: Int, fg: Int, action: () -> Unit): Button = Button(this).apply {
         this.text = text
         setTextColor(fg)
-        setBackgroundColor(bg)
+        background = roundedBackground(bg, radius = 14)
         gravity = Gravity.CENTER
         setOnClickListener { action() }
         val params = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         params.setMargins(0, dp(10), 0, 0)
         layoutParams = params
+    }
+
+    private fun roundedBackground(color: Int, stroke: Int? = null, radius: Int): GradientDrawable = GradientDrawable().apply {
+        shape = GradientDrawable.RECTANGLE
+        setColor(color)
+        cornerRadius = dp(radius).toFloat()
+        stroke?.let { setStroke(dp(1), it) }
     }
 
     private fun copy(value: String) {

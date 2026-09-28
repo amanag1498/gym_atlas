@@ -56,6 +56,44 @@ class SecureCredentialStore(context: Context) {
         save(current.copy(publicId = publicId ?: current.publicId, gymName = gymName ?: current.gymName, branchName = branchName ?: current.branchName))
     }
 
+    fun saveRuntimeStatus(status: HubRuntimeStatus) {
+        val json = JSONObject()
+            .put("provisioned", status.provisioned)
+            .put("serviceRunning", status.serviceRunning)
+            .put("bleAdvertising", status.bleAdvertising)
+            .put("backendConnected", status.backendConnected)
+            .put("lastHeartbeatAt", status.lastHeartbeatAt)
+            .put("lastStatusAt", status.lastStatusAt)
+            .put("lastError", status.lastError)
+            .put("advertisingMode", status.advertisingMode)
+            .put("batteryPercent", status.batteryPercent)
+            .put("publicId", status.publicId)
+            .put("gymName", status.gymName)
+            .put("branchName", status.branchName)
+        prefs.edit().putString("runtimeStatus", json.toString()).apply()
+    }
+
+    fun loadRuntimeStatus(): HubRuntimeStatus? {
+        val raw = prefs.getString("runtimeStatus", null) ?: return null
+        return runCatching {
+            val json = JSONObject(raw)
+            HubRuntimeStatus(
+                provisioned = json.optBoolean("provisioned"),
+                serviceRunning = json.optBoolean("serviceRunning"),
+                bleAdvertising = json.optBoolean("bleAdvertising"),
+                backendConnected = json.optBoolean("backendConnected"),
+                lastHeartbeatAt = json.nullableString("lastHeartbeatAt"),
+                lastStatusAt = json.nullableString("lastStatusAt"),
+                lastError = json.nullableString("lastError"),
+                advertisingMode = json.nullableString("advertisingMode"),
+                batteryPercent = if (json.isNull("batteryPercent")) null else json.optInt("batteryPercent"),
+                publicId = json.nullableString("publicId"),
+                gymName = json.nullableString("gymName"),
+                branchName = json.nullableString("branchName"),
+            )
+        }.getOrNull()
+    }
+
     fun clear() {
         prefs.edit().clear().apply()
     }
@@ -104,3 +142,6 @@ class SecureCredentialStore(context: Context) {
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
     }
 }
+
+private fun JSONObject.nullableString(key: String): String? =
+    optString(key).takeIf { has(key) && !isNull(key) && it.isNotBlank() && it != "null" }

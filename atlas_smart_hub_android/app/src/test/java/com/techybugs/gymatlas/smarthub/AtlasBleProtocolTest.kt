@@ -1,6 +1,7 @@
 package com.techybugs.gymatlas.smarthub
 
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
@@ -26,5 +27,12 @@ class AtlasBleProtocolTest {
         assertThrows(IllegalArgumentException::class.java) { AtlasBleProtocol.payload("") }
         assertThrows(IllegalArgumentException::class.java) { AtlasBleProtocol.payload("SAHABC") }
         assertThrows(IllegalArgumentException::class.java) { AtlasBleProtocol.payload("unsafe id") }
+    }
+
+    @Test
+    fun `explains Android advertising failures with a recovery action`() {
+        assertTrue(advertisingError(1).contains("data too large"))
+        assertTrue(advertisingError(2).contains("no free advertiser slot"))
+        assertTrue(advertisingError(4).contains("Toggle Bluetooth"))
     }
 }
