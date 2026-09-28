@@ -61,6 +61,38 @@ void main() {
     expect(scanner.backgroundStarted, isTrue);
   });
 
+  test(
+    'iOS background discovery records from its coalesced callback',
+    () async {
+      final scanner = _FakeScanner();
+      final client = _FakeCheckInClient();
+      final now = DateTime(2026, 9, 28, 12);
+      final controller = SmartAttendanceController(
+        scanner: scanner,
+        checkInClient: client,
+        successCache: _FakeSuccessCache(),
+        selectedGymIdProvider: () async => 7,
+        memberIdProvider: () => 42,
+        requestPermissions: () async => true,
+        clock: () => now,
+        presenceWindow: const Duration(seconds: 3),
+        requestDebounce: Duration.zero,
+      );
+
+      await controller.startBackgroundScan();
+      scanner.emit(
+        _detection('SAHABC123DEF4567', now, source: 'ios_background_ble'),
+      );
+      await _pumpAsync();
+
+      expect(client.calls, hasLength(1));
+      expect(
+        controller.lastAttendanceRequestResult,
+        'First check-in confirmed',
+      );
+    },
+  );
+
   test('starting the same scan mode twice is idempotent', () async {
     final scanner = _FakeScanner();
     final controller = SmartAttendanceController(
@@ -290,13 +322,14 @@ SmartAttendanceDetection _detection(
   String publicId,
   DateTime detectedAt, {
   int rssi = -61,
+  String source = 'test',
 }) {
   return SmartAttendanceDetection(
     publicId: publicId,
     protocolVersion: 1,
     rssi: rssi,
     detectedAt: detectedAt,
-    source: 'test',
+    source: source,
   );
 }
 

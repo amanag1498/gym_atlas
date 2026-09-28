@@ -252,7 +252,15 @@ class SmartAttendanceController extends ChangeNotifier {
     }
     _lastQualifiedDetectionByHub[hubKey] = now;
     final firstSeen = _firstQualifiedDetectionByHub[hubKey] ?? now;
-    if (now.difference(firstSeen) < _presenceWindow) {
+    // iOS coalesces duplicate BLE discoveries while an app is in the
+    // background, even when AllowDuplicates is requested. A service-filtered,
+    // strong background discovery must therefore be handled as the confirmed
+    // presence event; waiting for a second packet can prevent the visit from
+    // ever being recorded.
+    final isCoalescedIosBackgroundDetection =
+        detection.source == 'ios_background_ble';
+    if (!isCoalescedIosBackgroundDetection &&
+        now.difference(firstSeen) < _presenceWindow) {
       _logicState = 'Confirming continuous hub presence for 2.4 seconds.';
       return;
     }
