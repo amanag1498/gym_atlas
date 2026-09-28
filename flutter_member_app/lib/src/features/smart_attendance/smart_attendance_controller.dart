@@ -212,6 +212,38 @@ class SmartAttendanceController extends ChangeNotifier {
     }
   }
 
+  /// Used only by builds that explicitly enable Smart Attendance test tools.
+  /// It closes the current presence, preserves the six-hour visit as checked
+  /// out, and stops scanning so the next background transition can prove that
+  /// a fresh Hub detection reaches the server and reopens the visit.
+  Future<void> armNextBackgroundDetectionForTesting() async {
+    await stopScan();
+    final session = _session;
+    if (session != null && session.checkedOutAt == null) {
+      final client = _checkInClient;
+      if (client == null) {
+        throw StateError('Smart Attendance checkout is unavailable.');
+      }
+      await client.recordSmartAttendanceCheckOut(
+        attendanceLogId: session.attendanceLogId,
+        lastPresenceAt: session.lastPresenceAt,
+      );
+      _session = session.copyWith(checkedOutAt: session.lastPresenceAt);
+      await _persistSession();
+    }
+    _firstQualifiedDetectionByHub.clear();
+    _lastQualifiedDetectionByHub.clear();
+    _lastDetectionByHub.clear();
+    _lastRequestAttemptByHub.clear();
+    _lastCheckoutRequestAt = _clock();
+    _lastCheckoutRequestResult = session == null
+        ? 'No active visit; next detection is armed'
+        : 'Test visit closed; next detection is armed';
+    _logicState =
+        'Test armed. Press Home or lock the phone; the next Hub detection should reach the server.';
+    notifyListeners();
+  }
+
   void _handleDetection(SmartAttendanceDetection detection) {
     unawaited(_maybeSubmitAttendance(detection));
 

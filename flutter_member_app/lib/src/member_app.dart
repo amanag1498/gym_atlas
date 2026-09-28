@@ -31,6 +31,10 @@ import 'features/smart_attendance/smart_attendance_controller.dart';
 import 'features/smart_attendance/smart_attendance_debug_overlay.dart';
 import 'features/smart_attendance/smart_attendance_session_store.dart';
 
+const _smartAttendanceTestToolsEnabled = bool.fromEnvironment(
+  'SMART_ATTENDANCE_TEST_TOOLS',
+);
+
 class MemberApp extends StatefulWidget {
   const MemberApp({super.key});
 
@@ -572,7 +576,8 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
                 guides: memberGuides,
                 child: child ?? const SizedBox.shrink(),
               );
-              if (!kDebugMode || !session.isAuthenticated) {
+              if ((!kDebugMode && !_smartAttendanceTestToolsEnabled) ||
+                  !session.isAuthenticated) {
                 return content;
               }
               return SmartAttendanceDebugOverlay(

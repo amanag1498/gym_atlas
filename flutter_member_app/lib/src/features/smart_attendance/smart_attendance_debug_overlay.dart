@@ -285,8 +285,14 @@ class _SmartAttendanceDebugDetails extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Live debug-build state for the background attendance scanner.',
+          'Live test diagnostics for the background attendance scanner.',
           style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: () => _armBackgroundTest(context),
+          icon: const Icon(Icons.restart_alt_rounded),
+          label: const Text('Arm next background check-in'),
         ),
         const SizedBox(height: 20),
         if (controller.lastError != null || controller.backendSyncError != null)
@@ -470,6 +476,25 @@ class _SmartAttendanceDebugDetails extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _armBackgroundTest(BuildContext context) async {
+    try {
+      await controller.armNextBackgroundDetectionForTesting();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Test armed. Close this sheet, then press Home or lock the phone near the Hub.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not arm test: $error')));
+    }
   }
 
   String _time(DateTime value) {

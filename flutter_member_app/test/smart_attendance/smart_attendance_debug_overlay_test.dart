@@ -52,6 +52,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Smart Attendance diagnostics'), findsOneWidget);
+    expect(find.text('Arm next background check-in'), findsOneWidget);
   });
 }
 
