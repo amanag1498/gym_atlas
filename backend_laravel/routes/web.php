@@ -651,6 +651,7 @@ Route::prefix('gym')
         Route::get('/attendance/manual', [WebGymAttendanceController::class, 'manualForm'])->name('attendance.manual');
         Route::post('/attendance/manual', [WebGymAttendanceController::class, 'storeManual'])->name('attendance.manual.store');
         Route::post('/attendance/{attendanceLog}/checkout', [WebGymAttendanceController::class, 'checkout'])->name('attendance.checkout');
+        Route::post('/attendance/{attendanceLog}/reset-smart-test', [WebGymAttendanceController::class, 'resetSmartAttendanceTest'])->name('attendance.smart-test-reset');
         Route::post('/attendance/biometric-scan', [WebGymAttendanceController::class, 'biometricScan'])->name('attendance.biometric-scan');
         Route::get('/biometric-devices', [WebGymBiometricDeviceController::class, 'index'])->name('biometric-devices.index');
         Route::post('/biometric-devices', [WebGymBiometricDeviceController::class, 'store'])->name('biometric-devices.store');

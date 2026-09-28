@@ -266,6 +266,12 @@
                                                             <button type="submit" class="panel-btn-secondary !rounded-xl !px-3 !py-2 !text-xs">Check out</button>
                                                         </form>
                                                     @endif
+                                                    @if ($log->check_in_method === 'smart_attendance')
+                                                        <form method="POST" action="{{ route('web.gym.attendance.smart-test-reset', ['attendanceLog' => $log->id] + $scopeQuery) }}" data-confirm-submit data-confirm-title="Reset this Smart Attendance test?" data-confirm-message="This permanently deletes this test visit. The member test app will discard its matching six-hour window when it rearms or next starts scanning." data-confirm-button="Delete test visit">
+                                                            @csrf
+                                                            <button type="submit" class="panel-btn-secondary !rounded-xl !px-3 !py-2 !text-xs !text-rose-600 dark:!text-rose-300">Reset test</button>
+                                                        </form>
+                                                    @endif
                                                     <button
                                                         type="button"
                                                         class="panel-btn-secondary !rounded-xl !px-3 !py-2 !text-xs"

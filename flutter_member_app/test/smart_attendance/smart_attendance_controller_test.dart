@@ -419,17 +419,7 @@ void main() {
     final scanner = _FakeScanner();
     final client = _SessionCheckInClient();
     final now = DateTime(2026, 9, 28, 12);
-    final previousPresence = now.subtract(const Duration(minutes: 1));
-    final store = _FakeSessionStore()
-      ..session = SmartAttendanceSession(
-        attendanceLogId: 91,
-        memberId: 42,
-        gymId: 7,
-        hubPublicId: 'SAHABC123DEF4567',
-        checkedInAt: now.subtract(const Duration(minutes: 20)),
-        lastPresenceAt: previousPresence,
-        windowEndsAt: now.add(const Duration(hours: 5, minutes: 40)),
-      );
+    final store = _FakeSessionStore();
     final controller = SmartAttendanceController(
       scanner: scanner,
       checkInClient: client,
@@ -443,22 +433,109 @@ void main() {
     );
 
     await controller.startForegroundScan();
+    scanner.emit(_detection('SAHABC123DEF4567', now));
+    await _pumpAsync();
+    expect(controller.lastAttendanceRequestResult, 'First check-in confirmed');
+    expect(controller.lastCheckInMessage, isNotNull);
+
     await controller.armNextBackgroundDetectionForTesting();
 
-    expect(scanner.started, isFalse);
-    expect(client.checkOutCalls, [previousPresence]);
+    expect(scanner.started, isTrue);
+    expect(scanner.backgroundStarted, isTrue);
+    expect(controller.scanning, isTrue);
+    expect(controller.backgroundScanning, isTrue);
+    expect(client.checkOutCalls, [now]);
     expect(store.session, isNull);
     expect(controller.activeSession, isNull);
-    expect(controller.logicState, contains('next Hub detection'));
+    expect(controller.lastCheckInMessage, isNull);
+    expect(controller.lastAttendanceRequestAt, isNull);
+    expect(
+      controller.lastAttendanceRequestResult,
+      'Armed — waiting for a fresh Hub detection',
+    );
+    expect(controller.logicState, contains('only a fresh Hub response'));
 
-    await controller.startBackgroundScan();
     scanner.emit(
       _detection('SAHABC123DEF4567', now, source: 'ios_background_ble'),
     );
     await _pumpAsync();
 
-    expect(client.checkInCalls, 1);
+    expect(client.checkInCalls, 2);
+    expect(controller.lastAttendanceRequestResult, 'First check-in confirmed');
     expect(controller.activeSession?.checkedOutAt, isNull);
+  });
+
+  test(
+    'admin test reset clears the local window on the next detection',
+    () async {
+      final scanner = _FakeScanner();
+      final client = _SessionCheckInClient();
+      final store = _FakeSessionStore();
+      var now = DateTime(2026, 9, 28, 12);
+      final controller = SmartAttendanceController(
+        scanner: scanner,
+        checkInClient: client,
+        sessionStore: store,
+        selectedGymIdProvider: () async => 7,
+        memberIdProvider: () => 42,
+        requestPermissions: () async => true,
+        clock: () => now,
+        presenceWindow: Duration.zero,
+        requestDebounce: Duration.zero,
+        testToolsEnabled: true,
+      );
+
+      await controller.startBackgroundScan();
+      scanner.emit(
+        _detection('SAHABC123DEF4567', now, source: 'ios_background_ble'),
+      );
+      await _pumpAsync();
+      expect(client.checkInCalls, 1);
+      expect(controller.activeSession?.attendanceLogId, 91);
+
+      client.visitExists = false;
+      now = now.add(const Duration(seconds: 16));
+      scanner.emit(
+        _detection('SAHABC123DEF4567', now, source: 'ios_background_ble'),
+      );
+      await _pumpAsync();
+
+      expect(client.sessionChecks, 1);
+      expect(client.checkInCalls, 2);
+      expect(controller.activeSession?.attendanceLogId, 91);
+      expect(
+        controller.lastAttendanceRequestResult,
+        'First check-in confirmed',
+      );
+    },
+  );
+
+  test('test control saves out time without waiting two hours', () async {
+    final scanner = _FakeScanner();
+    final client = _SessionCheckInClient();
+    final now = DateTime(2026, 9, 28, 12);
+    final controller = SmartAttendanceController(
+      scanner: scanner,
+      checkInClient: client,
+      sessionStore: _FakeSessionStore(),
+      selectedGymIdProvider: () async => 7,
+      memberIdProvider: () => 42,
+      requestPermissions: () async => true,
+      clock: () => now,
+      presenceWindow: Duration.zero,
+      requestDebounce: Duration.zero,
+    );
+
+    await controller.startBackgroundScan();
+    scanner.emit(
+      _detection('SAHABC123DEF4567', now, source: 'ios_background_beacon'),
+    );
+    await _pumpAsync();
+    await controller.simulateAbsenceTimeoutForTesting();
+
+    expect(client.checkOutCalls, [now]);
+    expect(controller.activeSession?.checkedOutAt, now);
+    expect(controller.lastCheckoutRequestResult, 'Out time saved successfully');
   });
 }
 
@@ -549,6 +626,11 @@ class _FakeCheckInClient implements SmartAttendanceCheckInClient {
     required int attendanceLogId,
     required DateTime lastPresenceAt,
   }) async {}
+
+  @override
+  Future<bool> smartAttendanceVisitExists({
+    required int attendanceLogId,
+  }) async => true;
 }
 
 class _SlowCheckInClient implements SmartAttendanceCheckInClient {
@@ -579,6 +661,11 @@ class _SlowCheckInClient implements SmartAttendanceCheckInClient {
     required int attendanceLogId,
     required DateTime lastPresenceAt,
   }) async {}
+
+  @override
+  Future<bool> smartAttendanceVisitExists({
+    required int attendanceLogId,
+  }) async => true;
 }
 
 class _FakeSuccessCache implements SmartAttendanceCheckInCache {
@@ -621,6 +708,8 @@ class _SessionCheckInClient implements SmartAttendanceCheckInClient {
   DateTime? firstPresence;
   int checkInCalls = 0;
   bool failNextCheckIn = false;
+  bool visitExists = true;
+  int sessionChecks = 0;
 
   @override
   Future<SmartAttendanceCheckInResponse> recordSmartAttendanceCheckIn(
@@ -649,6 +738,15 @@ class _SessionCheckInClient implements SmartAttendanceCheckInClient {
   }) async {
     expect(attendanceLogId, 91);
     checkOutCalls.add(lastPresenceAt);
+  }
+
+  @override
+  Future<bool> smartAttendanceVisitExists({
+    required int attendanceLogId,
+  }) async {
+    expect(attendanceLogId, 91);
+    sessionChecks++;
+    return visitExists;
   }
 }
 

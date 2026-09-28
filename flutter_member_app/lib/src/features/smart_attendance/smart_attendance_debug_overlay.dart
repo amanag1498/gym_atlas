@@ -294,6 +294,16 @@ class _SmartAttendanceDebugDetails extends StatelessWidget {
           icon: const Icon(Icons.restart_alt_rounded),
           label: const Text('Arm next background check-in'),
         ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed:
+              controller.activeSession != null &&
+                  controller.activeSession?.checkedOutAt == null
+              ? () => _simulateAbsence(context)
+              : null,
+          icon: const Icon(Icons.timer_outlined),
+          label: const Text('Test 2-hour out time now'),
+        ),
         const SizedBox(height: 20),
         if (controller.lastError != null || controller.backendSyncError != null)
           _DebugErrorSection(
@@ -502,6 +512,25 @@ class _SmartAttendanceDebugDetails extends StatelessWidget {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Could not arm test: $error')));
+    }
+  }
+
+  Future<void> _simulateAbsence(BuildContext context) async {
+    try {
+      await controller.simulateAbsenceTimeoutForTesting();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Out time saved using the same path as the two-hour absence timer.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not test out time: $error')),
+      );
     }
   }
 

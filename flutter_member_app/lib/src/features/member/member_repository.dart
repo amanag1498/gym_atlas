@@ -102,13 +102,32 @@ class MemberRepository implements SmartAttendanceCheckInClient {
     required int attendanceLogId,
     required DateTime lastPresenceAt,
   }) async {
-    await _client.post(
-      '/member/attendance/smart-check-out',
-      data: {
-        'attendance_log_id': attendanceLogId,
-        'last_presence_at': lastPresenceAt.toIso8601String(),
-      },
-    );
+    try {
+      await _client.post(
+        '/member/attendance/smart-check-out',
+        data: {
+          'attendance_log_id': attendanceLogId,
+          'last_presence_at': lastPresenceAt.toIso8601String(),
+        },
+      );
+    } on DioException catch (error) {
+      // A gym admin can delete a test visit before the phone clears its secure
+      // local session. Treat that missing server visit as already finalized.
+      if (error.response?.statusCode != 404) rethrow;
+    }
+  }
+
+  @override
+  Future<bool> smartAttendanceVisitExists({
+    required int attendanceLogId,
+  }) async {
+    try {
+      await _client.get('/member/attendance/smart-session/$attendanceLogId');
+      return true;
+    } on DioException catch (error) {
+      if (error.response?.statusCode == 404) return false;
+      rethrow;
+    }
   }
 
   Future<Map<String, dynamic>> fetchMembership() async =>

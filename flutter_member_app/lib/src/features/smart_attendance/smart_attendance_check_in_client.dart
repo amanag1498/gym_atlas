@@ -9,6 +9,8 @@ abstract class SmartAttendanceCheckInClient {
     required int attendanceLogId,
     required DateTime lastPresenceAt,
   });
+
+  Future<bool> smartAttendanceVisitExists({required int attendanceLogId});
 }
 
 class SmartAttendanceCheckInResponse {

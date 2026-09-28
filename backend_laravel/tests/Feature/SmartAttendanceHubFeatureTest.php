@@ -242,7 +242,7 @@ class SmartAttendanceHubFeatureTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.smart_attendance_available', true);
 
-        $this->actingAs($member, 'sanctum')
+        $checkIn = $this->actingAs($member, 'sanctum')
             ->postJson('/api/member/attendance/smart-check-in', [
                 'hub_public_id' => strtolower($create->json('data.hub.public_id')),
                 'protocol_version' => 2,
@@ -274,6 +274,27 @@ class SmartAttendanceHubFeatureTest extends TestCase
             'type' => NotificationType::SmartAttendanceCheckIn->value,
             'title' => 'Welcome to '.$gym->name,
         ]);
+
+        $attendanceLogId = (int) $checkIn->json('data.attendance.id');
+        $this->actingAs($member, 'sanctum')
+            ->getJson("/api/member/attendance/smart-session/{$attendanceLogId}", $attendanceHeaders)
+            ->assertOk()
+            ->assertJsonPath('data.exists', true)
+            ->assertJsonPath('data.attendance.id', $attendanceLogId);
+
+        $this->actingAs($owner)
+            ->post(route('web.gym.attendance.smart-test-reset', [
+                'gym' => $gym->id,
+                'branch' => $branch->id,
+                'attendanceLog' => $attendanceLogId,
+            ]))
+            ->assertRedirect()
+            ->assertSessionHas('status');
+
+        $this->assertDatabaseMissing('attendance_logs', ['id' => $attendanceLogId]);
+        $this->actingAs($member, 'sanctum')
+            ->getJson("/api/member/attendance/smart-session/{$attendanceLogId}", $attendanceHeaders)
+            ->assertNotFound();
     }
 
     public function test_member_can_check_in_while_an_activated_hub_is_offline_from_the_backend(): void

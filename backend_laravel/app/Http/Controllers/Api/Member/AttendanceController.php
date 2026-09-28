@@ -173,6 +173,23 @@ class AttendanceController extends Controller
         ], 'Smart Attendance out time saved successfully.');
     }
 
+    public function smartSession(Request $request, AttendanceLog $attendanceLog)
+    {
+        $this->memberAppService->assertRequestedGymContextAccessible($request->user());
+        $selectedGymId = $this->memberAppService->selectedGymIdFor($request->user());
+        abort_unless(
+            (int) $attendanceLog->member_id === (int) $request->user()->id
+                && (int) $attendanceLog->gym_id === (int) $selectedGymId
+                && $attendanceLog->check_in_method === 'smart_attendance',
+            404,
+        );
+
+        return $this->success([
+            'exists' => true,
+            'attendance' => AttendanceLogResource::make($attendanceLog->load(['gym', 'branch'])),
+        ], 'Smart Attendance session fetched successfully.');
+    }
+
     private function sendSmartAttendanceWelcomeNotification(User $member, AttendanceLog $log, SmartAttendanceHub $hub): void
     {
         $gymName = $log->gym?->name ?? $hub->gym?->name ?? 'your gym';

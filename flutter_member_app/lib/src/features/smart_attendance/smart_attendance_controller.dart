@@ -30,6 +30,9 @@ class SmartAttendanceController extends ChangeNotifier {
     Duration attendanceWindow = const Duration(hours: 6),
     Duration absenceTimeout = const Duration(hours: 2),
     int minimumRssi = -78,
+    bool testToolsEnabled = const bool.fromEnvironment(
+      'SMART_ATTENDANCE_TEST_TOOLS',
+    ),
   }) : _scanner = scanner,
        _checkInClient = checkInClient,
        _successCache = successCache,
@@ -47,7 +50,8 @@ class SmartAttendanceController extends ChangeNotifier {
        _presenceContinuityTimeout = presenceContinuityTimeout,
        _attendanceWindow = attendanceWindow,
        _absenceTimeout = absenceTimeout,
-       _minimumRssi = minimumRssi;
+       _minimumRssi = minimumRssi,
+       _testToolsEnabled = testToolsEnabled;
 
   final SmartAttendanceBleScanner _scanner;
   final SmartAttendanceCheckInClient? _checkInClient;
@@ -67,6 +71,7 @@ class SmartAttendanceController extends ChangeNotifier {
   final Duration _attendanceWindow;
   final Duration _absenceTimeout;
   final int _minimumRssi;
+  final bool _testToolsEnabled;
   final List<SmartAttendanceDetection> _detections = [];
   final List<SmartAttendanceScanDiagnostic> _diagnostics = [];
   final Map<String, DateTime> _lastDetectionByHub = {};
@@ -98,6 +103,8 @@ class SmartAttendanceController extends ChangeNotifier {
   String _lastAttendanceRequestResult = 'Not sent';
   DateTime? _lastCheckoutRequestAt;
   String _lastCheckoutRequestResult = 'Not sent';
+  DateTime? _lastServerSessionCheckAt;
+  bool _serverSessionCheckInFlight = false;
 
   bool get scanning => _scanning;
   bool get permissionDenied => _permissionDenied;
@@ -253,8 +260,8 @@ class SmartAttendanceController extends ChangeNotifier {
 
   /// Used only by builds that explicitly enable Smart Attendance test tools.
   /// It closes the current presence, clears the phone's active six-hour
-  /// session, and stops scanning so the next background transition can prove
-  /// that a fresh Hub detection reaches the server.
+  /// session, clears every previous request result, and starts a fresh
+  /// background scan so only the next server response can report success.
   Future<void> armNextBackgroundDetectionForTesting() async {
     await stopScan();
     final session = _session;
@@ -274,13 +281,55 @@ class SmartAttendanceController extends ChangeNotifier {
     _lastQualifiedDetectionByHub.clear();
     _lastDetectionByHub.clear();
     _lastRequestAttemptByHub.clear();
+    _detections.clear();
+    _lastError = null;
+    _lastCheckInMessage = null;
+    _lastAttendanceRequestAt = null;
+    _lastAttendanceRequestResult = 'Armed — waiting for a fresh Hub detection';
+    _localPresenceUpdateCount = 0;
+    _lastLocalPresenceAt = null;
     _lastCheckoutRequestAt = _clock();
     _lastCheckoutRequestResult = session == null
         ? 'No active window; next detection is armed'
         : 'Test window cleared; next detection is armed';
-    _logicState =
-        'Test armed. Press Home or lock the phone; the next Hub detection should reach the server.';
+    _logicState = 'Starting a fresh background scan for the test.';
     notifyListeners();
+
+    await startBackgroundScan();
+    if (!_scanning || !_backgroundScanning) {
+      _lastAttendanceRequestResult = 'Not armed — background scan failed';
+      _logicState =
+          'The test could not start background scanning. Review the scanner error and permissions.';
+      notifyListeners();
+      throw StateError(
+        _lastError ?? 'Smart Attendance background scanning did not start.',
+      );
+    }
+
+    // A scanner implementation can deliver a detection while it is starting.
+    // Do not overwrite the resulting request state if that already happened.
+    if (_lastAttendanceRequestAt == null) {
+      _logicState =
+          'Test armed in background mode. Press Home or lock the phone; only a fresh Hub response will show confirmation.';
+      notifyListeners();
+    }
+  }
+
+  /// Runs the same out-time save used by the two-hour absence timer without
+  /// waiting, so a tester can verify the server record and admin UI directly.
+  Future<void> simulateAbsenceTimeoutForTesting() async {
+    final session = _session;
+    if (session == null || session.checkedOutAt != null) {
+      throw StateError('There is no open Smart Attendance visit to close.');
+    }
+    await _finalizeSession(
+      clearAfterSuccess: false,
+      reasonOverride:
+          'Test absence triggered. Saving last presence as out time.',
+    );
+    if (_session?.checkedOutAt == null) {
+      throw StateError(_lastError ?? 'The out-time test did not complete.');
+    }
   }
 
   void _handleDetection(SmartAttendanceDetection detection) {
@@ -374,6 +423,8 @@ class SmartAttendanceController extends ChangeNotifier {
       _logicState = 'Confirming continuous hub presence for 2.4 seconds.';
       return;
     }
+
+    await _reconcileDeletedTestVisit();
 
     final currentSession = _session;
     final startsNewVisit =
@@ -540,6 +591,9 @@ class SmartAttendanceController extends ChangeNotifier {
       return;
     }
 
+    await _reconcileDeletedTestVisit(force: true);
+    if (_session == null) return;
+
     final now = _clock();
     if (!now.isBefore(session.windowEndsAt)) {
       await _finalizeSession(clearAfterSuccess: true);
@@ -552,6 +606,54 @@ class SmartAttendanceController extends ChangeNotifier {
       return;
     }
     _scheduleSessionTimer();
+  }
+
+  Future<void> _reconcileDeletedTestVisit({bool force = false}) async {
+    final session = _session;
+    final client = _checkInClient;
+    if (session == null || client == null || _serverSessionCheckInFlight) {
+      return;
+    }
+
+    final now = _clock();
+    if (!force) {
+      if (!_testToolsEnabled) {
+        return;
+      }
+      final lastCheck = _lastServerSessionCheckAt;
+      if (lastCheck != null &&
+          now.difference(lastCheck) < const Duration(seconds: 15)) {
+        return;
+      }
+    }
+
+    _serverSessionCheckInFlight = true;
+    _lastServerSessionCheckAt = now;
+    try {
+      final exists = await client.smartAttendanceVisitExists(
+        attendanceLogId: session.attendanceLogId,
+      );
+      if (!exists && _session?.attendanceLogId == session.attendanceLogId) {
+        _sessionTimer?.cancel();
+        _session = null;
+        await _sessionStore?.clear();
+        _firstQualifiedDetectionByHub.clear();
+        _lastQualifiedDetectionByHub.clear();
+        _lastRequestAttemptByHub.clear();
+        _lastCheckInMessage = null;
+        _lastAttendanceRequestAt = null;
+        _lastAttendanceRequestResult =
+            'Admin reset detected — ready for a fresh check-in';
+        _logicState =
+            'The server test visit was deleted. The next qualified Hub signal will create a new visit.';
+        notifyListeners();
+      }
+    } catch (_) {
+      // Keep the local attendance window while offline. A failed validation
+      // must never disable background attendance or fabricate a reset.
+    } finally {
+      _serverSessionCheckInFlight = false;
+    }
   }
 
   void _scheduleSessionTimer() {
@@ -576,15 +678,20 @@ class SmartAttendanceController extends ChangeNotifier {
     );
   }
 
-  Future<void> _finalizeSession({required bool clearAfterSuccess}) async {
+  Future<void> _finalizeSession({
+    required bool clearAfterSuccess,
+    String? reasonOverride,
+  }) async {
     final session = _session;
     final client = _checkInClient;
     if (session == null || client == null) return;
     _lastCheckoutRequestAt = _clock();
     _lastCheckoutRequestResult = 'Sending last presence as out time';
-    _logicState = session.usesExitEvents
-        ? 'Saving beacon exit as out time.'
-        : 'Two-hour absence reached. Saving out time.';
+    _logicState =
+        reasonOverride ??
+        (session.usesExitEvents
+            ? 'Saving beacon exit as out time.'
+            : 'Two-hour absence reached. Saving out time.');
     _lastError = null;
     notifyListeners();
     try {

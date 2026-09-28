@@ -319,6 +319,44 @@ class AttendanceController extends Controller
         return back()->with('status', ($attendanceLog->member?->name ?? 'Member').' checked out successfully.');
     }
 
+    public function resetSmartAttendanceTest(Request $request, AttendanceLog $attendanceLog): RedirectResponse
+    {
+        $gym = $this->gymWebPanelService->resolveGym($request);
+        $this->gymWebPanelService->assertPermission(
+            $request,
+            PermissionName::AttendanceManage->value,
+            $gym,
+            $attendanceLog->branch_id,
+        );
+        $this->assertAttendanceManageAccess($request, $gym, $attendanceLog->branch_id);
+        $branchIds = $this->gymWebPanelService->accessibleBranchIds($request, $gym);
+        abort_unless(
+            (int) $attendanceLog->gym_id === (int) $gym->id
+                && in_array((int) $attendanceLog->branch_id, $branchIds, true)
+                && $attendanceLog->check_in_method === 'smart_attendance',
+            404,
+        );
+
+        $memberName = $attendanceLog->member?->name ?? 'Member';
+        $before = $attendanceLog->toArray();
+        $this->auditLogService->log(
+            event: 'web.gym.attendance.smart_test_reset',
+            action: 'delete',
+            request: $request,
+            subject: $attendanceLog,
+            gym: $gym,
+            branch: $attendanceLog->branch,
+            oldValues: $before,
+            context: ['reason' => 'smart_attendance_test_reset'],
+        );
+        $attendanceLog->delete();
+
+        return back()->with(
+            'status',
+            "{$memberName}'s Smart Attendance test visit was deleted. The test app will clear its local window when it rearms or next starts scanning.",
+        );
+    }
+
     public function storeCorrection(StoreAttendanceCorrectionRequest $request): RedirectResponse
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
