@@ -10,6 +10,11 @@ abstract class SmartAttendanceBleScanner {
 
   Future<void> startForegroundScan();
   Future<void> startBackgroundScan();
+  Future<void> configureBackgroundAttendance({
+    required String baseUrl,
+    required String accessToken,
+    required int gymId,
+  });
   Future<void> stopScan();
   Future<int?> androidSdkInt();
 }
@@ -62,6 +67,17 @@ class MethodChannelSmartAttendanceBleScanner
       'serviceUuid': SmartAttendanceBleProtocol.serviceUuid,
     });
   }
+
+  @override
+  Future<void> configureBackgroundAttendance({
+    required String baseUrl,
+    required String accessToken,
+    required int gymId,
+  }) => _methodChannel.invokeMethod<void>('configureBackgroundAttendance', {
+    'baseUrl': baseUrl,
+    'accessToken': accessToken,
+    'gymId': gymId,
+  });
 
   @override
   Future<void> stopScan() async {

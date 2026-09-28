@@ -12,7 +12,9 @@ use Illuminate\Validation\ValidationException;
 
 class SmartAttendanceHubService
 {
-    public const PLATFORMS = ['android', 'esp32'];
+    public const PLATFORMS = ['android', 'esp32', 'ble_hardware'];
+
+    public const BLE_SERVICE_UUID = '8b0f9c60-4f6d-4b40-9e8d-2d5d3f73a1a1';
 
     /** @return array{hub: SmartAttendanceHub, secret: string} */
     public function create(array $data, Gym $gym, User $actor): array
@@ -141,7 +143,16 @@ class SmartAttendanceHubService
             'heartbeat_interval_seconds' => 60,
             'ble' => [
                 'protocol_version' => 2,
+                'service_uuid' => self::BLE_SERVICE_UUID,
                 'public_id' => $hub->public_id,
+                'service_data_hex' => $this->compactServiceDataHex($hub->public_id),
+                'ibeacon' => [
+                    'uuid' => self::BLE_SERVICE_UUID,
+                    'major' => ($hub->id >> 16) & 0xFFFF,
+                    'minor' => $hub->id & 0xFFFF,
+                    'measured_power' => -59,
+                    'protocol_version' => 3,
+                ],
             ],
         ];
     }
@@ -204,5 +215,21 @@ class SmartAttendanceHubService
         $merged = array_replace($existing, $metadata);
 
         return $merged === [] ? null : $merged;
+    }
+
+    private function compactServiceDataHex(string $publicId): string
+    {
+        $bytes = array_fill(0, 9, 0);
+        foreach (str_split(substr($publicId, 3)) as $character) {
+            $digit = strpos('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ', $character);
+            $carry = $digit === false ? 0 : $digit;
+            for ($index = 8; $index >= 0; $index--) {
+                $value = ($bytes[$index] * 36) + $carry;
+                $bytes[$index] = $value & 0xFF;
+                $carry = $value >> 8;
+            }
+        }
+
+        return '02'.strtoupper(implode('', array_map(fn (int $byte): string => sprintf('%02x', $byte), $bytes)));
     }
 }

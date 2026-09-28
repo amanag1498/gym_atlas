@@ -121,6 +121,12 @@
                                         <div class="flex flex-col gap-2 rounded-xl bg-white p-3 dark:bg-black/10 md:flex-row md:items-center md:justify-between"><code id="hub-{{ $hub->id }}-heartbeat" class="break-all">{{ $heartbeatUrl }}</code><button type="button" class="panel-btn-secondary !px-3" onclick="navigator.clipboard.writeText(document.getElementById('hub-{{ $hub->id }}-heartbeat').innerText)">Copy</button></div>
                                         <div class="flex flex-col gap-2 rounded-xl bg-white p-3 dark:bg-black/10 md:flex-row md:items-center md:justify-between"><code id="hub-{{ $hub->id }}-config" class="break-all">{{ $configUrl }}</code><button type="button" class="panel-btn-secondary !px-3" onclick="navigator.clipboard.writeText(document.getElementById('hub-{{ $hub->id }}-config').innerText)">Copy</button></div>
                                     </div>
+                                    <div class="rounded-xl border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-600 dark:border-slate-800 dark:bg-black/10 dark:text-slate-300">
+                                        <div class="font-semibold text-slate-900 dark:text-white">Physical beacon profile</div>
+                                        <div class="mt-1">UUID <code class="break-all">{{ \App\Services\SmartAttendance\SmartAttendanceHubService::BLE_SERVICE_UUID }}</code></div>
+                                        <div>iBeacon major <code>{{ ($hub->id >> 16) & 0xffff }}</code> · minor <code>{{ $hub->id & 0xffff }}</code> · measured power <code>-59</code></div>
+                                        <p class="mt-1 text-slate-500 dark:text-slate-400">Android and iOS Member apps accept this hardware profile. The authenticated config endpoint returns the same values plus compact V2 service data.</p>
+                                    </div>
                                 </div>
                             </details>
 
@@ -138,6 +144,7 @@
                                         <select class="form-input" name="platform" required>
                                             <option value="android" @selected(old('platform', $hub->platform) === 'android')>Android</option>
                                             <option value="esp32" @selected(old('platform', $hub->platform) === 'esp32')>ESP32</option>
+                                            <option value="ble_hardware" @selected(old('platform', $hub->platform) === 'ble_hardware')>Other BLE hardware</option>
                                         </select>
                                     </label>
                                     <label>
@@ -183,6 +190,7 @@
                                 <select class="form-input" name="platform" required>
                                     <option value="android" @selected(old('platform', 'android') === 'android')>Android</option>
                                     <option value="esp32" @selected(old('platform') === 'esp32')>ESP32</option>
+                                    <option value="ble_hardware" @selected(old('platform') === 'ble_hardware')>Other BLE hardware</option>
                                 </select>
                             </label>
                             <label>

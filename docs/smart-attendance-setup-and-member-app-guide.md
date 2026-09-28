@@ -4,7 +4,7 @@ This guide covers the current Smart Attendance flow from Gym Admin setup through
 
 ## What the system does
 
-An Android entrance phone runs the separate **Atlas Smart Hub** app. The hub authenticates with Gym Atlas, broadcasts a public BLE identifier, and sends a heartbeat every 60 seconds. A signed-in **Gym Atlas** Member app detects that nearby signal and asks Laravel to record attendance. Laravel remains the authority for the member, selected gym, branch, membership, duplicate rules, and notification.
+An Android entrance phone running **Atlas Smart Hub**, an ESP32, or another compatible physical BLE device authenticates with Gym Atlas, broadcasts an Atlas beacon identifier, and sends a heartbeat every 60 seconds. A signed-in **Gym Atlas** Member app detects that nearby signal and asks Laravel to record attendance. Laravel remains the authority for the member, selected gym, branch, membership, duplicate rules, and notification.
 
 The first qualified presence starts a six-hour attendance window and becomes the in time. Further qualified detections inside that window update the visit's last-presence timestamp. After two hours without another presence, the latest timestamp becomes the out time. A return inside the original six-hour window reopens and updates the same visit; a presence after the window starts a new visit.
 
@@ -30,7 +30,7 @@ The entrance phone needs internet for its first activation. After that one-time 
 1. Sign in to Gym Admin.
 2. Open **Attendance → Smart Attendance**.
 3. Under **Create hub**, enter a clear device name such as `Main entrance phone`.
-4. Select **Android** and the physical branch where the phone will stay. Prefer a branch-scoped hub over **Gym-wide** for normal entrances.
+4. Select **Android**, **ESP32**, or **Other BLE hardware** and the physical entrance branch. Prefer a branch-scoped hub over **Gym-wide** for normal entrances.
 5. Select **Create hub and show secret**.
 6. Keep the confirmation page open. Copy the **Hub UUID** and **Device secret**. The secret is displayed only after creation or rotation.
 
@@ -77,7 +77,9 @@ Gym Admin will eventually label the hub **Offline** while the entrance phone has
 6. Open the Member app and approach the entrance hub. Stay near it for a few seconds so the proximity and signal checks can complete.
 7. A successful check-in appears in attendance history and can produce the **Welcome to [gym]** notification.
 
-On Android, background mode runs as a foreground BLE service with an ongoing Smart Attendance notification. If Flutter is detached while the native service remains alive, the service retains the latest detection for each nearby hub and replays it when the app reconnects. Manufacturer battery policies can still restrict the service. Force-stop disables all Android background work until the Member opens Gym Atlas again.
+On Android, background mode runs as a foreground BLE service with an ongoing Smart Attendance notification. The native service validates signal continuity, submits check-in itself, persists the six-hour visit window, updates last presence locally, and submits the last seen time as out time after two hours of absence. It does not depend on Flutter remaining alive. Manufacturer battery policies can still restrict the service. Force-stop disables all Android background work until the Member opens Gym Atlas again.
+
+Dedicated hardware can broadcast the Atlas iBeacon profile returned by its authenticated config endpoint. Both Android and iOS Member apps reconstruct the numeric hub ID from iBeacon major/minor; Android also continues to accept Atlas service-data V1/V2. See `smart-attendance-hardware-hub.md` for the exact radio and gateway contract.
 
 ## 4. Use Smart Attendance on an iOS Member phone
 

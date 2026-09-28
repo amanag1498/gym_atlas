@@ -11,6 +11,7 @@ use App\Models\MemberProfile;
 use App\Models\MembershipPlan;
 use App\Models\SmartAttendanceHub;
 use App\Models\User;
+use App\Services\SmartAttendance\SmartAttendanceHubService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -129,6 +130,7 @@ class SmartAttendanceHubFeatureTest extends TestCase
             ->assertCreated();
 
         $uuid = $create->json('data.hub.uuid');
+        $hubId = (int) $create->json('data.hub.id');
         $publicId = $create->json('data.hub.public_id');
         $secret = $create->json('data.device_secret');
 
@@ -145,6 +147,12 @@ class SmartAttendanceHubFeatureTest extends TestCase
             ->assertJsonPath('data.hub.public_id', $publicId)
             ->assertJsonPath('data.hub.status', 'online')
             ->assertJsonPath('data.ble.protocol_version', 2)
+            ->assertJsonPath('data.ble.service_uuid', SmartAttendanceHubService::BLE_SERVICE_UUID)
+            ->assertJsonPath('data.ble.ibeacon.uuid', SmartAttendanceHubService::BLE_SERVICE_UUID)
+            ->assertJsonPath('data.ble.ibeacon.major', ($hubId >> 16) & 0xFFFF)
+            ->assertJsonPath('data.ble.ibeacon.minor', $hubId & 0xFFFF)
+            ->assertJsonPath('data.ble.ibeacon.protocol_version', 3)
+            ->assertJsonStructure(['data' => ['ble' => ['service_data_hex']]])
             ->assertJsonMissing(['device_secret' => $secret]);
 
         $this->assertDatabaseHas('smart_attendance_hubs', [

@@ -21,13 +21,29 @@ import android.os.ParcelUuid
 import android.util.Base64
 import org.json.JSONObject
 import java.util.UUID
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 
 class SmartAttendanceScanService : Service() {
     private val serviceUuid = ParcelUuid(UUID.fromString(SmartAttendanceScanContract.ATLAS_SERVICE_UUID))
     private var scanCallback: ScanCallback? = null
+    private lateinit var configStore: SmartAttendanceBackgroundConfigStore
+    private lateinit var sessionStore: SmartAttendanceNativeSessionStore
+    private val client = SmartAttendanceNativeClient()
+    private var worker: ScheduledExecutorService? = null
+    @Volatile private var lastDetectionDispatchAt = 0L
+    private val firstQualifiedByHub = mutableMapOf<String, Long>()
+    private val lastQualifiedByHub = mutableMapOf<String, Long>()
+    private val lastAttemptByHub = mutableMapOf<String, Long>()
 
     override fun onCreate() {
         super.onCreate()
+        configStore = SmartAttendanceBackgroundConfigStore(this)
+        sessionStore = SmartAttendanceNativeSessionStore(this)
+        worker = Executors.newSingleThreadScheduledExecutor().also { executor ->
+            executor.scheduleAtFixedRate(::finalizeIfNeeded, 1, 1, TimeUnit.MINUTES)
+        }
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Smart Attendance", NotificationManager.IMPORTANCE_LOW),
         )
@@ -48,6 +64,8 @@ class SmartAttendanceScanService : Service() {
 
     override fun onDestroy() {
         stopScanning()
+        worker?.shutdownNow()
+        worker = null
         super.onDestroy()
     }
 
@@ -67,7 +85,14 @@ class SmartAttendanceScanService : Service() {
         }
         scanCallback = callback
         scanner.startScan(
-            listOf(ScanFilter.Builder().setServiceUuid(serviceUuid).build()),
+            listOf(
+                ScanFilter.Builder().setServiceUuid(serviceUuid).build(),
+                ScanFilter.Builder().setManufacturerData(
+                    SmartAttendanceScanContract.IBEACON_COMPANY_ID,
+                    byteArrayOf(0x02, 0x15),
+                    byteArrayOf(0xff.toByte(), 0xff.toByte()),
+                ).build(),
+            ),
             ScanSettings.Builder()
                 .setScanMode(ScanSettings.SCAN_MODE_LOW_POWER)
                 .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
@@ -87,17 +112,103 @@ class SmartAttendanceScanService : Service() {
     }
 
     private fun emit(result: ScanResult) {
-        val data = result.scanRecord?.getServiceData(serviceUuid) ?: return
+        val record = result.scanRecord ?: return
+        val data = record.getServiceData(serviceUuid)
+        val beaconData = record.getManufacturerSpecificData(SmartAttendanceScanContract.IBEACON_COMPANY_ID)
+        val detection = data?.let(SmartAttendanceNativeProtocol::decode)
+            ?: beaconData?.let(SmartAttendanceNativeProtocol::decodeIBeacon)
+            ?: return
         val detectedAt = System.currentTimeMillis()
-        SmartAttendanceDetectionQueue.save(this, data, result.rssi, detectedAt)
+        if (detectedAt - lastDetectionDispatchAt < NATIVE_DETECTION_INTERVAL_MS) return
+        lastDetectionDispatchAt = detectedAt
+        SmartAttendanceDetectionQueue.save(this, detection, data, result.rssi, detectedAt)
         sendBroadcast(
             Intent(SmartAttendanceScanContract.ACTION_DETECTION)
                 .setPackage(packageName)
-                .putExtra(SmartAttendanceScanContract.EXTRA_SERVICE_DATA, data)
+                .apply {
+                    data?.let { putExtra(SmartAttendanceScanContract.EXTRA_SERVICE_DATA, it) }
+                    detection.hubId?.let { putExtra(SmartAttendanceScanContract.EXTRA_HUB_ID, it) }
+                }
                 .putExtra(SmartAttendanceScanContract.EXTRA_RSSI, result.rssi)
                 .putExtra(SmartAttendanceScanContract.EXTRA_DETECTED_AT, detectedAt),
         )
+        worker?.execute { handlePresence(detection, result.rssi, detectedAt) }
     }
+
+    private fun handlePresence(detection: SmartAttendanceNativePayload, rssi: Int, detectedAt: Long) {
+        val config = configStore.load() ?: return
+        val hubKey = detection.key.uppercase()
+        if (rssi < MINIMUM_RSSI) {
+            firstQualifiedByHub.remove(hubKey)
+            lastQualifiedByHub.remove(hubKey)
+            return
+        }
+
+        val previous = lastQualifiedByHub[hubKey]
+        if (previous == null || detectedAt < previous || detectedAt - previous > PRESENCE_CONTINUITY_MS) {
+            firstQualifiedByHub[hubKey] = detectedAt
+        }
+        lastQualifiedByHub[hubKey] = detectedAt
+
+        var session = sessionStore.load()
+        if (session != null && detectedAt >= session.windowEndsAtMs) {
+            if (session.checkedOutAtMs == null && !finishSession(config, session)) return
+            sessionStore.clear()
+            session = null
+        }
+
+        if (session != null && detectedAt < session.windowEndsAtMs && session.checkedOutAtMs == null) {
+            if (detectedAt >= session.lastPresenceAtMs) {
+                sessionStore.save(
+                    session.copy(hubPublicId = hubKey, lastPresenceAtMs = detectedAt),
+                )
+            }
+            return
+        }
+
+        val firstSeen = firstQualifiedByHub[hubKey] ?: detectedAt
+        if (detectedAt - firstSeen < PRESENCE_CONFIRMATION_MS) return
+        val lastAttempt = lastAttemptByHub[hubKey]
+        if (lastAttempt != null && detectedAt - lastAttempt < REQUEST_DEBOUNCE_MS) return
+        lastAttemptByHub[hubKey] = detectedAt
+
+        runCatching { client.checkIn(config, detection, rssi, firstSeen) }
+            .onSuccess { response ->
+                sessionStore.save(
+                    response.copy(
+                        lastPresenceAtMs = maxOf(response.lastPresenceAtMs, detectedAt),
+                        checkedOutAtMs = null,
+                    ),
+                )
+                updateNotification("Background attendance active · check-in synced")
+            }
+            .onFailure {
+                updateNotification("Background attendance active · waiting to sync")
+            }
+    }
+
+    private fun finalizeIfNeeded() {
+        val config = configStore.load() ?: return
+        val session = sessionStore.load() ?: return
+        val now = System.currentTimeMillis()
+        if (session.checkedOutAtMs != null) {
+            if (now >= session.windowEndsAtMs) sessionStore.clear()
+            return
+        }
+        if (now < session.windowEndsAtMs && now < session.lastPresenceAtMs + ABSENCE_TIMEOUT_MS) return
+        if (finishSession(config, session)) {
+            if (now >= session.windowEndsAtMs) sessionStore.clear()
+            else sessionStore.save(session.copy(checkedOutAtMs = session.lastPresenceAtMs))
+        }
+    }
+
+    private fun finishSession(
+        config: SmartAttendanceBackgroundConfig,
+        session: SmartAttendanceNativeSession,
+    ): Boolean = runCatching { client.checkOut(config, session) }
+        .onSuccess { updateNotification("Background attendance active · out time synced") }
+        .onFailure { updateNotification("Background attendance active · out time waiting to sync") }
+        .isSuccess
 
     private fun hasScanPermission(): Boolean =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -114,11 +225,30 @@ class SmartAttendanceScanService : Service() {
         .setOngoing(true)
         .build()
 
+    private fun updateNotification(text: String) {
+        getSystemService(NotificationManager::class.java).notify(
+            NOTIFICATION_ID,
+            Notification.Builder(this, CHANNEL_ID)
+                .setContentTitle("Gym Atlas Smart Attendance")
+                .setContentText(text)
+                .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .build(),
+        )
+    }
+
     companion object {
         const val ACTION_STOP = "com.techybugs.gymatlas.member.STOP_SMART_ATTENDANCE_SCAN"
         private const val CHANNEL_ID = "gym_atlas_smart_attendance"
         private const val NOTIFICATION_ID = 4201
         private const val BACKGROUND_REPORT_DELAY_MS = 15_000L
+        private const val NATIVE_DETECTION_INTERVAL_MS = 1_000L
+        private const val MINIMUM_RSSI = -78
+        private const val PRESENCE_CONFIRMATION_MS = 2_400L
+        private const val PRESENCE_CONTINUITY_MS = 30_000L
+        private const val REQUEST_DEBOUNCE_MS = 15_000L
+        private const val ABSENCE_TIMEOUT_MS = 2 * 60 * 60 * 1000L
         private const val PREFS = "smart_attendance_scan_service"
         private const val KEY_ENABLED = "enabled"
 
@@ -144,8 +274,10 @@ class SmartAttendanceBootReceiver : BroadcastReceiver() {
 
 object SmartAttendanceScanContract {
     const val ATLAS_SERVICE_UUID = "8b0f9c60-4f6d-4b40-9e8d-2d5d3f73a1a1"
+    const val IBEACON_COMPANY_ID = 0x004C
     const val ACTION_DETECTION = "com.techybugs.gymatlas.member.SMART_ATTENDANCE_DETECTION"
     const val EXTRA_SERVICE_DATA = "serviceData"
+    const val EXTRA_HUB_ID = "hubId"
     const val EXTRA_RSSI = "rssi"
     const val EXTRA_DETECTED_AT = "detectedAt"
 }
@@ -154,11 +286,21 @@ object SmartAttendanceDetectionQueue {
     private const val PREFS = "smart_attendance_background_detections"
     private const val KEY = "latest_by_hub"
 
-    fun save(context: Context, data: ByteArray, rssi: Int, detectedAt: Long) {
+    fun save(
+        context: Context,
+        detection: SmartAttendanceNativePayload,
+        data: ByteArray?,
+        rssi: Int,
+        detectedAt: Long,
+    ) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val root = runCatching { JSONObject(prefs.getString(KEY, "{}") ?: "{}") }.getOrDefault(JSONObject())
-        val encoded = Base64.encodeToString(data, Base64.NO_WRAP)
-        root.put(encoded, JSONObject().put("data", encoded).put("rssi", rssi).put("detectedAt", detectedAt))
+        val encoded = data?.let { Base64.encodeToString(it, Base64.NO_WRAP) }
+        root.put(detection.key, JSONObject()
+            .put("data", encoded)
+            .put("hubId", detection.hubId)
+            .put("rssi", rssi)
+            .put("detectedAt", detectedAt))
         prefs.edit().putString(KEY, root.toString()).apply()
     }
 
@@ -168,13 +310,14 @@ object SmartAttendanceDetectionQueue {
         prefs.edit().remove(KEY).apply()
         return root.keys().asSequence().mapNotNull { key ->
             val item = root.optJSONObject(key) ?: return@mapNotNull null
-            val data = runCatching { Base64.decode(item.getString("data"), Base64.NO_WRAP) }.getOrNull()
-                ?: return@mapNotNull null
-            mapOf(
-                SmartAttendanceScanContract.EXTRA_SERVICE_DATA to data,
-                SmartAttendanceScanContract.EXTRA_RSSI to item.optInt("rssi"),
-                SmartAttendanceScanContract.EXTRA_DETECTED_AT to item.optLong("detectedAt"),
-            )
+            val data = item.optString("data").takeIf { it.isNotBlank() && it != "null" }
+                ?.let { runCatching { Base64.decode(it, Base64.NO_WRAP) }.getOrNull() }
+            buildMap<String, Any> {
+                data?.let { put(SmartAttendanceScanContract.EXTRA_SERVICE_DATA, it) }
+                item.optLong("hubId").takeIf { it > 0 }?.let { put(SmartAttendanceScanContract.EXTRA_HUB_ID, it) }
+                put(SmartAttendanceScanContract.EXTRA_RSSI, item.optInt("rssi"))
+                put(SmartAttendanceScanContract.EXTRA_DETECTED_AT, item.optLong("detectedAt"))
+            }.takeIf { it.containsKey(SmartAttendanceScanContract.EXTRA_SERVICE_DATA) || it.containsKey(SmartAttendanceScanContract.EXTRA_HUB_ID) }
         }.toList()
     }
 }

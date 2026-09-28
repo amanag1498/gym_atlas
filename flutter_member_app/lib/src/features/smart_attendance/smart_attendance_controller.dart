@@ -18,6 +18,8 @@ class SmartAttendanceController extends ChangeNotifier {
     SmartAttendanceSessionStore? sessionStore,
     Future<int?> Function()? selectedGymIdProvider,
     int? Function()? memberIdProvider,
+    String? Function()? accessTokenProvider,
+    String? backgroundApiBaseUrl,
     Future<bool> Function()? requestPermissions,
     DateTime Function()? clock,
     Duration duplicateWindow = const Duration(seconds: 12),
@@ -33,6 +35,8 @@ class SmartAttendanceController extends ChangeNotifier {
        _sessionStore = sessionStore,
        _selectedGymIdProvider = selectedGymIdProvider,
        _memberIdProvider = memberIdProvider,
+       _accessTokenProvider = accessTokenProvider,
+       _backgroundApiBaseUrl = backgroundApiBaseUrl,
        _requestPermissions = requestPermissions,
        _clock = clock ?? DateTime.now,
        _duplicateWindow = duplicateWindow,
@@ -49,6 +53,8 @@ class SmartAttendanceController extends ChangeNotifier {
   final SmartAttendanceSessionStore? _sessionStore;
   final Future<int?> Function()? _selectedGymIdProvider;
   final int? Function()? _memberIdProvider;
+  final String? Function()? _accessTokenProvider;
+  final String? _backgroundApiBaseUrl;
   final Future<bool> Function()? _requestPermissions;
   final DateTime Function() _clock;
   final Duration _duplicateWindow;
@@ -138,6 +144,19 @@ class SmartAttendanceController extends ChangeNotifier {
       return;
     }
     await _restoreAndReconcileSession();
+    final accessToken = _accessTokenProvider?.call();
+    final selectedGymId = await _selectedGymIdProvider?.call();
+    if (defaultTargetPlatform == TargetPlatform.android &&
+        accessToken != null &&
+        accessToken.isNotEmpty &&
+        selectedGymId != null &&
+        _backgroundApiBaseUrl != null) {
+      await _scanner.configureBackgroundAttendance(
+        baseUrl: _backgroundApiBaseUrl,
+        accessToken: accessToken,
+        gymId: selectedGymId,
+      );
+    }
     if (_scanning && !_backgroundScanning) {
       return;
     }
@@ -174,6 +193,19 @@ class SmartAttendanceController extends ChangeNotifier {
       return;
     }
     await _restoreAndReconcileSession();
+    final accessToken = _accessTokenProvider?.call();
+    final selectedGymId = await _selectedGymIdProvider?.call();
+    if (defaultTargetPlatform == TargetPlatform.android &&
+        accessToken != null &&
+        accessToken.isNotEmpty &&
+        selectedGymId != null &&
+        _backgroundApiBaseUrl != null) {
+      await _scanner.configureBackgroundAttendance(
+        baseUrl: _backgroundApiBaseUrl,
+        accessToken: accessToken,
+        gymId: selectedGymId,
+      );
+    }
     if (_scanning && _backgroundScanning) {
       return;
     }
@@ -248,6 +280,18 @@ class SmartAttendanceController extends ChangeNotifier {
     if (detection.isExit) {
       _detections.add(detection);
       unawaited(_handleBeaconExit(detection));
+      notifyListeners();
+      return;
+    }
+    if (detection.source == 'android_background_native') {
+      final previous = _lastDetectionByHub[detection.publicId];
+      final now = _clock();
+      if (previous == null || now.difference(previous) >= _duplicateWindow) {
+        _lastDetectionByHub[detection.publicId] = now;
+        _detections.add(detection);
+      }
+      _logicState =
+          'Android background service detected the Hub and owns attendance sync.';
       notifyListeners();
       return;
     }

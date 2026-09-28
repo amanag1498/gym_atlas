@@ -475,6 +475,13 @@ class _FakeScanner implements SmartAttendanceBleScanner {
   void emit(SmartAttendanceDetection detection) => _detections.add(detection);
 
   @override
+  Future<void> configureBackgroundAttendance({
+    required String baseUrl,
+    required String accessToken,
+    required int gymId,
+  }) async {}
+
+  @override
   Future<void> startForegroundScan() async {
     foregroundStartCalls++;
     started = true;

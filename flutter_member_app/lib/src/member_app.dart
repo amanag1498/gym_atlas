@@ -13,6 +13,7 @@ import 'package:provider/provider.dart';
 import '../core/theme/app_theme.dart';
 import 'core/api_client.dart';
 import 'core/fcm_token_service.dart';
+import 'core/config.dart';
 import 'core/member_route_redirect.dart';
 import 'core/secure_storage_service.dart';
 import 'features/auth/auth_gate.dart';
@@ -104,6 +105,8 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
       sessionStore: const SecureSmartAttendanceSessionStore(),
       selectedGymIdProvider: storage.readSelectedGymId,
       memberIdProvider: () => sessionController.user?.id,
+      accessTokenProvider: () => sessionController.token,
+      backgroundApiBaseUrl: MemberConfig.apiBaseUrl,
     );
     _chatNotificationService = ChatNotificationService();
     _appLinks = AppLinks();

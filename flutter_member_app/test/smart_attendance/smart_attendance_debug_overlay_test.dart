@@ -57,6 +57,13 @@ void main() {
 }
 
 class _DebugScanner implements SmartAttendanceBleScanner {
+  @override
+  Future<void> configureBackgroundAttendance({
+    required String baseUrl,
+    required String accessToken,
+    required int gymId,
+  }) async {}
+
   final _detections = StreamController<SmartAttendanceDetection>.broadcast();
   final _diagnostics =
       StreamController<SmartAttendanceScanDiagnostic>.broadcast();

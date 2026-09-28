@@ -56,6 +56,24 @@ class MainActivity : FlutterFragmentActivity() {
             when (call.method) {
                 "startForegroundScan" -> scanner.start(result, background = false)
                 "startBackgroundScan" -> scanner.start(result, background = true)
+                "configureBackgroundAttendance" -> {
+                    val arguments = call.arguments as? Map<*, *>
+                    val baseUrl = arguments?.get("baseUrl")?.toString()?.trim().orEmpty()
+                    val accessToken = arguments?.get("accessToken")?.toString()?.trim().orEmpty()
+                    val gymId = (arguments?.get("gymId") as? Number)?.toLong()
+                    if (!baseUrl.startsWith("https://") || accessToken.isBlank() || gymId == null || gymId <= 0) {
+                        result.error("invalid_background_config", "Valid API, session, and gym details are required.", null)
+                    } else {
+                        val configStore = SmartAttendanceBackgroundConfigStore(this)
+                        if (configStore.load()?.gymId != gymId) {
+                            SmartAttendanceNativeSessionStore(this).clear()
+                        }
+                        configStore.save(
+                            SmartAttendanceBackgroundConfig(baseUrl.trimEnd('/'), accessToken, gymId),
+                        )
+                        result.success(null)
+                    }
+                }
                 "stopScan" -> scanner.stop(result)
                 "androidSdkInt" -> result.success(Build.VERSION.SDK_INT)
                 else -> result.notImplemented()
@@ -212,12 +230,15 @@ private class SmartAttendanceBleScanner(private val context: Context) : EventCha
             } else {
                 @Suppress("DEPRECATION")
                 intent.getByteArrayExtra(SmartAttendanceScanContract.EXTRA_SERVICE_DATA)
-            } ?: return
+            }
+            val hubId = intent.getLongExtra(SmartAttendanceScanContract.EXTRA_HUB_ID, 0L).takeIf { it > 0 }
+            if (data == null && hubId == null) return
             emitPayload(
                 data,
+                hubId,
                 intent.getIntExtra(SmartAttendanceScanContract.EXTRA_RSSI, 0),
                 intent.getLongExtra(SmartAttendanceScanContract.EXTRA_DETECTED_AT, System.currentTimeMillis()),
-                "android_background_ble",
+                "android_background_native",
             )
         }
     }
@@ -252,14 +273,7 @@ private class SmartAttendanceBleScanner(private val context: Context) : EventCha
             stopLocalScan()
             registerBackgroundReceiver()
             context.startForegroundService(Intent(context, SmartAttendanceScanService::class.java))
-            SmartAttendanceDetectionQueue.drain(context).forEach { queued ->
-                emitPayload(
-                    queued.getValue(SmartAttendanceScanContract.EXTRA_SERVICE_DATA) as ByteArray,
-                    queued.getValue(SmartAttendanceScanContract.EXTRA_RSSI) as Int,
-                    queued.getValue(SmartAttendanceScanContract.EXTRA_DETECTED_AT) as Long,
-                    "android_background_ble",
-                )
-            }
+            SmartAttendanceDetectionQueue.drain(context).forEach(::emitQueuedDetection)
             currentBackgroundMode = true
             result.success(null)
             return
@@ -290,7 +304,14 @@ private class SmartAttendanceBleScanner(private val context: Context) : EventCha
         scanCallback = callback
         currentBackgroundMode = background
         scanner.startScan(
-            listOf(ScanFilter.Builder().setServiceUuid(serviceUuid).build()),
+            listOf(
+                ScanFilter.Builder().setServiceUuid(serviceUuid).build(),
+                ScanFilter.Builder().setManufacturerData(
+                    SmartAttendanceScanContract.IBEACON_COMPANY_ID,
+                    byteArrayOf(0x02, 0x15),
+                    byteArrayOf(0xff.toByte(), 0xff.toByte()),
+                ).build(),
+            ),
             ScanSettings.Builder()
                 .setScanMode(if (background) ScanSettings.SCAN_MODE_LOW_POWER else ScanSettings.SCAN_MODE_LOW_LATENCY)
                 .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
@@ -305,6 +326,8 @@ private class SmartAttendanceBleScanner(private val context: Context) : EventCha
     fun stop(result: MethodChannel.Result?) {
         stopLocalScan()
         stopBackgroundService()
+        SmartAttendanceBackgroundConfigStore(context).clear()
+        SmartAttendanceNativeSessionStore(context).clear()
         result?.success(null)
     }
 
@@ -351,35 +374,45 @@ private class SmartAttendanceBleScanner(private val context: Context) : EventCha
     }
 
     private fun drainQueuedDetections() {
-        SmartAttendanceDetectionQueue.drain(context).forEach { queued ->
-            emitPayload(
-                queued.getValue(SmartAttendanceScanContract.EXTRA_SERVICE_DATA) as ByteArray,
-                queued.getValue(SmartAttendanceScanContract.EXTRA_RSSI) as Int,
-                queued.getValue(SmartAttendanceScanContract.EXTRA_DETECTED_AT) as Long,
-                "android_background_ble",
-            )
-        }
+        SmartAttendanceDetectionQueue.drain(context).forEach(::emitQueuedDetection)
+    }
+
+    private fun emitQueuedDetection(queued: Map<String, Any>) {
+        emitPayload(
+            queued[SmartAttendanceScanContract.EXTRA_SERVICE_DATA] as? ByteArray,
+            queued[SmartAttendanceScanContract.EXTRA_HUB_ID] as? Long,
+            queued.getValue(SmartAttendanceScanContract.EXTRA_RSSI) as Int,
+            queued.getValue(SmartAttendanceScanContract.EXTRA_DETECTED_AT) as Long,
+            "android_background_native",
+        )
     }
 
     private fun emit(result: ScanResult) {
-        val serviceData = result.scanRecord?.getServiceData(serviceUuid)
+        val record = result.scanRecord ?: return
+        val serviceData = record.getServiceData(serviceUuid)
+        val hubId = record.getManufacturerSpecificData(SmartAttendanceScanContract.IBEACON_COMPANY_ID)
+            ?.let(SmartAttendanceNativeProtocol::decodeIBeacon)?.hubId
+        if (serviceData == null && hubId == null) return
         emitPayload(
             serviceData,
+            hubId,
             result.rssi,
             System.currentTimeMillis(),
             if (currentBackgroundMode) "android_background_ble" else "android_foreground_ble",
         )
     }
 
-    private fun emitPayload(serviceData: ByteArray?, rssi: Int, detectedAt: Long, source: String) {
+    private fun emitPayload(serviceData: ByteArray?, hubId: Long?, rssi: Int, detectedAt: Long, source: String) {
         eventSink?.success(
-            mapOf(
-                "serviceUuid" to ATLAS_SERVICE_UUID,
-                "serviceData" to serviceData,
-                "rssi" to rssi,
-                "detectedAt" to detectedAt,
-                "source" to source,
-            ),
+            buildMap<String, Any?> {
+                put("eventType", if (hubId != null) "beacon_presence" else "service_presence")
+                put("serviceUuid", ATLAS_SERVICE_UUID)
+                put("serviceData", serviceData)
+                put("hubId", hubId)
+                put("rssi", rssi)
+                put("detectedAt", detectedAt)
+                put("source", source)
+            },
         )
     }
 
