@@ -21,6 +21,7 @@ class SecureCredentialStore(context: Context) {
             .put("baseUrl", credentials.baseUrl.trimEnd('/'))
             .put("hubUuid", credentials.hubUuid.trim())
             .put("deviceSecret", credentials.deviceSecret.trim())
+            .put("hubId", credentials.hubId)
             .put("publicId", credentials.publicId)
             .put("gymName", credentials.gymName)
             .put("branchName", credentials.branchName)
@@ -41,6 +42,7 @@ class SecureCredentialStore(context: Context) {
                 baseUrl = json.optString("baseUrl", HubContracts.DEFAULT_BASE_URL).ifBlank { HubContracts.DEFAULT_BASE_URL },
                 hubUuid = json.optString("hubUuid"),
                 deviceSecret = json.optString("deviceSecret"),
+                hubId = if (json.isNull("hubId")) null else json.optLong("hubId").takeIf { it > 0 },
                 publicId = json.optString("publicId").takeIf { it.isNotBlank() && it != "null" },
                 gymName = json.optString("gymName").takeIf { it.isNotBlank() && it != "null" },
                 branchName = json.optString("branchName").takeIf { it.isNotBlank() && it != "null" },

@@ -2,7 +2,7 @@ package com.techybugs.gymatlas.smarthub
 
 object HubStartupPolicy {
     fun canBroadcastOffline(credentials: HubCredentials): Boolean =
-        !credentials.publicId.isNullOrBlank()
+        credentials.hubId != null && !credentials.publicId.isNullOrBlank()
 
     fun initialStatus(credentials: HubCredentials, bluetoothEnabled: Boolean): HubRuntimeStatus =
         HubRuntimeStatus(

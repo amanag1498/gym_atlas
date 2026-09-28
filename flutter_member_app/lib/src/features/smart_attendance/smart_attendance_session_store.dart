@@ -11,6 +11,7 @@ class SmartAttendanceSession {
     required this.checkedInAt,
     required this.lastPresenceAt,
     required this.windowEndsAt,
+    this.usesExitEvents = false,
     this.checkedOutAt,
   });
 
@@ -21,6 +22,7 @@ class SmartAttendanceSession {
   final DateTime checkedInAt;
   final DateTime lastPresenceAt;
   final DateTime windowEndsAt;
+  final bool usesExitEvents;
   final DateTime? checkedOutAt;
 
   SmartAttendanceSession copyWith({
@@ -28,6 +30,7 @@ class SmartAttendanceSession {
     DateTime? lastPresenceAt,
     DateTime? checkedOutAt,
     bool clearCheckedOutAt = false,
+    bool? usesExitEvents,
   }) => SmartAttendanceSession(
     attendanceLogId: attendanceLogId,
     memberId: memberId,
@@ -36,6 +39,7 @@ class SmartAttendanceSession {
     checkedInAt: checkedInAt,
     lastPresenceAt: lastPresenceAt ?? this.lastPresenceAt,
     windowEndsAt: windowEndsAt,
+    usesExitEvents: usesExitEvents ?? this.usesExitEvents,
     checkedOutAt: clearCheckedOutAt
         ? null
         : (checkedOutAt ?? this.checkedOutAt),
@@ -49,6 +53,7 @@ class SmartAttendanceSession {
     'checked_in_at': checkedInAt.toUtc().toIso8601String(),
     'last_presence_at': lastPresenceAt.toUtc().toIso8601String(),
     'window_ends_at': windowEndsAt.toUtc().toIso8601String(),
+    'uses_exit_events': usesExitEvents,
     'checked_out_at': checkedOutAt?.toUtc().toIso8601String(),
   };
 
@@ -61,6 +66,7 @@ class SmartAttendanceSession {
       checkedInAt: DateTime.parse(json['checked_in_at'].toString()),
       lastPresenceAt: DateTime.parse(json['last_presence_at'].toString()),
       windowEndsAt: DateTime.parse(json['window_ends_at'].toString()),
+      usesExitEvents: json['uses_exit_events'] == true,
       checkedOutAt: json['checked_out_at'] == null
           ? null
           : DateTime.parse(json['checked_out_at'].toString()),

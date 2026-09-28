@@ -48,6 +48,7 @@ class HubBackendClient {
         val gym = data.optJSONObject("gym") ?: JSONObject()
         val branch = data.optJSONObject("branch")
         return current.copy(
+            hubId = hub.optLong("id").takeIf { it > 0 } ?: current.hubId,
             publicId = hub.optString("public_id").takeIf { it.isNotBlank() } ?: current.publicId,
             gymName = gym.optString("name").takeIf { it.isNotBlank() } ?: current.gymName,
             branchName = if (data.has("branch")) {

@@ -28,6 +28,7 @@ class AttendanceLog extends Model
         'biometric_device_event_id',
         'smart_attendance_hub_id',
         'smart_attendance_detection',
+        'smart_attendance_exit_managed',
         'occurred_at_device',
         'received_at',
     ];
@@ -42,6 +43,7 @@ class AttendanceLog extends Model
             'occurred_at_device' => 'datetime',
             'received_at' => 'datetime',
             'smart_attendance_detection' => 'array',
+            'smart_attendance_exit_managed' => 'boolean',
         ];
     }
 

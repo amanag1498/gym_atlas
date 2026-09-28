@@ -183,13 +183,14 @@ class HubForegroundService : Service() {
             )
             return
         }
-        if (publicId.isNullOrBlank() || advertiser.hasActiveRequest) return
-        runCatching { startBle(publicId) }
+        val hubId = credentials?.hubId
+        if (publicId.isNullOrBlank() || hubId == null || advertiser.hasActiveRequest) return
+        runCatching { startBle(publicId, hubId) }
             .onFailure { error -> publish(runtimeStatus.copy(lastError = error.message ?: "BLE advertising could not start.")) }
     }
 
-    private fun startBle(publicId: String) {
-        advertiser.start(publicId) { state ->
+    private fun startBle(publicId: String, hubId: Long) {
+        advertiser.start(publicId, hubId) { state ->
             publish(
                 runtimeStatus.copy(
                     provisioned = true,
@@ -315,5 +316,5 @@ class HubForegroundService : Service() {
 }
 
 object BuildInfo {
-    const val firmwareVersion = "atlas-smart-hub-android-0.3.0"
+    const val firmwareVersion = "atlas-smart-hub-android-0.4.0"
 }

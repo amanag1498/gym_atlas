@@ -404,6 +404,51 @@ class SmartAttendanceHubFeatureTest extends TestCase
             ->assertJsonPath('data.attendance.checked_out_at', $returnPresence->toIso8601String());
     }
 
+    public function test_ios_beacon_visit_uses_hub_id_and_waits_for_exit(): void
+    {
+        [$owner, $member, $gym, $branch] = $this->makeGymScope();
+        $create = $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/gym/smart-attendance-hubs', [
+                'branch_id' => $branch->id,
+                'name' => 'Scalable Beacon Hub',
+                'platform' => 'android',
+            ], ['X-Gym-Id' => (string) $gym->id, 'X-Branch-Id' => (string) $branch->id])
+            ->assertCreated();
+        $hubId = (int) $create->json('data.hub.id');
+        $this->markHubOnline($hubId);
+        $headers = ['X-Gym-Id' => (string) $gym->id, 'X-Branch-Id' => (string) $branch->id];
+        $entry = now()->subHours(3)->startOfSecond();
+
+        $checkIn = $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/attendance/smart-check-in', [
+                'hub_id' => $hubId,
+                'protocol_version' => 3,
+                'detected_at' => $entry->toIso8601String(),
+                'source' => 'ios_background_beacon',
+            ], $headers)
+            ->assertCreated()
+            ->assertJsonPath('data.attendance.smart_attendance_hub_id', $hubId);
+
+        $logId = (int) $checkIn->json('data.attendance.id');
+        $this->assertDatabaseHas('attendance_logs', [
+            'id' => $logId,
+            'smart_attendance_exit_managed' => true,
+            'checked_out_at' => null,
+        ]);
+
+        $this->artisan('attendance:finalize-smart-visits')->assertSuccessful();
+        $this->assertDatabaseHas('attendance_logs', ['id' => $logId, 'checked_out_at' => null]);
+
+        $exit = now()->startOfSecond();
+        $this->actingAs($member, 'sanctum')
+            ->postJson('/api/member/attendance/smart-check-out', [
+                'attendance_log_id' => $logId,
+                'last_presence_at' => $exit->toIso8601String(),
+            ], $headers)
+            ->assertOk()
+            ->assertJsonPath('data.attendance.checked_out_at', $exit->toIso8601String());
+    }
+
     public function test_member_smart_attendance_rejects_hub_before_device_activation(): void
     {
         [$owner, $member, $gym, $branch] = $this->makeGymScope();

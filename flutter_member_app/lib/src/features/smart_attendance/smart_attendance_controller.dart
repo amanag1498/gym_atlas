@@ -245,6 +245,12 @@ class SmartAttendanceController extends ChangeNotifier {
   }
 
   void _handleDetection(SmartAttendanceDetection detection) {
+    if (detection.isExit) {
+      _detections.add(detection);
+      unawaited(_handleBeaconExit(detection));
+      notifyListeners();
+      return;
+    }
     unawaited(_maybeSubmitAttendance(detection));
 
     final now = _clock();
@@ -255,6 +261,26 @@ class SmartAttendanceController extends ChangeNotifier {
     _lastDetectionByHub[detection.publicId] = now;
     _detections.add(detection);
     notifyListeners();
+  }
+
+  Future<void> _handleBeaconExit(SmartAttendanceDetection detection) async {
+    final session = _session;
+    if (session == null || session.checkedOutAt != null) {
+      _logicState = 'Gym exit detected with no open Smart Attendance visit.';
+      notifyListeners();
+      return;
+    }
+    final exitAt = detection.detectedAt.isAfter(_clock())
+        ? _clock()
+        : detection.detectedAt;
+    if (exitAt.isAfter(session.lastPresenceAt)) {
+      _session = session.copyWith(lastPresenceAt: exitAt);
+      _lastLocalPresenceAt = exitAt;
+      _localPresenceUpdateCount++;
+      await _persistSession();
+    }
+    _logicState = 'Gym exit detected. Saving out time.';
+    await _finalizeSession(clearAfterSuccess: false);
   }
 
   Future<void> _maybeSubmitAttendance(
@@ -289,9 +315,9 @@ class SmartAttendanceController extends ChangeNotifier {
     // strong background discovery must therefore be handled as the confirmed
     // presence event; waiting for a second packet can prevent the visit from
     // ever being recorded.
-    final isCoalescedIosBackgroundDetection = detection.source.startsWith(
-      'ios_background_ble',
-    );
+    final isCoalescedIosBackgroundDetection =
+        detection.source.startsWith('ios_background_ble') ||
+        detection.source.startsWith('ios_background_beacon');
     if (!isCoalescedIosBackgroundDetection &&
         now.difference(firstSeen) < _presenceWindow) {
       _logicState = 'Confirming continuous hub presence for 2.4 seconds.';
@@ -310,6 +336,7 @@ class SmartAttendanceController extends ChangeNotifier {
             rssi: detection.rssi,
             detectedAt: firstSeen,
             source: detection.source,
+            hubId: detection.hubId,
             rawServiceData: detection.rawServiceData,
           )
         : detection;
@@ -394,6 +421,9 @@ class SmartAttendanceController extends ChangeNotifier {
             windowEndsAt:
                 response.attendanceWindowEndsAt ??
                 checkedInAt.add(_attendanceWindow),
+            usesExitEvents: hasNewerLocalPresence
+                ? current.usesExitEvents
+                : detection.source.contains('beacon'),
             checkedOutAt: hasNewerLocalPresence ? null : response.checkedOutAt,
           );
           await _persistSession();
@@ -464,7 +494,8 @@ class SmartAttendanceController extends ChangeNotifier {
       await _finalizeSession(clearAfterSuccess: true);
       return;
     }
-    if (session.checkedOutAt == null &&
+    if (!session.usesExitEvents &&
+        session.checkedOutAt == null &&
         !now.isBefore(session.lastPresenceAt.add(_absenceTimeout))) {
       await _finalizeSession(clearAfterSuccess: false);
       return;
@@ -477,7 +508,7 @@ class SmartAttendanceController extends ChangeNotifier {
     final session = _session;
     if (session == null) return;
     final now = _clock();
-    final deadline = session.checkedOutAt == null
+    final deadline = session.checkedOutAt == null && !session.usesExitEvents
         ? session.lastPresenceAt.add(_absenceTimeout)
         : session.windowEndsAt;
     final effectiveDeadline = deadline.isBefore(session.windowEndsAt)
@@ -500,7 +531,9 @@ class SmartAttendanceController extends ChangeNotifier {
     if (session == null || client == null) return;
     _lastCheckoutRequestAt = _clock();
     _lastCheckoutRequestResult = 'Sending last presence as out time';
-    _logicState = 'Two-hour absence reached. Saving out time.';
+    _logicState = session.usesExitEvents
+        ? 'Saving beacon exit as out time.'
+        : 'Two-hour absence reached. Saving out time.';
     _lastError = null;
     notifyListeners();
     try {
@@ -595,6 +628,27 @@ class SmartAttendanceController extends ChangeNotifier {
       return false;
     }
     final statuses = await permissions.request();
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      final bluetoothStatus = statuses[Permission.bluetooth];
+      final bluetoothAllowed = bluetoothStatus?.isGranted == true;
+      if (!bluetoothAllowed) {
+        _bluetoothPermissionStatus = _permissionStatusName(bluetoothStatus);
+        return false;
+      }
+      var whenInUse = await Permission.locationWhenInUse.status;
+      if (!whenInUse.isGranted) {
+        whenInUse = await Permission.locationWhenInUse.request();
+      }
+      var always = await Permission.locationAlways.status;
+      if (whenInUse.isGranted && !always.isGranted) {
+        await Permission.locationAlways.request();
+      }
+      // iOS can defer its second-stage "Always" prompt. Start the native
+      // scanner once Bluetooth is granted so CLLocationManager remains armed
+      // and begins beacon monitoring as soon as that authorization changes.
+      _bluetoothPermissionStatus = 'granted';
+      return true;
+    }
     final allowed = statuses.values.every(
       (status) => status.isGranted || status.isLimited,
     );
@@ -610,6 +664,15 @@ class SmartAttendanceController extends ChangeNotifier {
     };
     return allowed;
   }
+
+  String _permissionStatusName(PermissionStatus? status) => switch (status) {
+    PermissionStatus.permanentlyDenied => 'permanently_denied',
+    PermissionStatus.restricted => 'restricted',
+    PermissionStatus.denied => 'denied',
+    PermissionStatus.limited => 'limited',
+    PermissionStatus.granted || PermissionStatus.provisional => 'granted',
+    _ => 'unknown',
+  };
 
   String _friendlyError(Object error) {
     if (error is PlatformException) {

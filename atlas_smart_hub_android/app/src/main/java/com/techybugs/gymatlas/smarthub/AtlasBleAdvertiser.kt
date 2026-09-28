@@ -20,6 +20,7 @@ class AtlasBleAdvertiser(private val context: Context) {
     private val bluetoothManager = context.getSystemService(BluetoothManager::class.java)
     private val adapter: BluetoothAdapter? = bluetoothManager?.adapter
     private var legacyCallback: AdvertiseCallback? = null
+    private var beaconCallback: AdvertiseCallback? = null
     private var extendedCallback: AdvertisingSetCallback? = null
     private var advertisingSet: AdvertisingSet? = null
     private var stateCallback: (BleAdvertisingState) -> Unit = {}
@@ -29,14 +30,15 @@ class AtlasBleAdvertiser(private val context: Context) {
     var mode: String? = null
         private set
     val hasActiveRequest: Boolean
-        get() = legacyCallback != null || extendedCallback != null
+        get() = legacyCallback != null || beaconCallback != null || extendedCallback != null
 
     @SuppressLint("MissingPermission")
     fun bluetoothEnabled(): Boolean = adapter?.isEnabled == true
 
     @SuppressLint("MissingPermission")
-    fun start(publicId: String, onStateChanged: (BleAdvertisingState) -> Unit = {}) {
+    fun start(publicId: String, hubId: Long, onStateChanged: (BleAdvertisingState) -> Unit = {}) {
         val payload = AtlasBleProtocol.payload(publicId)
+        val beaconPayload = AtlasBeaconProtocol.payload(hubId)
         if (!hasAdvertisePermission()) throw IllegalStateException("Nearby devices permission is required to broadcast.")
         val bluetoothAdapter = adapter ?: throw IllegalStateException("Bluetooth is not available on this device.")
         if (!bluetoothAdapter.isEnabled) throw IllegalStateException("Bluetooth is turned off.")
@@ -44,11 +46,11 @@ class AtlasBleAdvertiser(private val context: Context) {
 
         stop()
         stateCallback = onStateChanged
-        startLegacy(bluetoothAdapter, payload)
+        startLegacy(bluetoothAdapter, payload, beaconPayload)
     }
 
     @SuppressLint("MissingPermission")
-    private fun startLegacy(bluetoothAdapter: BluetoothAdapter, payload: ByteArray) {
+    private fun startLegacy(bluetoothAdapter: BluetoothAdapter, payload: ByteArray, beaconPayload: ByteArray) {
         val serviceUuid = serviceUuid()
         val settings = AdvertiseSettings.Builder()
             .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
@@ -68,9 +70,7 @@ class AtlasBleAdvertiser(private val context: Context) {
 
         val callback = object : AdvertiseCallback() {
             override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
-                isAdvertising = true
-                mode = MODE_LEGACY
-                stateCallback(BleAdvertisingState(true, MODE_LEGACY))
+                startBeacon(bluetoothAdapter, beaconPayload, MODE_LEGACY)
             }
 
             override fun onStartFailure(errorCode: Int) {
@@ -78,7 +78,7 @@ class AtlasBleAdvertiser(private val context: Context) {
                 isAdvertising = false
                 mode = null
                 if (errorCode == ADVERTISE_FAILED_DATA_TOO_LARGE && canUseExtended(bluetoothAdapter)) {
-                    startExtended(bluetoothAdapter, payload)
+                    startExtended(bluetoothAdapter, payload, beaconPayload)
                     return
                 }
                 stateCallback(BleAdvertisingState(false, error = advertisingError(errorCode)))
@@ -90,7 +90,7 @@ class AtlasBleAdvertiser(private val context: Context) {
     }
 
     @SuppressLint("MissingPermission")
-    private fun startExtended(bluetoothAdapter: BluetoothAdapter, payload: ByteArray) {
+    private fun startExtended(bluetoothAdapter: BluetoothAdapter, payload: ByteArray, beaconPayload: ByteArray) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             stateCallback(
                 BleAdvertisingState(
@@ -120,9 +120,7 @@ class AtlasBleAdvertiser(private val context: Context) {
             override fun onAdvertisingSetStarted(set: AdvertisingSet?, txPower: Int, status: Int) {
                 if (status == ADVERTISE_SUCCESS && set != null) {
                     advertisingSet = set
-                    isAdvertising = true
-                    mode = MODE_EXTENDED
-                    stateCallback(BleAdvertisingState(true, MODE_EXTENDED, usedFallback = true))
+                    startBeacon(bluetoothAdapter, beaconPayload, MODE_EXTENDED)
                     return
                 }
                 extendedCallback = null
@@ -146,14 +144,57 @@ class AtlasBleAdvertiser(private val context: Context) {
     }
 
     @SuppressLint("MissingPermission")
+    private fun startBeacon(bluetoothAdapter: BluetoothAdapter, payload: ByteArray, baseMode: String) {
+        val settings = AdvertiseSettings.Builder()
+            .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
+            .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
+            .setConnectable(false)
+            .build()
+        val data = AdvertiseData.Builder()
+            .addManufacturerData(HubContracts.IBEACON_COMPANY_ID, payload)
+            .setIncludeDeviceName(false)
+            .setIncludeTxPowerLevel(false)
+            .build()
+        val callback = object : AdvertiseCallback() {
+            override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
+                isAdvertising = true
+                mode = "$baseMode + iOS beacon"
+                stateCallback(
+                    BleAdvertisingState(
+                        advertising = true,
+                        mode = mode,
+                        usedFallback = baseMode == MODE_EXTENDED,
+                    ),
+                )
+            }
+
+            override fun onStartFailure(errorCode: Int) {
+                val message = "The Android attendance signal started, but the scalable iOS beacon failed. ${advertisingError(errorCode)}"
+                stop()
+                stateCallback(
+                    BleAdvertisingState(
+                        false,
+                        error = message,
+                    ),
+                )
+            }
+        }
+        beaconCallback = callback
+        bluetoothAdapter.bluetoothLeAdvertiser?.startAdvertising(settings, data, callback)
+            ?: throw IllegalStateException("BLE advertiser is unavailable for the iOS beacon.")
+    }
+
+    @SuppressLint("MissingPermission")
     fun stop() {
         if (hasAdvertisePermission()) {
             legacyCallback?.let { adapter?.bluetoothLeAdvertiser?.stopAdvertising(it) }
+            beaconCallback?.let { adapter?.bluetoothLeAdvertiser?.stopAdvertising(it) }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 extendedCallback?.let { adapter?.bluetoothLeAdvertiser?.stopAdvertisingSet(it) }
             }
         }
         legacyCallback = null
+        beaconCallback = null
         extendedCallback = null
         advertisingSet = null
         isAdvertising = false

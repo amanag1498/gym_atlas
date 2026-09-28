@@ -15,6 +15,7 @@ class HubStartupPolicyTest {
     @Test
     fun `one successful activation makes the hub offline ready`() {
         val credentials = baseCredentials.copy(
+            hubId = 17,
             publicId = "SAHABC123DEF4567",
             gymName = "Atlas Gym",
             branchName = "Main branch",
@@ -33,5 +34,10 @@ class HubStartupPolicyTest {
     fun `credentials without a public id still require online activation`() {
         assertFalse(HubStartupPolicy.canBroadcastOffline(baseCredentials))
         assertFalse(HubStartupPolicy.canBroadcastOffline(baseCredentials.copy(publicId = " ")))
+    }
+
+    @Test
+    fun `legacy credentials refresh once to receive their beacon id`() {
+        assertFalse(baseCredentials.copy(publicId = "SAHABC123DEF4567").let(HubStartupPolicy::canBroadcastOffline))
     }
 }

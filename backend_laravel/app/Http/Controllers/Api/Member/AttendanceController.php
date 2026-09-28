@@ -94,14 +94,14 @@ class AttendanceController extends Controller
             ]);
         }
 
-        $hub = SmartAttendanceHub::query()
-            ->with(['gym', 'branch'])
-            ->where('public_id', $request->validated('hub_public_id'))
-            ->first();
+        $hubQuery = SmartAttendanceHub::query()->with(['gym', 'branch']);
+        $hub = $request->filled('hub_id')
+            ? $hubQuery->whereKey($request->integer('hub_id'))->first()
+            : $hubQuery->where('public_id', $request->validated('hub_public_id'))->first();
 
         if (! $hub || (int) $hub->gym_id !== (int) $selectedGymId || ! $hub->is_active || $hub->status !== 'online') {
             throw ValidationException::withMessages([
-                'hub_public_id' => ['No active Smart Attendance Hub matched the selected gym.'],
+                ($request->filled('hub_id') ? 'hub_id' : 'hub_public_id') => ['No active Smart Attendance Hub matched the selected gym.'],
             ]);
         }
 

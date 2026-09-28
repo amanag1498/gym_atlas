@@ -118,6 +118,60 @@ void main() {
     expect(client.calls, hasLength(1));
   });
 
+  test(
+    'iOS background beacon checks in once and exits with exact time',
+    () async {
+      final scanner = _FakeScanner();
+      final client = _SessionCheckInClient();
+      final store = _FakeSessionStore();
+      var now = DateTime(2026, 9, 28, 12);
+      final controller = SmartAttendanceController(
+        scanner: scanner,
+        checkInClient: client,
+        sessionStore: store,
+        selectedGymIdProvider: () async => 7,
+        memberIdProvider: () => 42,
+        requestPermissions: () async => true,
+        clock: () => now,
+        presenceWindow: const Duration(seconds: 3),
+        requestDebounce: Duration.zero,
+      );
+
+      await controller.startBackgroundScan();
+      scanner.emit(
+        SmartAttendanceDetection(
+          publicId: 'BEACON_17',
+          hubId: 17,
+          protocolVersion: 3,
+          rssi: -61,
+          detectedAt: now,
+          source: 'ios_background_beacon',
+        ),
+      );
+      await _pumpAsync();
+
+      expect(client.checkInCalls, 1);
+      expect(controller.activeSession?.usesExitEvents, isTrue);
+
+      now = now.add(const Duration(hours: 3));
+      scanner.emit(
+        SmartAttendanceDetection(
+          publicId: 'BEACON_17',
+          hubId: 17,
+          protocolVersion: 3,
+          rssi: null,
+          detectedAt: now,
+          source: 'ios_background_beacon',
+          isExit: true,
+        ),
+      );
+      await _pumpAsync();
+
+      expect(client.checkOutCalls, [now]);
+      expect(controller.activeSession?.checkedOutAt, now);
+    },
+  );
+
   test('starting the same scan mode twice is idempotent', () async {
     final scanner = _FakeScanner();
     final controller = SmartAttendanceController(

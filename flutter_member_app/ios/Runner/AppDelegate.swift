@@ -1,4 +1,5 @@
 import CoreBluetooth
+import CoreLocation
 import Flutter
 import UIKit
 
@@ -41,8 +42,13 @@ import UIKit
   }
 }
 
-private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, CBCentralManagerDelegate {
+private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, CBCentralManagerDelegate, CLLocationManagerDelegate {
   private let serviceUuid = CBUUID(string: "8b0f9c60-4f6d-4b40-9e8d-2d5d3f73a1a1")
+  private let beaconUuid = UUID(uuidString: "8b0f9c60-4f6d-4b40-9e8d-2d5d3f73a1a1")!
+  private let beaconMonitorIdentifier = "com.techybugs.gymatlas.member.atlas-hubs"
+  private let beaconMonitoringEnabledKey = "smartAttendance.beaconMonitoringEnabled"
+  private let lastBeaconHubIdKey = "smartAttendance.lastBeaconHubId"
+  private let locationManager = CLLocationManager()
   private var eventSink: FlutterEventSink?
   private lazy var centralManager = CBCentralManager(
     delegate: self,
@@ -55,6 +61,17 @@ private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, C
   private var pendingEvents: [[String: Any]] = []
   private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
   private let serviceDataCachePrefix = "smartAttendance.serviceData."
+  private var rangingGeneration = 0
+
+  override init() {
+    super.init()
+    locationManager.delegate = self
+    if UserDefaults.standard.bool(forKey: beaconMonitoringEnabledKey) {
+      DispatchQueue.main.async { [weak self] in
+        self?.startBeaconMonitoring()
+      }
+    }
+  }
 
   func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
     eventSink = events
@@ -73,6 +90,8 @@ private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, C
   func start(result: @escaping FlutterResult, background: Bool) {
     wantsScanning = true
     backgroundMode = background
+    UserDefaults.standard.set(true, forKey: beaconMonitoringEnabledKey)
+    startBeaconMonitoring()
     if centralManager.state == .poweredOn {
       restartScan()
       if background {
@@ -97,6 +116,8 @@ private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, C
     wantsScanning = false
     backgroundMode = false
     centralManager.stopScan()
+    UserDefaults.standard.set(false, forKey: beaconMonitoringEnabledKey)
+    stopBeaconMonitoring()
     endBackgroundProcessingWindow()
     pendingStartResult = nil
     result?(nil)
@@ -120,6 +141,65 @@ private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, C
     if central.state == .poweredOn {
       restartScan()
     }
+  }
+
+  func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    if UserDefaults.standard.bool(forKey: beaconMonitoringEnabledKey) {
+      startBeaconMonitoring()
+    }
+  }
+
+  func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
+    guard region.identifier == beaconMonitorIdentifier else { return }
+    NSLog("[SmartAttendance] entered Atlas beacon region")
+    beginBackgroundProcessingWindow()
+    startBeaconRanging()
+  }
+
+  func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
+    guard region.identifier == beaconMonitorIdentifier else { return }
+    NSLog("[SmartAttendance] exited Atlas beacon region")
+    beginBackgroundProcessingWindow()
+    guard let hubId = UserDefaults.standard.object(forKey: lastBeaconHubIdKey) as? NSNumber else {
+      emitDiagnostic("Atlas beacon exit detected, but no prior Hub identity was cached.", source: beaconSource())
+      return
+    }
+    emit([
+      "eventType": "beacon_exit",
+      "hubId": hubId.int64Value,
+      "detectedAt": Int(Date().timeIntervalSince1970 * 1000),
+      "source": beaconSource(),
+    ])
+  }
+
+  func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
+    guard region.identifier == beaconMonitorIdentifier, state == .inside else { return }
+    NSLog("[SmartAttendance] current state is inside Atlas beacon region")
+    beginBackgroundProcessingWindow()
+    startBeaconRanging()
+  }
+
+  func locationManager(
+    _ manager: CLLocationManager,
+    didRange beacons: [CLBeacon],
+    satisfying beaconConstraint: CLBeaconIdentityConstraint
+  ) {
+    for beacon in beacons where beacon.rssi != 0 {
+      let hubId = (beacon.major.int64Value << 16) | beacon.minor.int64Value
+      guard hubId > 0 else { continue }
+      UserDefaults.standard.set(NSNumber(value: hubId), forKey: lastBeaconHubIdKey)
+      emit([
+        "eventType": "beacon_presence",
+        "hubId": hubId,
+        "rssi": beacon.rssi,
+        "detectedAt": Int(Date().timeIntervalSince1970 * 1000),
+        "source": beaconSource(),
+      ])
+    }
+  }
+
+  func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?, withError error: Error) {
+    emitDiagnostic("Atlas beacon monitoring failed: \(error.localizedDescription)", source: beaconSource())
   }
 
   func centralManager(
@@ -159,12 +239,67 @@ private final class SmartAttendanceBleScanner: NSObject, FlutterStreamHandler, C
     if backgroundMode || UIApplication.shared.applicationState != .active {
       beginBackgroundProcessingWindow()
     }
+    emit(event)
+  }
+
+  private func startBeaconMonitoring() {
+    guard CLLocationManager.isMonitoringAvailable(for: CLBeaconRegion.self) else {
+      emitDiagnostic("This iPhone does not support Atlas beacon monitoring.", source: beaconSource())
+      return
+    }
+    guard locationManager.authorizationStatus == .authorizedAlways else {
+      emitDiagnostic(
+        "Always Location access is required so iOS can wake Gym Atlas for the entrance beacon.",
+        source: beaconSource()
+      )
+      return
+    }
+    let region = CLBeaconRegion(uuid: beaconUuid, identifier: beaconMonitorIdentifier)
+    region.notifyOnEntry = true
+    region.notifyOnExit = true
+    locationManager.startMonitoring(for: region)
+    locationManager.requestState(for: region)
+    NSLog("[SmartAttendance] Atlas beacon region monitoring active")
+  }
+
+  private func stopBeaconMonitoring() {
+    rangingGeneration += 1
+    let region = CLBeaconRegion(uuid: beaconUuid, identifier: beaconMonitorIdentifier)
+    locationManager.stopRangingBeacons(satisfying: region.beaconIdentityConstraint)
+    locationManager.stopMonitoring(for: region)
+  }
+
+  private func startBeaconRanging() {
+    let region = CLBeaconRegion(uuid: beaconUuid, identifier: beaconMonitorIdentifier)
+    rangingGeneration += 1
+    let generation = rangingGeneration
+    locationManager.startRangingBeacons(satisfying: region.beaconIdentityConstraint)
+    DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak self] in
+      guard let self, self.rangingGeneration == generation else { return }
+      self.locationManager.stopRangingBeacons(satisfying: region.beaconIdentityConstraint)
+    }
+  }
+
+  private func beaconSource() -> String {
+    let isBackground = backgroundMode || UIApplication.shared.applicationState != .active
+    return isBackground ? "ios_background_beacon" : "ios_foreground_beacon"
+  }
+
+  private func emitDiagnostic(_ message: String, source: String) {
+    emit([
+      "diagnostic": message,
+      "detectedAt": Int(Date().timeIntervalSince1970 * 1000),
+      "source": source,
+    ])
+  }
+
+  private func emit(_ event: [String: Any]) {
     if let eventSink {
       eventSink(event)
     } else {
       pendingEvents.append(event)
-      if pendingEvents.count > 8 {
-        pendingEvents.removeFirst(pendingEvents.count - 8)
+      if pendingEvents.count > 12 {
+        pendingEvents.removeFirst(pendingEvents.count - 12)
       }
     }
   }

@@ -72,7 +72,8 @@ class MemberRepository implements SmartAttendanceCheckInClient {
     final response = await _client.post(
       '/member/attendance/smart-check-in',
       data: {
-        'hub_public_id': detection.publicId,
+        if (detection.hubId != null) 'hub_id': detection.hubId,
+        if (detection.hubId == null) 'hub_public_id': detection.publicId,
         'protocol_version': detection.protocolVersion,
         if (detection.rssi != null) 'rssi': detection.rssi,
         'detected_at': detection.detectedAt.toIso8601String(),

@@ -216,6 +216,8 @@ class AttendanceService
                                 $existingSmartVisit->smart_attendance_detection,
                                 $smartAttendanceDetection,
                             ),
+                            'smart_attendance_exit_managed' => $existingSmartVisit->smart_attendance_exit_managed
+                                || $this->usesBeaconExit($smartAttendanceDetection),
                         ])->save();
                     }
 
@@ -256,6 +258,7 @@ class AttendanceService
                 'biometric_device_event_id' => $biometricDeviceEvent?->id,
                 'smart_attendance_hub_id' => $smartAttendanceHub?->id,
                 'smart_attendance_detection' => $smartAttendanceDetection,
+                'smart_attendance_exit_managed' => $this->usesBeaconExit($smartAttendanceDetection),
                 'occurred_at_device' => $biometricDeviceEvent?->occurred_at_device,
                 'received_at' => $biometricDeviceEvent?->received_at,
             ]);
@@ -308,7 +311,10 @@ class AttendanceService
             ->whereNull('checked_out_at')
             ->whereNotNull('last_presence_at')
             ->where(function ($query): void {
-                $query->where('last_presence_at', '<=', now()->subHours(2))
+                $query->where(function ($absence): void {
+                    $absence->where('smart_attendance_exit_managed', false)
+                        ->where('last_presence_at', '<=', now()->subHours(2));
+                })
                     ->orWhere('attendance_window_ends_at', '<=', now());
             })
             ->orderBy('id')
@@ -319,8 +325,10 @@ class AttendanceService
                         if (! $locked || $locked->checked_out_at !== null || $locked->last_presence_at === null) {
                             return false;
                         }
-                        if ($locked->last_presence_at->gt(now()->subHours(2))
-                            && ($locked->attendance_window_ends_at === null || $locked->attendance_window_ends_at->gt(now()))) {
+                        $windowStillOpen = $locked->attendance_window_ends_at === null
+                            || $locked->attendance_window_ends_at->gt(now());
+                        $absenceNotReached = $locked->last_presence_at->gt(now()->subHours(2));
+                        if ($windowStillOpen && ($locked->smart_attendance_exit_managed || $absenceNotReached)) {
                             return false;
                         }
 
@@ -346,6 +354,11 @@ class AttendanceService
         return array_replace($current ?? [], [
             'last_presence' => $latest,
         ]);
+    }
+
+    private function usesBeaconExit(?array $detection): bool
+    {
+        return str_contains((string) ($detection['source'] ?? ''), 'beacon');
     }
 
     private function attendanceTimezone(Gym $gym, Branch $branch): string

@@ -97,6 +97,24 @@ class MethodChannelSmartAttendanceBleScanner
       return null;
     }
 
+    final eventType = event['eventType']?.toString();
+    final beaconHubId = event['hubId'] is num
+        ? (event['hubId'] as num).toInt()
+        : null;
+    if ((eventType == 'beacon_presence' || eventType == 'beacon_exit') &&
+        beaconHubId != null &&
+        beaconHubId > 0) {
+      return SmartAttendanceDetection(
+        publicId: 'BEACON_$beaconHubId',
+        hubId: beaconHubId,
+        protocolVersion: 3,
+        rssi: event['rssi'] is num ? (event['rssi'] as num).round() : null,
+        detectedAt: _dateTime(event['detectedAt']) ?? _clock(),
+        source: '${event['source'] ?? 'ios_background_beacon'}',
+        isExit: eventType == 'beacon_exit',
+      );
+    }
+
     final serviceUuid = '${event['serviceUuid'] ?? ''}'.toLowerCase();
     if (serviceUuid != SmartAttendanceBleProtocol.serviceUuid) {
       return null;
