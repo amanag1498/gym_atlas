@@ -344,7 +344,8 @@ void main() {
 
     expect(scanner.started, isFalse);
     expect(client.checkOutCalls, [previousPresence]);
-    expect(store.session?.checkedOutAt, previousPresence);
+    expect(store.session, isNull);
+    expect(controller.activeSession, isNull);
     expect(controller.logicState, contains('next Hub detection'));
 
     await controller.startBackgroundScan();
