@@ -14,6 +14,7 @@ use App\Services\Members\TrainerEmailInvitationService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -472,6 +473,53 @@ class TrainerManagementFeatureTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.assigned_trainer', null)
             ->assertJsonPath('data.enabled', false);
+    }
+
+    public function test_web_trainer_pages_tolerate_legacy_date_and_scalar_profile_json(): void
+    {
+        $owner = $this->makeUser(RoleName::GymOwner->value, 'owner-legacy-trainer@example.com');
+        $trainer = $this->makeUser(RoleName::Trainer->value, 'legacy-trainer@example.com');
+        $gym = Gym::query()->create([
+            'owner_user_id' => $owner->id,
+            'name' => 'Legacy Trainer Gym',
+            'slug' => 'legacy-trainer-gym',
+            'approval_status' => 'approved',
+            'is_active' => true,
+        ]);
+        $branch = Branch::query()->create([
+            'gym_id' => $gym->id,
+            'name' => 'Main Branch',
+            'slug' => 'legacy-trainer-main-branch',
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+
+        DB::table('users')->where('id', $trainer->id)->update(['date_of_birth' => '0000-00-00']);
+        DB::table('trainer_profiles')->insert([
+            'user_id' => $trainer->id,
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'specialization' => 'Strength',
+            'specializations' => json_encode('Strength'),
+            'certifications' => json_encode('Level 1'),
+            'languages' => json_encode('Hindi'),
+            'status' => 'active',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->attachToGymAndBranches($owner, $gym, [$branch]);
+        $this->attachToGymAndBranches($trainer, $gym, [$branch]);
+        $this->loginGymUser($owner);
+
+        $this->get(route('web.gym.trainers.show', ['gym' => $gym->id, 'trainer' => $trainer->id]))
+            ->assertOk()
+            ->assertSee('Birth date not set');
+        $this->get(route('web.gym.trainers.edit', ['gym' => $gym->id, 'trainer' => $trainer->id]))
+            ->assertOk()
+            ->assertSee('Strength')
+            ->assertSee('Level 1')
+            ->assertSee('Hindi');
     }
 
     public function test_legacy_gym_deactivation_is_backfilled_without_overriding_platform_suspension(): void

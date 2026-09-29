@@ -1,6 +1,14 @@
 @extends('layouts.panel')
 
 @section('content')
+    @php
+        $trainerDateOfBirth = $trainer->getRawOriginal('date_of_birth');
+        $trainerDateOfBirth = is_string($trainerDateOfBirth)
+            && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $trainerDateOfBirth, $trainerDateParts)
+            && checkdate((int) $trainerDateParts[2], (int) $trainerDateParts[3], (int) $trainerDateParts[1])
+                ? \Illuminate\Support\Carbon::createFromFormat('Y-m-d', $trainerDateOfBirth)->format('d M Y')
+                : null;
+    @endphp
     <div class="space-y-5">
         <x-premium-card class="p-6">
             <div class="flex flex-wrap items-start justify-between gap-5">
@@ -18,7 +26,7 @@
                         @if ($trainer->phone)
                             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $trainer->phone }}</p>
                         @endif
-                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $trainer->gender ? str($trainer->gender)->replace('_', ' ')->title() : 'Gender not set' }} • {{ $trainer->date_of_birth?->format('d M Y') ?? 'Birth date not set' }}</p>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $trainer->gender ? str($trainer->gender)->replace('_', ' ')->title() : 'Gender not set' }} • {{ $trainerDateOfBirth ?? 'Birth date not set' }}</p>
                         <div class="mt-3 flex flex-wrap gap-2">
                             <x-status-badge :label="$trainerProfile?->status ?? ($trainer->is_active ? 'Active' : 'Inactive')" />
                             <x-status-badge :label="$trainerProfile?->branch?->name ?? 'Gym-wide'" tone="info" />

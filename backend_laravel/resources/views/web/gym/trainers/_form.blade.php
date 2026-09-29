@@ -1,6 +1,15 @@
 @php
     $trainer = $trainer ?? null;
     $trainerProfile = $trainerProfile ?? null;
+    $trainerDateOfBirth = $trainer?->getRawOriginal('date_of_birth');
+    $trainerDateOfBirth = is_string($trainerDateOfBirth)
+        && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $trainerDateOfBirth, $trainerDateParts)
+        && checkdate((int) $trainerDateParts[2], (int) $trainerDateParts[3], (int) $trainerDateParts[1])
+            ? $trainerDateOfBirth
+            : null;
+    $trainerSpecializations = collect($trainerProfile?->specializations)->filter(fn ($value) => is_scalar($value) && filled(trim((string) $value)))->map(fn ($value) => trim((string) $value))->values();
+    $trainerCertifications = collect($trainerProfile?->certifications)->filter(fn ($value) => is_scalar($value) && filled(trim((string) $value)))->map(fn ($value) => trim((string) $value))->values();
+    $trainerLanguages = collect($trainerProfile?->languages)->filter(fn ($value) => is_scalar($value) && filled(trim((string) $value)))->map(fn ($value) => trim((string) $value))->values();
 @endphp
 
 <div class="space-y-5">
@@ -33,7 +42,7 @@
                     <x-form-input name="phone" label="Phone Number" type="tel" inputmode="tel" autocomplete="tel" :value="$trainer?->phone" />
                 </div>
                 <div data-existing-account-field>
-                    <x-form-input name="date_of_birth" label="Date of Birth" type="date" max="{{ now()->toDateString() }}" autocomplete="bday" :value="$trainer?->date_of_birth?->toDateString()" />
+                    <x-form-input name="date_of_birth" label="Date of Birth" type="date" max="{{ now()->toDateString() }}" autocomplete="bday" :value="$trainerDateOfBirth" />
                 </div>
                 <div data-existing-account-field>
                     <label for="gender" class="panel-label">Gender</label>
@@ -66,22 +75,22 @@
                         <option value="inactive" @selected(old('status', $trainerProfile?->status) === 'inactive')>Inactive</option>
                     </select>
                 </div>
-                <x-form-input name="specialization" label="Primary Specialization" :value="old('specialization', $trainerProfile?->specialization ?? (($trainerProfile?->specializations ?? [])[0] ?? null))" placeholder="Strength, Fat loss, Mobility..." />
+                <x-form-input name="specialization" label="Primary Specialization" :value="old('specialization', $trainerProfile?->specialization ?? $trainerSpecializations->first())" placeholder="Strength, Fat loss, Mobility..." />
                 <x-form-input name="experience_years" label="Experience Years" type="number" min="0" :value="$trainerProfile?->experience_years" />
             </div>
 
             <div class="grid gap-5 md:grid-cols-2">
                 <div>
                     <label for="specializations_text" class="panel-label">Specializations</label>
-                    <textarea id="specializations_text" name="specializations_text" class="panel-textarea" placeholder="One per line">{{ old('specializations_text', implode(PHP_EOL, $trainerProfile?->specializations ?? [])) }}</textarea>
+                    <textarea id="specializations_text" name="specializations_text" class="panel-textarea" placeholder="One per line">{{ old('specializations_text', $trainerSpecializations->implode(PHP_EOL)) }}</textarea>
                 </div>
                 <div>
                     <label for="certifications_text" class="panel-label">Certifications</label>
-                    <textarea id="certifications_text" name="certifications_text" class="panel-textarea" placeholder="One per line">{{ old('certifications_text', implode(PHP_EOL, $trainerProfile?->certifications ?? [])) }}</textarea>
+                    <textarea id="certifications_text" name="certifications_text" class="panel-textarea" placeholder="One per line">{{ old('certifications_text', $trainerCertifications->implode(PHP_EOL)) }}</textarea>
                 </div>
                 <div>
                     <label for="languages_text" class="panel-label">Languages</label>
-                    <textarea id="languages_text" name="languages_text" class="panel-textarea" placeholder="One per line">{{ old('languages_text', implode(PHP_EOL, $trainerProfile?->languages ?? [])) }}</textarea>
+                    <textarea id="languages_text" name="languages_text" class="panel-textarea" placeholder="One per line">{{ old('languages_text', $trainerLanguages->implode(PHP_EOL)) }}</textarea>
                 </div>
                 <div>
                     <label for="availability_notes" class="panel-label">Availability Notes</label>
