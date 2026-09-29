@@ -29,9 +29,9 @@ return new class extends Migration
             $table->id();
             $table->foreignId('gym_id')->constrained()->cascadeOnDelete();
             $table->foreignId('branch_id')->nullable()->constrained()->nullOnDelete();
-            $table->foreignId('member_membership_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('recipient_user_id')->constrained('users')->restrictOnDelete();
-            $table->foreignId('copied_from_allocation_id')->nullable()->constrained('membership_commission_allocations')->nullOnDelete();
+            $table->foreignId('member_membership_id');
+            $table->foreignId('recipient_user_id');
+            $table->foreignId('copied_from_allocation_id')->nullable();
             $table->string('recipient_type');
             $table->string('category');
             $table->string('calculation_type');
@@ -44,15 +44,18 @@ return new class extends Migration
 
             $table->index(['member_membership_id', 'status']);
             $table->index(['gym_id', 'recipient_user_id', 'status'], 'commission_alloc_recipient_idx');
+            $table->foreign('member_membership_id', 'member_comm_membership_fk')->references('id')->on('member_memberships')->cascadeOnDelete();
+            $table->foreign('recipient_user_id', 'member_comm_recipient_fk')->references('id')->on('users')->restrictOnDelete();
+            $table->foreign('copied_from_allocation_id', 'member_comm_source_fk')->references('id')->on('membership_commission_allocations')->nullOnDelete();
         });
 
         Schema::create('commission_earnings', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('gym_id')->constrained()->cascadeOnDelete();
             $table->foreignId('branch_id')->nullable()->constrained()->nullOnDelete();
-            $table->foreignId('membership_commission_allocation_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('membership_commission_allocation_id');
             $table->foreignId('payment_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('recipient_user_id')->constrained('users')->restrictOnDelete();
+            $table->foreignId('recipient_user_id');
             $table->decimal('commissionable_collected_amount', 12, 2);
             $table->decimal('amount', 12, 2);
             $table->string('status')->default('earned');
@@ -62,6 +65,8 @@ return new class extends Migration
 
             $table->unique(['membership_commission_allocation_id', 'payment_id'], 'commission_earning_source_unique');
             $table->index(['gym_id', 'recipient_user_id', 'earned_at'], 'commission_earning_period_idx');
+            $table->foreign('membership_commission_allocation_id', 'comm_earning_allocation_fk')->references('id')->on('membership_commission_allocations')->cascadeOnDelete();
+            $table->foreign('recipient_user_id', 'comm_earning_recipient_fk')->references('id')->on('users')->restrictOnDelete();
         });
 
         Schema::create('payroll_statements', function (Blueprint $table): void {
