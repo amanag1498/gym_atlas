@@ -21,8 +21,8 @@ return new class extends Migration
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
-            $table->unique(['gym_id', 'user_id']);
-            $table->index(['gym_id', 'branch_id', 'worker_type']);
+            $table->unique(['gym_id', 'user_id'], 'comp_profile_gym_user_uq');
+            $table->index(['gym_id', 'branch_id', 'worker_type'], 'comp_profile_scope_idx');
         });
 
         Schema::create('membership_commission_allocations', function (Blueprint $table): void {
@@ -42,7 +42,7 @@ return new class extends Migration
             $table->string('status')->default('active');
             $table->timestamps();
 
-            $table->index(['member_membership_id', 'status']);
+            $table->index(['member_membership_id', 'status'], 'member_comm_membership_status_idx');
             $table->index(['gym_id', 'recipient_user_id', 'status'], 'commission_alloc_recipient_idx');
             $table->foreign('member_membership_id', 'member_comm_membership_fk')->references('id')->on('member_memberships')->cascadeOnDelete();
             $table->foreign('recipient_user_id', 'member_comm_recipient_fk')->references('id')->on('users')->restrictOnDelete();
@@ -89,8 +89,8 @@ return new class extends Migration
             $table->timestamp('approved_at')->nullable();
             $table->timestamps();
 
-            $table->unique(['gym_id', 'user_id', 'period_start']);
-            $table->index(['gym_id', 'period_start', 'status']);
+            $table->unique(['gym_id', 'user_id', 'period_start'], 'payroll_stmt_period_uq');
+            $table->index(['gym_id', 'period_start', 'status'], 'payroll_stmt_scope_idx');
         });
 
         Schema::create('payroll_payments', function (Blueprint $table): void {
