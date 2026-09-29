@@ -6,11 +6,38 @@ use App\Enums\PaymentRecordStatus;
 use App\Models\Gym;
 use App\Models\GymLedgerEntry;
 use App\Models\Payment;
+use App\Models\PayrollPayment;
 use App\Models\User;
 use Illuminate\Support\Str;
 
 class GymLedgerService
 {
+    public function syncPayrollPaymentEntry(PayrollPayment $payment): GymLedgerEntry
+    {
+        $payment->loadMissing('statement.user');
+        $statement = $payment->statement;
+
+        return GymLedgerEntry::query()->updateOrCreate(
+            ['source_type' => PayrollPayment::class, 'source_id' => $payment->id],
+            [
+                'gym_id' => $statement->gym_id,
+                'branch_id' => $statement->branch_id,
+                'created_by_user_id' => $payment->paid_by_user_id,
+                'entry_type' => 'expense',
+                'direction' => 'outflow',
+                'category' => 'payroll',
+                'title' => ($statement->user?->name ?? 'Team member').' payout',
+                'description' => 'Salary and commission payout for '.$statement->period_start->format('M Y'),
+                'reference' => $payment->reference,
+                'payment_mode' => $payment->payment_mode,
+                'amount' => $payment->amount,
+                'status' => 'posted',
+                'occurred_at' => $payment->paid_at,
+                'metadata' => ['payroll_statement_id' => $statement->id, 'recipient_user_id' => $statement->user_id],
+            ],
+        );
+    }
+
     public function syncPaymentEntry(Payment $payment): GymLedgerEntry
     {
         $payment->loadMissing(['member:id,name', 'membership.membershipPlan:id,name', 'branch:id,name']);

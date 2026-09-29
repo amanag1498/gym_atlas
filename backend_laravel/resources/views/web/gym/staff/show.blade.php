@@ -23,6 +23,7 @@
                 <x-status-badge :label="str($staff->roles->pluck('name')->first() ?? 'gym_staff')->replace('_', ' ')->title()" />
                 <x-status-badge :label="$staff->is_active ? 'Active' : 'Inactive'" />
                 @if ($canManageStaff)
+                    <x-action-button as="a" href="{{ route('web.gym.compensation.index', ['gym' => $gym->id]) }}" variant="secondary">Salary & Commission</x-action-button>
                     <x-action-button as="a" href="{{ route('web.gym.staff.edit', ['staff' => $staff->id, 'gym' => $gym->id]) }}" variant="secondary">Edit</x-action-button>
                 @endif
             </div>

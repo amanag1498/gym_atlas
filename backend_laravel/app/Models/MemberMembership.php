@@ -117,6 +117,11 @@ class MemberMembership extends Model
         return $this->hasMany(Payment::class);
     }
 
+    public function commissionAllocations(): HasMany
+    {
+        return $this->hasMany(MembershipCommissionAllocation::class);
+    }
+
     public function paymentReceipts(): HasManyThrough
     {
         return $this->hasManyThrough(PaymentReceipt::class, Payment::class, 'member_membership_id', 'payment_id');

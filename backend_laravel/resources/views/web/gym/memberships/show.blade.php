@@ -174,6 +174,40 @@
                             @endif
                         </div>
                     @endif
+
+                    <div class="mt-5 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/70">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div><h4 class="text-sm font-semibold text-slate-950 dark:text-white">Commission split</h4><p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Calculated only from the ₹{{ number_format((float)$membership->pt_custom_fee, 2) }} commissionable extra and earned as payments are collected.</p></div>
+                            <a href="{{ route('web.gym.compensation.index', ['gym' => $gym->id]) }}" class="text-sm font-semibold text-indigo-600 dark:text-indigo-400">Open payouts</a>
+                        </div>
+                        @php($expectedCommission = (float) $commissionAllocations->sum('expected_commission_amount'))
+                        <div class="mt-3 grid gap-3 sm:grid-cols-3">
+                            <div class="panel-card-muted px-3 py-3"><p class="text-xs text-slate-500">Expected commission</p><p class="mt-1 font-semibold text-slate-950 dark:text-white">₹{{ number_format($expectedCommission, 2) }}</p></div>
+                            <div class="panel-card-muted px-3 py-3"><p class="text-xs text-slate-500">Gym share from extra</p><p class="mt-1 font-semibold text-slate-950 dark:text-white">₹{{ number_format(max(0, (float)$membership->pt_custom_fee - $expectedCommission), 2) }}</p></div>
+                            <div class="panel-card-muted px-3 py-3"><p class="text-xs text-slate-500">Frequency</p><p class="mt-1 font-semibold text-slate-950 dark:text-white">{{ $commissionAllocations->where('recurrence', 'recurring')->count() }} recurring</p></div>
+                        </div>
+                        @if($canCollectPayments)
+                            <form method="POST" action="{{ route('web.gym.memberships.commissions.update', ['membership' => $membership->id, 'gym' => $gym->id]) }}" class="mt-4 space-y-3">
+                                @csrf @method('PUT')
+                                @for($index = 0; $index < max(2, $commissionAllocations->count() + 1); $index++)
+                                    @php($allocation = $commissionAllocations->values()->get($index))
+                                    <div class="grid gap-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800 md:grid-cols-7">
+                                        <div class="md:col-span-2"><label class="panel-label">Recipient</label><select name="commissions[{{ $index }}][recipient_user_id]" class="panel-select"><option value="">Unused row</option>@foreach($commissionRecipients as $person)<option value="{{ $person->id }}" @selected((int)old("commissions.$index.recipient_user_id", $allocation?->recipient_user_id) === $person->id)>{{ $person->name }}</option>@endforeach</select></div>
+                                        <div><label class="panel-label">Role</label><select name="commissions[{{ $index }}][recipient_type]" class="panel-select"><option value="trainer" @selected(old("commissions.$index.recipient_type", $allocation?->recipient_type) === 'trainer')>Trainer</option><option value="staff" @selected(old("commissions.$index.recipient_type", $allocation?->recipient_type) === 'staff')>Staff</option></select></div>
+                                        <div><label class="panel-label">Category</label><select name="commissions[{{ $index }}][category]" class="panel-select"><option value="pt" @selected(old("commissions.$index.category", $allocation?->category) === 'pt')>PT</option><option value="sales" @selected(old("commissions.$index.category", $allocation?->category) === 'sales')>Sales</option></select></div>
+                                        <div><label class="panel-label">Calculation</label><select name="commissions[{{ $index }}][calculation_type]" class="panel-select"><option value="percentage" @selected(old("commissions.$index.calculation_type", $allocation?->calculation_type) === 'percentage')>%</option><option value="fixed" @selected(old("commissions.$index.calculation_type", $allocation?->calculation_type) === 'fixed')>Fixed</option></select></div>
+                                        <div><label class="panel-label">Value</label><input name="commissions[{{ $index }}][value]" type="number" min="0" step="0.01" value="{{ old("commissions.$index.value", $allocation?->value ?? 0) }}" class="panel-input"></div>
+                                        <div><label class="panel-label">Frequency</label><select name="commissions[{{ $index }}][recurrence]" class="panel-select"><option value="one_time" @selected(old("commissions.$index.recurrence", $allocation?->recurrence) === 'one_time')>One time</option><option value="recurring" @selected(old("commissions.$index.recurrence", $allocation?->recurrence) === 'recurring')>Every renewal</option></select></div>
+                                    </div>
+                                @endfor
+                                <div class="flex justify-end"><x-action-button type="submit">Save Commission Split</x-action-button></div>
+                            </form>
+                        @elseif($commissionAllocations->isEmpty())
+                            <p class="mt-3 text-sm text-slate-500">No commission has been configured.</p>
+                        @else
+                            <div class="mt-3 flex flex-wrap gap-2">@foreach($commissionAllocations as $allocation)<x-status-badge :label="$allocation->recipient?->name.' · '.($allocation->calculation_type === 'percentage' ? number_format((float)$allocation->value, 2).'%' : '₹'.number_format((float)$allocation->value, 2)).' · '.str($allocation->recurrence)->replace('_',' ')->title()" tone="info" />@endforeach</div>
+                        @endif
+                    </div>
                 </x-premium-card>
 
                 @if (! $focusLifecycle)

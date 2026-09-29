@@ -26,6 +26,7 @@ use App\Http\Controllers\Web\Gym\AttendanceController as WebGymAttendanceControl
 use App\Http\Controllers\Web\Gym\AuditLogController as WebGymAuditLogController;
 use App\Http\Controllers\Web\Gym\BiometricDeviceController as WebGymBiometricDeviceController;
 use App\Http\Controllers\Web\Gym\BranchController as WebGymBranchController;
+use App\Http\Controllers\Web\Gym\CompensationController as WebGymCompensationController;
 use App\Http\Controllers\Web\Gym\DashboardController as WebGymDashboardController;
 use App\Http\Controllers\Web\Gym\DietPlanController as WebGymDietPlanController;
 use App\Http\Controllers\Web\Gym\EventController as WebGymEventController;
@@ -645,6 +646,11 @@ Route::prefix('gym')
         Route::post('/payments/{memberMembership}/mark-paid', [WebGymPaymentController::class, 'markPaid'])->name('payments.mark-paid');
         Route::post('/payments/{memberMembership}/mark-unpaid', [WebGymPaymentController::class, 'markUnpaid'])->name('payments.mark-unpaid');
         Route::post('/payments/{payment}/reverse', [WebGymPaymentController::class, 'reverse'])->name('payments.reverse');
+        Route::get('/compensation', [WebGymCompensationController::class, 'index'])->name('compensation.index');
+        Route::post('/compensation/profiles', [WebGymCompensationController::class, 'storeProfile'])->name('compensation.profiles.store');
+        Route::post('/compensation/generate', [WebGymCompensationController::class, 'generate'])->name('compensation.generate');
+        Route::post('/compensation/statements/{statement}/pay', [WebGymCompensationController::class, 'pay'])->name('compensation.statements.pay');
+        Route::put('/memberships/{membership}/commissions', [WebGymCompensationController::class, 'updateMembership'])->name('memberships.commissions.update');
 
         Route::get('/attendance', [WebGymAttendanceController::class, 'index'])->name('attendance.index');
         Route::get('/attendance/search/members', [WebGymAttendanceController::class, 'searchMembers'])->name('attendance.search.members');

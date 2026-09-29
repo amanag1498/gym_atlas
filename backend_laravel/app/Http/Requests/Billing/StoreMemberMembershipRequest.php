@@ -44,6 +44,13 @@ class StoreMemberMembershipRequest extends FormRequest
             'payment_status' => ['nullable', 'in:'.implode(',', PaymentStatus::values())],
             'custom_fee_reason' => ['nullable', 'string'],
             'approved_by_admin_id' => ['nullable', 'integer', 'exists:users,id'],
+            'commissions' => ['nullable', 'array', 'max:10'],
+            'commissions.*.recipient_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'commissions.*.recipient_type' => ['nullable', 'in:trainer,staff'],
+            'commissions.*.category' => ['nullable', 'in:pt,sales'],
+            'commissions.*.calculation_type' => ['nullable', 'in:percentage,fixed'],
+            'commissions.*.value' => ['nullable', 'numeric', 'min:0'],
+            'commissions.*.recurrence' => ['nullable', 'in:one_time,recurring'],
         ];
     }
 

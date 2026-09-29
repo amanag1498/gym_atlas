@@ -24,6 +24,7 @@ class MemberMembershipLifecycleService
         private readonly NotificationService $notificationService,
         private readonly TransactionalEmailService $transactionalEmailService,
         private readonly MemberAppService $memberAppService,
+        private readonly CommissionService $commissionService,
     ) {}
 
     /**
@@ -50,8 +51,13 @@ class MemberMembershipLifecycleService
             'amount_paid' => $input['amount_paid'] ?? 0,
             'custom_joining_fee' => 0,
             'joining_fee_waived' => true,
+            'pt_custom_fee' => $input['pt_custom_fee'] ?? $membership->pt_custom_fee,
+            'custom_fee_enabled' => (bool) $membership->custom_fee_enabled,
+            'custom_fee_amount' => $membership->custom_fee_amount,
+            'custom_fee_reason' => $membership->custom_fee_reason,
         ]);
 
+        $this->commissionService->copyRecurring($membership, $result['membership']);
         $this->syncMemberProfileFromMembership($result['membership']->fresh(['member.memberProfile']));
 
         return $result;

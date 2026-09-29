@@ -15,6 +15,7 @@
                     <x-action-button as="a" :variant="($activeTab ?? 'all') === 'all' ? 'primary' : 'secondary'" href="{{ route('web.gym.payments.index', request()->only(['gym', 'branch'])) }}">All</x-action-button>
                     <x-action-button as="a" :variant="($activeTab ?? '') === 'dues' ? 'primary' : 'secondary'" href="{{ route('web.gym.dues.index', request()->only(['gym', 'branch'])) }}">Dues</x-action-button>
                     <x-action-button as="a" :variant="request('payment_status') === 'overdue' ? 'primary' : 'secondary'" href="{{ route('web.gym.payments.index', array_merge(request()->only(['gym', 'branch']), ['payment_status' => 'overdue'])) }}">Overdue</x-action-button>
+                    <x-action-button as="a" variant="secondary" href="{{ route('web.gym.compensation.index', request()->only(['gym', 'branch'])) }}">Salary & Commission</x-action-button>
                     @if ($canCollectPayments)
                         <x-action-button as="a" href="{{ route('web.gym.payments.create', request()->only(['gym', 'branch'])) }}">Collect Payment</x-action-button>
                     @endif

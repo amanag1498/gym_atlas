@@ -24,6 +24,7 @@ class PaymentService
         private readonly ReminderService $reminderService,
         private readonly GymLedgerService $gymLedgerService,
         private readonly TransactionalEmailService $transactionalEmailService,
+        private readonly CommissionService $commissionService,
     ) {}
 
     public function recordPayment(MemberMembership $membership, User $actor, array $input): Payment
@@ -76,6 +77,7 @@ class PaymentService
 
             $freshPayment = $payment->fresh(['receipt', 'member', 'membership.membershipPlan', 'branch', 'gym']);
             $this->gymLedgerService->syncPaymentEntry($freshPayment);
+            $this->commissionService->syncMembershipEarnings($membership->fresh(['payments', 'commissionAllocations']));
             DB::afterCommit(fn () => $this->transactionalEmailService->send(
                 $freshPayment->member,
                 'Payment received — '.($freshPayment->gym?->name ?? config('app.name')),
@@ -130,6 +132,7 @@ class PaymentService
                 });
 
             $this->syncMembershipBalance($membership->fresh(['payments', 'membershipPlan']));
+            $this->commissionService->syncMembershipEarnings($membership->fresh(['payments', 'commissionAllocations']));
 
             return $membership->fresh(['payments.receipt', 'membershipPlan']);
         });
@@ -154,6 +157,7 @@ class PaymentService
 
             if ($membership) {
                 $this->syncMembershipBalance($membership);
+                $this->commissionService->syncMembershipEarnings($membership->fresh(['payments', 'commissionAllocations']));
             }
 
             $freshPayment = $payment->fresh(['receipt', 'membership.membershipPlan', 'member', 'branch']);

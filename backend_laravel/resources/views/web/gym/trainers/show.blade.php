@@ -29,6 +29,7 @@
                 <div class="flex flex-wrap gap-3">
                     @if ($canManageTrainer)
                         <a href="{{ route('web.gym.trainers.edit', ['trainer' => $trainer->id] + request()->query()) }}" class="panel-btn-secondary">Edit Trainer</a>
+                        <a href="{{ route('web.gym.compensation.index', ['gym' => $gym->id]) }}" class="panel-btn-secondary">Salary & Commission</a>
                         @php($trainerRelationshipActive = (bool) $trainerProfile?->is_active)
                         <form action="{{ route('web.gym.trainers.' . ($trainerRelationshipActive ? 'deactivate' : 'activate'), ['trainer' => $trainer->id] + request()->query()) }}" method="POST" @if($trainerRelationshipActive) data-confirm-submit data-confirm-title="Release trainer from this gym?" data-confirm-message="Gym assignments will end, but the trainer will keep an independent Atlas account and may complete platform verification." data-confirm-button="Release trainer" @endif>
                             @csrf

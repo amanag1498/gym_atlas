@@ -21,6 +21,7 @@ use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Audit\AuditTimelineService;
 use App\Services\Billing\BillingAccessService;
+use App\Services\Billing\CommissionService;
 use App\Services\Billing\CustomFeeAuditService;
 use App\Services\Billing\MemberMembershipLifecycleService;
 use App\Services\Billing\MembershipEnrollmentService;
@@ -30,6 +31,7 @@ use App\Services\Web\GymWebPanelService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -46,6 +48,7 @@ class MemberMembershipController extends Controller
         private readonly ReminderService $reminderService,
         private readonly AuditLogService $auditLogService,
         private readonly AuditTimelineService $auditTimelineService,
+        private readonly CommissionService $commissionService,
     ) {}
 
     public function index(Request $request): View
@@ -118,6 +121,8 @@ class MemberMembershipController extends Controller
             'membership' => $membership,
             'activityTimeline' => $this->auditTimelineService->forActivityLogs($activityLogs),
             'customFeeTimeline' => $this->auditTimelineService->forCustomFeeAudits($membership->customFeeAuditLogs),
+            'commissionAllocations' => $membership->commissionAllocations()->with('recipient')->where('status', 'active')->get(),
+            'commissionRecipients' => $this->commissionRecipients($gym->id),
             'canManageMemberships' => $this->gymWebPanelService->canPermission($request, PermissionName::MembershipsManage->value, $gym, $membership->branch_id),
             'canCollectPayments' => $this->gymWebPanelService->canPermission($request, PermissionName::PaymentsManage->value, $gym, $membership->branch_id),
             'canEditCustomFee' => $this->gymWebPanelService->canPermission($request, PermissionName::EditCustomFee->value, $gym, $membership->branch_id),
@@ -285,6 +290,8 @@ class MemberMembershipController extends Controller
                 ->orderBy('name')
                 ->get(),
             'latestMembership' => $latestMembership,
+            'commissionRecipients' => $this->commissionRecipients($gym->id),
+            'assignedTrainerId' => $memberProfile->assigned_trainer_user_id,
         ]);
     }
 
@@ -315,6 +322,8 @@ class MemberMembershipController extends Controller
                 $request->user(),
                 $validated,
             );
+
+            $this->commissionService->configure($membership, $validated['commissions'] ?? []);
 
             $this->membershipLifecycleService->syncMemberProfileFromMembership($membership->fresh(['member.memberProfile']));
 
@@ -371,6 +380,17 @@ class MemberMembershipController extends Controller
         return redirect()
             ->route('web.gym.members.custom-fee', ['member' => $member->id] + $request->only(['gym', 'branch']))
             ->with('status', 'Membership assigned successfully.');
+    }
+
+    /** @return Collection<int, User> */
+    private function commissionRecipients(int $gymId)
+    {
+        return User::query()
+            ->whereHas('gyms', fn ($query) => $query->where('gyms.id', $gymId))
+            ->whereHas('roles', fn ($query) => $query->whereIn('name', ['trainer', 'gym_staff', 'branch_manager', 'gym_owner']))
+            ->with('roles')
+            ->orderBy('name')
+            ->get();
     }
 
     public function renew(RenewMembershipRequest $request, MemberMembership $membership): RedirectResponse
