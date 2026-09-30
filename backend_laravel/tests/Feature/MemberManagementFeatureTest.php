@@ -16,6 +16,7 @@ use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Models\WhatsAppConsent;
 use App\Models\WorkoutSession;
+use App\Services\Billing\CompensationTeamService;
 use App\Services\Members\MemberEmailInvitationService;
 use App\Services\Privacy\ConsentService;
 use Database\Seeders\PermissionSeeder;
@@ -82,9 +83,15 @@ class MemberManagementFeatureTest extends TestCase
 
         $this->loginGymUser($owner);
 
+        $this->assertCount(1, app(CompensationTeamService::class)->eligibleRecipients($gym->id));
+
         $this->get(route('web.gym.members.create', ['gym' => $gym->id, 'branch' => $branch->id]))
             ->assertOk()
             ->assertSee('Split the PT extra at enrollment')
+            ->assertSee('data-commission-count', false)
+            ->assertSee('+ Add recipient')
+            ->assertSee('name="commissions[0][recipient_user_id]"', false)
+            ->assertDontSee('name="commissions[1][recipient_user_id]"', false)
             ->assertSee($trainer->name)
             ->assertSee('data-branch-ids="'.$branch->id.'"', false);
 

@@ -198,16 +198,7 @@
                         @if($canCollectPayments)
                             <form method="POST" action="{{ route('web.gym.memberships.commissions.update', ['membership' => $membership->id, 'gym' => $gym->id]) }}" class="mt-4 space-y-3">
                                 @csrf @method('PUT')
-                                @for($index = 0; $index < max(4, $commissionAllocations->count() + 1); $index++)
-                                    @php($allocation = $commissionAllocations->values()->get($index))
-                                    <div class="grid gap-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800 md:grid-cols-7">
-                                        <div class="md:col-span-3"><label class="panel-label">Recipient</label><select name="commissions[{{ $index }}][recipient_user_id]" class="panel-select"><option value="">Unused row</option>@foreach($commissionRecipients as $person)<option value="{{ $person->id }}" @selected((int)old("commissions.$index.recipient_user_id", $allocation?->recipient_user_id) === $person->id)>{{ $person->name }} · {{ ucfirst($person->getAttribute('compensation_role')) }}</option>@endforeach</select></div>
-                                        <div><label class="panel-label">Category</label><select name="commissions[{{ $index }}][category]" class="panel-select"><option value="pt" @selected(old("commissions.$index.category", $allocation?->category) === 'pt')>PT</option><option value="sales" @selected(old("commissions.$index.category", $allocation?->category) === 'sales')>Sales</option></select></div>
-                                        <div><label class="panel-label">Calculation</label><select name="commissions[{{ $index }}][calculation_type]" class="panel-select"><option value="percentage" @selected(old("commissions.$index.calculation_type", $allocation?->calculation_type) === 'percentage')>%</option><option value="fixed" @selected(old("commissions.$index.calculation_type", $allocation?->calculation_type) === 'fixed')>Fixed</option></select></div>
-                                        <div><label class="panel-label">Value</label><input name="commissions[{{ $index }}][value]" type="number" min="0" step="0.01" value="{{ old("commissions.$index.value", $allocation?->value ?? 0) }}" class="panel-input"></div>
-                                        <div><label class="panel-label">Frequency</label><select name="commissions[{{ $index }}][recurrence]" class="panel-select"><option value="one_time" @selected(old("commissions.$index.recurrence", $allocation?->recurrence) === 'one_time')>One time</option><option value="recurring" @selected(old("commissions.$index.recurrence", $allocation?->recurrence) === 'recurring')>Every renewal</option></select></div>
-                                    </div>
-                                @endfor
+                                <x-commission-rule-builder :recipients="$commissionRecipients" :rows="$commissionAllocations" />
                                 <div class="flex justify-end"><x-action-button type="submit">Save Commission Split</x-action-button></div>
                             </form>
                         @elseif($commissionAllocations->isEmpty())
