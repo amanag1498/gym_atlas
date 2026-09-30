@@ -8,6 +8,7 @@ use App\Models\MemberEmailInvitation;
 use App\Models\MembershipPlan;
 use App\Models\User;
 use App\Services\Billing\BillingAccessService;
+use App\Services\Billing\CommissionService;
 use App\Services\Billing\MemberMembershipLifecycleService;
 use App\Services\Billing\MembershipEnrollmentService;
 use App\Services\Notification\ReminderService;
@@ -25,6 +26,7 @@ class MemberEmailInvitationService
         private readonly MembershipEnrollmentService $membershipEnrollmentService,
         private readonly MemberMembershipLifecycleService $membershipLifecycleService,
         private readonly BillingAccessService $billingAccessService,
+        private readonly CommissionService $commissionService,
         private readonly ReminderService $reminderService,
         private readonly TransactionalEmailService $transactionalEmailService,
     ) {}
@@ -77,6 +79,7 @@ class MemberEmailInvitationService
                 $this->billingAccessService->assertPlanBelongsToScope($plan, $invitation->gym_id, (int) $payload['branch_id']);
                 ['membership' => $membership] = $this->membershipEnrollmentService->enroll($plan, $invitation->invitedBy ?: $user, [...$payload, 'gym_id' => $invitation->gym_id, 'branch_id' => $payload['branch_id'], 'member_id' => $user->id, 'start_date' => $payload['start_date'] ?? now()->toDateString(), 'due_date' => $payload['due_date'] ?? ($payload['start_date'] ?? now()->toDateString())]);
                 $this->membershipLifecycleService->syncMemberProfileFromMembership($membership->fresh(['member.memberProfile']));
+                $this->commissionService->configure($membership, $payload['commissions'] ?? []);
                 $this->reminderService->syncMembershipReminders($membership->fresh(['membershipPlan']));
             }
             $invitation->forceFill(['status' => 'accepted', 'responded_at' => now()])->save();

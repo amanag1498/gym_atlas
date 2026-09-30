@@ -11,8 +11,9 @@
                 label="Select Existing User"
                 :search-url="route('web.gym.members.search.eligible-users', request()->query())"
                 :initial-item="$initialExistingUser ?? null"
-                placeholder="Search existing users by name, email, or phone"
-                empty-label="Optional. Leave empty to create a new member user."
+                placeholder="Type the full account email"
+                empty-label="Optional. Type a full email to find an existing Atlas account, or leave empty to create a new member user."
+                :requires-full-email="true"
             />
             <div id="existing_user_hint" class="mt-3 hidden rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
                 Existing user selected. This will send a pending gym invitation; the user must accept before becoming a member of this gym.
@@ -206,6 +207,47 @@
                     <label for="custom_fee_reason" class="panel-label">Custom Fee Reason</label>
                     <textarea id="custom_fee_reason" name="custom_fee_reason" class="panel-textarea">{{ old('custom_fee_reason') }}</textarea>
                 </div>
+
+                <div class="md:col-span-2 overflow-hidden rounded-2xl border border-indigo-200 bg-indigo-50/70 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+                    <div class="border-b border-indigo-200/80 px-4 py-4 dark:border-indigo-500/20">
+                        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-700 dark:text-indigo-300">Salary & Commission</p>
+                        <h5 class="mt-1 font-semibold text-slate-950 dark:text-white">Split the PT extra at enrollment</h5>
+                        <p class="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">Optional. Commission is earned only when the PT / commissionable extra is collected. The team member role is detected automatically.</p>
+                    </div>
+                    <div class="space-y-3 p-4">
+                        @if(($commissionRecipients ?? collect())->isEmpty())
+                            <p class="rounded-xl bg-white/80 px-4 py-3 text-sm text-slate-600 dark:bg-slate-950/60 dark:text-slate-300">No active trainers or staff are available. Add the team member first, then return here.</p>
+                        @else
+                            @for($row = 0; $row < 4; $row++)
+                                @php($savedCommission = old("commissions.$row", []))
+                                <div class="grid gap-3 rounded-xl border border-white bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-950/60 lg:grid-cols-[1.4fr_0.8fr_0.8fr_0.7fr_0.9fr]" data-commission-row>
+                                    <div>
+                                        <label class="panel-label" for="commission-recipient-{{ $row }}">Recipient</label>
+                                        <select id="commission-recipient-{{ $row }}" name="commissions[{{ $row }}][recipient_user_id]" class="panel-select" data-commission-recipient>
+                                            <option value="">No commission</option>
+                                            @foreach($commissionRecipients as $recipient)
+                                                @php
+                                                    $recipientBranchIds = $recipient->branches->where('gym_id', $gym->id)->pluck('id');
+                                                    if ($recipient->managedTrainerProfile?->branch_id) {
+                                                        $recipientBranchIds->push($recipient->managedTrainerProfile->branch_id);
+                                                    }
+                                                @endphp
+                                                <option value="{{ $recipient->id }}" data-branch-ids="{{ $recipientBranchIds->unique()->implode(',') }}" @selected((int)($savedCommission['recipient_user_id'] ?? 0) === $recipient->id)>
+                                                    {{ $recipient->name }} · {{ ucfirst($recipient->getAttribute('compensation_role')) }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div><label class="panel-label">For</label><select name="commissions[{{ $row }}][category]" class="panel-select"><option value="pt" @selected(($savedCommission['category'] ?? 'pt') === 'pt')>PT</option><option value="sales" @selected(($savedCommission['category'] ?? '') === 'sales')>Sale</option></select></div>
+                                    <div><label class="panel-label">Rule</label><select name="commissions[{{ $row }}][calculation_type]" class="panel-select"><option value="percentage" @selected(($savedCommission['calculation_type'] ?? 'percentage') === 'percentage')>Percentage</option><option value="fixed" @selected(($savedCommission['calculation_type'] ?? '') === 'fixed')>Fixed ₹</option></select></div>
+                                    <div><label class="panel-label">Value</label><input name="commissions[{{ $row }}][value]" type="number" min="0" step="0.01" value="{{ $savedCommission['value'] ?? '' }}" class="panel-input" placeholder="0"></div>
+                                    <div><label class="panel-label">Cycle</label><select name="commissions[{{ $row }}][recurrence]" class="panel-select"><option value="recurring" @selected(($savedCommission['recurrence'] ?? 'recurring') === 'recurring')>Every renewal</option><option value="one_time" @selected(($savedCommission['recurrence'] ?? '') === 'one_time')>First cycle only</option></select></div>
+                                </div>
+                            @endfor
+                            <p id="commission_branch_hint" class="hidden text-xs font-medium text-amber-700 dark:text-amber-300">A commission recipient was cleared because they are not assigned to the selected branch.</p>
+                        @endif
+                    </div>
+                </div>
             </div>
         </div>
     @endif
@@ -310,6 +352,8 @@
             const discountAmountInput = document.getElementById('discount_amount');
             const partialMonthFeeInput = document.getElementById('partial_month_fee');
             const ptCustomFeeInput = document.getElementById('pt_custom_fee');
+            const commissionRecipients = Array.from(document.querySelectorAll('[data-commission-recipient]'));
+            const commissionBranchHint = document.getElementById('commission_branch_hint');
 
             const formatDate = (date) => {
                 const year = date.getFullYear();
@@ -354,6 +398,27 @@
                 } else {
                     hint?.classList.add('hidden');
                 }
+            };
+
+            const filterCommissionRecipientsForBranch = () => {
+                if (!branchSelect || commissionRecipients.length === 0) return;
+                const branchId = branchSelect.value;
+                let cleared = false;
+
+                commissionRecipients.forEach((select) => {
+                    [...select.options].forEach((option) => {
+                        if (!option.value) return;
+                        const branchIds = (option.dataset.branchIds || '').split(',').filter(Boolean);
+                        const visible = !branchId || branchIds.length === 0 || branchIds.includes(branchId);
+                        option.hidden = !visible;
+                        if (option.selected && !visible) {
+                            select.value = '';
+                            cleared = true;
+                        }
+                    });
+                });
+
+                commissionBranchHint?.classList.toggle('hidden', !cleared);
             };
 
             const applyPlanDefaults = (force = false) => {
@@ -409,7 +474,10 @@
                 }
             };
 
-            branchSelect?.addEventListener('change', filterTrainersForBranch);
+            branchSelect?.addEventListener('change', () => {
+                filterTrainersForBranch();
+                filterCommissionRecipientsForBranch();
+            });
             planSelect?.addEventListener('change', () => applyPlanDefaults(true));
             customFeeEnabledInput?.addEventListener('change', () => {
                 if (customFeeEnabledInput.checked) {
@@ -429,6 +497,7 @@
             });
 
             filterTrainersForBranch();
+            filterCommissionRecipientsForBranch();
             applyPlanDefaults(false);
         });
     </script>

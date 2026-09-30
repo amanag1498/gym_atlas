@@ -647,6 +647,7 @@ Route::prefix('gym')
         Route::post('/payments/{memberMembership}/mark-unpaid', [WebGymPaymentController::class, 'markUnpaid'])->name('payments.mark-unpaid');
         Route::post('/payments/{payment}/reverse', [WebGymPaymentController::class, 'reverse'])->name('payments.reverse');
         Route::get('/compensation', [WebGymCompensationController::class, 'index'])->name('compensation.index');
+        Route::get('/compensation/statements/{statement}', [WebGymCompensationController::class, 'showStatement'])->name('compensation.statements.show');
         Route::post('/compensation/profiles', [WebGymCompensationController::class, 'storeProfile'])->name('compensation.profiles.store');
         Route::post('/compensation/generate', [WebGymCompensationController::class, 'generate'])->name('compensation.generate');
         Route::post('/compensation/statements/{statement}/pay', [WebGymCompensationController::class, 'pay'])->name('compensation.statements.pay');

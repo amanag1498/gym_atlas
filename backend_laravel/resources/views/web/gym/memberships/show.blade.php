@@ -48,8 +48,8 @@
                         @endif
                     </div>
                     <div class="mt-5 inline-flex rounded-2xl border border-white/10 bg-slate-950/40 p-1">
-                        <a href="{{ $overviewHref }}" class="{{ $focusLifecycle ? 'text-slate-300' : 'bg-white text-slate-950' }} rounded-xl px-3 py-2 text-sm font-medium transition">Detail</a>
-                        <a href="{{ $workspaceHref }}" class="{{ $focusLifecycle ? 'bg-white text-slate-950' : 'text-slate-300' }} rounded-xl px-3 py-2 text-sm font-medium transition">Workspace</a>
+                        <a href="{{ $overviewHref }}" class="{{ $focusLifecycle ? 'text-slate-300' : 'bg-white text-slate-950' }} rounded-xl px-3 py-2 text-sm font-medium transition">Overview & Billing</a>
+                        <a href="{{ $workspaceHref }}" class="{{ $focusLifecycle ? 'bg-white text-slate-950' : 'text-slate-300' }} rounded-xl px-3 py-2 text-sm font-medium transition">Action Workspace</a>
                     </div>
                 </div>
                 <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
@@ -106,17 +106,26 @@
             </div>
         </section>
 
-        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-            <x-stat-card label="Lifecycle" :value="ucfirst((string) $membership->status)" hint="Current membership state" tone="sky" />
-            <x-stat-card label="Payment Status" :value="ucfirst((string) $membership->payment_status)" hint="Current billing state" tone="amber" />
-            <x-stat-card label="Payable" :value="number_format((float) $membership->final_payable_amount, 2)" hint="Final commercial amount" tone="violet" />
-            <x-stat-card label="Paid" :value="number_format((float) $membership->amount_paid, 2)" hint="Recorded collections" tone="emerald" />
-            <x-stat-card :label="$hasCredit ? 'Credit' : 'Due'" :value="number_format($hasCredit ? $creditAmount : (float) $membership->due_amount, 2)" :hint="$hasCredit ? 'Member has extra paid amount' : 'Outstanding balance'" :tone="$hasCredit ? 'emerald' : 'warning'" />
-            <x-stat-card label="Payments" :value="$membership->payments->where('status', 'recorded')->count()" hint="Recorded payment entries" tone="info" />
+        <div class="flex flex-col gap-3 rounded-2xl border border-sky-200 bg-sky-50/80 px-5 py-4 text-sky-950 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-100 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">Recommended next action</p>
+                <p class="mt-1 text-sm font-medium">
+                    @if ($isCancelled) Renew this closed membership to create a new cycle.
+                    @elseif ($isFrozen) Reactivate the membership when the member returns.
+                    @elseif ($hasDue) Collect ₹{{ number_format((float) $membership->due_amount, 2) }} before the due checkpoint.
+                    @elseif ($hasCredit) Review the ₹{{ number_format($creditAmount, 2) }} member credit before renewal.
+                    @else Review the cycle now; use the workspace only when an operational change is needed.
+                    @endif
+                </p>
+            </div>
+            @if (! $focusLifecycle)
+                <a href="{{ $workspaceHref }}" class="panel-btn-primary whitespace-nowrap">Open Action Workspace</a>
+            @endif
         </div>
 
-        <div class="grid gap-6 {{ $focusLifecycle ? 'xl:grid-cols-[0.86fr_1.14fr]' : 'xl:grid-cols-[1.05fr_0.95fr]' }}">
-            <div class="space-y-6 {{ $focusLifecycle ? 'xl:order-2' : '' }}">
+        <div class="grid gap-6 {{ $focusLifecycle ? '' : 'xl:grid-cols-[1.05fr_0.95fr]' }}">
+            @if (! $focusLifecycle)
+            <div class="space-y-6">
                 <x-premium-card class="p-6">
                     <h3 class="panel-section-title">Membership Snapshot</h3>
                     <p class="panel-section-copy">{{ $focusLifecycle ? 'Reference summary for the operator while actions are being taken.' : 'Readable cycle, commercial structure, and renewal-safe pricing context.' }}</p>
@@ -189,11 +198,10 @@
                         @if($canCollectPayments)
                             <form method="POST" action="{{ route('web.gym.memberships.commissions.update', ['membership' => $membership->id, 'gym' => $gym->id]) }}" class="mt-4 space-y-3">
                                 @csrf @method('PUT')
-                                @for($index = 0; $index < max(2, $commissionAllocations->count() + 1); $index++)
+                                @for($index = 0; $index < max(4, $commissionAllocations->count() + 1); $index++)
                                     @php($allocation = $commissionAllocations->values()->get($index))
                                     <div class="grid gap-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800 md:grid-cols-7">
-                                        <div class="md:col-span-2"><label class="panel-label">Recipient</label><select name="commissions[{{ $index }}][recipient_user_id]" class="panel-select"><option value="">Unused row</option>@foreach($commissionRecipients as $person)<option value="{{ $person->id }}" @selected((int)old("commissions.$index.recipient_user_id", $allocation?->recipient_user_id) === $person->id)>{{ $person->name }}</option>@endforeach</select></div>
-                                        <div><label class="panel-label">Role</label><select name="commissions[{{ $index }}][recipient_type]" class="panel-select"><option value="trainer" @selected(old("commissions.$index.recipient_type", $allocation?->recipient_type) === 'trainer')>Trainer</option><option value="staff" @selected(old("commissions.$index.recipient_type", $allocation?->recipient_type) === 'staff')>Staff</option></select></div>
+                                        <div class="md:col-span-3"><label class="panel-label">Recipient</label><select name="commissions[{{ $index }}][recipient_user_id]" class="panel-select"><option value="">Unused row</option>@foreach($commissionRecipients as $person)<option value="{{ $person->id }}" @selected((int)old("commissions.$index.recipient_user_id", $allocation?->recipient_user_id) === $person->id)>{{ $person->name }} · {{ ucfirst($person->getAttribute('compensation_role')) }}</option>@endforeach</select></div>
                                         <div><label class="panel-label">Category</label><select name="commissions[{{ $index }}][category]" class="panel-select"><option value="pt" @selected(old("commissions.$index.category", $allocation?->category) === 'pt')>PT</option><option value="sales" @selected(old("commissions.$index.category", $allocation?->category) === 'sales')>Sales</option></select></div>
                                         <div><label class="panel-label">Calculation</label><select name="commissions[{{ $index }}][calculation_type]" class="panel-select"><option value="percentage" @selected(old("commissions.$index.calculation_type", $allocation?->calculation_type) === 'percentage')>%</option><option value="fixed" @selected(old("commissions.$index.calculation_type", $allocation?->calculation_type) === 'fixed')>Fixed</option></select></div>
                                         <div><label class="panel-label">Value</label><input name="commissions[{{ $index }}][value]" type="number" min="0" step="0.01" value="{{ old("commissions.$index.value", $allocation?->value ?? 0) }}" class="panel-input"></div>
@@ -262,8 +270,10 @@
                 </x-table-wrapper>
                 @endif
             </div>
+            @endif
 
-            <div class="space-y-6 {{ $focusLifecycle ? 'xl:order-1' : '' }}">
+            <div class="space-y-6">
+                @if ($focusLifecycle)
                 <x-premium-card class="p-6 {{ $focusLifecycle ? 'ring-1 ring-sky-300/70 dark:ring-sky-500/30' : '' }}" id="lifecycle-workspace">
                     <div class="border-b border-slate-200/80 pb-5 dark:border-slate-800">
                         <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -534,6 +544,7 @@
                         @endif
                     </div>
                 </x-premium-card>
+                @endif
 
                 @if ($focusLifecycle)
                     <x-table-wrapper class="overflow-hidden p-0">

@@ -65,6 +65,12 @@ class StoreMemberRequest extends FormRequest
             'partial_month_fee' => ['nullable', 'numeric', 'min:0'],
             'pt_custom_fee' => ['nullable', 'numeric', 'min:0'],
             'custom_fee_reason' => ['nullable', 'string', 'max:5000'],
+            'commissions' => ['nullable', 'array', 'max:10'],
+            'commissions.*.recipient_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'commissions.*.category' => ['required_with:commissions.*.recipient_user_id', Rule::in(['pt', 'sales'])],
+            'commissions.*.calculation_type' => ['required_with:commissions.*.recipient_user_id', Rule::in(['percentage', 'fixed'])],
+            'commissions.*.value' => ['nullable', 'numeric', 'min:0'],
+            'commissions.*.recurrence' => ['required_with:commissions.*.recipient_user_id', Rule::in(['one_time', 'recurring'])],
         ];
 
         return $rules;
@@ -131,6 +137,33 @@ class StoreMemberRequest extends FormRequest
 
             if ($this->filled('membership_plan_id') && $this->boolean('custom_fee_enabled') && blank($this->input('custom_fee_reason'))) {
                 $validator->errors()->add('custom_fee_reason', 'The custom fee reason field is required when a custom fee is enabled.');
+            }
+
+            $commissionRows = collect($this->input('commissions', []))
+                ->filter(fn ($row): bool => filled($row['recipient_user_id'] ?? null) && (float) ($row['value'] ?? 0) > 0);
+
+            if ($commissionRows->isNotEmpty() && ! $this->filled('membership_plan_id')) {
+                $validator->errors()->add('commissions', 'Select a membership plan before adding commission rules.');
+            }
+
+            $extra = round((float) $this->input('pt_custom_fee', 0), 2);
+            if ($commissionRows->isNotEmpty() && $extra <= 0) {
+                $validator->errors()->add('pt_custom_fee', 'Enter a PT / commissionable extra amount before adding commission rules.');
+            }
+
+            $total = $commissionRows->sum(function (array $row) use ($extra): float {
+                $value = round((float) ($row['value'] ?? 0), 2);
+                if (($row['calculation_type'] ?? 'percentage') === 'percentage' && $value > 100) {
+                    return $extra + 1;
+                }
+
+                return ($row['calculation_type'] ?? 'percentage') === 'fixed'
+                    ? $value
+                    : round($extra * $value / 100, 2);
+            });
+
+            if ($total > $extra + 0.001) {
+                $validator->errors()->add('commissions', 'Trainer and staff commissions cannot exceed the PT / commissionable extra amount.');
             }
         });
     }

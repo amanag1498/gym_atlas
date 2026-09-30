@@ -134,17 +134,17 @@
             <div class="md:col-span-2"><label class="panel-label">Custom Fee Reason</label><textarea name="custom_fee_reason" class="panel-textarea"></textarea></div>
             <div class="md:col-span-2 rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
                 <h4 class="font-semibold text-white">Commission split</h4>
-                <p class="mt-1 text-xs text-slate-400">One-time applies only to this sale. Recurring copies to future renewals. Total commission cannot exceed the PT / commissionable extra.</p>
+                <p class="mt-1 text-xs text-slate-400">Choose only active trainers or staff from this gym. One-time applies to this sale; recurring follows future renewals.</p>
                 <div class="mt-4 space-y-3">
-                    @foreach ([0 => ['trainer', 'pt', 'recurring'], 1 => ['staff', 'sales', 'one_time']] as $index => $defaults)
-                        <div class="grid gap-3 rounded-xl border border-white/10 p-3 sm:grid-cols-5">
-                            <div class="sm:col-span-2"><label class="panel-label">{{ $index === 0 ? 'Trainer' : 'Staff / salesperson' }}</label><select name="commissions[{{ $index }}][recipient_user_id]" class="panel-select"><option value="">No commission</option>@foreach($commissionRecipients as $person)<option value="{{ $person->id }}" @selected((int)old("commissions.$index.recipient_user_id", $index === 0 ? $assignedTrainerId : null) === $person->id)>{{ $person->name }}</option>@endforeach</select></div>
-                            <input type="hidden" name="commissions[{{ $index }}][recipient_type]" value="{{ $defaults[0] }}"><input type="hidden" name="commissions[{{ $index }}][category]" value="{{ $defaults[1] }}">
+                    @for($index = 0; $index < 4; $index++)
+                        <div class="grid gap-3 rounded-xl border border-white/10 p-3 sm:grid-cols-6">
+                            <div class="sm:col-span-2"><label class="panel-label">{{ $index === 0 ? 'Primary recipient' : 'Additional recipient' }}</label><select name="commissions[{{ $index }}][recipient_user_id]" class="panel-select"><option value="">Unused row</option>@foreach($commissionRecipients as $person)<option value="{{ $person->id }}" @selected((int)old("commissions.$index.recipient_user_id", $index === 0 ? $assignedTrainerId : null) === $person->id)>{{ $person->name }} · {{ ucfirst($person->getAttribute('compensation_role')) }}</option>@endforeach</select></div>
+                            <div><label class="panel-label">For</label><select name="commissions[{{ $index }}][category]" class="panel-select"><option value="pt" @selected(old("commissions.$index.category", $index === 0 ? 'pt' : 'sales') === 'pt')>PT</option><option value="sales" @selected(old("commissions.$index.category", $index === 0 ? 'pt' : 'sales') === 'sales')>Sale</option></select></div>
                             <div><label class="panel-label">Type</label><select name="commissions[{{ $index }}][calculation_type]" class="panel-select"><option value="percentage">Percentage</option><option value="fixed">Fixed amount</option></select></div>
                             <div><label class="panel-label">Value</label><input name="commissions[{{ $index }}][value]" type="number" min="0" step="0.01" value="{{ old("commissions.$index.value", 0) }}" class="panel-input"></div>
-                            <div><label class="panel-label">Frequency</label><select name="commissions[{{ $index }}][recurrence]" class="panel-select"><option value="one_time" @selected($defaults[2] === 'one_time')>One time</option><option value="recurring" @selected($defaults[2] === 'recurring')>Every renewal</option></select></div>
+                            <div><label class="panel-label">Frequency</label><select name="commissions[{{ $index }}][recurrence]" class="panel-select"><option value="one_time" @selected(old("commissions.$index.recurrence", $index === 0 ? 'recurring' : 'one_time') === 'one_time')>One time</option><option value="recurring" @selected(old("commissions.$index.recurrence", $index === 0 ? 'recurring' : 'one_time') === 'recurring')>Every renewal</option></select></div>
                         </div>
-                    @endforeach
+                    @endfor
                 </div>
             </div>
             <div class="md:col-span-2"><x-action-button type="submit" variant="primary">{{ $hasExistingMembership ? 'Create Next Membership Cycle' : 'Assign Membership' }}</x-action-button></div>

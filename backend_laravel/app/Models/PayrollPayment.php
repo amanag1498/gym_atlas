@@ -23,4 +23,9 @@ class PayrollPayment extends Model
     {
         return $this->belongsTo(GymLedgerEntry::class, 'gym_ledger_entry_id');
     }
+
+    public function paidBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'paid_by_user_id');
+    }
 }

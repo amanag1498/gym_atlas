@@ -6,6 +6,7 @@
     'placeholder' => 'Search by name, email, or phone',
     'emptyLabel' => null,
     'branchSource' => null,
+    'requiresFullEmail' => false,
     'required' => false,
     'fieldId' => null,
 ])
@@ -21,6 +22,7 @@
     data-search-url="{{ $searchUrl }}"
     data-branch-source="{{ $branchSource }}"
     data-empty-label="{{ $emptyLabel }}"
+    data-requires-full-email="{{ $requiresFullEmail ? 'true' : 'false' }}"
     class="relative"
 >
     <label for="{{ $fieldId }}_search" class="panel-label">{{ $label }}</label>
@@ -74,6 +76,8 @@
                     const clear = root.querySelector('[data-remote-user-clear]');
                     const help = root.querySelector('[data-remote-user-help]');
                     const emptyLabel = root.dataset.emptyLabel || 'Enter at least 2 characters to search.';
+                    const requiresFullEmail = root.dataset.requiresFullEmail === 'true';
+                    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                     let timer;
                     let controller;
 
@@ -104,6 +108,12 @@
 
                     const searchUsers = async () => {
                         const query = search.value.trim();
+                        if (requiresFullEmail && !emailPattern.test(query)) {
+                            closeResults();
+                            help.textContent = emptyLabel;
+                            return;
+                        }
+
                         if (query.length < 2) {
                             closeResults();
                             return;

@@ -9,6 +9,7 @@ use App\Models\MemberProfile;
 use App\Models\MembershipPlan;
 use App\Models\User;
 use App\Services\Billing\BillingAccessService;
+use App\Services\Billing\CommissionService;
 use App\Services\Billing\CustomFeeAuditService;
 use App\Services\Billing\MemberMembershipLifecycleService;
 use App\Services\Billing\MembershipEnrollmentService;
@@ -26,6 +27,7 @@ class MemberGymInvitationService
         private readonly MembershipEnrollmentService $membershipEnrollmentService,
         private readonly MemberMembershipLifecycleService $membershipLifecycleService,
         private readonly BillingAccessService $billingAccessService,
+        private readonly CommissionService $commissionService,
         private readonly CustomFeeAuditService $customFeeAuditService,
         private readonly ReminderService $reminderService,
     ) {}
@@ -316,6 +318,7 @@ class MemberGymInvitationService
         );
 
         $this->membershipLifecycleService->syncMemberProfileFromMembership($membership->fresh(['member.memberProfile']));
+        $this->commissionService->configure($membership, $payload['commissions'] ?? []);
 
         if ($membership->custom_fee_enabled) {
             $this->customFeeAuditService->log(

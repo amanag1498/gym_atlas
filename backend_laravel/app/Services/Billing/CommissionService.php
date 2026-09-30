@@ -11,6 +11,8 @@ use Illuminate\Validation\ValidationException;
 
 class CommissionService
 {
+    public function __construct(private readonly CompensationTeamService $compensationTeamService) {}
+
     /**
      * @param  list<array<string, mixed>>  $rows
      */
@@ -19,14 +21,17 @@ class CommissionService
         DB::transaction(function () use ($membership, $rows): void {
             $membership = MemberMembership::query()->lockForUpdate()->findOrFail($membership->id);
             $extra = round((float) $membership->pt_custom_fee, 2);
+            $eligibleRecipients = $this->compensationTeamService
+                ->eligibleRecipients($membership->gym_id, $membership->branch_id)
+                ->keyBy('id');
             $prepared = collect($rows)
                 ->filter(fn (array $row): bool => ! empty($row['recipient_user_id']) && (float) ($row['value'] ?? 0) > 0)
                 ->values()
-                ->map(function (array $row) use ($membership, $extra): array {
+                ->map(function (array $row) use ($membership, $extra, $eligibleRecipients): array {
                     $recipientId = (int) $row['recipient_user_id'];
-                    $belongsToGym = DB::table('gym_user')->where('gym_id', $membership->gym_id)->where('user_id', $recipientId)->exists();
-                    if (! $belongsToGym) {
-                        throw ValidationException::withMessages(['commissions' => ['Every commission recipient must belong to this gym.']]);
+                    $recipient = $eligibleRecipients->get($recipientId);
+                    if (! $recipient) {
+                        throw ValidationException::withMessages(['commissions' => ['Every commission recipient must be an active trainer or staff member in this gym and branch.']]);
                     }
 
                     $calculationType = (string) ($row['calculation_type'] ?? 'percentage');
@@ -42,8 +47,8 @@ class CommissionService
                         'branch_id' => $membership->branch_id,
                         'member_membership_id' => $membership->id,
                         'recipient_user_id' => $recipientId,
-                        'recipient_type' => $row['recipient_type'] ?? 'trainer',
-                        'category' => $row['category'] ?? (($row['recipient_type'] ?? 'trainer') === 'staff' ? 'sales' : 'pt'),
+                        'recipient_type' => $recipient->getAttribute('compensation_role'),
+                        'category' => $row['category'] ?? ($recipient->getAttribute('compensation_role') === 'staff' ? 'sales' : 'pt'),
                         'calculation_type' => $calculationType,
                         'value' => $value,
                         'recurrence' => $row['recurrence'] ?? 'one_time',

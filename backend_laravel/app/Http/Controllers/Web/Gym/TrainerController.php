@@ -113,18 +113,13 @@ class TrainerController extends Controller
         $validated = $request->validate([
             'q' => ['required', 'string', 'min:2', 'max:100'],
         ]);
-        $search = '%'.$validated['q'].'%';
-        $hasPhoneColumn = $this->trainerManagementService->hasPhoneColumn();
+        $email = strtolower(trim($validated['q']));
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return response()->json(['data' => []]);
+        }
 
         $users = $this->trainerManagementService->existingUsersQuery($gym)
-            ->where(function (Builder $query) use ($search, $hasPhoneColumn): void {
-                $query->where('name', 'like', $search)
-                    ->orWhere('email', 'like', $search);
-
-                if ($hasPhoneColumn) {
-                    $query->orWhere('phone', 'like', $search);
-                }
-            })
+            ->whereRaw('LOWER(email) = ?', [$email])
             ->limit(20)
             ->get()
             ->map(fn (User $user): array => $this->existingUserSearchItem($user))

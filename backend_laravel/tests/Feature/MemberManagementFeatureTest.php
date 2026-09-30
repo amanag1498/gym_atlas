@@ -98,7 +98,15 @@ class MemberManagementFeatureTest extends TestCase
             'custom_fee_enabled' => 1,
             'custom_fee_amount' => 2200,
             'custom_joining_fee' => 300,
+            'pt_custom_fee' => 1000,
             'custom_fee_reason' => 'Launch offer',
+            'commissions' => [[
+                'recipient_user_id' => $trainer->id,
+                'category' => 'pt',
+                'calculation_type' => 'percentage',
+                'value' => 50,
+                'recurrence' => 'recurring',
+            ]],
         ])->assertRedirect();
 
         $invitation = MemberEmailInvitation::query()
@@ -147,6 +155,18 @@ class MemberManagementFeatureTest extends TestCase
             'custom_fee_amount' => 2200,
             'amount_paid' => 1000,
             'custom_fee_reason' => 'Launch offer',
+        ]);
+        $membership = MemberMembership::query()->where('member_id', $member->id)->firstOrFail();
+        $this->assertDatabaseHas('membership_commission_allocations', [
+            'member_membership_id' => $membership->id,
+            'recipient_user_id' => $trainer->id,
+            'recipient_type' => 'trainer',
+            'category' => 'pt',
+            'calculation_type' => 'percentage',
+            'value' => 50,
+            'recurrence' => 'recurring',
+            'expected_commission_amount' => 500,
+            'status' => 'active',
         ]);
     }
 
@@ -233,6 +253,13 @@ class MemberManagementFeatureTest extends TestCase
         $this->getJson(route('web.gym.members.search.eligible-users', [
             'gym' => $gym->id,
             'q' => 'existing-member',
+        ]))
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->getJson(route('web.gym.members.search.eligible-users', [
+            'gym' => $gym->id,
+            'q' => 'existing-member@example.com',
         ]))
             ->assertOk()
             ->assertJsonPath('data.0.id', $existingUser->id)

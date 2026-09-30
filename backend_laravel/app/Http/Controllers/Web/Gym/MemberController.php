@@ -21,6 +21,8 @@ use App\Models\WorkoutSession;
 use App\Services\Audit\AuditLogService;
 use App\Services\Audit\MemberTimelineService;
 use App\Services\Billing\BillingAccessService;
+use App\Services\Billing\CommissionService;
+use App\Services\Billing\CompensationTeamService;
 use App\Services\Billing\CustomFeeAuditService;
 use App\Services\Billing\MemberMembershipLifecycleService;
 use App\Services\Billing\MembershipEnrollmentService;
@@ -56,6 +58,8 @@ class MemberController extends Controller
         private readonly MembershipEnrollmentService $membershipEnrollmentService,
         private readonly MemberMembershipLifecycleService $membershipLifecycleService,
         private readonly BillingAccessService $billingAccessService,
+        private readonly CommissionService $commissionService,
+        private readonly CompensationTeamService $compensationTeamService,
         private readonly CustomFeeAuditService $customFeeAuditService,
         private readonly ReminderService $reminderService,
         private readonly AuditLogService $auditLogService,
@@ -98,6 +102,7 @@ class MemberController extends Controller
         ], $gym, $branchId);
         $payload = $this->normalizedPayload($request);
         $this->assertBranchAndTrainerInScope($request, $gym, $branchId, $payload['assigned_trainer_user_id'] ?? null);
+        $this->assertCommissionRecipientsInScope($gym->id, $branchId ? (int) $branchId : null, $payload['commissions'] ?? []);
 
         $existingUser = isset($payload['existing_user_id']) ? User::query()->find($payload['existing_user_id']) : null;
 
@@ -251,6 +256,7 @@ class MemberController extends Controller
             'branches' => $this->gymWebPanelService->accessibleBranches($request, $gym),
             'trainers' => $this->trainers($request, $gym),
             'plans' => $this->plans($gym, $this->gymWebPanelService->accessibleBranchIds($request, $gym)),
+            'commissionRecipients' => $this->compensationTeamService->eligibleRecipients($gym->id),
             'hasPhoneColumn' => Schema::hasColumn('users', 'phone'),
             'initialExistingUser' => $initialExistingUser
                 ? $this->existingUserSearchItem($initialExistingUser)
@@ -269,18 +275,13 @@ class MemberController extends Controller
         $validated = $request->validate([
             'q' => ['required', 'string', 'min:2', 'max:100'],
         ]);
-        $search = '%'.$validated['q'].'%';
-        $hasPhoneColumn = Schema::hasColumn('users', 'phone');
+        $email = strtolower(trim($validated['q']));
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return response()->json(['data' => []]);
+        }
 
         $users = $this->eligibleExistingUsersQuery($gym)
-            ->where(function ($query) use ($search, $hasPhoneColumn): void {
-                $query->where('name', 'like', $search)
-                    ->orWhere('email', 'like', $search);
-
-                if ($hasPhoneColumn) {
-                    $query->orWhere('phone', 'like', $search);
-                }
-            })
+            ->whereRaw('LOWER(email) = ?', [$email])
             ->orderBy('name')
             ->limit(20)
             ->get()
@@ -828,6 +829,7 @@ class MemberController extends Controller
         );
 
         $this->membershipLifecycleService->syncMemberProfileFromMembership($membership->fresh(['member.memberProfile']));
+        $this->commissionService->configure($membership, $payload['commissions'] ?? []);
 
         if ($membership->custom_fee_enabled) {
             $this->customFeeAuditService->log(
@@ -980,6 +982,27 @@ class MemberController extends Controller
                     'assigned_trainer_user_id' => ['The selected trainer is not assigned to the selected branch.'],
                 ]);
             }
+        }
+    }
+
+    /** @param array<int, array<string, mixed>> $rows */
+    private function assertCommissionRecipientsInScope(int $gymId, ?int $branchId, array $rows): void
+    {
+        $requestedIds = collect($rows)
+            ->filter(fn (array $row): bool => ! empty($row['recipient_user_id']) && (float) ($row['value'] ?? 0) > 0)
+            ->pluck('recipient_user_id')
+            ->map(fn ($id): int => (int) $id)
+            ->unique();
+
+        if ($requestedIds->isEmpty()) {
+            return;
+        }
+
+        $eligibleIds = $this->compensationTeamService->eligibleRecipients($gymId, $branchId)->pluck('id');
+        if ($requestedIds->diff($eligibleIds)->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'commissions' => ['Every commission recipient must be an active trainer or staff member in the selected gym and branch.'],
+            ]);
         }
     }
 }

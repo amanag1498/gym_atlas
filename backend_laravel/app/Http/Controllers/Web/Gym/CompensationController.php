@@ -8,9 +8,9 @@ use App\Models\CommissionEarning;
 use App\Models\CompensationProfile;
 use App\Models\MemberMembership;
 use App\Models\PayrollStatement;
-use App\Models\User;
 use App\Services\Audit\AuditLogService;
 use App\Services\Billing\CommissionService;
+use App\Services\Billing\CompensationTeamService;
 use App\Services\Billing\PayrollService;
 use App\Services\Web\GymWebPanelService;
 use Carbon\Carbon;
@@ -23,6 +23,7 @@ class CompensationController extends Controller
     public function __construct(
         private readonly GymWebPanelService $gymWebPanelService,
         private readonly CommissionService $commissionService,
+        private readonly CompensationTeamService $compensationTeamService,
         private readonly PayrollService $payrollService,
         private readonly AuditLogService $auditLogService,
     ) {}
@@ -31,13 +32,31 @@ class CompensationController extends Controller
     {
         $gym = $this->gymWebPanelService->resolveGym($request);
         $this->gymWebPanelService->assertPermission($request, PermissionName::PaymentsView->value, $gym);
-        $month = $request->filled('month') ? Carbon::createFromFormat('Y-m', $request->string('month')->toString())->startOfMonth() : now()->startOfMonth();
-        $profiles = CompensationProfile::query()->with(['user', 'branch'])->where('gym_id', $gym->id)->orderBy('worker_type')->get();
+        $monthInput = $request->string('month')->toString();
+        abort_if($monthInput !== '' && ! Carbon::canBeCreatedFromFormat($monthInput, 'Y-m'), 422, 'Choose a valid statement month.');
+        $month = $monthInput !== '' ? Carbon::createFromFormat('Y-m', $monthInput)->startOfMonth() : now()->startOfMonth();
+        $branchId = $request->integer('branch') ?: null;
+        if ($branchId) {
+            abort_unless(in_array($branchId, $this->gymWebPanelService->accessibleBranchIds($request, $gym), true), 403);
+        }
+        $scopeBranch = fn ($query) => $query->when($branchId, fn ($scoped) => $scoped
+            ->where(fn ($branch) => $branch->whereNull('branch_id')->orWhere('branch_id', $branchId)));
+        $profiles = CompensationProfile::query()->with(['user', 'branch'])->where('gym_id', $gym->id)
+            ->tap($scopeBranch)->orderBy('worker_type')->get();
         $statements = PayrollStatement::query()->with(['user', 'branch', 'payments'])->where('gym_id', $gym->id)
-            ->whereDate('period_start', $month)->orderByDesc('net_payable_amount')->get();
+            ->tap($scopeBranch)->whereDate('period_start', $month)->orderByDesc('net_payable_amount')->get();
         $earnings = CommissionEarning::query()->with(['recipient', 'allocation.membership.member', 'payment'])
-            ->where('gym_id', $gym->id)->where('status', 'earned')->whereBetween('earned_at', [$month, $month->copy()->endOfMonth()])
+            ->where('gym_id', $gym->id)->tap($scopeBranch)->where('status', 'earned')->whereBetween('earned_at', [$month, $month->copy()->endOfMonth()])
             ->latest('earned_at')->limit(100)->get();
+        $editingProfile = $request->integer('edit_profile')
+            ? $profiles->firstWhere('id', $request->integer('edit_profile'))
+            : null;
+        $activeProfiles = $profiles->filter(fn (CompensationProfile $profile): bool => $profile->is_active
+            && (! $profile->effective_from || $profile->effective_from->lte($month->copy()->endOfMonth()))
+            && (! $profile->effective_until || $profile->effective_until->gte($month)));
+        $statementCommission = (float) $statements->sum('commission_amount');
+        $earnedCommission = (float) CommissionEarning::query()->where('gym_id', $gym->id)->where('status', 'earned')
+            ->tap($scopeBranch)->whereBetween('earned_at', [$month, $month->copy()->endOfMonth()])->sum('amount');
 
         return view('web.gym.compensation.index', [
             'pageTitle' => 'Salary & Commission',
@@ -47,9 +66,45 @@ class CompensationController extends Controller
             'profiles' => $profiles,
             'statements' => $statements,
             'earnings' => $earnings,
-            'teamMembers' => $this->teamMembers($gym->id),
+            'teamMembers' => $this->compensationTeamService->eligibleRecipients($gym->id, $branchId),
             'branches' => $this->gymWebPanelService->accessibleBranches($request, $gym),
             'canManage' => $this->gymWebPanelService->canPermission($request, PermissionName::PaymentsManage->value, $gym),
+            'editingProfile' => $editingProfile,
+            'overview' => [
+                'active_profiles' => $activeProfiles->count(),
+                'salary_commitment' => (float) $activeProfiles->sum('monthly_salary'),
+                'earned_commission' => $earnedCommission,
+                'unprocessed_commission' => max(0, $earnedCommission - $statementCommission),
+                'net_payable' => (float) $statements->sum('net_payable_amount'),
+                'paid' => (float) $statements->sum('paid_amount'),
+                'remaining' => max(0, (float) $statements->sum('net_payable_amount') - (float) $statements->sum('paid_amount')),
+                'attention_count' => $statements->whereIn('status', ['draft', 'partially_paid'])->count(),
+            ],
+        ]);
+    }
+
+    public function showStatement(Request $request, PayrollStatement $statement): View
+    {
+        $gym = $this->gymWebPanelService->resolveGym($request);
+        abort_unless($statement->gym_id === $gym->id, 404);
+        $this->gymWebPanelService->assertPermission($request, PermissionName::PaymentsView->value, $gym, $statement->branch_id);
+        $statement->load(['user', 'branch', 'payments' => fn ($query) => $query->with(['paidBy', 'ledgerEntry'])->latest('paid_at')]);
+        $earnings = CommissionEarning::query()
+            ->with(['allocation.membership.member', 'payment'])
+            ->where('gym_id', $gym->id)
+            ->where('recipient_user_id', $statement->user_id)
+            ->where('status', 'earned')
+            ->whereBetween('earned_at', [$statement->period_start->copy()->startOfDay(), $statement->period_end->copy()->endOfDay()])
+            ->latest('earned_at')
+            ->get();
+
+        return view('web.gym.compensation.show', [
+            'pageTitle' => 'Payout Statement',
+            'breadcrumbs' => ['Gym', 'Finance', 'Salary & Commission', $statement->user?->name ?? 'Statement'],
+            'gym' => $gym,
+            'statement' => $statement,
+            'earnings' => $earnings,
+            'canManage' => $this->gymWebPanelService->canPermission($request, PermissionName::PaymentsManage->value, $gym, $statement->branch_id),
         ]);
     }
 
@@ -60,7 +115,7 @@ class CompensationController extends Controller
         $data = $request->validate([
             'user_id' => ['required', 'integer', 'exists:users,id'],
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
-            'worker_type' => ['required', 'in:trainer,staff'],
+            'worker_type' => ['nullable', 'in:trainer,staff'],
             'monthly_salary' => ['required', 'numeric', 'min:0'],
             'payout_day' => ['required', 'integer', 'min:1', 'max:28'],
             'effective_from' => ['nullable', 'date'],
@@ -70,9 +125,15 @@ class CompensationController extends Controller
         if (! empty($data['branch_id'])) {
             abort_unless(in_array((int) $data['branch_id'], $this->gymWebPanelService->selectedBranchIds($request, $gym), true), 403);
         }
-        abort_unless($this->teamMembers($gym->id)->contains('id', (int) $data['user_id']), 422, 'The selected user is not an active gym team member.');
+        $selectedTeamMember = $this->compensationTeamService
+            ->eligibleRecipients($gym->id, $data['branch_id'] ?? null)
+            ->firstWhere('id', (int) $data['user_id']);
+        abort_unless($selectedTeamMember, 422, 'Select an active trainer or staff member from this gym and branch.');
         $profile = CompensationProfile::query()->updateOrCreate(['gym_id' => $gym->id, 'user_id' => $data['user_id']], [
-            ...$data, 'gym_id' => $gym->id, 'is_active' => $request->boolean('is_active', true),
+            ...$data,
+            'gym_id' => $gym->id,
+            'worker_type' => $selectedTeamMember->getAttribute('compensation_role'),
+            'is_active' => $request->boolean('is_active', true),
         ]);
         $this->auditLogService->log('web.gym.compensation.profile.saved', 'update', $request, $profile, $gym, $profile->branch, [], $profile->toArray());
 
@@ -87,7 +148,7 @@ class CompensationController extends Controller
         $data = $request->validate([
             'commissions' => ['nullable', 'array', 'max:10'],
             'commissions.*.recipient_user_id' => ['nullable', 'integer', 'exists:users,id'],
-            'commissions.*.recipient_type' => ['required_with:commissions.*.recipient_user_id', 'in:trainer,staff'],
+            'commissions.*.recipient_type' => ['nullable', 'in:trainer,staff'],
             'commissions.*.category' => ['required_with:commissions.*.recipient_user_id', 'in:pt,sales'],
             'commissions.*.calculation_type' => ['required_with:commissions.*.recipient_user_id', 'in:percentage,fixed'],
             'commissions.*.value' => ['nullable', 'numeric', 'min:0'],
@@ -125,12 +186,5 @@ class CompensationController extends Controller
         $this->auditLogService->log('web.gym.payroll.paid', 'create', $request, $payment, $gym, $statement->branch, [], $payment->toArray());
 
         return back()->with('status', 'Payout recorded and posted to the finance ledger.');
-    }
-
-    private function teamMembers(int $gymId)
-    {
-        return User::query()->whereHas('gyms', fn ($query) => $query->where('gyms.id', $gymId))
-            ->whereHas('roles', fn ($query) => $query->whereIn('name', ['trainer', 'gym_staff', 'branch_manager', 'gym_owner']))
-            ->with('roles')->orderBy('name')->get();
     }
 }

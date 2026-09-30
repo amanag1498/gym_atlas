@@ -230,7 +230,7 @@ class TrainerManagementFeatureTest extends TestCase
 
         $this->get(route('web.gym.trainers.create', ['gym' => $gym->id]))
             ->assertOk()
-            ->assertSee('Search users by name, email, or phone')
+            ->assertSee('Type the full account email')
             ->assertDontSee('name="password"', false);
 
         $this->getJson(route('web.gym.trainers.search.eligible-users', [
@@ -238,18 +238,25 @@ class TrainerManagementFeatureTest extends TestCase
             'q' => 'free-trainer',
         ]))
             ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->getJson(route('web.gym.trainers.search.eligible-users', [
+            'gym' => $gym->id,
+            'q' => 'free-trainer@example.com',
+        ]))
+            ->assertOk()
             ->assertJsonPath('data.0.id', $freeTrainer->id);
 
         $this->getJson(route('web.gym.trainers.search.eligible-users', [
             'gym' => $gym->id,
-            'q' => 'visible-member',
+            'q' => 'visible-member@example.com',
         ]))
             ->assertOk()
             ->assertJsonPath('data.0.id', $existingMember->id);
 
         $this->getJson(route('web.gym.trainers.search.eligible-users', [
             'gym' => $gym->id,
-            'q' => 'listed-trainer',
+            'q' => 'listed-trainer@example.com',
         ]))
             ->assertOk()
             ->assertJsonCount(0, 'data');

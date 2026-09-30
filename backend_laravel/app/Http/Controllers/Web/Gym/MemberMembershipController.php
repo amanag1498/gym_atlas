@@ -22,6 +22,7 @@ use App\Services\Audit\AuditLogService;
 use App\Services\Audit\AuditTimelineService;
 use App\Services\Billing\BillingAccessService;
 use App\Services\Billing\CommissionService;
+use App\Services\Billing\CompensationTeamService;
 use App\Services\Billing\CustomFeeAuditService;
 use App\Services\Billing\MemberMembershipLifecycleService;
 use App\Services\Billing\MembershipEnrollmentService;
@@ -122,7 +123,7 @@ class MemberMembershipController extends Controller
             'activityTimeline' => $this->auditTimelineService->forActivityLogs($activityLogs),
             'customFeeTimeline' => $this->auditTimelineService->forCustomFeeAudits($membership->customFeeAuditLogs),
             'commissionAllocations' => $membership->commissionAllocations()->with('recipient')->where('status', 'active')->get(),
-            'commissionRecipients' => $this->commissionRecipients($gym->id),
+            'commissionRecipients' => $this->commissionRecipients($gym->id, $membership->branch_id),
             'canManageMemberships' => $this->gymWebPanelService->canPermission($request, PermissionName::MembershipsManage->value, $gym, $membership->branch_id),
             'canCollectPayments' => $this->gymWebPanelService->canPermission($request, PermissionName::PaymentsManage->value, $gym, $membership->branch_id),
             'canEditCustomFee' => $this->gymWebPanelService->canPermission($request, PermissionName::EditCustomFee->value, $gym, $membership->branch_id),
@@ -290,7 +291,7 @@ class MemberMembershipController extends Controller
                 ->orderBy('name')
                 ->get(),
             'latestMembership' => $latestMembership,
-            'commissionRecipients' => $this->commissionRecipients($gym->id),
+            'commissionRecipients' => $this->commissionRecipients($gym->id, $memberProfile->branch_id),
             'assignedTrainerId' => $memberProfile->assigned_trainer_user_id,
         ]);
     }
@@ -383,14 +384,9 @@ class MemberMembershipController extends Controller
     }
 
     /** @return Collection<int, User> */
-    private function commissionRecipients(int $gymId)
+    private function commissionRecipients(int $gymId, ?int $branchId = null)
     {
-        return User::query()
-            ->whereHas('gyms', fn ($query) => $query->where('gyms.id', $gymId))
-            ->whereHas('roles', fn ($query) => $query->whereIn('name', ['trainer', 'gym_staff', 'branch_manager', 'gym_owner']))
-            ->with('roles')
-            ->orderBy('name')
-            ->get();
+        return app(CompensationTeamService::class)->eligibleRecipients($gymId, $branchId);
     }
 
     public function renew(RenewMembershipRequest $request, MemberMembership $membership): RedirectResponse

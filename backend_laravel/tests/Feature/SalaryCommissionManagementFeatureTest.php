@@ -12,8 +12,10 @@ use App\Models\MemberMembership;
 use App\Models\MemberProfile;
 use App\Models\MembershipPlan;
 use App\Models\PayrollStatement;
+use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Services\Billing\CommissionService;
+use App\Services\Billing\CompensationTeamService;
 use App\Services\Billing\MemberMembershipLifecycleService;
 use App\Services\Billing\PaymentService;
 use App\Services\Billing\PayrollService;
@@ -94,6 +96,13 @@ class SalaryCommissionManagementFeatureTest extends TestCase
         $this->assertEquals(1750.0, (float) $statement->commission_amount);
         $this->assertEquals(11750.0, (float) $statement->net_payable_amount);
 
+        $this->actingAs($owner)
+            ->get(route('web.gym.compensation.statements.show', ['gym' => $gym->id, 'statement' => $statement->id]))
+            ->assertOk()
+            ->assertSee($trainer->name)
+            ->assertSee('Commission sources')
+            ->assertSee('₹1,750.00');
+
         $payout = $payroll->pay($statement, $owner, ['amount' => 11750, 'payment_mode' => 'bank', 'reference' => 'BANK-1', 'paid_at' => now()]);
         $this->assertSame('paid', $statement->fresh()->status);
         $entry = GymLedgerEntry::query()->findOrFail($payout->gym_ledger_entry_id);
@@ -114,13 +123,46 @@ class SalaryCommissionManagementFeatureTest extends TestCase
 
     public function test_gym_owner_can_open_salary_and_commission_workspace(): void
     {
-        [$owner, , , , $gym] = $this->fixtures();
+        [$owner, $trainer, $staff, , $gym] = $this->fixtures();
 
         $this->actingAs($owner)
             ->get(route('web.gym.compensation.index', ['gym' => $gym->id]))
             ->assertOk()
             ->assertSee('Salary &amp; Commission', false)
-            ->assertSee('Generate monthly statements');
+            ->assertSee('Generate monthly statements')
+            ->assertSee($trainer->name)
+            ->assertSee($staff->name);
+
+        $this->actingAs($owner)
+            ->post(route('web.gym.compensation.profiles.store', ['gym' => $gym->id]), [
+                'user_id' => $owner->id,
+                'monthly_salary' => 10000,
+                'payout_day' => 1,
+                'is_active' => 1,
+            ])
+            ->assertStatus(422);
+    }
+
+    public function test_compensation_recipients_are_limited_to_the_selected_gym_branch(): void
+    {
+        [$owner, $trainer, $staff, , $gym] = $this->fixtures();
+        $otherBranch = Branch::query()->create([
+            'gym_id' => $gym->id,
+            'name' => 'Other',
+            'slug' => fake()->unique()->slug(),
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+
+        $service = app(CompensationTeamService::class);
+        $mainRecipients = $service->eligibleRecipients($gym->id);
+        $otherBranchRecipients = $service->eligibleRecipients($gym->id, $otherBranch->id);
+
+        $this->assertTrue($mainRecipients->contains('id', $trainer->id));
+        $this->assertTrue($mainRecipients->contains('id', $staff->id));
+        $this->assertFalse($mainRecipients->contains('id', $owner->id));
+        $this->assertFalse($otherBranchRecipients->contains('id', $trainer->id));
+        $this->assertFalse($otherBranchRecipients->contains('id', $staff->id));
     }
 
     private function fixtures(): array
@@ -131,10 +173,17 @@ class SalaryCommissionManagementFeatureTest extends TestCase
         $member = $this->roleUser(RoleName::Member->value);
         $gym = Gym::query()->create(['owner_user_id' => $owner->id, 'name' => 'Commission Gym', 'slug' => fake()->unique()->slug(), 'status' => 'active', 'approval_status' => 'approved', 'is_active' => true]);
         $branch = Branch::query()->create(['gym_id' => $gym->id, 'name' => 'Main', 'slug' => fake()->unique()->slug(), 'status' => 'active', 'is_active' => true]);
-        foreach ([$owner, $trainer, $staff] as $person) {
-            $person->gyms()->attach($gym->id, ['is_primary' => true]);
+        foreach ([[$owner, RoleName::GymOwner->value], [$trainer, RoleName::Trainer->value], [$staff, RoleName::GymStaff->value]] as [$person, $role]) {
+            $person->gyms()->attach($gym->id, ['is_primary' => true, 'role_name' => $role, 'status' => 'active']);
             $person->branches()->attach($branch->id, ['is_primary' => true]);
         }
+        TrainerProfile::query()->create([
+            'user_id' => $trainer->id,
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'status' => 'active',
+            'is_active' => true,
+        ]);
         MemberProfile::query()->create(['user_id' => $member->id, 'gym_id' => $gym->id, 'branch_id' => $branch->id, 'assigned_trainer_user_id' => $trainer->id, 'membership_status' => 'active', 'is_active' => true]);
         $plan = MembershipPlan::query()->create(['gym_id' => $gym->id, 'branch_id' => $branch->id, 'name' => 'Monthly PT', 'duration_days' => 30, 'plan_price' => 1500, 'joining_fee' => 0, 'pt_included' => true, 'status' => 'active', 'created_by_user_id' => $owner->id]);
         $membership = MemberMembership::query()->create(['gym_id' => $gym->id, 'branch_id' => $branch->id, 'member_id' => $member->id, 'membership_plan_id' => $plan->id, 'start_date' => now()->toDateString(), 'expiry_date' => now()->addDays(30)->toDateString(), 'status' => 'active', 'default_plan_price' => 1500, 'default_joining_fee' => 0, 'custom_fee_enabled' => false, 'custom_fee_amount' => 0, 'discount_type' => 'none', 'discount_amount' => 0, 'custom_joining_fee' => 0, 'joining_fee_waived' => true, 'partial_month_fee' => 0, 'pt_custom_fee' => 3500, 'final_payable_amount' => 5000, 'amount_paid' => 0, 'due_amount' => 5000, 'due_date' => now()->addDays(30), 'payment_status' => 'unpaid', 'custom_fee_reason' => 'PT package', 'approved_by_admin_id' => $owner->id]);
