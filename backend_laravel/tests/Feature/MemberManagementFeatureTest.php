@@ -82,6 +82,12 @@ class MemberManagementFeatureTest extends TestCase
 
         $this->loginGymUser($owner);
 
+        $this->get(route('web.gym.members.create', ['gym' => $gym->id, 'branch' => $branch->id]))
+            ->assertOk()
+            ->assertSee('Split the PT extra at enrollment')
+            ->assertSee($trainer->name)
+            ->assertSee('data-branch-ids="'.$branch->id.'"', false);
+
         $this->post(route('web.gym.members.store', ['gym' => $gym->id, 'branch' => $branch->id]), [
             'name' => 'Riya Member',
             'email' => 'riya-member@example.com',

@@ -226,13 +226,7 @@
                                         <select id="commission-recipient-{{ $row }}" name="commissions[{{ $row }}][recipient_user_id]" class="panel-select" data-commission-recipient>
                                             <option value="">No commission</option>
                                             @foreach($commissionRecipients as $recipient)
-                                                @php
-                                                    $recipientBranchIds = $recipient->branches->where('gym_id', $gym->id)->pluck('id');
-                                                    if ($recipient->managedTrainerProfile?->branch_id) {
-                                                        $recipientBranchIds->push($recipient->managedTrainerProfile->branch_id);
-                                                    }
-                                                @endphp
-                                                <option value="{{ $recipient->id }}" data-branch-ids="{{ $recipientBranchIds->unique()->implode(',') }}" @selected((int)($savedCommission['recipient_user_id'] ?? 0) === $recipient->id)>
+                                                <option value="{{ $recipient->id }}" data-branch-ids="{{ implode(',', $recipient->getAttribute('compensation_branch_ids') ?? []) }}" @selected((int)($savedCommission['recipient_user_id'] ?? 0) === $recipient->id)>
                                                     {{ $recipient->name }} · {{ ucfirst($recipient->getAttribute('compensation_role')) }}
                                                 </option>
                                             @endforeach

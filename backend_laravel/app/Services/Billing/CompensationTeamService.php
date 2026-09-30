@@ -22,12 +22,23 @@ class CompensationTeamService
             ->get()
             ->each(function (User $user) use ($gymId): void {
                 $profile = $user->managedTrainerProfile;
+                $branchIds = $user->branches
+                    ->where('gym_id', $gymId)
+                    ->pluck('id');
+                if ($profile?->branch_id) {
+                    $branchIds->push($profile->branch_id);
+                }
                 $user->setAttribute('compensation_role', $profile
                     && (int) $profile->gym_id === $gymId
                     && $profile->is_active
                     && $profile->status === 'active'
                         ? 'trainer'
                         : 'staff');
+                $user->setAttribute('compensation_branch_ids', $branchIds
+                    ->map(fn ($branchId): int => (int) $branchId)
+                    ->unique()
+                    ->values()
+                    ->all());
             });
     }
 
