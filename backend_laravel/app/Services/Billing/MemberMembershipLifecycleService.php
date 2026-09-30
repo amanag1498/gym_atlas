@@ -122,6 +122,12 @@ class MemberMembershipLifecycleService
 
     public function extend(MemberMembership $membership, int $extraDays, ?string $dueDate = null): MemberMembership
     {
+        if ($membership->status === MembershipStatus::Cancelled->value) {
+            throw ValidationException::withMessages([
+                'membership' => ['A cancelled membership cannot be extended. Renew it to create a new cycle.'],
+            ]);
+        }
+
         $expiry = Carbon::parse($membership->expiry_date)->addDays($extraDays);
         $membership->expiry_date = $expiry->toDateString();
 
@@ -142,6 +148,12 @@ class MemberMembershipLifecycleService
 
     public function cancel(MemberMembership $membership): MemberMembership
     {
+        if ($membership->status === MembershipStatus::Cancelled->value) {
+            throw ValidationException::withMessages([
+                'membership' => ['This membership is already cancelled.'],
+            ]);
+        }
+
         return DB::transaction(function () use ($membership): MemberMembership {
             $membership = MemberMembership::query()->lockForUpdate()->findOrFail($membership->id);
             $membership->status = MembershipStatus::Cancelled->value;

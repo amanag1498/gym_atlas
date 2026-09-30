@@ -87,7 +87,10 @@ class MembershipLifecycleFeatureTest extends TestCase
         $this->get(route('web.gym.memberships.active', ['gym' => $gym->id, 'branch' => $branch->id]))
             ->assertOk()
             ->assertSee('Active Memberships')
-            ->assertSee('Quarterly');
+            ->assertSee('Quarterly')
+            ->assertSee('Pause')
+            ->assertSee('Extend')
+            ->assertSee('Cancel');
     }
 
     public function test_membership_renew_freeze_extend_and_cancel_work_without_corrupting_old_snapshot(): void
@@ -146,6 +149,24 @@ class MembershipLifecycleFeatureTest extends TestCase
 
         $this->loginGymUser($owner);
 
+        $this->get(route('web.gym.memberships.show', ['gym' => $gym->id, 'branch' => $branch->id, 'membership' => $membership->id]))
+            ->assertOk()
+            ->assertSee('Membership controls')
+            ->assertSee('Pause Membership')
+            ->assertSee('Extend Membership')
+            ->assertSee('Cancel Membership');
+
+        $this->get(route('web.gym.memberships.show', [
+            'gym' => $gym->id,
+            'branch' => $branch->id,
+            'membership' => $membership->id,
+            'flow' => 'lifecycle',
+            'action' => 'freeze',
+        ]))
+            ->assertOk()
+            ->assertSee('id="status-control"', false)
+            ->assertSee('id="pause-membership"', false);
+
         $attendanceReminder = ScheduledReminder::query()->create([
             'user_id' => $member->id,
             'gym_id' => $gym->id,
@@ -168,6 +189,14 @@ class MembershipLifecycleFeatureTest extends TestCase
             'type' => ReminderType::AttendanceInactivity->value,
             'status' => 'pending',
         ]);
+
+        $this->get(route('web.gym.memberships.show', ['gym' => $gym->id, 'branch' => $branch->id, 'membership' => $membership->id]))
+            ->assertOk()
+            ->assertSee('Resume Membership');
+
+        $this->post(route('web.gym.memberships.reactivate', ['gym' => $gym->id, 'branch' => $branch->id, 'membership' => $membership->id]))
+            ->assertRedirect();
+        $this->assertSame('active', $membership->fresh()->status);
 
         $originalExpiry = $membership->expiry_date?->toDateString();
 
@@ -202,6 +231,15 @@ class MembershipLifecycleFeatureTest extends TestCase
             ->assertRedirect();
 
         $this->assertSame('cancelled', $renewed->fresh()->status);
+
+        $cancelledExpiry = $renewed->expiry_date?->toDateString();
+        $this->post(route('web.gym.memberships.extend', ['gym' => $gym->id, 'branch' => $branch->id, 'membership' => $renewed->id]), [
+            'extra_days' => 7,
+        ])->assertSessionHasErrors('membership');
+        $this->assertSame($cancelledExpiry, $renewed->fresh()->expiry_date?->toDateString());
+
+        $this->post(route('web.gym.memberships.cancel', ['gym' => $gym->id, 'branch' => $branch->id, 'membership' => $renewed->id]))
+            ->assertSessionHasErrors('membership');
     }
 
     public function test_api_membership_alias_routes_work(): void

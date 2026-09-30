@@ -11,10 +11,17 @@
         $creditAmount = abs((float) $membership->due_amount);
         $plan = $membership->membershipPlan;
         $focusLifecycle = request('flow') === 'lifecycle';
+        $lifecycleAction = request('action');
         $renewalStartDate = optional($membership->expiry_date)->copy()?->addDay() ?? now();
         $renewalProjectedEnd = $renewalStartDate->copy()->addDays((int) ($plan?->duration_days ?? 0));
-        $overviewHref = route('web.gym.memberships.show', ['membership' => $membership->id] + request()->except('flow'));
-        $workspaceHref = route('web.gym.memberships.show', ['membership' => $membership->id] + request()->query() + ['flow' => 'lifecycle']);
+        $overviewHref = route('web.gym.memberships.show', ['membership' => $membership->id] + request()->except(['flow', 'action']));
+        $workspaceHref = route('web.gym.memberships.show', ['membership' => $membership->id] + request()->except('action') + ['flow' => 'lifecycle']);
+        $lifecycleHref = fn (string $action, string $anchor) => route('web.gym.memberships.show', [
+            'membership' => $membership->id,
+            ...request()->only(['gym', 'branch']),
+            'flow' => 'lifecycle',
+            'action' => $action,
+        ]).'#'.$anchor;
     @endphp
 
     <div class="space-y-6">
@@ -122,6 +129,29 @@
                 <a href="{{ $workspaceHref }}" class="panel-btn-primary whitespace-nowrap">Open Action Workspace</a>
             @endif
         </div>
+
+        @if ($canManageMemberships)
+            <section class="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Membership controls</p>
+                        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Choose an action to open its form with the current member and membership already selected.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <x-action-button as="a" href="{{ $lifecycleHref('renew', 'renew-membership') }}">Renew</x-action-button>
+                        @if ($isFrozen)
+                            <x-action-button as="a" variant="secondary" href="{{ $lifecycleHref('reactivate', 'reactivate-membership') }}">Resume Membership</x-action-button>
+                        @elseif (! $isCancelled)
+                            <x-action-button as="a" variant="secondary" href="{{ $lifecycleHref('freeze', 'pause-membership') }}">Pause Membership</x-action-button>
+                        @endif
+                        @if (! $isCancelled)
+                            <x-action-button as="a" variant="secondary" href="{{ $lifecycleHref('extend', 'extend-membership') }}">Extend Membership</x-action-button>
+                            <x-action-button as="a" variant="danger" href="{{ $lifecycleHref('cancel', 'cancel-membership') }}">Cancel Membership</x-action-button>
+                        @endif
+                    </div>
+                </div>
+            </section>
+        @endif
 
         <div class="grid gap-6 {{ $focusLifecycle ? '' : 'xl:grid-cols-[1.05fr_0.95fr]' }}">
             @if (! $focusLifecycle)
@@ -411,7 +441,7 @@
                         @endif
 
                         @if ($canManageMemberships)
-                            <details class="group rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-900/60" id="renew-membership" @if (request('flow') === 'lifecycle') open @endif>
+                            <details class="group rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-900/60" id="renew-membership" @if ($lifecycleAction === null || $lifecycleAction === 'renew') open @endif>
                                 <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
                                     <div>
                                         <p class="text-sm font-semibold text-slate-950 dark:text-white">2. Next cycle and renewal</p>
@@ -458,7 +488,7 @@
                                 </form>
                             </details>
 
-                            <details class="group rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-900/60" id="status-control">
+                            <details class="group rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-900/60" id="status-control" @if ($lifecycleAction === null || in_array($lifecycleAction, ['freeze', 'reactivate', 'extend', 'cancel'], true)) open @endif>
                                 <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
                                     <div>
                                         <p class="text-sm font-semibold text-slate-950 dark:text-white">3. Cycle and status controls</p>
@@ -469,7 +499,7 @@
 
                                 <div class="mt-4 grid gap-4 xl:grid-cols-2">
                                     @if ($isFrozen)
-                                        <form method="POST" action="{{ route('web.gym.memberships.reactivate', ['membership' => $membership->id] + request()->query()) }}" class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/70">
+                                        <form id="reactivate-membership" method="POST" action="{{ route('web.gym.memberships.reactivate', ['membership' => $membership->id] + request()->query()) }}" class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/70">
                                             @csrf
                                             <div>
                                                 <p class="text-sm font-semibold text-slate-950 dark:text-white">Reactivate membership</p>
@@ -485,7 +515,7 @@
                                             <x-action-button type="submit">Resume & Extend Membership</x-action-button>
                                         </form>
                                     @elseif (! $isCancelled)
-                                        <form method="POST" action="{{ route('web.gym.memberships.freeze', ['membership' => $membership->id] + request()->query()) }}" class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/70">
+                                        <form id="pause-membership" method="POST" action="{{ route('web.gym.memberships.freeze', ['membership' => $membership->id] + request()->query()) }}" class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/70">
                                             @csrf
                                             <div>
                                                 <p class="text-sm font-semibold text-slate-950 dark:text-white">Pause current cycle</p>
@@ -500,7 +530,7 @@
                                     @endif
 
                                     @if (! $isCancelled)
-                                        <form method="POST" action="{{ route('web.gym.memberships.extend', ['membership' => $membership->id] + request()->query()) }}" class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/70">
+                                        <form id="extend-membership" method="POST" action="{{ route('web.gym.memberships.extend', ['membership' => $membership->id] + request()->query()) }}" class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/70">
                                             @csrf
                                             <div>
                                                 <p class="text-sm font-semibold text-slate-950 dark:text-white">Extend current cycle</p>
@@ -517,7 +547,7 @@
                                     @endif
 
                                     @if (! $isCancelled)
-                                        <form method="POST" action="{{ route('web.gym.memberships.cancel', ['membership' => $membership->id] + request()->query()) }}" class="grid gap-3 rounded-2xl border border-rose-200/80 bg-rose-50/70 p-4 dark:border-rose-500/20 dark:bg-rose-500/10 xl:col-span-2">
+                                        <form id="cancel-membership" method="POST" action="{{ route('web.gym.memberships.cancel', ['membership' => $membership->id] + request()->query()) }}" class="grid gap-3 rounded-2xl border border-rose-200/80 bg-rose-50/70 p-4 dark:border-rose-500/20 dark:bg-rose-500/10 xl:col-span-2">
                                             @csrf
                                             <div>
                                                 <p class="text-sm font-semibold text-rose-900 dark:text-rose-100">Cancel membership</p>

@@ -218,7 +218,17 @@
                                                 <x-action-button as="a" variant="secondary" href="{{ route('web.gym.payments.create', array_merge(request()->only(['gym', 'branch']), ['member_membership_id' => $membership->id])) }}">Collect</x-action-button>
                                             @endif
                                             @if ($canManageMemberships)
-                                                <x-action-button as="a" href="{{ route('web.gym.memberships.show', ['membership' => $membership->id] + request()->query() + ['flow' => 'lifecycle']) }}">Open Workspace</x-action-button>
+                                                @if ($membership->status === 'frozen')
+                                                    <x-action-button as="a" href="{{ route('web.gym.memberships.show', ['membership' => $membership->id, ...request()->only(['gym', 'branch']), 'flow' => 'lifecycle', 'action' => 'reactivate']).'#reactivate-membership' }}">Resume</x-action-button>
+                                                @elseif ($membership->status !== 'cancelled')
+                                                    <x-action-button as="a" variant="secondary" href="{{ route('web.gym.memberships.show', ['membership' => $membership->id, ...request()->only(['gym', 'branch']), 'flow' => 'lifecycle', 'action' => 'freeze']).'#pause-membership' }}">Pause</x-action-button>
+                                                @endif
+                                                @if ($membership->status !== 'cancelled')
+                                                    <x-action-button as="a" variant="secondary" href="{{ route('web.gym.memberships.show', ['membership' => $membership->id, ...request()->only(['gym', 'branch']), 'flow' => 'lifecycle', 'action' => 'extend']).'#extend-membership' }}">Extend</x-action-button>
+                                                    <x-action-button as="a" variant="danger" href="{{ route('web.gym.memberships.show', ['membership' => $membership->id, ...request()->only(['gym', 'branch']), 'flow' => 'lifecycle', 'action' => 'cancel']).'#cancel-membership' }}">Cancel</x-action-button>
+                                                @else
+                                                    <x-action-button as="a" href="{{ route('web.gym.memberships.show', ['membership' => $membership->id, ...request()->only(['gym', 'branch']), 'flow' => 'lifecycle', 'action' => 'renew']).'#renew-membership' }}">Renew</x-action-button>
+                                                @endif
                                             @endif
                                         </div>
                                     </td>
