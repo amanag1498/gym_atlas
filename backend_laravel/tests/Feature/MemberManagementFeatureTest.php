@@ -538,7 +538,12 @@ class MemberManagementFeatureTest extends TestCase
 
         $this->get(route('web.gym.members.index', ['gym' => $gym->id, 'status' => 'overdue']))
             ->assertOk()
-            ->assertSee('member-a-filter@example.com');
+            ->assertSee('member-a-filter@example.com')
+            ->assertSee('Advanced filters')
+            ->assertSee('Import CSV')
+            ->assertDontSee('Open Create Flow')
+            ->assertDontSee('Immediate member pressure')
+            ->assertDontSee('Preview CSV before intake');
 
         $this->get(route('web.gym.members.index', ['gym' => $gym->id, 'trainer_id' => $trainer->id]))
             ->assertOk()

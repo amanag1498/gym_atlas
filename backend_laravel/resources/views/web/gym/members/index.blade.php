@@ -3,162 +3,117 @@
 @section('content')
     @php
         $memberCollection = $members->getCollection();
-        $visibleMembersCount = $memberCollection->count();
         $highRiskCount = $memberCollection->filter(fn ($member) => (($member->engagement_score['category'] ?? $member->memberProfile?->engagement_score['category'] ?? null) === 'High Risk'))->count();
         $noTrainerCount = $memberCollection->filter(fn ($member) => blank($member->memberProfile?->assignedTrainer?->name))->count();
         $expiringSoonCount = $memberCollection->filter(fn ($member) => in_array(strtolower((string) ($member->memberProfile?->membership_status ?? '')), ['expiring soon', 'expiring_soon'], true))->count();
         $dueMembersCount = $memberCollection->filter(fn ($member) => (float) ($member->memberMemberships->first()?->due_amount ?? 0) > 0)->count();
-        $assignedTrainerCount = max(0, $visibleMembersCount - $noTrainerCount);
-        $appActiveCount = collect($memberAppPresenceSummaries ?? [])->filter(fn ($presence) => ($presence['status'] ?? null) === 'active')->count();
+        $advancedFiltersActive = request()->filled('trainer_id')
+            || request()->filled('plan_id')
+            || request()->filled('gender')
+            || request()->filled('goal')
+            || request()->boolean('no_trainer_assigned')
+            || request()->boolean('inactive_7_days');
     @endphp
 
     <div class="space-y-4">
         <section class="overflow-hidden rounded-[28px] border border-slate-200/80 bg-linear-to-br from-slate-950 via-slate-900 to-sky-950 text-white shadow-[0_24px_80px_-36px_rgba(15,23,42,0.75)] dark:border-slate-800">
-            <div class="grid gap-6 px-5 py-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] lg:px-6">
+            <div class="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between lg:px-6">
                 <div>
-                    <div class="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-100">
-                        Member Operations
-                    </div>
-                    <h1 class="mt-4 text-3xl font-semibold tracking-tight">Member Directory</h1>
-                    <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-                        Profiles, trainer allocation, membership pressure, and day-to-day follow-up in one operator-grade workspace.
-                    </p>
-                    <div class="mt-5 flex flex-wrap gap-2">
-                        <x-action-button as="a" href="{{ route('web.gym.members.create', request()->query()) }}">Add Member</x-action-button>
-                        <x-action-button as="a" variant="secondary" href="{{ route('web.gym.self-enrollment.index', request()->query()) }}">Enrollment QR</x-action-button>
-                        <x-action-button as="a" variant="secondary" href="{{ request()->fullUrlWithQuery(['export' => 'csv']) }}">Export CSV</x-action-button>
-                        <x-action-button as="a" variant="secondary" href="{{ route('web.gym.reports.index', array_merge(request()->query(), ['report' => 'inactive_members'])) }}">Inactive Report</x-action-button>
-                        <x-action-button as="a" variant="secondary" href="{{ route('web.gym.memberships.index', request()->query()) }}">Open Memberships</x-action-button>
-                    </div>
+                    <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Members</h1>
+                    <p class="mt-1 text-sm text-slate-300">{{ $members->total() }} in this result</p>
                 </div>
-
-                <div class="grid gap-3 sm:grid-cols-2">
-                    <div class="rounded-[22px] border border-white/10 bg-white/8 p-4 backdrop-blur">
-                        <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-100/80">Visible Members</div>
-                        <div class="mt-2 text-2xl font-semibold tracking-tight">{{ $visibleMembersCount }}</div>
-                        <div class="mt-1 text-sm text-slate-300">members on this page</div>
-                    </div>
-                    <div class="rounded-[22px] border border-white/10 bg-white/8 p-4 backdrop-blur">
-                        <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-100/80">Trainer Coverage</div>
-                        <div class="mt-2 text-2xl font-semibold tracking-tight">{{ $assignedTrainerCount }}</div>
-                        <div class="mt-1 text-sm text-slate-300">{{ $noTrainerCount }} still unassigned</div>
-                    </div>
-                    <div class="rounded-[22px] border border-white/10 bg-white/8 p-4 backdrop-blur">
-                        <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-100/80">Payment Pressure</div>
-                        <div class="mt-2 text-2xl font-semibold tracking-tight">{{ $dueMembersCount }}</div>
-                        <div class="mt-1 text-sm text-slate-300">members with open due</div>
-                    </div>
-                    <div class="rounded-[22px] border border-white/10 bg-white/8 p-4 backdrop-blur">
-                        <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-100/80">Risk Watch</div>
-                        <div class="mt-2 text-2xl font-semibold tracking-tight">{{ $highRiskCount }}</div>
-                        <div class="mt-1 text-sm text-slate-300">high-risk engagement profiles</div>
-                    </div>
+                <div class="flex flex-wrap gap-2">
+                    <x-action-button as="a" href="{{ route('web.gym.members.create', request()->query()) }}">Add Member</x-action-button>
+                    <x-action-button as="a" variant="secondary" href="{{ route('web.gym.self-enrollment.index', request()->query()) }}">Enrollment QR</x-action-button>
                 </div>
             </div>
         </section>
 
-        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-            <x-stat-card label="Filtered Members" :value="$members->total()" hint="Current result set" tone="sky" />
-            <x-stat-card label="High Risk" :value="$highRiskCount" hint="Needs intervention" tone="rose" />
-            <x-stat-card label="No Trainer" :value="$noTrainerCount" hint="Coverage gap" tone="amber" />
-            <x-stat-card label="Expiring Soon" :value="$expiringSoonCount" hint="Renewal pressure" tone="violet" />
-            <x-stat-card label="Due Now" :value="$dueMembersCount" hint="Billing follow-up" tone="emerald" />
-            <x-stat-card label="App Active" :value="$appActiveCount" hint="Seen in 30 days" tone="indigo" />
+        <div class="grid grid-cols-2 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950 lg:grid-cols-5">
+            @foreach ([
+                ['label' => 'Members', 'value' => $members->total(), 'href' => route('web.gym.members.index', request()->only(['gym', 'branch']))],
+                ['label' => 'Due', 'value' => $dueMembersCount, 'href' => request()->fullUrlWithQuery(['status' => 'due_payment'])],
+                ['label' => 'High risk', 'value' => $highRiskCount, 'href' => null],
+                ['label' => 'No trainer', 'value' => $noTrainerCount, 'href' => request()->fullUrlWithQuery(['no_trainer_assigned' => 1])],
+                ['label' => 'Expiring', 'value' => $expiringSoonCount, 'href' => request()->fullUrlWithQuery(['status' => 'expiring_soon'])],
+            ] as $metric)
+                @if ($metric['href'])
+                    <a href="{{ $metric['href'] }}" class="{{ $loop->last ? 'col-span-2 lg:col-span-1' : '' }} flex items-center justify-between border-b border-r border-slate-200/80 px-4 py-3 transition hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900/70 lg:border-b-0">
+                @else
+                    <div class="{{ $loop->last ? 'col-span-2 lg:col-span-1' : '' }} flex items-center justify-between border-b border-r border-slate-200/80 px-4 py-3 dark:border-slate-800 lg:border-b-0">
+                @endif
+                        <span class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">{{ $metric['label'] }}</span>
+                        <span class="text-lg font-semibold text-slate-950 dark:text-white">{{ $metric['value'] }}</span>
+                @if ($metric['href'])
+                    </a>
+                @else
+                    </div>
+                @endif
+            @endforeach
         </div>
 
         <div class="space-y-4">
             <x-premium-card class="overflow-hidden p-0">
-                <div class="border-b border-slate-200/80 px-5 py-4 dark:border-slate-800">
-                    <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                        <div>
-                            <h2 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Filter and Operate</h2>
-                            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Search by profile, trainer, branch, plan, dues, and inactivity without leaving the list.</p>
-                        </div>
-                        <div class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                            {{ $members->total() }} members in scope
+                <form method="GET" class="space-y-4 px-5 py-4">
+                    @if (request()->filled('gym'))
+                        <input type="hidden" name="gym" value="{{ request('gym') }}">
+                    @endif
+                    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1.5fr)_minmax(180px,0.8fr)_minmax(180px,0.8fr)_auto]">
+                        <x-form-input name="search" label="Search members" :value="request('search')" />
+                        <x-form-select name="status" label="Status" :options="['' => 'All statuses', 'active' => 'Active', 'frozen' => 'Frozen', 'inactive' => 'Inactive', 'expired' => 'Expired', 'cancelled' => 'Cancelled', 'left_gym' => 'Left gym', 'expiring_soon' => 'Expiring Soon', 'due_payment' => 'Due Payment', 'overdue' => 'Overdue']" :selected="request('status')" />
+                        <x-form-select name="branch_id" label="Branch" :options="['' => 'All branches'] + $branches->pluck('name', 'id')->all()" :selected="request('branch_id')" />
+                        <div class="flex items-end gap-2">
+                            <x-action-button type="submit">Apply</x-action-button>
+                            <x-action-button as="a" variant="secondary" href="{{ route('web.gym.members.index', request()->only(['gym', 'branch'])) }}">Reset</x-action-button>
                         </div>
                     </div>
-                </div>
 
-                <form method="GET" class="grid gap-3 px-5 py-4 md:grid-cols-2 xl:grid-cols-6">
-                    <x-form-input name="search" label="Search" :value="request('search')" />
-                    <x-form-select name="status" label="Status" :options="['' => 'All statuses', 'active' => 'Active', 'frozen' => 'Frozen', 'inactive' => 'Inactive', 'expired' => 'Expired', 'cancelled' => 'Cancelled', 'left_gym' => 'Left gym', 'expiring_soon' => 'Expiring Soon', 'due_payment' => 'Due Payment', 'overdue' => 'Overdue']" :selected="request('status')" />
-                    <x-form-select name="trainer_id" label="Trainer" :options="['' => 'All trainers'] + $trainers->pluck('name', 'id')->all()" :selected="request('trainer_id')" />
-                    <x-form-select name="branch_id" label="Branch" :options="['' => 'All branches'] + $branches->pluck('name', 'id')->all()" :selected="request('branch_id')" />
-                    <x-form-select name="plan_id" label="Plan" :options="['' => 'All plans'] + $plans->pluck('name', 'id')->all()" :selected="request('plan_id')" />
-                    <x-form-select name="gender" label="Gender" :options="['' => 'All genders', 'male' => 'Male', 'female' => 'Female', 'other' => 'Other']" :selected="request('gender')" />
-                    <x-form-input name="goal" label="Goal" :value="request('goal')" />
-                    <label class="flex items-end">
-                        <span class="flex w-full items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                            <input type="checkbox" name="no_trainer_assigned" value="1" @checked(request()->boolean('no_trainer_assigned'))>
-                            No Trainer Assigned
-                        </span>
-                    </label>
-                    <label class="flex items-end">
-                        <span class="flex w-full items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                            <input type="checkbox" name="inactive_7_days" value="1" @checked(request()->boolean('inactive_7_days'))>
-                            Inactive 7 Days
-                        </span>
-                    </label>
-                    <div class="flex items-end gap-2 xl:col-span-2">
-                        <x-action-button type="submit">Apply Filters</x-action-button>
-                        <x-action-button as="a" variant="secondary" href="{{ route('web.gym.members.index', request()->only(['gym', 'branch'])) }}">Reset</x-action-button>
-                    </div>
+                    <details class="group" @if ($advancedFiltersActive) open @endif>
+                        <summary class="inline-flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-600 transition hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">
+                            Advanced filters
+                            <span class="text-xs transition group-open:rotate-180">⌄</span>
+                        </summary>
+                        <div class="mt-3 grid gap-3 border-t border-slate-200/80 pt-4 md:grid-cols-2 xl:grid-cols-4 dark:border-slate-800">
+                            <x-form-select name="trainer_id" label="Trainer" :options="['' => 'All trainers'] + $trainers->pluck('name', 'id')->all()" :selected="request('trainer_id')" />
+                            <x-form-select name="plan_id" label="Plan" :options="['' => 'All plans'] + $plans->pluck('name', 'id')->all()" :selected="request('plan_id')" />
+                            <x-form-select name="gender" label="Gender" :options="['' => 'All genders', 'male' => 'Male', 'female' => 'Female', 'other' => 'Other']" :selected="request('gender')" />
+                            <x-form-input name="goal" label="Goal" :value="request('goal')" />
+                            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                                <input type="checkbox" name="no_trainer_assigned" value="1" @checked(request()->boolean('no_trainer_assigned'))>
+                                No trainer assigned
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                                <input type="checkbox" name="inactive_7_days" value="1" @checked(request()->boolean('inactive_7_days'))>
+                                Inactive for 7 days
+                            </label>
+                        </div>
+                    </details>
                 </form>
             </x-premium-card>
 
-            <div class="grid gap-4 lg:grid-cols-3">
-                <x-premium-card class="p-4">
-                    <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Member intake</p>
-                    <h3 class="mt-1 text-base font-semibold tracking-tight text-slate-950 dark:text-white">Create individual member</h3>
-                    <p class="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">Use guided setup for branch, trainer, plan, and fee defaults.</p>
-                    <div class="mt-4">
-                        <x-action-button as="a" href="{{ route('web.gym.members.create', request()->query()) }}">Open Create Flow</x-action-button>
-                    </div>
-                </x-premium-card>
-
-                <x-premium-card class="p-4">
-                    <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Batch import</p>
-                    <h3 class="mt-1 text-base font-semibold tracking-tight text-slate-950 dark:text-white">Preview CSV before intake</h3>
-                    <p class="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">Supported fields include name, email, phone, gender, branch, trainer, plan, and start date.</p>
-                    <form action="{{ route('web.gym.members.import.preview', request()->query()) }}" method="POST" enctype="multipart/form-data" class="mt-4 space-y-3">
-                        @csrf
-                        <x-form-input name="members_csv" label="CSV File" type="file" required />
-                        <x-action-button type="submit" class="w-full">Preview Import</x-action-button>
-                    </form>
-                </x-premium-card>
-
-                <x-premium-card class="p-4">
-                    <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Watchlist</p>
-                    <h3 class="mt-1 text-base font-semibold tracking-tight text-slate-950 dark:text-white">Immediate member pressure</h3>
-                    <div class="mt-4 space-y-3">
-                        <div class="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/70">
-                            <span class="text-sm text-slate-600 dark:text-slate-300">Due now</span>
-                            <x-status-badge :label="$dueMembersCount" tone="warning" />
-                        </div>
-                        <div class="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/70">
-                            <span class="text-sm text-slate-600 dark:text-slate-300">High risk</span>
-                            <x-status-badge :label="$highRiskCount" tone="danger" />
-                        </div>
-                        <div class="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/70">
-                            <span class="text-sm text-slate-600 dark:text-slate-300">Expiring soon</span>
-                            <x-status-badge :label="$expiringSoonCount" tone="info" />
-                        </div>
-                    </div>
-                </x-premium-card>
+            <div class="rounded-2xl border border-slate-200/80 bg-white px-3 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+                <div class="flex flex-wrap items-center gap-2">
+                    <details class="group min-w-[12rem] flex-1">
+                        <summary class="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-2 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-900">
+                            Import CSV
+                            <span class="text-xs text-slate-500 transition group-open:rotate-180 dark:text-slate-400">⌄</span>
+                        </summary>
+                        <form action="{{ route('web.gym.members.import.preview', request()->query()) }}" method="POST" enctype="multipart/form-data" class="mt-3 grid gap-3 border-t border-slate-200/80 px-2 pt-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end dark:border-slate-800">
+                            @csrf
+                            <x-form-input name="members_csv" label="CSV file" type="file" required />
+                            <x-action-button type="submit">Preview Import</x-action-button>
+                        </form>
+                    </details>
+                    <x-action-button as="a" variant="secondary" href="{{ request()->fullUrlWithQuery(['export' => 'csv']) }}">Export CSV</x-action-button>
+                    <x-action-button as="a" variant="secondary" href="{{ route('web.gym.memberships.index', request()->query()) }}">Memberships</x-action-button>
+                    <x-action-button as="a" variant="secondary" href="{{ route('web.gym.reports.index', array_merge(request()->query(), ['report' => 'inactive_members'])) }}">Inactive Members</x-action-button>
+                </div>
             </div>
 
             <x-table-wrapper class="overflow-hidden p-0">
                 <div class="flex items-center justify-between gap-3 border-b border-slate-200/80 px-5 py-4 dark:border-slate-800">
-                    <div>
-                        <h2 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Members in scope</h2>
-                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Compact operating table for profile review, billing follow-up, and trainer actions.</p>
-                    </div>
-                    <div class="hidden md:flex md:flex-wrap md:gap-2">
-                        <x-status-badge :label="'Visible '.$visibleMembersCount" tone="info" />
-                        <x-status-badge :label="'No trainer '.$noTrainerCount" tone="warning" />
-                        <x-status-badge :label="'Due '.$dueMembersCount" tone="danger" />
-                    </div>
+                    <h2 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Member list</h2>
+                    <span class="text-sm text-slate-500 dark:text-slate-400">{{ $members->total() }} results</span>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="panel-table min-w-[1480px]">
