@@ -259,7 +259,8 @@ class MembershipLifecycleReconciliationFeatureTest extends TestCase
                 'action' => 'renew',
             ]))
             ->assertOk()
-            ->assertSee('expired cycle ready for renewal')
+            ->assertSee('Expired')
+            ->assertSee('Renew membership')
             ->assertSee('value="2026-08-12"', false);
 
         $result = app(MemberMembershipLifecycleService::class)->renew($expired->fresh(), $owner, [

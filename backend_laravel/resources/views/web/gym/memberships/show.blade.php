@@ -29,6 +29,58 @@
     @endphp
 
     <div class="space-y-6">
+        @if ($focusLifecycle)
+            <section class="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+                <div class="flex flex-col gap-5 bg-linear-to-br from-slate-950 via-slate-900 to-sky-950 px-5 py-5 text-white sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="min-w-0">
+                        <a href="{{ $overviewHref }}" class="inline-flex items-center gap-2 text-sm font-semibold text-slate-300 transition hover:text-white"><i class="ti ti-arrow-left" aria-hidden="true"></i>Membership overview</a>
+                        <div class="mt-3 flex flex-wrap items-center gap-2">
+                            <h1 class="text-2xl font-semibold tracking-tight">{{ $membership->member?->name ?? 'Member' }}</h1>
+                            <x-status-badge :label="ucfirst((string) $membership->status)" :tone="$isCancelled ? 'danger' : (($isFrozen || $isExpired) ? 'warning' : 'success')" />
+                            <x-status-badge :label="ucfirst((string) $membership->payment_status)" :tone="$hasDue ? 'warning' : 'info'" />
+                        </div>
+                        <p class="mt-1 text-sm text-slate-300">{{ $plan?->name ?? 'Membership' }} #{{ $membership->id }} · {{ $membership->branch?->name ?? 'Gym-wide' }}</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+                        <div><p class="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-400">Cycle</p><p class="mt-1 whitespace-nowrap text-sm font-semibold">{{ optional($membership->start_date)->format('d M') }} – {{ optional($membership->expiry_date)->format('d M Y') }}</p></div>
+                        <div><p class="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-400">Paid</p><p class="mt-1 whitespace-nowrap text-sm font-semibold">₹{{ number_format((float) $membership->amount_paid, 2) }}</p></div>
+                        <div><p class="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-400">Due</p><p class="mt-1 whitespace-nowrap text-sm font-semibold">₹{{ number_format(max(0, (float) $membership->due_amount), 2) }}</p></div>
+                        <div><p class="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-400">Due date</p><p class="mt-1 whitespace-nowrap text-sm font-semibold">{{ optional($membership->due_date)->format('d M Y') ?: 'Not set' }}</p></div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-3 px-5 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="flex flex-wrap gap-2">
+                        @if ($canCollectPayments && ($hasDue || (float) $membership->amount_paid > 0))
+                            <x-action-button as="a" variant="secondary" href="{{ $lifecycleHref('payment', 'payment-actions') }}">Payment</x-action-button>
+                        @endif
+                        @if ($canManageMemberships)
+                            <x-action-button as="a" href="{{ $lifecycleHref('renew', 'renew-membership') }}">Renew</x-action-button>
+                            @if ($isFrozen)
+                                <x-action-button as="a" variant="secondary" href="{{ $lifecycleHref('reactivate', 'status-control') }}">Resume</x-action-button>
+                            @elseif (! $isCancelled)
+                                <x-action-button as="a" variant="secondary" href="{{ $lifecycleHref('freeze', 'status-control') }}">Pause</x-action-button>
+                            @endif
+                            @if (! $isCancelled)
+                                <x-action-button as="a" variant="secondary" href="{{ $lifecycleHref('extend', 'status-control') }}">Extend</x-action-button>
+                                <x-action-button as="a" variant="danger" href="{{ $lifecycleHref('cancel', 'status-control') }}">Cancel</x-action-button>
+                            @endif
+                        @endif
+                    </div>
+                    <div class="flex flex-wrap gap-2 text-sm">
+                        @if ($membership->member_id)
+                            <a href="{{ route('web.gym.members.show', ['member' => $membership->member_id] + request()->only(['gym', 'branch'])) }}" class="font-semibold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Member profile</a>
+                            <span class="text-slate-300 dark:text-slate-700">·</span>
+                            <a href="{{ route('web.gym.members.assign-membership', ['member' => $membership->member_id] + request()->only(['gym', 'branch'])) }}" class="font-semibold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Change plan</a>
+                        @endif
+                        @if ($canEditCustomFee && $membership->member_id)
+                            <span class="text-slate-300 dark:text-slate-700">·</span>
+                            <a href="{{ route('web.gym.members.custom-fee', ['member' => $membership->member_id, 'member_membership_id' => $membership->id] + request()->only(['gym', 'branch'])) }}" class="font-semibold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Pricing</a>
+                        @endif
+                    </div>
+                </div>
+            </section>
+        @else
         <section class="overflow-hidden rounded-[30px] border border-slate-200/80 bg-white shadow-[0_30px_90px_-55px_rgba(15,23,42,0.45)] dark:border-slate-800 dark:bg-slate-950">
             <div class="grid gap-6 border-b border-slate-200/80 bg-linear-to-br from-slate-950 via-slate-900 to-sky-950 px-5 py-6 text-white dark:border-slate-800 lg:grid-cols-[minmax(0,1.15fr)_360px] lg:px-6">
                 <div>
@@ -118,7 +170,9 @@
                 </div>
             </div>
         </section>
+        @endif
 
+        @if (! $focusLifecycle)
         <div class="flex flex-col gap-3 rounded-2xl border border-sky-200 bg-sky-50/80 px-5 py-4 text-sky-950 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-100 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <p class="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">Recommended next action</p>
@@ -135,8 +189,9 @@
                 <a href="{{ $workspaceHref }}" class="panel-btn-primary whitespace-nowrap">Open Action Workspace</a>
             @endif
         </div>
+        @endif
 
-        @if ($canManageMemberships)
+        @if ($canManageMemberships && ! $focusLifecycle)
             <section class="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm dark:border-slate-800 dark:bg-slate-950">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
@@ -300,90 +355,13 @@
             @endif
 
             <div class="space-y-6">
-                @if ($focusLifecycle)
-                <x-premium-card class="p-6 {{ $focusLifecycle ? 'ring-1 ring-sky-300/70 dark:ring-sky-500/30' : '' }}" id="lifecycle-workspace">
-                    <div class="border-b border-slate-200/80 pb-5 dark:border-slate-800">
-                        <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                            <div class="max-w-3xl">
-                                <h3 class="panel-section-title">Lifecycle Workspace</h3>
-                                <p class="panel-section-copy">Operate this membership from one control desk: collect or reverse money, prep the next cycle, switch the next plan, update pricing, and manage hold or closure states.</p>
-                            </div>
-                            <div class="flex flex-wrap gap-2">
-                                @if ($membership->member_id)
-                                    <a href="{{ route('web.gym.members.show', ['member' => $membership->member_id] + request()->query()) }}" class="panel-btn-secondary">Member</a>
-                                    <a href="{{ route('web.gym.members.assign-membership', ['member' => $membership->member_id] + request()->query()) }}" class="panel-btn-secondary">Change Plan</a>
-                                @endif
-                                @if ($canEditCustomFee && $membership->member_id)
-                                    <a href="{{ route('web.gym.members.custom-fee', ['member' => $membership->member_id, 'member_membership_id' => $membership->id] + request()->query()) }}" class="panel-btn-primary">Pricing Desk</a>
-                                @endif
-                            </div>
-                        </div>
-
-                        <div class="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-5">
-                            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
-                                <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">State</p>
-                                <p class="mt-2 text-base font-semibold text-slate-950 dark:text-white">{{ ucfirst((string) $membership->status) }}</p>
-                            </div>
-                            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
-                                <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Billing</p>
-                                <p class="mt-2 text-base font-semibold text-slate-950 dark:text-white">{{ ucfirst((string) $membership->payment_status) }}</p>
-                            </div>
-                            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
-                                <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Due / Credit</p>
-                                <p class="mt-2 text-base font-semibold text-slate-950 dark:text-white">
-                                    @if ($hasCredit)
-                                        Credit ₹{{ number_format($creditAmount, 2) }}
-                                    @else
-                                        Due ₹{{ number_format((float) $membership->due_amount, 2) }}
-                                    @endif
-                                </p>
-                            </div>
-                            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
-                                <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Current due date</p>
-                                <p class="mt-2 text-base font-semibold text-slate-950 dark:text-white">{{ optional($membership->due_date)->format('d M Y') ?: 'Not set' }}</p>
-                            </div>
-                            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
-                                <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Next cycle start</p>
-                                <p class="mt-2 text-base font-semibold text-slate-950 dark:text-white">{{ $renewalStartDate->format('d M Y') }}</p>
-                            </div>
-                        </div>
-
-                        <div class="mt-5 grid gap-3 md:grid-cols-2">
-                            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
-                                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Current next step</p>
-                                <p class="mt-2 text-base font-semibold text-slate-950 dark:text-white">
-                                    @if ($isCancelled)
-                                        This membership is closed. Renew to start a fresh cycle.
-                                    @elseif ($isFrozen)
-                                        This membership is paused. Reactivate it to resume billing.
-                                    @elseif ($hasDue)
-                                        This membership has an outstanding due. Collect or settle payment first.
-                                    @elseif ($hasCredit)
-                                        This membership is carrying a credit. Review reversal or absorb it in the next cycle.
-                                    @else
-                                        This membership is healthy. Use renewal, plan change, or extension when the next cycle changes.
-                                    @endif
-                                </p>
-                            </div>
-                            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
-                                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Action map</p>
-                                <div class="mt-3 grid gap-2 sm:grid-cols-3">
-                                    <a href="#payment-actions" class="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium text-slate-700 transition hover:border-sky-300 hover:text-sky-700 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-200 dark:hover:border-sky-500/30 dark:hover:text-sky-300">1. Payment</a>
-                                    <a href="#renew-membership" class="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium text-slate-700 transition hover:border-sky-300 hover:text-sky-700 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-200 dark:hover:border-sky-500/30 dark:hover:text-sky-300">2. Next Cycle</a>
-                                    <a href="#status-control" class="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium text-slate-700 transition hover:border-sky-300 hover:text-sky-700 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-200 dark:hover:border-sky-500/30 dark:hover:text-sky-300">3. Status</a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="mt-5 space-y-4">
-                        @if ($canCollectPayments)
-                            <details class="group rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-900/60" id="payment-actions" open>
+                @if ($focusLifecycle && $lifecycleAction)
+                <x-premium-card class="p-5" id="lifecycle-workspace">
+                    <div class="space-y-4">
+                        @if ($canCollectPayments && in_array($lifecycleAction, [null, 'payment'], true))
+                            <details class="group rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-900/60" id="payment-actions" @if ($lifecycleAction === 'payment') open @endif>
                                 <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
-                                    <div>
-                                        <p class="text-sm font-semibold text-slate-950 dark:text-white">1. Payment actions</p>
-                                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Use this block when money is due, fully settled, or a payment needs reversal.</p>
-                                    </div>
+                                    <p class="text-sm font-semibold text-slate-950 dark:text-white">Payment</p>
                                     <span class="text-xs font-medium text-slate-500 transition group-open:rotate-180 dark:text-slate-400">⌄</span>
                                 </summary>
 
@@ -447,34 +425,16 @@
                         @endif
 
                         @if ($canManageMemberships)
-                            <details class="group rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-900/60" id="renew-membership" @if ($lifecycleAction === null || $lifecycleAction === 'renew') open @endif>
+                            @if (in_array($lifecycleAction, [null, 'renew'], true))
+                            <details class="group rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-900/60" id="renew-membership" @if ($lifecycleAction === 'renew') open @endif>
                                 <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
-                                    <div>
-                                        <p class="text-sm font-semibold text-slate-950 dark:text-white">2. Next cycle and renewal</p>
-                                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Use this when the member is starting a fresh billing cycle. If the next plan should be different, use the Change Plan action above first.</p>
-                                    </div>
+                                    <p class="text-sm font-semibold text-slate-950 dark:text-white">Renew membership</p>
                                     <span class="text-xs font-medium text-slate-500 transition group-open:rotate-180 dark:text-slate-400">⌄</span>
                                 </summary>
 
                                 <form method="POST" action="{{ route('web.gym.memberships.renew', ['membership' => $membership->id] + request()->query()) }}" class="mt-4 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/70 md:grid-cols-2">
                                     @csrf
-                                    <div class="md:col-span-2 rounded-2xl border border-sky-200/70 bg-sky-50/80 px-4 py-3 text-sm text-sky-900 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-100">
-                                        Renewal creates a fresh cycle based on the plan. Joining fee is automatically excluded here, and the due date now defaults to the projected cycle end.
-                                    </div>
-                                    <div class="md:col-span-2 grid gap-3 sm:grid-cols-3">
-                                        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/70">
-                                            <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Renewal start</p>
-                                            <p class="mt-2 font-semibold text-slate-950 dark:text-white">{{ $renewalStartDate->format('d M Y') }}</p>
-                                        </div>
-                                        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/70">
-                                            <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Projected end</p>
-                                            <p class="mt-2 font-semibold text-slate-950 dark:text-white">{{ $renewalProjectedEnd->format('d M Y') }}</p>
-                                        </div>
-                                        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/70">
-                                            <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Joining fee</p>
-                                            <p class="mt-2 font-semibold text-slate-950 dark:text-white">Not charged on renewal</p>
-                                        </div>
-                                    </div>
+                                    <p class="md:col-span-2 text-sm text-slate-500 dark:text-slate-400">{{ $renewalStartDate->format('d M Y') }} – {{ $renewalProjectedEnd->format('d M Y') }} · joining fee waived</p>
                                     <x-form-input type="date" name="start_date" label="New Cycle Start" :value="$renewalStartDate->format('Y-m-d')" required />
                                     <x-form-input type="date" name="due_date" label="Due Date" :value="$renewalProjectedEnd->format('Y-m-d')" />
                                     <x-form-input type="number" step="0.01" min="0" name="amount_paid" label="Initial Amount Paid" value="0" />
@@ -493,18 +453,17 @@
                                     </div>
                                 </form>
                             </details>
+                            @endif
 
-                            <details class="group rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-900/60" id="status-control" @if ($lifecycleAction === null || in_array($lifecycleAction, ['freeze', 'reactivate', 'extend', 'cancel'], true)) open @endif>
+                            @if (in_array($lifecycleAction, [null, 'freeze', 'reactivate', 'extend', 'cancel'], true))
+                            <details class="group rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-900/60" id="status-control" @if (in_array($lifecycleAction, ['freeze', 'reactivate', 'extend', 'cancel'], true)) open @endif>
                                 <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
-                                    <div>
-                                        <p class="text-sm font-semibold text-slate-950 dark:text-white">3. Cycle and status controls</p>
-                                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Pause, reactivate, extend, or close the membership without creating a new cycle or altering the commercial setup.</p>
-                                    </div>
+                                    <p class="text-sm font-semibold text-slate-950 dark:text-white">Pause, extend or cancel</p>
                                     <span class="text-xs font-medium text-slate-500 transition group-open:rotate-180 dark:text-slate-400">⌄</span>
                                 </summary>
 
                                 <div class="mt-4 grid gap-4 xl:grid-cols-2">
-                                    @if ($isFrozen)
+                                    @if ($isFrozen && in_array($lifecycleAction, [null, 'reactivate'], true))
                                         <form id="reactivate-membership" method="POST" action="{{ route('web.gym.memberships.reactivate', ['membership' => $membership->id] + request()->query()) }}" class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/70">
                                             @csrf
                                             <div>
@@ -520,7 +479,7 @@
                                             </div>
                                             <x-action-button type="submit">Resume & Extend Membership</x-action-button>
                                         </form>
-                                    @elseif (! $isCancelled)
+                                    @elseif (! $isCancelled && in_array($lifecycleAction, [null, 'freeze'], true))
                                         <form id="pause-membership" method="POST" action="{{ route('web.gym.memberships.freeze', ['membership' => $membership->id] + request()->query()) }}" class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/70">
                                             @csrf
                                             <div>
@@ -535,7 +494,7 @@
                                         </form>
                                     @endif
 
-                                    @if (! $isCancelled)
+                                    @if (! $isCancelled && in_array($lifecycleAction, [null, 'extend'], true))
                                         <form id="extend-membership" method="POST" action="{{ route('web.gym.memberships.extend', ['membership' => $membership->id] + request()->query()) }}" class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/70">
                                             @csrf
                                             <div>
@@ -552,7 +511,7 @@
                                         </form>
                                     @endif
 
-                                    @if (! $isCancelled)
+                                    @if (! $isCancelled && in_array($lifecycleAction, [null, 'cancel'], true))
                                         <form id="cancel-membership" method="POST" action="{{ route('web.gym.memberships.cancel', ['membership' => $membership->id] + request()->query()) }}" class="grid gap-3 rounded-2xl border border-rose-200/80 bg-rose-50/70 p-4 dark:border-rose-500/20 dark:bg-rose-500/10 xl:col-span-2">
                                             @csrf
                                             <div>
@@ -568,18 +527,20 @@
                                     @endif
                                 </div>
                             </details>
+                            @endif
                         @endif
                     </div>
                 </x-premium-card>
                 @endif
 
                 @if ($focusLifecycle)
-                    <x-table-wrapper class="overflow-hidden p-0">
-                        <div class="border-b border-slate-200/80 px-5 py-4 dark:border-slate-800">
-                            <h3 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Recent Payments</h3>
-                            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Compact payment reference while you operate the lifecycle workspace.</p>
-                        </div>
-                        <div class="overflow-x-auto">
+                    <x-premium-card class="overflow-hidden p-0">
+                        <details class="group">
+                            <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">
+                                <span class="font-semibold text-slate-950 dark:text-white">Recent payments</span>
+                                <span class="flex items-center gap-2 text-xs font-medium text-slate-500"><span>{{ $membership->payments->count() }}</span><i class="ti ti-chevron-down transition group-open:rotate-180" aria-hidden="true"></i></span>
+                            </summary>
+                            <div class="overflow-x-auto border-t border-slate-200 dark:border-slate-800">
                             <table class="panel-table min-w-[920px]">
                                 <thead>
                                     <tr>
@@ -616,17 +577,32 @@
                                     @endforelse
                                 </tbody>
                             </table>
-                        </div>
-                    </x-table-wrapper>
+                            </div>
+                        </details>
+                    </x-premium-card>
                 @endif
 
-                <x-premium-card class="p-6">
-                    <h3 class="panel-section-title">Lifecycle Audit</h3>
-                    <p class="panel-section-copy">{{ $focusLifecycle ? 'Recent operational history for quick verification while you act.' : 'Membership status, renewals, extensions, payments, and reversals in one timeline.' }}</p>
-                    <div class="mt-5">
-                        <x-web.audit-timeline :items="$focusLifecycle ? collect($activityTimeline)->take(6) : $activityTimeline" empty-title="No lifecycle activity yet" empty-message="Membership and payment actions will appear here." />
-                    </div>
-                </x-premium-card>
+                @if ($focusLifecycle)
+                    <x-premium-card class="overflow-hidden p-0">
+                        <details class="group">
+                            <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">
+                                <span class="font-semibold text-slate-950 dark:text-white">Activity history</span>
+                                <span class="flex items-center gap-2 text-xs font-medium text-slate-500"><span>{{ collect($activityTimeline)->count() }}</span><i class="ti ti-chevron-down transition group-open:rotate-180" aria-hidden="true"></i></span>
+                            </summary>
+                            <div class="border-t border-slate-200 p-5 dark:border-slate-800">
+                                <x-web.audit-timeline :items="collect($activityTimeline)->take(6)" empty-title="No lifecycle activity yet" empty-message="Membership and payment actions will appear here." />
+                            </div>
+                        </details>
+                    </x-premium-card>
+                @else
+                    <x-premium-card class="p-6">
+                        <h3 class="panel-section-title">Lifecycle Audit</h3>
+                        <p class="panel-section-copy">Membership status, renewals, extensions, payments, and reversals in one timeline.</p>
+                        <div class="mt-5">
+                            <x-web.audit-timeline :items="$activityTimeline" empty-title="No lifecycle activity yet" empty-message="Membership and payment actions will appear here." />
+                        </div>
+                    </x-premium-card>
+                @endif
 
                 @if (! $focusLifecycle)
                 <x-premium-card class="p-6">
