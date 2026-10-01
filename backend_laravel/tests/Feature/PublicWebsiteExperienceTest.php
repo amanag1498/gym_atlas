@@ -128,6 +128,26 @@ class PublicWebsiteExperienceTest extends TestCase
             ->assertSee(route('web.gym.login'));
     }
 
+    public function test_homepage_ignores_featured_gyms_without_public_operational_access(): void
+    {
+        Gym::query()->create([
+            'name' => 'Unavailable Featured Gym',
+            'slug' => 'unavailable-featured-gym',
+            'timezone' => 'Asia/Kolkata',
+            'status' => 'active',
+            'approval_status' => 'approved',
+            'is_active' => true,
+            'is_featured' => true,
+            'public_listing_enabled' => true,
+            'public_listing_approval_status' => 'approved',
+            'operational_access_enabled' => false,
+        ]);
+
+        $this->get(route('public.home'))
+            ->assertOk()
+            ->assertDontSee('Unavailable Featured Gym');
+    }
+
     public function test_individual_access_verification_and_whatsapp_are_explained_consistently(): void
     {
         $whatsappUrl = 'https://wa.me/917451008842';

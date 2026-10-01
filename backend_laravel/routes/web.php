@@ -113,23 +113,11 @@ Route::get('/', function (GymDiscoveryService $discoveryService) {
         'trial_requests' => TrialRequest::query()->count(),
     ];
 
-    $featuredGyms = Gym::query()
-        ->with(['facilities', 'membershipPlans' => fn ($query) => $query->where('status', 'active')->orderBy('plan_price')])
-        ->where('public_listing_enabled', true)
-        ->where('public_listing_approval_status', 'approved')
-        ->where(function ($query): void {
-            $query->where('approval_status', 'approved')
-                ->orWhereNull('approval_status');
-        })
-        ->where('is_active', true)
-        ->where('status', 'active')
-        ->where('is_featured', true)
-        ->orderByDesc('is_promoted')
-        ->orderByDesc('is_featured')
-        ->orderBy('name')
-        ->limit(6)
-        ->get()
-        ->map(fn (Gym $gym) => $discoveryService->publicGymBySlug($gym->slug));
+    $featuredGyms = collect($discoveryService->list([
+        'featured_only' => true,
+        'per_page' => 6,
+        'page' => 1,
+    ])->items());
 
     return view('public.home', [
         'stats' => $stats,
