@@ -275,6 +275,9 @@
                                                         @csrf
                                                         <button type="submit" class="panel-btn-danger !rounded-xl !px-3 !py-2 !text-xs">Remove</button>
                                                     </form>
+                                                @elseif ($profile?->membership_status === 'expired' && $latestMembership)
+                                                    <a href="{{ route('web.gym.memberships.show', ['membership' => $latestMembership->id, 'flow' => 'lifecycle', 'action' => 'renew'] + request()->only(['gym', 'branch'])).'#renew-membership' }}" class="panel-btn-primary !rounded-xl !px-3 !py-2 !text-xs">Renew Membership</a>
+                                                    <a href="{{ route('web.gym.memberships.show', ['membership' => $latestMembership->id] + request()->only(['gym', 'branch'])) }}" class="panel-btn-secondary !rounded-xl !px-3 !py-2 !text-xs">Review Cycle</a>
                                                 @else
                                                     <span class="inline-flex items-center rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-300">History only</span>
                                                 @endif

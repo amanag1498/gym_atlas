@@ -6,13 +6,17 @@
         $paymentModes = ['cash' => 'Cash', 'upi' => 'UPI', 'card' => 'Card', 'bank' => 'Bank'];
         $isCancelled = $membership->status === 'cancelled';
         $isFrozen = $membership->status === 'frozen';
+        $isExpired = $membership->status === 'expired';
         $hasDue = (float) $membership->due_amount > 0;
         $hasCredit = (float) $membership->due_amount < 0;
         $creditAmount = abs((float) $membership->due_amount);
         $plan = $membership->membershipPlan;
         $focusLifecycle = request('flow') === 'lifecycle';
         $lifecycleAction = request('action');
-        $renewalStartDate = optional($membership->expiry_date)->copy()?->addDay() ?? now();
+        $renewalStartDate = optional($membership->expiry_date)->copy()?->addDay() ?? today();
+        if ($renewalStartDate->lt(today())) {
+            $renewalStartDate = today();
+        }
         $renewalProjectedEnd = $renewalStartDate->copy()->addDays((int) ($plan?->duration_days ?? 0));
         $overviewHref = route('web.gym.memberships.show', ['membership' => $membership->id] + request()->except(['flow', 'action']));
         $workspaceHref = route('web.gym.memberships.show', ['membership' => $membership->id] + request()->except('action') + ['flow' => 'lifecycle']);
@@ -38,6 +42,8 @@
                             archived cycle with history preserved
                         @elseif ($isFrozen)
                             paused cycle awaiting reactivation
+                        @elseif ($isExpired)
+                            expired cycle ready for renewal
                         @elseif ($hasDue)
                             active cycle with outstanding due
                         @elseif ($hasCredit)
@@ -47,7 +53,7 @@
                         @endif
                     </p>
                     <div class="mt-5 flex flex-wrap gap-3">
-                        <x-status-badge :label="ucfirst((string) $membership->status)" :tone="$isCancelled ? 'danger' : ($isFrozen ? 'warning' : 'success')" />
+                        <x-status-badge :label="ucfirst((string) $membership->status)" :tone="$isCancelled ? 'danger' : (($isFrozen || $isExpired) ? 'warning' : 'success')" />
                         <x-status-badge :label="ucfirst((string) $membership->payment_status)" :tone="$hasDue ? 'warning' : 'info'" />
                         <x-status-badge :label="'Cycle '.optional($membership->start_date)->format('d M').' - '.optional($membership->expiry_date)->format('d M')" tone="neutral" />
                         @if ($membership->joining_fee_waived)
@@ -469,7 +475,7 @@
                                             <p class="mt-2 font-semibold text-slate-950 dark:text-white">Not charged on renewal</p>
                                         </div>
                                     </div>
-                                    <x-form-input type="date" name="start_date" label="New Cycle Start" :value="optional($membership->expiry_date)->addDay()?->format('Y-m-d') ?? now()->toDateString()" required />
+                                    <x-form-input type="date" name="start_date" label="New Cycle Start" :value="$renewalStartDate->format('Y-m-d')" required />
                                     <x-form-input type="date" name="due_date" label="Due Date" :value="$renewalProjectedEnd->format('Y-m-d')" />
                                     <x-form-input type="number" step="0.01" min="0" name="amount_paid" label="Initial Amount Paid" value="0" />
                                     <x-form-select name="initial_payment_mode" label="Initial Payment Mode" :options="$paymentModes" />

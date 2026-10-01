@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Models\WorkoutPlan;
 use App\Models\WorkoutSession;
 use App\Services\Audit\AuditTimelineService;
+use App\Services\Billing\MemberMembershipLifecycleService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -28,6 +29,7 @@ class MembershipLifecycleReconciliationFeatureTest extends TestCase
     {
         parent::setUp();
 
+        $this->withoutVite();
         $this->seed(PermissionSeeder::class);
         Carbon::setTestNow('2026-08-12 10:00:00');
     }
@@ -223,6 +225,67 @@ class MembershipLifecycleReconciliationFeatureTest extends TestCase
             'assigned_trainer_user_id' => $trainer->id,
             'is_active' => true,
         ]);
+    }
+
+    public function test_expired_member_is_distinct_from_left_gym_and_renewal_restores_access(): void
+    {
+        [$member, , $gym, $branch, $plan] = $this->makeMembershipContext();
+        $expired = $this->makeMembership($member, $gym, $branch, $plan, '2026-07-01', '2026-08-11');
+
+        $this->artisan('memberships:reconcile-lifecycle', ['--date' => '2026-08-12'])
+            ->assertSuccessful();
+
+        $owner = User::query()->findOrFail($gym->owner_user_id);
+        $scope = ['gym' => $gym->id, 'branch' => $branch->id];
+
+        $this->actingAs($owner)
+            ->get(route('web.gym.members.index', $scope))
+            ->assertOk()
+            ->assertSee($member->name)
+            ->assertSee('Expired')
+            ->assertSee('Renew Membership');
+
+        $this->actingAs($owner)
+            ->get(route('web.gym.members.show', $scope + ['member' => $member->id]))
+            ->assertOk()
+            ->assertSee('access is paused')
+            ->assertSee('Renew Membership')
+            ->assertDontSee('This is a historical member record.');
+
+        $this->actingAs($owner)
+            ->get(route('web.gym.memberships.show', $scope + [
+                'membership' => $expired->id,
+                'flow' => 'lifecycle',
+                'action' => 'renew',
+            ]))
+            ->assertOk()
+            ->assertSee('expired cycle ready for renewal')
+            ->assertSee('value="2026-08-12"', false);
+
+        $result = app(MemberMembershipLifecycleService::class)->renew($expired->fresh(), $owner, [
+            'start_date' => '2026-08-12',
+            'due_date' => '2026-09-11',
+            'amount_paid' => 0,
+        ]);
+        $renewed = $result['membership'];
+
+        $this->assertNotSame($expired->id, $renewed->id);
+        $this->assertSame('expired', $expired->fresh()->status);
+        $this->assertSame('active', $renewed->status);
+        $this->assertDatabaseHas('member_profiles', [
+            'user_id' => $member->id,
+            'gym_id' => $gym->id,
+            'membership_status' => 'active',
+            'is_active' => true,
+        ]);
+        $this->assertDatabaseHas('member_profiles', [
+            'user_id' => $member->id,
+            'gym_id' => null,
+            'membership_status' => 'inactive',
+            'is_active' => false,
+        ]);
+        $this->assertDatabaseHas('gym_user', ['gym_id' => $gym->id, 'user_id' => $member->id]);
+        $this->assertDatabaseHas('branch_user', ['branch_id' => $branch->id, 'user_id' => $member->id]);
     }
 
     private function makeMembershipContext(): array

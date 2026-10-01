@@ -2,6 +2,7 @@
 
 namespace App\Services\Member;
 
+use App\Enums\RoleName;
 use App\Models\AttendanceLog;
 use App\Models\Branch;
 use App\Models\DietPlan;
@@ -599,6 +600,52 @@ class MemberAppService
                 );
                 $independentProfile->fitnessGoals()->sync($fitnessGoalIds);
             }
+
+            $user->unsetRelation('memberProfile');
+            $user->unsetRelation('gyms');
+            $user->unsetRelation('branches');
+        });
+    }
+
+    /**
+     * Restore the gym and branch relationship when a renewed cycle becomes
+     * operational. Expiry removes these pivots, while renewal keeps the old
+     * membership row as history and creates a new active cycle.
+     */
+    public function restoreGymAccess(User $user, MemberMembership $membership): void
+    {
+        DB::transaction(function () use ($user, $membership): void {
+            $gymId = (int) $membership->gym_id;
+            $branchId = (int) $membership->branch_id;
+            $isPrimaryGym = ! $user->gyms()->exists();
+
+            $user->assignRole(RoleName::Member->value);
+            $user->gyms()->syncWithoutDetaching([$gymId => [
+                'branch_id' => $branchId,
+                'role_name' => RoleName::Member->value,
+                'status' => 'active',
+                'is_primary' => $isPrimaryGym,
+            ]]);
+            $user->gyms()->updateExistingPivot($gymId, [
+                'branch_id' => $branchId,
+                'role_name' => RoleName::Member->value,
+                'status' => 'active',
+            ]);
+
+            $gymBranchIds = Branch::query()->where('gym_id', $gymId)->pluck('id')->all();
+            if ($gymBranchIds !== []) {
+                $user->branches()->detach($gymBranchIds);
+            }
+            $user->branches()->syncWithoutDetaching([$branchId => ['is_primary' => true]]);
+
+            MemberProfile::query()
+                ->where('user_id', $user->id)
+                ->whereNull('gym_id')
+                ->update([
+                    'status' => 'inactive',
+                    'membership_status' => 'inactive',
+                    'is_active' => false,
+                ]);
 
             $user->unsetRelation('memberProfile');
             $user->unsetRelation('gyms');

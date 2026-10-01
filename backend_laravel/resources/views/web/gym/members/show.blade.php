@@ -9,6 +9,8 @@
         $trainerProfile = $assignedTrainer?->managedTrainerProfile;
         $recentTimeline = collect($membershipTimeline)->take(6);
         $hasCurrentMembership = $currentMembership !== null;
+        $isExpiredMembership = $memberProfile->membership_status === 'expired'
+            || $currentMembership?->status === 'expired';
         $dueAmount = (float) ($currentMembership?->due_amount ?? 0);
         $creditAmount = abs(min($dueAmount, 0));
         $memberStatusLabel = $memberProfile->membership_status === 'left_gym'
@@ -66,7 +68,11 @@
                 </div>
             </div>
 
-            @if (! $hasOperationalAccess)
+            @if ($isExpiredMembership)
+                <div class="border-b border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100 lg:px-6">
+                    This membership expired{{ $currentMembership?->expiry_date ? ' on '.$currentMembership->expiry_date->format('d M Y') : '' }}. The member record remains with the gym, access is paused, and a renewal creates the next billing cycle.
+                </div>
+            @elseif (! $hasOperationalAccess)
                 <div class="border-b border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100 lg:px-6">
                     This is a historical member record. Gym access, attendance, billing actions, biometrics, and trainer assignment remain disabled until the member is enrolled again.
                 </div>
@@ -86,6 +92,9 @@
                     @csrf
                     <x-action-button type="submit" variant="danger">Remove From Gym</x-action-button>
                 </form>
+                @elseif ($isExpiredMembership && $hasCurrentMembership && $canManageMemberships)
+                    <a href="{{ route('web.gym.memberships.show', ['membership' => $currentMembership->id, 'flow' => 'lifecycle', 'action' => 'renew'] + request()->only(['gym', 'branch'])).'#renew-membership' }}" class="panel-btn-primary">Renew Membership</a>
+                    <a href="{{ route('web.gym.memberships.show', ['membership' => $currentMembership->id] + request()->only(['gym', 'branch'])) }}" class="panel-btn-secondary">Review Last Cycle</a>
                 @else
                     <a href="{{ route('web.gym.members.index', request()->only(['gym', 'branch'])) }}" class="panel-btn-secondary">Back to Members</a>
                 @endif
@@ -93,7 +102,7 @@
         </section>
 
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <x-stat-card label="Current Plan" :value="$currentMembership?->membershipPlan?->name ?? 'No Plan'" hint="Current operational membership" tone="sky" />
+            <x-stat-card :label="$hasOperationalAccess ? 'Current Plan' : 'Latest Plan'" :value="$currentMembership?->membershipPlan?->name ?? 'No Plan'" :hint="$isExpiredMembership ? 'Expired cycle available to renew' : ($hasOperationalAccess ? 'Current operational membership' : 'Most recent membership record')" tone="sky" />
             <x-stat-card label="Collected" :value="number_format($collectedAmount, 2)" hint="Recent payment history total" tone="emerald" />
             <x-stat-card label="Workouts" :value="$workoutSummary['total_sessions']" hint="Total recorded sessions" tone="violet" />
             <x-stat-card label="Attendance 30d" :value="$engagement['attendance_last_30_days'] ?? 0" hint="Recent check-ins" tone="amber" />

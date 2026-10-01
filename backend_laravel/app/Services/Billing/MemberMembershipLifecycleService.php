@@ -322,6 +322,9 @@ class MemberMembershipLifecycleService
 
         $isOperational = $current->status === MembershipStatus::Frozen->value
             || $current->status === MembershipStatus::Active->value;
+        if ($isOperational) {
+            $this->memberAppService->restoreGymAccess($member, $current);
+        }
         $changed = $profile->status !== ($isOperational ? 'active' : 'inactive')
             || $profile->is_active !== $isOperational
             || $profile->membership_status !== $current->status
