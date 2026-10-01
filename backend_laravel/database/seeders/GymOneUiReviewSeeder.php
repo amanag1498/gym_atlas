@@ -407,6 +407,8 @@ class GymOneUiReviewSeeder extends Seeder
     private function seedCompensation(Gym $gym, $branch, User $owner, User $trainer, User $staff, $members): void
     {
         foreach ([[$trainer, 'trainer', 22000, 5], [$staff, 'staff', 18000, 7]] as [$user, $type, $salary, $payoutDay]) {
+            $commission = $type === 'trainer' ? 750 : 250;
+
             CompensationProfile::query()->updateOrCreate(
                 ['gym_id' => $gym->id, 'user_id' => $user->id],
                 ['branch_id' => $branch->id, 'worker_type' => $type, 'monthly_salary' => $salary, 'payout_day' => $payoutDay, 'effective_from' => today()->startOfYear(), 'is_active' => true],
@@ -417,12 +419,12 @@ class GymOneUiReviewSeeder extends Seeder
                     'branch_id' => $branch->id,
                     'period_end' => today()->endOfMonth(),
                     'salary_amount' => $salary,
-                    'commission_amount' => $type === 'trainer' ? 750 : 250,
-                    'adjustment_amount' => 500,
-                    'deduction_amount' => 250,
-                    'net_payable_amount' => $salary + ($type === 'trainer' ? 1000 : 500),
+                    'commission_amount' => $commission,
+                    'adjustment_amount' => 0,
+                    'deduction_amount' => 0,
+                    'net_payable_amount' => $salary + $commission,
                     'paid_amount' => $type === 'staff' ? $salary : 0,
-                    'status' => $type === 'staff' ? 'paid' : 'approved',
+                    'status' => $type === 'staff' ? 'partially_paid' : 'approved',
                     'notes' => 'Local UI review payroll statement',
                     'generated_at' => now(),
                     'approved_by_user_id' => $owner->id,
