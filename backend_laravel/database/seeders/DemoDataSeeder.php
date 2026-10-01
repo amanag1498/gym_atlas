@@ -2,11 +2,16 @@
 
 namespace Database\Seeders;
 
+use App\Enums\AttendanceCheckInMethod;
+use App\Enums\NotificationType;
 use App\Enums\RoleName;
 use App\Models\Announcement;
 use App\Models\AnnouncementRecipient;
+use App\Models\AttendanceLog;
+use App\Models\BodyMeasurement;
 use App\Models\Branch;
 use App\Models\City;
+use App\Models\Exercise;
 use App\Models\Facility;
 use App\Models\Gym;
 use App\Models\GymPhoto;
@@ -16,25 +21,20 @@ use App\Models\MembershipPlan;
 use App\Models\Notification;
 use App\Models\NotificationPreference;
 use App\Models\Payment;
+use App\Models\PersonalRecord;
 use App\Models\PlatformBanner;
+use App\Models\ProgressPhoto;
 use App\Models\ScheduledReminder;
 use App\Models\TrainerProfile;
 use App\Models\TrialRequest;
 use App\Models\User;
-use App\Models\Exercise;
+use App\Models\WeightLog;
 use App\Models\WorkoutPlan;
 use App\Models\WorkoutSession;
-use App\Models\WeightLog;
-use App\Models\BodyMeasurement;
-use App\Models\ProgressPhoto;
-use App\Models\PersonalRecord;
 use App\Services\Authorization\ActiveRoleManager;
 use App\Services\Billing\MembershipPricingService;
 use App\Services\Billing\PaymentService;
-use App\Enums\AttendanceCheckInMethod;
-use App\Enums\NotificationType;
 use App\Services\Notification\ReminderService;
-use App\Models\AttendanceLog;
 use App\Services\Workout\WorkoutPlanService;
 use App\Services\Workout\WorkoutSessionService;
 use Illuminate\Database\Seeder;
@@ -125,6 +125,7 @@ class DemoDataSeeder extends Seeder
                 'weekly_off' => [],
                 'status' => 'active',
                 'is_active' => true,
+                'operational_access_enabled' => true,
                 'approval_status' => 'approved',
                 'approved_at' => now(),
                 'is_verified' => true,
@@ -564,76 +565,92 @@ class DemoDataSeeder extends Seeder
             ],
         );
 
-        $plans = $workoutPlanService->createPlans($trainer, [
-            'gym_id' => $gym->id,
-            'branch_id' => $branchA->id,
-            'member_ids' => [$member->id],
-            'name' => 'Strength Base Phase',
-            'goal' => 'Strength and muscle gain',
-            'difficulty' => 'beginner',
-            'duration_weeks' => 4,
-            'weekly_schedule' => ['monday', 'wednesday', 'friday'],
-            'notes' => 'Demo starter plan.',
-            'status' => 'active',
-            'starts_on' => now()->subDays(3)->toDateString(),
-            'ends_on' => now()->addWeeks(4)->toDateString(),
-            'days' => [
-                [
-                    'day_number' => 1,
-                    'label' => 'Day 1',
-                    'focus' => 'Lower body',
-                    'exercises' => [
-                        [
-                            'exercise_id' => $squat->id,
-                            'sort_order' => 1,
-                            'sets' => 4,
-                            'reps' => '5',
-                            'target_weight' => 60,
-                            'rest_seconds' => 120,
+        $workoutPlan = WorkoutPlan::query()
+            ->where('gym_id', $gym->id)
+            ->where('branch_id', $branchA->id)
+            ->where('member_id', $member->id)
+            ->where('trainer_id', $trainer->id)
+            ->where('name', 'Strength Base Phase')
+            ->latest('id')
+            ->first();
+
+        if (! $workoutPlan) {
+            $plans = $workoutPlanService->createPlans($trainer, [
+                'gym_id' => $gym->id,
+                'branch_id' => $branchA->id,
+                'member_ids' => [$member->id],
+                'name' => 'Strength Base Phase',
+                'goal' => 'Strength and muscle gain',
+                'difficulty' => 'beginner',
+                'duration_weeks' => 4,
+                'weekly_schedule' => ['monday', 'wednesday', 'friday'],
+                'notes' => 'Demo starter plan.',
+                'status' => 'active',
+                'starts_on' => now()->subDays(3)->toDateString(),
+                'ends_on' => now()->addWeeks(4)->toDateString(),
+                'days' => [
+                    [
+                        'day_number' => 1,
+                        'label' => 'Day 1',
+                        'focus' => 'Lower body',
+                        'exercises' => [
+                            [
+                                'exercise_id' => $squat->id,
+                                'sort_order' => 1,
+                                'sets' => 4,
+                                'reps' => '5',
+                                'target_weight' => 60,
+                                'rest_seconds' => 120,
+                            ],
+                        ],
+                    ],
+                    [
+                        'day_number' => 2,
+                        'label' => 'Day 2',
+                        'focus' => 'Upper pull',
+                        'exercises' => [
+                            [
+                                'exercise_id' => $row->id,
+                                'sort_order' => 1,
+                                'sets' => 3,
+                                'reps' => '10',
+                                'target_weight' => 35,
+                                'rest_seconds' => 90,
+                            ],
                         ],
                     ],
                 ],
-                [
-                    'day_number' => 2,
-                    'label' => 'Day 2',
-                    'focus' => 'Upper pull',
-                    'exercises' => [
-                        [
-                            'exercise_id' => $row->id,
-                            'sort_order' => 1,
-                            'sets' => 3,
-                            'reps' => '10',
-                            'target_weight' => 35,
-                            'rest_seconds' => 90,
-                        ],
+            ]);
+            $workoutPlan = $plans->first();
+        }
+
+        if (! WorkoutSession::query()
+            ->where('member_id', $member->id)
+            ->where('workout_plan_id', $workoutPlan->id)
+            ->where('notes', 'Solid effort on all sets.')
+            ->exists()) {
+            $session = $workoutSessionService->startSession($member, [
+                'gym_id' => $gym->id,
+                'branch_id' => $branchA->id,
+                'workout_plan_id' => $workoutPlan->id,
+                'session_date' => now()->subDay()->toDateString(),
+                'allow_duplicate_active_session' => true,
+                'notes' => 'Demo completed workout.',
+            ]);
+
+            $workoutSessionService->completeSession($session, [
+                'notes' => 'Solid effort on all sets.',
+                'exercises' => $session->fresh('exercises')->exercises->map(fn ($exercise) => [
+                    'id' => $exercise->id,
+                    'exercise_id' => $exercise->exercise_id,
+                    'sets' => [
+                        ['set_number' => 1, 'reps' => 5, 'weight' => 60],
+                        ['set_number' => 2, 'reps' => 5, 'weight' => 60],
+                        ['set_number' => 3, 'reps' => 5, 'weight' => 62.5],
                     ],
-                ],
-            ],
-        ]);
-
-        $workoutPlan = $plans->first();
-
-        $session = $workoutSessionService->startSession($member, [
-            'gym_id' => $gym->id,
-            'branch_id' => $branchA->id,
-            'workout_plan_id' => $workoutPlan->id,
-            'session_date' => now()->subDay()->toDateString(),
-            'allow_duplicate_active_session' => true,
-            'notes' => 'Demo completed workout.',
-        ]);
-
-        $workoutSessionService->completeSession($session, [
-            'notes' => 'Solid effort on all sets.',
-            'exercises' => $session->fresh('exercises')->exercises->map(fn ($exercise) => [
-                'id' => $exercise->id,
-                'exercise_id' => $exercise->exercise_id,
-                'sets' => [
-                    ['set_number' => 1, 'reps' => 5, 'weight' => 60],
-                    ['set_number' => 2, 'reps' => 5, 'weight' => 60],
-                    ['set_number' => 3, 'reps' => 5, 'weight' => 62.5],
-                ],
-            ])->values()->all(),
-        ]);
+                ])->values()->all(),
+            ]);
+        }
 
         WeightLog::query()->updateOrCreate(
             [
@@ -725,7 +742,7 @@ class DemoDataSeeder extends Seeder
             ->first();
 
         if (! $user) {
-            $user = new User();
+            $user = new User;
         }
 
         $user->fill([
