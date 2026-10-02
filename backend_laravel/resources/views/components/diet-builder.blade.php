@@ -106,7 +106,7 @@
 
 @push('scripts')
 <script>
-document.addEventListener('DOMContentLoaded', () => {
+window.panelOnLoad(() => {
     const root = document.getElementById(@json($builderId));
     if (!root) return;
     const catalog = new Map(@json($catalogRows).map(food => [food.label, food]));

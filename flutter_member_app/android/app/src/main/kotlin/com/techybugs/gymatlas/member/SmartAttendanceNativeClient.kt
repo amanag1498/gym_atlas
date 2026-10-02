@@ -1,5 +1,7 @@
 package com.techybugs.gymatlas.member
 
+import android.content.Context
+import android.os.Build
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -8,7 +10,15 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
 
-class SmartAttendanceNativeClient {
+class SmartAttendanceNativeClient(context: Context) {
+    private val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+    private val appVersion = packageInfo.versionName.orEmpty()
+    @Suppress("DEPRECATION")
+    private val appVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        packageInfo.longVersionCode
+    } else {
+        packageInfo.versionCode.toLong()
+    }
     fun checkIn(
         config: SmartAttendanceBackgroundConfig,
         detection: SmartAttendanceNativePayload,
@@ -63,6 +73,8 @@ class SmartAttendanceNativeClient {
             setRequestProperty("X-Gym-Id", config.gymId.toString())
             setRequestProperty("X-Atlas-App", "member")
             setRequestProperty("X-Client-Platform", "android")
+            setRequestProperty("X-App-Version", appVersion)
+            setRequestProperty("X-App-Version-Code", appVersionCode.toString())
         }
         try {
             OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use {

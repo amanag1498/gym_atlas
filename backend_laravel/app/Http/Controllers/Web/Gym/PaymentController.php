@@ -552,8 +552,8 @@ class PaymentController extends Controller
             'pendingDues' => (clone $membershipsQuery)
                 ->whereIn('payment_status', [PaymentStatus::Unpaid->value, PaymentStatus::Partial->value, PaymentStatus::Overdue->value])
                 ->orderBy('due_date')
-                ->take(20)
-                ->get(),
+                ->paginate(20, ['*'], 'dues_page')
+                ->withQueryString(),
             'overdueMemberships' => (clone $membershipsQuery)->where('payment_status', PaymentStatus::Overdue->value)->orderBy('due_date')->take(20)->get(),
             'monthlyCollection' => (float) (clone $paymentsQuery)
                 ->where('status', PaymentRecordStatus::Recorded->value)

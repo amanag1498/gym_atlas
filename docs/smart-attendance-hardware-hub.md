@@ -4,7 +4,18 @@ Gym Atlas supports dedicated BLE hardware as well as the Atlas Smart Hub Android
 
 ## Supported transmitter profile
 
-For the broadest Android and iOS background support, hardware should broadcast the Atlas iBeacon profile continuously:
+Hardware must continuously advertise the Atlas BLE service so iOS can use Core Bluetooth's service-filtered background scan and state restoration for entry detection:
+
+- Service UUID: `8b0f9c60-4f6d-4b40-9e8d-2d5d3f73a1a1`
+- Primary advertisement: the Atlas service UUID
+- Scan response: Atlas BLE V2 service data for the same UUID
+- Service-data byte 0: `0x02`
+- Bytes 1–9: the 13-character public-ID suffix encoded as an unsigned, big-endian base-36 integer
+- Non-connectable advertising, normally 250–500 ms at an entrance where members may pass quickly
+
+The authenticated config response provides `ble.service_data_hex` so firmware does not need to reproduce the base-36 conversion. The service UUID must be present in the primary advertisement; iOS requires a specific service filter for background scanning and may slow its scan interval while all scanning apps are in the background.
+
+Every production Hub must also broadcast the iBeacon profile. iOS uses the service UUID for direct discovery and the OS-managed iBeacon region for reliable background entry/exit wakeups when Flutter is suspended:
 
 - Company ID: `0x004C` (Apple iBeacon framing identifier)
 - Type and length: `0x02 0x15`
@@ -12,17 +23,10 @@ For the broadest Android and iOS background support, hardware should broadcast t
 - Major: upper 16 bits of the numeric Hub `id`
 - Minor: lower 16 bits of the numeric Hub `id`
 - Measured power: `-59` by default, calibrated for the enclosure and installation if possible
-- Non-connectable advertising, normally 250–1000 ms interval
+- Non-connectable advertising
 
-The Member apps reconstruct `hub_id = (major << 16) | minor` and submit protocol version 3. Laravel then validates that exact hub against the signed-in member's selected gym, branch, membership, active state, and device activation state. The numeric ID is only a public lookup value; it is not an attendance credential.
+Clients reconstruct `hub_id = (major << 16) | minor` and submit protocol version 3. The iOS native layer accepts either that Hub ID or the BLE V2 public ID. Laravel validates either identifier against the signed-in member's selected gym, branch, membership, active state, and device activation state.
 
-Hardware may additionally advertise Atlas BLE V2 for compatibility and diagnostics:
-
-- Service UUID: `8b0f9c60-4f6d-4b40-9e8d-2d5d3f73a1a1`
-- Service-data byte 0: `0x02`
-- Bytes 1–9: the 13-character public-ID suffix encoded as an unsigned, big-endian base-36 integer
-
-The authenticated config response provides `ble.service_data_hex` so firmware does not need to reproduce the base-36 conversion.
 
 ## Provisioning and heartbeat
 
@@ -30,7 +34,7 @@ The authenticated config response provides `ble.service_data_hex` so firmware do
 2. Create an **ESP32** or **Other BLE hardware** hub for the entrance branch.
 3. Save the one-time Hub UUID and device secret in protected flash/NVS. Never put either value in BLE advertising.
 4. Call `POST /api/smart-attendance/hubs/{hubUuid}/activate` over HTTPS with `X-GymAtlas-Device-Token: {secret}`.
-5. Read `data.ble.ibeacon` and configure the radio from those returned values.
+5. Read `data.ble.service_uuid`, `data.ble.service_data_hex`, and `data.ble.ibeacon`, then configure the service advertisement, scan response, and iBeacon advertisement.
 6. Send `POST /api/smart-attendance/hubs/{hubUuid}/heartbeat` every 60 seconds. Include the firmware version, battery percentage when available, and whether BLE advertising is active.
 7. Refresh `GET /api/smart-attendance/hubs/{hubUuid}/config` after reconnect and periodically so branch changes, beacon configuration, or credential rotation are applied.
 

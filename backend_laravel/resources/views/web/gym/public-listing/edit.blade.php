@@ -1,120 +1,102 @@
 @extends('layouts.panel')
 
 @php
+    $panelFullWidth = true;
     $galleryPhotos = $gym->gymPhotos->whereNull('branch_id')->where('type', 'gallery')->sortBy('sort_order')->values();
 @endphp
 
 @section('content')
-    <div class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <div class="space-y-6">
-            @if (! $canBePubliclyListed)
-                <div class="rounded-3xl border border-amber-400/30 bg-amber-400/10 px-5 py-4 text-sm text-amber-100">
-                    <p class="font-semibold text-amber-50">Public listing is restricted</p>
-                    <p class="mt-1">This gym is currently {{ ucfirst($gym->status ?: 'inactive') }}. Discovery stays private until the gym is active and approved.</p>
-                </div>
-            @endif
+    <div class="w-full min-w-0 space-y-6">
+        <header class="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between dark:border-slate-800">
+            <div>
+                <h2 class="text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">Public listing</h2>
+                <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Choose what visitors see when they find {{ $gym->name }}.</p>
+            </div>
+            <x-action-button as="a" variant="secondary" href="{{ route('web.gym.profile.edit', request()->only(['gym', 'branch'])) }}">Edit gym profile</x-action-button>
+        </header>
 
-            <x-premium-card class="p-6">
+        @if (! $canBePubliclyListed)
+            <div class="rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200" role="status">
+                <p class="font-semibold">Public listing is currently unavailable</p>
+                <p class="mt-1">This gym is {{ ucfirst($gym->status ?: 'inactive') }}. It must be active and approved before it can appear in discovery. You can save the other settings now.</p>
+            </div>
+        @endif
+
+        <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.9fr)]">
+            <section class="min-w-0 space-y-5" aria-labelledby="listing-settings-heading">
                 <div>
-                    <h3 class="panel-section-title">Public listing settings</h3>
-                    <p class="panel-section-copy">Control discovery visibility, public pricing, trial requests, and public contact behavior.</p>
+                    <h3 id="listing-settings-heading" class="text-lg font-semibold text-slate-950 dark:text-white">Visibility & actions</h3>
+                    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Changes to these options take effect when you save.</p>
                 </div>
-
-                <form action="{{ route('web.gym.public-listing.update') }}" method="POST" class="mt-6 space-y-5">
+                <form action="{{ route('web.gym.public-listing.update', request()->only(['gym', 'branch'])) }}" method="POST" class="space-y-5">
                     @csrf
                     @method('PUT')
-
-                    <label class="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 text-sm text-slate-200">
-                        <input type="hidden" name="public_listing_enabled" value="0">
-                        <input type="checkbox" name="public_listing_enabled" value="1" @checked($gym->public_listing_enabled)>
-                        <span><span class="font-semibold text-white">Enable public profile</span><br>Allow this gym to appear in discovery once the gym is active and platform-approved.</span>
-                    </label>
-
-                    <label class="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 text-sm text-slate-200">
-                        <input type="hidden" name="show_pricing" value="0">
-                        <input type="checkbox" name="show_pricing" value="1" @checked($gym->show_pricing ?? $gym->pricing_visible)>
-                        <span><span class="font-semibold text-white">Show pricing publicly</span><br>Expose membership plan pricing when the listing is public.</span>
-                    </label>
-
-                    <label class="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 text-sm text-slate-200">
-                        <input type="hidden" name="trial_available" value="0">
-                        <input type="checkbox" name="trial_available" value="1" @checked($gym->trial_available)>
-                        <span><span class="font-semibold text-white">Accept trial requests</span><br>Allow nearby users to request a trial directly from the public profile.</span>
-                    </label>
-
-                    <label class="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 text-sm text-slate-200">
-                        <input type="hidden" name="contact_visible" value="0">
-                        <input type="checkbox" name="contact_visible" value="1" @checked($gym->contact_visible)>
-                        <span><span class="font-semibold text-white">Show public contact action</span><br>Enable the public contact/trial CTA on the public profile preview.</span>
-                    </label>
-
-                    <x-action-button type="submit" variant="primary" class="w-full justify-center">Save Public Listing Settings</x-action-button>
+                    @include('web.gym.public-listing._settings-toggles', ['gym' => $gym])
+                    <x-action-button type="submit" variant="primary" class="w-full justify-center sm:w-auto">Save listing settings</x-action-button>
                 </form>
-            </x-premium-card>
-        </div>
+            </section>
 
-        <div class="space-y-6">
-            <x-premium-card class="p-6">
-                <div class="flex items-start justify-between gap-4">
+            <aside class="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900" aria-labelledby="listing-preview-heading">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
                     <div>
-                        <h3 class="panel-section-title">Public profile preview</h3>
-                        <p class="mt-2 text-sm text-slate-400">This is the discovery-facing summary for nearby users.</p>
+                        <h3 id="listing-preview-heading" class="text-base font-semibold text-slate-950 dark:text-white">Current public profile</h3>
+                        <p class="mt-0.5 text-xs text-slate-600 dark:text-slate-400">Preview of the last saved profile</p>
                     </div>
-                    <div class="flex flex-wrap gap-2">
-                        <x-status-badge :label="$gym->public_listing_enabled ? 'Public' : 'Private'" />
-                        <x-status-badge :label="ucfirst($gym->public_listing_approval_status ?? 'pending')" />
-                        <x-status-badge :label="$gym->contact_visible ? 'Contact Visible' : 'Contact Hidden'" />
-                    </div>
+                    <x-status-badge :label="$gym->public_listing_enabled && $canBePubliclyListed ? 'Public' : 'Private'" />
                 </div>
 
-                <div class="mt-5 overflow-hidden rounded-3xl border border-white/10 bg-slate-950/50">
+                <div class="relative">
                     @if ($gym->cover_image_url)
-                        <img src="{{ $gym->cover_image_thumbnail_url ?: $gym->cover_image_url }}" alt="{{ $gym->name }} cover" class="h-48 w-full object-cover">
+                        <img src="{{ $gym->cover_image_thumbnail_url ?: $gym->cover_image_url }}" alt="{{ $gym->name }} cover" class="h-40 w-full object-cover sm:h-48">
                     @else
-                        <div class="flex h-48 items-center justify-center text-sm text-slate-400">No cover image configured</div>
+                        <div class="flex h-40 items-center justify-center bg-slate-100 text-sm text-slate-600 sm:h-48 dark:bg-slate-800 dark:text-slate-400">Add a cover image in Gym Profile</div>
                     @endif
                 </div>
 
-                <div class="mt-5 flex items-center gap-4">
-                    <div class="h-20 w-20 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/50">
-                        @if ($gym->logo_url)
-                            <img src="{{ $gym->logo_thumbnail_url ?: $gym->logo_url }}" alt="{{ $gym->name }} logo" class="h-full w-full object-cover">
-                        @else
-                            <div class="flex h-full items-center justify-center text-[11px] text-slate-400">No logo</div>
-                        @endif
+                <div class="space-y-5 p-5">
+                    <div class="flex min-w-0 items-start gap-4">
+                        <div class="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
+                            @if ($gym->logo_url)
+                                <img src="{{ $gym->logo_thumbnail_url ?: $gym->logo_url }}" alt="{{ $gym->name }} logo" class="h-full w-full object-cover">
+                            @else
+                                <span class="text-xs text-slate-600 dark:text-slate-400">No logo</span>
+                            @endif
+                        </div>
+                        <div class="min-w-0">
+                            <h4 class="break-words text-lg font-semibold text-slate-950 dark:text-white">{{ $gym->name }}</h4>
+                            <p class="mt-1 break-words text-sm text-slate-600 dark:text-slate-400">{{ $gym->city ?: 'City not set' }}{{ $gym->state ? ', '.$gym->state : '' }}</p>
+                        </div>
                     </div>
+
+                    <p class="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700 dark:text-slate-300">{{ $gym->description ?: 'Add a description in Gym Profile to introduce this gym to visitors.' }}</p>
+
+                    <dl class="divide-y divide-slate-200 border-t border-slate-200 text-sm dark:divide-slate-800 dark:border-slate-800">
+                        <div class="flex justify-between gap-4 py-3"><dt class="text-slate-600 dark:text-slate-400">Address</dt><dd class="max-w-[65%] break-words text-right font-medium text-slate-950 dark:text-slate-100">{{ $gym->address ?: $gym->address_line ?: 'Not set' }}</dd></div>
+                        <div class="flex justify-between gap-4 py-3"><dt class="text-slate-600 dark:text-slate-400">Pricing</dt><dd class="font-medium text-slate-950 dark:text-slate-100">{{ ($gym->show_pricing ?? $gym->pricing_visible) ? 'Shown' : 'Hidden' }}</dd></div>
+                        <div class="flex justify-between gap-4 py-3"><dt class="text-slate-600 dark:text-slate-400">Trial requests</dt><dd class="font-medium text-slate-950 dark:text-slate-100">{{ $gym->trial_available ? 'Accepted' : 'Off' }}</dd></div>
+                        <div class="flex justify-between gap-4 py-3"><dt class="text-slate-600 dark:text-slate-400">Contact action</dt><dd class="font-medium text-slate-950 dark:text-slate-100">{{ $gym->contact_visible ? 'Shown' : 'Hidden' }}</dd></div>
+                    </dl>
+
                     <div>
-                        <p class="text-2xl font-semibold text-white">{{ $gym->name }}</p>
-                        <p class="mt-1 text-sm text-slate-400">{{ $gym->description ?: 'No public description yet.' }}</p>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">Facilities</p>
+                        <div class="mt-2 flex flex-wrap gap-2">
+                            @forelse ($gym->facilities as $facility)
+                                <span class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">{{ $facility->name }}</span>
+                            @empty
+                                <span class="text-sm text-slate-600 dark:text-slate-400">No facilities selected yet.</span>
+                            @endforelse
+                        </div>
                     </div>
-                </div>
 
-                <div class="mt-5 grid gap-3 md:grid-cols-2">
-                    <div class="panel-card-muted px-4 py-3">Address: {{ $gym->address ?: $gym->address_line ?: 'Not configured' }}</div>
-                    <div class="panel-card-muted px-4 py-3">Location: {{ $gym->city ?: 'City pending' }}{{ $gym->state ? ' • '.$gym->state : '' }}</div>
-                    <div class="panel-card-muted px-4 py-3">Pricing: {{ ($gym->show_pricing ?? $gym->pricing_visible) ? 'Visible on profile' : 'Hidden from public view' }}</div>
-                    <div class="panel-card-muted px-4 py-3">Trial CTA: {{ $gym->trial_available ? ($gym->contact_visible ? 'Enabled' : 'Trial on, contact hidden') : 'Disabled' }}</div>
-                </div>
-
-                <div class="mt-5 flex flex-wrap gap-2">
-                    @foreach ($gym->facilities as $facility)
-                        <span class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium text-slate-200">{{ $facility->name }}</span>
-                    @endforeach
-                    @if ($gym->facilities->isEmpty())
-                        <span class="text-sm text-slate-500">No facilities added yet.</span>
+                    @if ($galleryPhotos->isNotEmpty())
+                        <div class="grid grid-cols-2 gap-2">
+                            @foreach ($galleryPhotos->take(4) as $photo)
+                                <img src="{{ $photo->thumbnail_url }}" alt="Gym gallery photo" class="h-24 w-full rounded-lg object-cover">
+                            @endforeach
+                        </div>
                     @endif
                 </div>
-
-                @if ($galleryPhotos->isNotEmpty())
-                    <div class="mt-5 grid grid-cols-2 gap-3">
-                        @foreach ($galleryPhotos->take(4) as $photo)
-                            <div class="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/50">
-                                <img src="{{ $photo->thumbnail_url }}" alt="Gym gallery preview" class="h-28 w-full object-cover">
-                            </div>
-                        @endforeach
-                    </div>
-                @endif
-            </x-premium-card>
+            </aside>
         </div>
     </div>
 @endsection

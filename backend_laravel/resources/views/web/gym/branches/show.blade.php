@@ -140,8 +140,8 @@
                     <p class="panel-section-copy">Photo readiness and listing support metadata.</p>
                     <div class="mt-5 grid gap-3">
                         <div class="panel-card-muted px-4 py-3">
-                            <p class="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Photo URLs</p>
-                            <p class="mt-2 text-sm text-slate-700 dark:text-slate-300">{{ count($branch->photo_urls ?? []) }} linked images</p>
+                            <p class="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Branch photos</p>
+                            <p class="mt-2 text-sm text-slate-700 dark:text-slate-300">{{ count($branch->photo_urls ?? []) }} photos</p>
                         </div>
                         <div class="panel-card-muted px-4 py-3">
                             <p class="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Linked city record</p>

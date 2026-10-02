@@ -9,12 +9,22 @@ class StoreBranchWebRequest extends StoreBranchRequest
 {
     use InteractsWithDelimitedFields;
 
+    public function rules(): array
+    {
+        return array_merge(parent::rules(), [
+            'gallery_images' => ['nullable', 'array', 'max:10'],
+            'gallery_images.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:6144'],
+        ]);
+    }
+
     protected function prepareForValidation(): void
     {
         $timings = $this->parseJsonArray($this->input('timings_json'));
 
         $this->merge([
-            'photo_urls' => $this->parseDelimitedString($this->input('photo_urls_text')),
+            'photo_urls' => $this->has('photo_urls_text')
+                ? $this->parseDelimitedString($this->input('photo_urls_text'))
+                : [],
             'timings' => $timings,
             'weekly_off' => is_array($timings)
                 ? OperatingHours::weeklyOffFromTimings(OperatingHours::normalize($timings))

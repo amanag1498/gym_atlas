@@ -11,7 +11,7 @@
                 <x-status-badge label="New branch" tone="info" />
             </div>
 
-            <form action="{{ route('web.gym.branches.store', ['gym' => $gym->id]) }}" method="POST" class="mt-6 space-y-5">
+            <form action="{{ route('web.gym.branches.store', ['gym' => $gym->id]) }}" method="POST" enctype="multipart/form-data" class="mt-6 space-y-5">
                 @csrf
                 @include('web.gym.branches._form', ['branch' => null, 'gym' => $gym, 'facilities' => $facilities, 'cities' => $cities])
 

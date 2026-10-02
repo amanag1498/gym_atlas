@@ -2,6 +2,7 @@
     'pageTitle' => config('app.name'),
     'panelContext' => [],
     'breadcrumbs' => [],
+    'fullWidth' => false,
 ])
 
 @php
@@ -45,10 +46,17 @@
 
             document.documentElement.classList.toggle('dark', theme === 'dark');
         })();
+        window.panelOnLoad = (callback) => {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', callback, { once: true });
+            } else {
+                queueMicrotask(callback);
+            }
+        };
     </script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="panel-shell min-h-screen bg-gray-50 font-sans text-gray-800 antialiased dark:bg-gray-950 dark:text-gray-100">
+<body data-panel-kind="{{ $panel }}" class="panel-shell min-h-screen bg-gray-50 font-sans text-gray-800 antialiased dark:bg-gray-950 dark:text-gray-100">
     <div id="panel-preloader" class="fixed inset-0 z-[9999] flex items-center justify-center bg-white transition-opacity duration-300 dark:bg-gray-950">
         <div class="h-16 w-16 animate-spin rounded-full border-4 border-solid border-brand-500 border-t-transparent"></div>
     </div>
@@ -68,7 +76,7 @@
             </header>
 
             <main class="flex-1">
-                <div class="mx-auto flex w-full max-w-[1680px] flex-col gap-6 px-4 py-4 sm:px-6 lg:px-8">
+                <div class="mx-auto flex w-full flex-col gap-6 px-4 py-4 sm:px-6 lg:px-8 {{ $fullWidth ? 'max-w-none' : 'max-w-[1680px]' }}">
                     @if (session('web_panel.platform_admin_impersonator_id'))
                         <div class="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-slate-700 shadow-theme-xs md:flex-row md:items-center md:justify-between dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
                             <div>

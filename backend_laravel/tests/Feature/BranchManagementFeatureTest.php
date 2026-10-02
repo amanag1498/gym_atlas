@@ -11,6 +11,8 @@ use App\Models\MemberProfile;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class BranchManagementFeatureTest extends TestCase
@@ -51,11 +53,15 @@ class BranchManagementFeatureTest extends TestCase
 
         $this->attachToGym($owner, $gym);
         $this->loginGymUser($owner);
+        Storage::fake('public');
         config()->set('services.google.maps_browser_key', 'restricted-browser-test-key');
         config()->set('services.google.maps_id', 'test-map-id');
 
         $this->get(route('web.gym.branches.create', ['gym' => $gym->id]))
             ->assertOk()
+            ->assertSee('Branch photos')
+            ->assertSee('Choose facilities')
+            ->assertDontSee('Photo URLs')
             ->assertSee('Search Google Maps')
             ->assertSee('name="google-maps-api-key" content="restricted-browser-test-key"', false)
             ->assertSee('name="google-maps-id" content="test-map-id"', false)
@@ -74,18 +80,28 @@ class BranchManagementFeatureTest extends TestCase
             'opening_time' => '06:00',
             'closing_time' => '22:00',
             'facility_ids' => [$facility->id],
+            'gallery_images' => [UploadedFile::fake()->image('branch.jpg')],
             'is_active' => '1',
         ])->assertRedirect();
 
         $branch = Branch::query()->where('gym_id', $gym->id)->where('name', 'North Branch')->firstOrFail();
         $this->assertSame('active', $branch->status);
         $this->assertSame([$facility->id], $branch->facilities()->pluck('facilities.id')->all());
+        $this->assertCount(1, $branch->photo_urls);
+        $this->assertCount(1, $branch->gymPhotos);
+
+        $this->get(route('web.gym.branches.edit', ['gym' => $gym->id, 'branch' => $branch->id]))
+            ->assertOk()
+            ->assertSee('Current photos')
+            ->assertSee('remove_photo_indexes');
 
         $this->put(route('web.gym.branches.update', ['gym' => $gym->id, 'branch' => $branch->id]), [
             'name' => 'North Branch Prime',
             'city' => 'Noida',
             'address' => 'Updated Road',
             'is_active' => '0',
+            'facility_ids_present' => '1',
+            'remove_photo_indexes' => [0],
         ])->assertRedirect(route('web.gym.branches.show', ['gym' => $gym->id, 'branch' => $branch->id]));
 
         $branch->refresh();
@@ -94,6 +110,9 @@ class BranchManagementFeatureTest extends TestCase
         $this->assertSame('Updated Road', $branch->address);
         $this->assertFalse((bool) $branch->is_active);
         $this->assertSame('inactive', $branch->status);
+        $this->assertSame([], $branch->photo_urls);
+        $this->assertCount(0, $branch->gymPhotos()->get());
+        $this->assertSame([], $branch->facilities()->pluck('facilities.id')->all());
     }
 
     public function test_branch_manager_scope_applies_to_web_and_api_branch_views(): void

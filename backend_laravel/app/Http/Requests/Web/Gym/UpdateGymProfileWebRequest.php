@@ -47,6 +47,10 @@ class UpdateGymProfileWebRequest extends UpdateGymProfileRequest
             $payload['photo_urls'] = $this->parseDelimitedString($this->input('photo_urls_text'));
         }
 
+        if ($this->boolean('facility_ids_present') && ! $this->has('facility_ids')) {
+            $payload['facility_ids'] = [];
+        }
+
         foreach (['public_listing_enabled', 'show_pricing', 'pricing_visible', 'trial_available', 'contact_visible'] as $field) {
             if ($this->has($field)) {
                 $payload[$field] = $this->boolean($field);

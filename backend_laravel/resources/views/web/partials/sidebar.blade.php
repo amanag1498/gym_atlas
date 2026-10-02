@@ -137,7 +137,7 @@
                                     $target = $panel === 'gym' ? route($item['route'], $gymQuery) : route($item['route']);
                                 @endphp
                                 <li>
-                                    <a href="{{ $target }}" class="group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition {{ $isActive ? 'bg-brand-50 text-brand-500 dark:bg-brand-500/[0.12] dark:text-brand-400' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5 dark:hover:text-gray-300' }}">
+                                    <a href="{{ $target }}" @if($isActive) aria-current="page" @endif class="group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition {{ $isActive ? 'bg-brand-50 text-brand-500 dark:bg-brand-500/[0.12] dark:text-brand-400' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5 dark:hover:text-gray-300' }}">
                                         <span class="{{ $isActive ? 'text-brand-500 dark:text-brand-400' : 'text-gray-500 dark:text-gray-400' }}">
                                             <i class="ti {{ $item['icon'] }} text-xl"></i>
                                         </span>

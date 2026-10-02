@@ -6,11 +6,14 @@
         <section class="panel-hero">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                    <span class="inline-flex rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold uppercase tracking-[.18em] text-violet-700 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-200">Device integrations</span>
-                    <h1 class="mt-4 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">Biometric Devices</h1>
-                    <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">Connect face, fingerprint, palm, or card terminals. Atlas stores device-user mappings and attendance events—not biometric templates or face images.</p>
+                    <h1 class="text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">Biometric devices</h1>
+                    <p class="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">Monitor terminals and review events that need a member mapping.</p>
                 </div>
-                <a href="{{ route('web.gym.attendance.index', $scope) }}" class="panel-btn-secondary">Back to Attendance</a>
+                <div class="flex flex-wrap gap-2">
+                    <a href="#add-biometric-device" class="panel-btn-primary" onclick="document.getElementById('add-biometric-device').open = true">Add device</a>
+                    <a href="{{ route('web.gym.attendance.index', $scope) }}" class="panel-btn-secondary">Attendance</a>
+                    <a href="{{ route('web.gym.smart-attendance-hubs.index', $scope) }}" class="panel-btn-secondary">Smart Attendance</a>
+                </div>
             </div>
         </section>
 
@@ -27,10 +30,10 @@
             </div>
         @endif
 
-        <div class="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,.9fr)]">
+        <div class="space-y-6">
             <x-premium-card class="p-6">
                 <div class="flex items-start justify-between gap-4">
-                    <div><h2 class="panel-section-title">Connected terminals</h2><p class="panel-section-copy">Each terminal has its own revocable credential and branch scope.</p></div>
+                    <div><h2 class="panel-section-title">Terminals</h2><p class="panel-section-copy">Check status and last contact. Open a device for setup details or settings.</p></div>
                     <x-status-badge :label="$devices->count().' devices'" tone="info" />
                 </div>
                 <div class="mt-5 space-y-3">
@@ -44,13 +47,12 @@
                                         <x-status-badge :label="$effectiveStatus" :tone="in_array($effectiveStatus, ['online', 'connected'], true) ? 'success' : (in_array($effectiveStatus, ['offline', 'error'], true) ? 'danger' : ($device->is_active ? 'warning' : 'neutral'))" />
                                     </div>
                                     <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $device->vendor }} {{ $device->model }} · {{ $device->branch->name }} · {{ str($device->connection_method)->replace('_', ' ')->title() }}</p>
-                                    <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">{{ $device->member_links_count }} mappings · Last contact {{ $device->last_seen_at?->diffForHumans() ?? 'never' }} · UUID <span class="font-mono">{{ $device->uuid }}</span></p>
+                                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $device->member_links_count }} member mappings · Last contact {{ $device->last_seen_at?->diffForHumans() ?? 'never' }}</p>
                                     @if (abs((int) $device->clock_skew_seconds) > 300)<p class="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-300">Clock warning: terminal differs from Atlas by {{ gmdate('H:i:s', abs((int) $device->clock_skew_seconds)) }}.</p>@endif
-                                    <details class="mt-3 text-sm text-slate-600 dark:text-slate-300"><summary class="cursor-pointer font-semibold text-slate-900 dark:text-white">Setup instructions and gateway URLs</summary><p class="mt-2">{{ $deviceInstructions[$device->id] }}</p><div class="mt-2 space-y-1 font-mono text-xs">@if($device->adapter_key === 'essl_ebioserver')<div class="break-all">Webhook: {{ url('/api/integrations/essl/ebioserver/'.$device->uuid.'/{SECRET}') }}</div><div class="font-sans text-slate-500 dark:text-slate-400">Rotate the secret to generate a complete webhook URL, then paste it into eBioServer Utilities.</div>@else<div class="break-all">Events: {{ url('/api/biometric/devices/'.$device->uuid.'/events') }}</div><div class="break-all">Heartbeat: {{ url('/api/biometric/devices/'.$device->uuid.'/heartbeat') }}</div><div class="break-all">Commands: {{ url('/api/biometric/devices/'.$device->uuid.'/commands') }}</div>@endif</div></details>
+                                    <details class="mt-3 text-sm text-slate-600 dark:text-slate-300"><summary class="cursor-pointer font-semibold text-slate-900 dark:text-white">Setup instructions and gateway URLs</summary><p class="mt-2">{{ $deviceInstructions[$device->id] }}</p><div class="mt-2 space-y-1 font-mono text-xs"><div class="break-all">Device UUID: {{ $device->uuid }}</div>@if($device->adapter_key === 'essl_ebioserver')<div class="break-all">Webhook: {{ url('/api/integrations/essl/ebioserver/'.$device->uuid.'/{SECRET}') }}</div><div class="font-sans text-slate-500 dark:text-slate-400">Rotate the secret to generate a complete webhook URL, then paste it into eBioServer Utilities.</div>@else<div class="break-all">Events: {{ url('/api/biometric/devices/'.$device->uuid.'/events') }}</div><div class="break-all">Heartbeat: {{ url('/api/biometric/devices/'.$device->uuid.'/heartbeat') }}</div><div class="break-all">Commands: {{ url('/api/biometric/devices/'.$device->uuid.'/commands') }}</div>@endif</div><form method="POST" action="{{ route('web.gym.biometric-devices.rotate-secret', ['device' => $device->id] + $scope) }}" data-confirm-submit data-confirm-title="Rotate device secret?" data-confirm-message="The current connector credential will stop working until you update it." data-confirm-button="Rotate secret" class="mt-3">@csrf<button class="panel-btn-secondary" type="submit">Rotate secret</button></form></details>
                                     <details class="mt-3 text-sm"><summary class="cursor-pointer font-semibold text-slate-900 dark:text-white">Edit device and connector settings</summary><form method="POST" action="{{ route('web.gym.biometric-devices.update', ['device' => $device->id] + $scope) }}" class="mt-3 grid gap-3 md:grid-cols-2">@csrf @method('PUT')<x-form-input name="name" label="Device name" :value="$device->name" /><x-form-input name="vendor" label="Vendor" :value="$device->vendor" /><x-form-input name="model" label="Model" :value="$device->model" /><x-form-input name="firmware_version" label="Firmware" :value="$device->firmware_version" /><x-form-input name="serial_number" label="Serial number" :value="$device->serial_number" /><div><label class="panel-label">Methods</label><div class="grid grid-cols-2 gap-2">@foreach(['face' => 'Face', 'fingerprint' => 'Fingerprint', 'palm' => 'Palm', 'card' => 'Card'] as $value => $label)<label class="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-200"><input type="checkbox" name="modalities[]" value="{{ $value }}" @checked(in_array($value, $device->modalities ?? [], true))>{{ $label }}</label>@endforeach</div></div><x-form-input name="configuration[host]" label="New host/IP" placeholder="Leave empty to keep current" /><x-form-input name="configuration[port]" label="New port" type="number" /><x-form-input name="configuration[server_url]" label="New eBioServer Webservice.asmx URL" /><x-form-input name="configuration[username]" label="New API username" /><x-form-input name="configuration[password]" label="New API password" type="password" /><x-form-input name="configuration[location_code]" label="New eBioServer location code" /><x-form-input name="configuration[webhook_encryption_password]" label="New webhook AES password (32 characters)" type="password" /><label class="panel-card-muted flex items-center gap-2 px-3 py-2 text-sm text-slate-800 dark:text-slate-100"><input type="hidden" name="configuration[webhook_encryption_enabled]" value="0"><input type="checkbox" name="configuration[webhook_encryption_enabled]" value="1" @checked((bool) data_get($device->configuration, 'webhook_encryption_enabled', false))>Encrypted eBioServer webhook</label><div class="md:col-span-2"><button class="panel-btn-primary" type="submit">Save device settings</button></div></form>@if($device->adapter_key === 'essl_ebioserver')<form method="POST" action="{{ route('web.gym.biometric-devices.test-connection', ['device' => $device->id] + $scope) }}" class="mt-3">@csrf<button class="panel-btn-secondary" type="submit">Test eBioServer connection</button></form>@endif</details>
                                 </div>
                                 <div class="flex flex-wrap gap-2">
-                                    <form method="POST" action="{{ route('web.gym.biometric-devices.rotate-secret', ['device' => $device->id] + $scope) }}">@csrf<button class="panel-btn-secondary" type="submit">Rotate secret</button></form>
                                     <form method="POST" action="{{ route('web.gym.biometric-devices.toggle', ['device' => $device->id] + $scope) }}">@csrf<button class="{{ $device->is_active ? 'panel-btn-danger' : 'panel-btn-secondary' }}" type="submit">{{ $device->is_active ? 'Disable' : 'Enable' }}</button></form>
                                 </div>
                             </div>
@@ -62,10 +64,11 @@
                 </div>
             </x-premium-card>
 
-            <x-premium-card class="p-6">
-                <h2 class="panel-section-title">Add a device</h2>
-                <p class="panel-section-copy">Choose the exact integration method supported by the machine.</p>
-                <form id="biometric-device-create-form" method="POST" action="{{ route('web.gym.biometric-devices.store', $scope) }}" class="mt-5 space-y-4">
+            <details id="add-biometric-device" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900" @if($errors->any()) open @endif>
+                <summary class="cursor-pointer text-base font-semibold text-slate-950 dark:text-white">Add a device</summary>
+                <div class="mt-4 max-w-3xl">
+                    <p class="panel-section-copy">Choose the exact integration method supported by the machine.</p>
+                    <form id="biometric-device-create-form" method="POST" action="{{ route('web.gym.biometric-devices.store', $scope) }}" class="mt-5 space-y-4">
                     @csrf
                     <input type="hidden" name="gym_id" value="{{ $gym->id }}">
                     <x-form-select name="branch_id" label="Branch" :selected="old('branch_id', request('branch'))" :options="['' => 'Select branch'] + $branches->pluck('name', 'id')->all()" />
@@ -90,23 +93,25 @@
                         </div>
                     </details>
                     <button class="panel-btn-primary w-full justify-center" type="submit">Create secure device</button>
-                </form>
-            </x-premium-card>
+                    </form>
+                </div>
+            </details>
         </div>
 
-        <x-premium-card class="p-6">
-            <h2 class="panel-section-title">Recent device events</h2><p class="panel-section-copy">Unmatched or rejected events stay visible for diagnosis instead of silently disappearing.</p>
+        <details class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900" @if($recentEvents->contains(fn ($event) => $event->status === 'unmatched')) open @endif>
+            <summary class="cursor-pointer text-base font-semibold text-slate-950 dark:text-white">Recent device events <span class="ml-2 text-sm font-normal text-slate-500 dark:text-slate-400">{{ $recentEvents->count() }} recent</span></summary>
+            <p class="panel-section-copy mt-3">Map unmatched device users to members and review rejected events.</p>
             <div class="mt-5 overflow-x-auto"><table class="panel-table"><thead><tr><th>Time</th><th>Device</th><th>Device user</th><th>Member</th><th>Method</th><th>Status</th><th>Result</th></tr></thead><tbody>
                 @forelse ($recentEvents as $event)<tr><td>{{ $event->occurred_at_device->format('d M Y, h:i A') }}</td><td>{{ $event->device->name }}</td><td class="font-mono">{{ $event->external_user_id }}</td><td>{{ $event->memberLink?->memberProfile?->user?->name ?? 'Unmatched' }}</td><td>{{ ucfirst($event->modality ?? 'unknown') }}</td><td><x-status-badge :label="$event->status" :tone="match($event->status) { 'accepted' => 'success', 'unmatched', 'rejected' => 'danger', 'ignored' => 'neutral', default => 'warning' }" /></td><td class="min-w-72 max-w-sm text-sm text-slate-500 dark:text-slate-400"><span>{{ $event->error_message ?: 'Attendance recorded' }}</span>@if($event->status === 'unmatched')<details class="mt-2"><summary class="cursor-pointer font-semibold text-violet-700 dark:text-violet-300">Map to a member</summary><form method="POST" action="{{ route('web.gym.biometric-events.resolve', ['event' => $event->id] + $scope) }}" class="mt-3 space-y-3">@csrf<x-remote-user-search name="member_id" :field-id="'biometric_event_'.$event->id.'_member'" label="Atlas member" :search-url="route('web.gym.attendance.search.members', $scope + ['branch_id' => $event->branch_id])" placeholder="Search by name, email, or phone" required /><button class="panel-btn-primary" type="submit">Map and process event</button></form></details>@endif</td></tr>
                 @empty<tr><td colspan="7" class="text-center text-slate-500">No device events yet.</td></tr>@endforelse
             </tbody></table></div>
-        </x-premium-card>
+        </details>
     </div>
 @endsection
 
 @push('scripts')
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        window.panelOnLoad(() => {
             const adapter = document.getElementById('adapter_key');
             const form = document.getElementById('biometric-device-create-form');
             if (!adapter || !form) return;

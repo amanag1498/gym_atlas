@@ -35,7 +35,7 @@
 @push('scripts')
     @once
         <script>
-            document.addEventListener('DOMContentLoaded', () => {
+            window.panelOnLoad(() => {
                 document.querySelectorAll('[data-profile-photo-upload]').forEach((root) => {
                     const input = root.querySelector('input[type="file"]');
                     const preview = root.querySelector('[data-profile-photo-preview]');

@@ -275,7 +275,7 @@ class HubForegroundService : Service() {
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("Atlas Smart Hub")
             .setContentText(text)
-            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+            .setSmallIcon(R.drawable.ic_stat_atlas)
             .setContentIntent(openApp)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

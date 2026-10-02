@@ -41,6 +41,7 @@ class MemberSessionController extends ChangeNotifier {
   bool initializing = true;
   String? error;
   Map<String, dynamic> consentState = const <String, dynamic>{};
+  bool _unauthorizedLogoutInFlight = false;
 
   bool get isAuthenticated => user != null && token != null;
   bool get hasRequiredConsent =>
@@ -77,16 +78,11 @@ class MemberSessionController extends ChangeNotifier {
       _ensureEligibleMember(me);
       user = me;
       consentState = await _authService.fetchConsentState();
-      if (!hasRequiredConsent) {
-        await _googleSafeSignOut();
-        await _clearLocalState(notify: false);
-        initializing = false;
-        notifyListeners();
-        return;
-      }
       await _storage.saveSession(token: storedToken, user: me);
-      _registerAppPresence();
-      _registerFcmToken();
+      if (hasRequiredConsent) {
+        _registerAppPresence();
+        _registerFcmToken();
+      }
     } on DioException catch (exception) {
       if (exception.response?.statusCode == 401) {
         await _clearLocalState(notify: false);
@@ -313,8 +309,27 @@ class MemberSessionController extends ChangeNotifier {
     }
   }
 
-  Future<void> _handleUnauthorized() async {
-    await logout(remote: false);
+  Future<void> _handleUnauthorized(String rejectedToken, Uri requestUri) async {
+    final currentToken = token;
+    if (currentToken == null ||
+        currentToken.isEmpty ||
+        rejectedToken != currentToken ||
+        _unauthorizedLogoutInFlight) {
+      debugPrint(
+        '[auth][session] Ignored stale or unauthenticated 401 from $requestUri',
+      );
+      return;
+    }
+
+    _unauthorizedLogoutInFlight = true;
+    debugPrint(
+      '[auth][session] Current session rejected with 401 by $requestUri; clearing local session.',
+    );
+    try {
+      await logout(remote: false);
+    } finally {
+      _unauthorizedLogoutInFlight = false;
+    }
   }
 
   Future<MemberUser> _ensureMemberRole(MemberUser currentUser) async {

@@ -648,7 +648,7 @@
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
+    window.panelOnLoad(() => {
         const exerciseCatalog = @json($exerciseCatalog);
         const exerciseBook = @json($exerciseBook);
         const weekdayOptions = @json($weekdayOptions);

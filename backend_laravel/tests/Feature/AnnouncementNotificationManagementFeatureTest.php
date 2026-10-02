@@ -50,15 +50,63 @@ class AnnouncementNotificationManagementFeatureTest extends TestCase
             ]))
             ->assertOk()
             ->assertSee('Search announcements')
-            ->assertSee('id="send_audience_type"', false)
+            ->assertSee('aria-current="page"', false)
+            ->assertDontSee('data-open-member-picker', false)
             ->assertSee('Web member update')
             ->assertSee('1 recipients');
+
+        $this->actingAs($owner)
+            ->get(route('web.gym.announcements.index', ['gym' => $gym->id, 'tab' => 'compose']))
+            ->assertOk()
+            ->assertSee('id="send_audience_type"', false)
+            ->assertSee('data-open-member-picker', false)
+            ->assertDontSee('Search announcements');
 
         $this->actingAs($owner)
             ->get(route('web.gym.announcements.show', ['gym' => $gym->id, 'announcement' => $announcement->id]))
             ->assertOk()
             ->assertSee('Delivery coverage')
             ->assertSee($member->email);
+
+        $this->actingAs($owner)
+            ->get(route('web.gym.notifications.index', ['gym' => $gym->id]))
+            ->assertOk()
+            ->assertSee('Notification list')
+            ->assertSee('max-w-none');
+    }
+
+    public function test_member_picker_search_returns_only_eligible_members_in_the_requested_branch(): void
+    {
+        [$owner, $gym, $branch, $member] = $this->makeGymScope();
+        $member->update(['name' => 'Alice Member']);
+
+        $otherBranch = Branch::query()->create([
+            'gym_id' => $gym->id,
+            'name' => 'Other Branch',
+            'slug' => 'other-branch-'.str()->random(6),
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+        $otherMember = User::factory()->create(['name' => 'Alice Elsewhere', 'active_role' => RoleName::Member->value, 'is_active' => true]);
+        MemberProfile::query()->create([
+            'user_id' => $otherMember->id,
+            'gym_id' => $gym->id,
+            'branch_id' => $otherBranch->id,
+            'membership_status' => 'active',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($owner)
+            ->getJson(route('web.gym.announcements.member-options', ['gym' => $gym->id, 'branch_id' => $branch->id, 'q' => 'Alice']))
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $member->id)
+            ->assertJsonCount(1, 'data');
+
+        $this->actingAs($owner)
+            ->getJson(route('web.gym.announcements.member-options', ['gym' => $gym->id, 'branch_id' => $branch->id]))
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $member->id)
+            ->assertJsonCount(1, 'data');
     }
 
     public function test_announcement_detail_and_delete_cannot_cross_the_selected_gym_context(): void

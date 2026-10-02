@@ -5,6 +5,8 @@
     $branchTimingsValue = old('timings_json')
         ? json_decode((string) old('timings_json'), true)
         : OperatingHours::normalize($branch?->timings ?? [], $branch?->weekly_off ?? []);
+    $branchPhotoUrls = collect($branch?->photo_urls ?? [])->values();
+    $removedPhotoIndexes = collect(old('remove_photo_indexes', []))->map(fn ($index) => (int) $index)->all();
 @endphp
 
 <div class="grid gap-5 md:grid-cols-2">
@@ -50,20 +52,31 @@
     </div>
 
     <div class="md:col-span-2">
-        <label for="photo_urls_text" class="panel-label">Photo URLs</label>
-        <textarea id="photo_urls_text" name="photo_urls_text" class="panel-textarea" rows="3" placeholder="One image URL per line">{{ old('photo_urls_text', $branch ? implode("\n", $branch->photo_urls ?? []) : '') }}</textarea>
-        <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Up to 10 URLs. These support branch discovery, listing media, and gallery previews.</p>
+        <label for="gallery_images" class="panel-label">Branch photos</label>
+        <p class="mb-3 text-sm text-slate-600 dark:text-slate-400">Upload up to 10 photos for branch discovery and gallery previews.</p>
+        <input id="gallery_images" name="gallery_images[]" type="file" accept=".jpg,.jpeg,.png,.webp" multiple class="panel-input">
+        @error('gallery_images')<p class="mt-2 text-sm text-error-600 dark:text-error-300">{{ $message }}</p>@enderror
+        @if ($errors->has('gallery_images.*'))<p class="mt-2 text-sm text-error-600 dark:text-error-300">{{ $errors->first('gallery_images.*') }}</p>@endif
+        @error('remove_photo_indexes')<p class="mt-2 text-sm text-error-600 dark:text-error-300">{{ $message }}</p>@enderror
+        @if ($branchPhotoUrls->isNotEmpty())
+            <p class="mt-5 text-sm font-semibold text-slate-950 dark:text-white">Current photos · {{ $branchPhotoUrls->count() }}</p>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Select photos to remove when you save.</p>
+            <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                @foreach ($branchPhotoUrls as $index => $photoUrl)
+                    <label class="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
+                        <img src="{{ \App\Support\Media\StoredImage::thumbnailUrl($photoUrl, $photoUrl) }}" alt="Branch photo {{ $index + 1 }}" class="h-32 w-full object-cover">
+                        <span class="flex min-h-12 items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200">
+                            <input type="checkbox" name="remove_photo_indexes[]" value="{{ $index }}" class="h-5 w-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500" @checked(in_array($index, $removedPhotoIndexes, true))>
+                            Remove photo
+                        </span>
+                    </label>
+                @endforeach
+            </div>
+        @endif
     </div>
 
     <div class="md:col-span-2">
-        <label for="facility_ids" class="panel-label">Facilities</label>
-        <select id="facility_ids" name="facility_ids[]" class="panel-select min-h-40" multiple>
-            @foreach ($facilities as $facility)
-                <option value="{{ $facility->id }}" @selected(in_array($facility->id, old('facility_ids', $branch?->facilities?->pluck('id')->all() ?? []), true))>
-                    {{ $facility->name }}
-                </option>
-            @endforeach
-        </select>
+        @include('web.gym.profile._facility-picker', ['selectedFacilities' => $branch?->facilities ?? collect(), 'facilities' => $facilities, 'facilityDescription' => 'Choose the amenities available at this branch.'])
     </div>
 
     <div class="md:col-span-2">

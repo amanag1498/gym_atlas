@@ -61,7 +61,16 @@ class GymProfileManagementFeatureTest extends TestCase
         $this->get(route('web.gym.profile.edit', ['gym' => $gym->id, 'branch' => $branch->id]))
             ->assertOk()
             ->assertSee('Search Google Maps')
-            ->assertSee('Copy hours from');
+            ->assertSee('Copy hours from')
+            ->assertSee('data-facility-picker', false)
+            ->assertSee('Choose facilities')
+            ->assertSee('max-w-none');
+
+        $this->get(route('web.gym.public-listing.edit', ['gym' => $gym->id, 'branch' => $branch->id]))
+            ->assertOk()
+            ->assertSee('Current public profile')
+            ->assertSee('Show this gym in discovery')
+            ->assertSee('max-w-none');
 
         $this->put(route('web.gym.profile.update', ['gym' => $gym->id, 'branch' => $branch->id]), [
             'name' => 'Profile Gym Plus',
@@ -93,6 +102,13 @@ class GymProfileManagementFeatureTest extends TestCase
         $this->assertNotEmpty($gym->cover_image_url);
         $this->assertNotEmpty($gym->photo_urls);
         $this->assertSame([$facility->id], $gym->facilities()->pluck('facilities.id')->all());
+
+        $this->put(route('web.gym.profile.update', ['gym' => $gym->id, 'branch' => $branch->id]), [
+            'name' => $gym->name,
+            'city' => $gym->city,
+            'facility_ids_present' => '1',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame([], $gym->fresh()->facilities()->pluck('facilities.id')->all());
     }
 
     public function test_gym_owner_can_update_public_listing_settings_via_api_and_discovery_respects_them(): void

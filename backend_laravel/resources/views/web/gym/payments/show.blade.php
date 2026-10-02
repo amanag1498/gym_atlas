@@ -5,9 +5,9 @@
         <section class="panel-hero">
             <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div class="max-w-3xl">
-                    <p class="text-xs font-semibold uppercase tracking-[0.24em] text-sky-200/80">Billing detail</p>
-                    <h3 class="mt-3 text-3xl font-semibold tracking-tight text-white">Payment #{{ $payment->id }}</h3>
-                    <p class="mt-3 max-w-2xl text-sm text-slate-300">Receipt, collector, member, and membership balance context for this recorded payment.</p>
+                    <p class="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700 dark:text-sky-300">Billing detail</p>
+                    <h3 class="mt-3 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">Payment #{{ $payment->id }}</h3>
+                    <p class="mt-3 max-w-2xl text-sm text-slate-600 dark:text-slate-300">Receipt, collector, member, and membership balance context for this recorded payment.</p>
                 </div>
                 <div class="flex flex-wrap gap-3">
                     <a href="{{ route('web.gym.payments.index', request()->only(['gym', 'branch'])) }}" class="panel-btn-secondary">Back to Payments</a>
@@ -31,30 +31,30 @@
                 <h3 class="panel-section-title">Payment profile</h3>
                 <div class="mt-5 grid gap-4 md:grid-cols-2">
                     <div class="panel-card-muted p-4">
-                        <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Member</p>
-                        <p class="mt-2 font-semibold text-white">{{ $payment->member?->name ?? 'Unknown member' }}</p>
-                        <p class="mt-1 text-sm text-slate-400">{{ $payment->member?->email ?: ($payment->member?->phone ?: 'No contact details') }}</p>
+                        <p class="text-xs uppercase tracking-[0.16em] text-slate-600 dark:text-slate-400">Member</p>
+                        <p class="mt-2 break-words font-semibold text-slate-950 dark:text-slate-100">{{ $payment->member?->name ?? 'Unknown member' }}</p>
+                        <p class="mt-1 break-all text-sm text-slate-600 dark:text-slate-400">{{ $payment->member?->email ?: ($payment->member?->phone ?: 'No contact details') }}</p>
                     </div>
                     <div class="panel-card-muted p-4">
-                        <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Membership</p>
-                        <p class="mt-2 font-semibold text-white">{{ $payment->membership?->membershipPlan?->name ?? 'Unknown plan' }}</p>
-                        <p class="mt-1 text-sm text-slate-400">Branch: {{ $payment->branch?->name ?? 'Unassigned' }}</p>
+                        <p class="text-xs uppercase tracking-[0.16em] text-slate-600 dark:text-slate-400">Membership</p>
+                        <p class="mt-2 break-words font-semibold text-slate-950 dark:text-slate-100">{{ $payment->membership?->membershipPlan?->name ?? 'Unknown plan' }}</p>
+                        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Branch: {{ $payment->branch?->name ?? 'Unassigned' }}</p>
                     </div>
                     <div class="panel-card-muted p-4">
-                        <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Amount</p>
-                        <p class="mt-2 font-semibold text-white">{{ number_format((float) $payment->amount, 2) }}</p>
+                        <p class="text-xs uppercase tracking-[0.16em] text-slate-600 dark:text-slate-400">Amount</p>
+                        <p class="mt-2 font-semibold text-slate-950 dark:text-slate-100">₹{{ number_format((float) $payment->amount, 2) }}</p>
                     </div>
                     <div class="panel-card-muted p-4">
-                        <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Payment Mode</p>
-                        <p class="mt-2 font-semibold text-white">{{ strtoupper((string) $payment->payment_mode) }}</p>
+                        <p class="text-xs uppercase tracking-[0.16em] text-slate-600 dark:text-slate-400">Payment Mode</p>
+                        <p class="mt-2 font-semibold text-slate-950 dark:text-slate-100">{{ strtoupper((string) $payment->payment_mode) }}</p>
                     </div>
                     <div class="panel-card-muted p-4">
-                        <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Collected By</p>
-                        <p class="mt-2 font-semibold text-white">{{ $payment->collector?->name ?? 'System' }}</p>
+                        <p class="text-xs uppercase tracking-[0.16em] text-slate-600 dark:text-slate-400">Collected By</p>
+                        <p class="mt-2 break-words font-semibold text-slate-950 dark:text-slate-100">{{ $payment->collector?->name ?? 'System' }}</p>
                     </div>
                     <div class="panel-card-muted p-4">
-                        <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Payment Date</p>
-                        <p class="mt-2 font-semibold text-white">{{ optional($payment->paid_at)->format('d M Y H:i') ?: 'Unknown' }}</p>
+                        <p class="text-xs uppercase tracking-[0.16em] text-slate-600 dark:text-slate-400">Payment Date</p>
+                        <p class="mt-2 font-semibold text-slate-950 dark:text-slate-100">{{ optional($payment->paid_at)->format('d M Y H:i') ?: 'Unknown' }}</p>
                     </div>
                 </div>
             </div>
@@ -63,25 +63,25 @@
                 <div class="panel-card p-6">
                     <h3 class="panel-section-title">Receipt & reference</h3>
                     <div class="mt-5 space-y-3">
-                        <div class="panel-card-muted flex items-center justify-between px-4 py-3">
-                            <span class="text-slate-300">Receipt Number</span>
-                            <span class="font-semibold text-white">{{ $payment->receipt_number ?? 'Pending' }}</span>
+                        <div class="panel-card-muted flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                            <span class="text-slate-600 dark:text-slate-300">Receipt Number</span>
+                            <span class="break-all font-semibold text-slate-950 dark:text-slate-100 sm:text-right">{{ $payment->receipt_number ?? 'Pending' }}</span>
                         </div>
-                        <div class="panel-card-muted flex items-center justify-between px-4 py-3">
-                            <span class="text-slate-300">Payment Record Status</span>
+                        <div class="panel-card-muted flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                            <span class="text-slate-600 dark:text-slate-300">Payment Record Status</span>
                             <x-status-badge :label="str($payment->status)->replace('_', ' ')->title()" tone="info" />
                         </div>
-                        <div class="panel-card-muted flex items-center justify-between px-4 py-3">
-                            <span class="text-slate-300">Membership Payment Status</span>
+                        <div class="panel-card-muted flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                            <span class="text-slate-600 dark:text-slate-300">Membership Payment Status</span>
                             <x-status-badge :label="str($payment->membership?->payment_status ?? 'unknown')->replace('_', ' ')->title()" tone="{{ ($payment->membership?->payment_status ?? '') === 'overdue' ? 'danger' : (($payment->membership?->payment_status ?? '') === 'partial' ? 'warning' : (($payment->membership?->payment_status ?? '') === 'overpaid' ? 'verified' : 'success')) }}" />
                         </div>
-                        <div class="panel-card-muted flex items-center justify-between px-4 py-3">
-                            <span class="text-slate-300">External Reference</span>
-                            <span class="font-semibold text-white">{{ $payment->external_reference ?: 'No external ref' }}</span>
+                        <div class="panel-card-muted flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                            <span class="text-slate-600 dark:text-slate-300">External Reference</span>
+                            <span class="break-all font-semibold text-slate-950 dark:text-slate-100 sm:text-right">{{ $payment->external_reference ?: 'No external ref' }}</span>
                         </div>
                         <div class="panel-card-muted px-4 py-3">
-                            <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Notes</p>
-                            <p class="mt-2 text-sm text-slate-200">{{ $payment->notes ?: 'No notes added.' }}</p>
+                            <p class="text-xs uppercase tracking-[0.16em] text-slate-600 dark:text-slate-400">Notes</p>
+                            <p class="mt-2 whitespace-pre-wrap break-words text-sm text-slate-700 dark:text-slate-200">{{ $payment->notes ?: 'No notes added.' }}</p>
                         </div>
                     </div>
                 </div>
@@ -90,16 +90,16 @@
                     <h3 class="panel-section-title">Membership balance snapshot</h3>
                     <div class="mt-5 grid gap-3 md:grid-cols-3">
                         <div class="panel-card-muted p-4">
-                            <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Final Payable</p>
-                            <p class="mt-2 font-semibold text-white">{{ number_format((float) ($payment->membership?->final_payable_amount ?? 0), 2) }}</p>
+                            <p class="text-xs uppercase tracking-[0.16em] text-slate-600 dark:text-slate-400">Final Payable</p>
+                            <p class="mt-2 font-semibold text-slate-950 dark:text-slate-100">₹{{ number_format((float) ($payment->membership?->final_payable_amount ?? 0), 2) }}</p>
                         </div>
                         <div class="panel-card-muted p-4">
-                            <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Amount Paid</p>
-                            <p class="mt-2 font-semibold text-white">{{ number_format((float) ($payment->membership?->amount_paid ?? 0), 2) }}</p>
+                            <p class="text-xs uppercase tracking-[0.16em] text-slate-600 dark:text-slate-400">Amount Paid</p>
+                            <p class="mt-2 font-semibold text-slate-950 dark:text-slate-100">₹{{ number_format((float) ($payment->membership?->amount_paid ?? 0), 2) }}</p>
                         </div>
-                        <div class="rounded-3xl border border-amber-400/15 bg-amber-400/10 p-4">
-                            <p class="text-xs uppercase tracking-[0.16em] text-amber-100">Due Amount</p>
-                            <p class="mt-2 font-semibold text-white">{{ number_format((float) ($payment->membership?->due_amount ?? 0), 2) }}</p>
+                        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
+                            <p class="text-xs uppercase tracking-[0.16em] text-amber-800 dark:text-amber-200">Due Amount</p>
+                            <p class="mt-2 font-semibold text-slate-950 dark:text-slate-100">₹{{ number_format((float) ($payment->membership?->due_amount ?? 0), 2) }}</p>
                         </div>
                     </div>
                     @if (($payment->membership?->amount_paid ?? 0) > 0)

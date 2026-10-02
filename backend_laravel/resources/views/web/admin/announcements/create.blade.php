@@ -129,7 +129,7 @@
 
 @push('scripts')
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        window.panelOnLoad(() => {
             const audienceField = document.querySelector('[data-announcement-audience]');
             const gymBlock = document.querySelector('[data-announcement-gym]');
             const branchBlock = document.querySelector('[data-announcement-branch]');

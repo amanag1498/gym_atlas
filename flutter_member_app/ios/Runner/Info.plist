@@ -58,9 +58,9 @@
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Gym Atlas uses your health activity totals to sync step progress with your training dashboard.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Gym Atlas uses background location access to let iOS detect your gym's Bluetooth entrance beacon and record attendance when the app is closed. GPS coordinates are not used for Smart Attendance.</string>
+	<string>Gym Atlas uses background location permission only to let iOS monitor your gym's Bluetooth entrance beacon and save attendance out time. Smart Attendance does not read or store GPS coordinates.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Gym Atlas uses location access for nearby gym discovery and to set up Bluetooth entrance-beacon monitoring for Smart Attendance.</string>
+	<string>Gym Atlas uses location access for nearby gym discovery and to enable Bluetooth entrance-beacon monitoring when your gym offers Smart Attendance.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Gym Atlas uses your photo library when you choose profile and progress photos.</string>
 	<key>UIApplicationSceneManifest</key>

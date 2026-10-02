@@ -32,6 +32,41 @@ void main() {
     expect(output, contains('Map(keys=id_token,email)'));
     expect(output, contains('Map(keys=success,data)'));
   });
+
+  test('unauthenticated 401 does not clear an existing app session', () async {
+    var unauthorizedCalls = 0;
+    final client = MemberApiClient(
+      onUnauthorized: (rejectedToken, requestUri) async {
+        unauthorizedCalls++;
+      },
+    );
+    client.dio.httpClientAdapter = _UnauthorizedAdapter();
+
+    await expectLater(client.get('/public/me'), throwsA(isA<DioException>()));
+
+    expect(unauthorizedCalls, 0);
+  });
+
+  test('authenticated 401 identifies the rejected token and request', () async {
+    String? rejectedToken;
+    Uri? rejectedRequest;
+    final client = MemberApiClient(
+      token: 'current-member-token',
+      onUnauthorized: (token, requestUri) async {
+        rejectedToken = token;
+        rejectedRequest = requestUri;
+      },
+    );
+    client.dio.httpClientAdapter = _UnauthorizedAdapter();
+
+    await expectLater(
+      client.get('/member/attendance/status'),
+      throwsA(isA<DioException>()),
+    );
+
+    expect(rejectedToken, 'current-member-token');
+    expect(rejectedRequest?.path, '/api/member/attendance/status');
+  });
 }
 
 class _SuccessfulAuthAdapter implements HttpClientAdapter {
@@ -47,6 +82,29 @@ class _SuccessfulAuthAdapter implements HttpClientAdapter {
         'data': <String, dynamic>{'token': 'issued-bearer-token'},
       }),
       200,
+      headers: <String, List<String>>{
+        Headers.contentTypeHeader: <String>[Headers.jsonContentType],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+class _UnauthorizedAdapter implements HttpClientAdapter {
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    return ResponseBody.fromString(
+      jsonEncode(<String, dynamic>{
+        'success': false,
+        'message': 'Unauthenticated.',
+      }),
+      401,
       headers: <String, List<String>>{
         Headers.contentTypeHeader: <String>[Headers.jsonContentType],
       },

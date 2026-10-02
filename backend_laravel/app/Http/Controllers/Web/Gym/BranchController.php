@@ -161,7 +161,7 @@ class BranchController extends Controller
         $this->gymWebPanelService->assertBranchAccessible($branch, $request, $gym);
 
         $oldValues = $branch->load('facilities')->toArray();
-        $branch = $this->branchManagementService->update($branch, $request->validated());
+        $branch = $this->branchManagementService->update($branch, $request->validated(), $request);
 
         $this->auditLogService->log(
             event: 'web.gym.branch.updated',

@@ -7,7 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:gym_flutter_core/guides.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_flutter_core/gym_flutter_core.dart'
-    show AppRuntimeController, AppRuntimeGate, ChatNotificationService;
+    show
+        AppRuntimeController,
+        AppRuntimeGate,
+        BrandedStartupSplash,
+        ChatNotificationService;
 import 'package:provider/provider.dart';
 
 import '../core/theme/app_theme.dart';
@@ -568,28 +572,31 @@ class _MemberAppState extends State<MemberApp> with WidgetsBindingObserver {
         title: 'Gym Atlas',
         routerConfig: router,
         theme: AppTheme.build(),
-        builder: (context, child) => AppRuntimeGate(
-          controller: runtimeController,
+        builder: (context, child) => BrandedStartupSplash(
           audience: 'Member',
-          child: Consumer<MemberSessionController>(
-            builder: (context, session, _) {
-              final content = GuideScope(
-                account: session.isAuthenticated && session.hasRequiredConsent
-                    ? 'member:${session.user!.id}'
-                    : null,
-                guides: memberGuides,
-                child: child ?? const SizedBox.shrink(),
-              );
-              if ((!kDebugMode && !_smartAttendanceTestToolsEnabled) ||
-                  !session.isAuthenticated) {
-                return content;
-              }
-              return SmartAttendanceDebugOverlay(
-                controller: smartAttendanceController,
-                navigatorKey: _rootNavigatorKey,
-                child: content,
-              );
-            },
+          child: AppRuntimeGate(
+            controller: runtimeController,
+            audience: 'Member',
+            child: Consumer<MemberSessionController>(
+              builder: (context, session, _) {
+                final content = GuideScope(
+                  account: session.isAuthenticated && session.hasRequiredConsent
+                      ? 'member:${session.user!.id}'
+                      : null,
+                  guides: memberGuides,
+                  child: child ?? const SizedBox.shrink(),
+                );
+                if ((!kDebugMode && !_smartAttendanceTestToolsEnabled) ||
+                    !session.isAuthenticated) {
+                  return content;
+                }
+                return SmartAttendanceDebugOverlay(
+                  controller: smartAttendanceController,
+                  navigatorKey: _rootNavigatorKey,
+                  child: content,
+                );
+              },
+            ),
           ),
         ),
       ),

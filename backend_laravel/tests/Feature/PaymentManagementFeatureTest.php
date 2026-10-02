@@ -85,8 +85,8 @@ class PaymentManagementFeatureTest extends TestCase
 
         $this->get(route('web.gym.payments.index', ['gym' => $gym->id, 'branch' => $branch->id]))
             ->assertOk()
-            ->assertSeeInOrder(['Mode', 'Collector', 'Receipt', 'Actions'])
-            ->assertSee($owner->email);
+            ->assertSeeInOrder(['Payment', 'Amount', 'Receipt', 'Actions'])
+            ->assertSee('By '.$owner->name);
 
         $this->assertSame('paid', $membership->payment_status);
         $this->assertSame(1900.0, (float) $membership->amount_paid);

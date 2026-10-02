@@ -74,7 +74,7 @@
 
 @push('scripts')
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        window.panelOnLoad(() => {
             const template = document.getElementById('diet_template_id');
             const customFields = document.querySelector('[data-custom-diet-fields]');
             const copyNote = document.querySelector('[data-template-copy-note]');

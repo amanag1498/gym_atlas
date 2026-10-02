@@ -4,43 +4,30 @@
     @php
         $scope = request()->only(['gym', 'branch']);
         $totalHubs = $hubs->count();
-        $activeHubs = $hubs->where('is_active', true)->count();
         $onlineHubs = $hubs->filter(fn ($hub) => ($hubPayloads[$hub->id]['status'] ?? null) === 'online')->count();
         $needsSetup = $hubs->filter(fn ($hub) => in_array($hubPayloads[$hub->id]['status'] ?? null, ['pending', 'offline'], true))->count();
     @endphp
 
     <div class="space-y-6">
-        <section class="panel-hero overflow-hidden">
-            <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
+        <section class="panel-hero">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                    <span class="inline-flex rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-[.18em] text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200">Entrance automation</span>
-                    <h1 class="mt-4 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">Smart Attendance Hubs</h1>
-                    <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">Manage trusted Android or ESP32 entrance hubs that will broadcast the Atlas Smart Attendance signal. Each hub has its own branch scope, public ID, and revocable activation credential.</p>
-                    <div class="mt-5 flex flex-wrap gap-2">
-                        <a href="{{ route('web.gym.attendance.index', $scope) }}" class="panel-btn-secondary"><i class="ti ti-arrow-left"></i>Attendance</a>
-                        <a href="{{ route('web.gym.biometric-devices.index', $scope) }}" class="panel-btn-secondary"><i class="ti ti-fingerprint"></i>Biometric devices</a>
-                    </div>
+                    <h1 class="text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">Smart Attendance hubs</h1>
+                    <p class="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">Monitor entrance hubs and manage their activation credentials.</p>
                 </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="rounded-2xl border border-white/60 bg-white/75 p-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5">
-                        <div class="text-2xl font-semibold text-slate-950 dark:text-white">{{ $totalHubs }}</div>
-                        <div class="mt-1 text-xs font-semibold uppercase tracking-[.16em] text-slate-500 dark:text-slate-400">Total hubs</div>
-                    </div>
-                    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm dark:border-emerald-500/20 dark:bg-emerald-500/10">
-                        <div class="text-2xl font-semibold text-emerald-700 dark:text-emerald-200">{{ $onlineHubs }}</div>
-                        <div class="mt-1 text-xs font-semibold uppercase tracking-[.16em] text-emerald-700/80 dark:text-emerald-200/80">Online now</div>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
-                        <div class="text-2xl font-semibold text-slate-950 dark:text-white">{{ $activeHubs }}</div>
-                        <div class="mt-1 text-xs font-semibold uppercase tracking-[.16em] text-slate-500 dark:text-slate-400">Active</div>
-                    </div>
-                    <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-500/20 dark:bg-amber-500/10">
-                        <div class="text-2xl font-semibold text-amber-700 dark:text-amber-200">{{ $needsSetup }}</div>
-                        <div class="mt-1 text-xs font-semibold uppercase tracking-[.16em] text-amber-700/80 dark:text-amber-200/80">Needs check</div>
-                    </div>
+                <div class="flex flex-wrap gap-2">
+                    <a href="#create-hub" class="panel-btn-primary" onclick="document.getElementById('create-hub').open = true">Add hub</a>
+                    <a href="{{ route('web.gym.attendance.index', $scope) }}" class="panel-btn-secondary">Attendance</a>
+                    <a href="{{ route('web.gym.biometric-devices.index', $scope) }}" class="panel-btn-secondary">Biometric devices</a>
                 </div>
             </div>
         </section>
+
+        <div class="flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-600 dark:text-slate-300" aria-label="Hub status summary">
+            <span><strong class="text-slate-950 dark:text-white">{{ $totalHubs }}</strong> total</span>
+            <span><strong class="text-emerald-700 dark:text-emerald-300">{{ $onlineHubs }}</strong> online</span>
+            <span><strong class="text-amber-700 dark:text-amber-300">{{ $needsSetup }}</strong> need attention</span>
+        </div>
 
         @if (session('smart_hub_secret'))
             <x-premium-card class="border-amber-300/70 bg-amber-50/90 p-5 text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
@@ -63,13 +50,13 @@
             </x-premium-card>
         @endif
 
-        <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div class="space-y-6">
             <x-premium-card class="overflow-hidden p-0">
                 <div class="border-b border-slate-200 p-5 dark:border-slate-800">
                     <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                         <div>
                             <h2 class="panel-section-title">Hub fleet</h2>
-                            <p class="panel-section-copy">Status, branch scope, public BLE identity, and setup URLs for every Smart Attendance hub.</p>
+                            <p class="panel-section-copy">Check connection status and last contact. Open a hub for setup details or settings.</p>
                         </div>
                         <x-status-badge :label="$totalHubs.' hubs'" tone="info" />
                     </div>
@@ -92,26 +79,22 @@
                                     <div class="flex flex-wrap items-center gap-2">
                                         <h3 class="text-base font-semibold text-slate-950 dark:text-white">{{ $hub->name }}</h3>
                                         <x-status-badge :label="str($status)->replace('_', ' ')->title()" :tone="$tone" />
-                                        <x-status-badge :label="$hub->is_active ? 'Active' : 'Inactive'" :tone="$hub->is_active ? 'success' : 'neutral'" />
+                                        @unless($hub->is_active)<x-status-badge label="Disabled" tone="neutral" />@endunless
                                     </div>
-                                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $hub->branch?->name ?? 'Gym-wide' }} · {{ strtoupper($hub->platform) }} · Public ID <code class="font-mono">{{ $hub->public_id }}</code></p>
-                                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Last heartbeat {{ $hub->last_seen_at?->diffForHumans() ?? 'never' }} · UUID <code class="font-mono">{{ $hub->uuid }}</code></p>
+                                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $hub->branch?->name ?? 'Gym-wide' }} · {{ strtoupper($hub->platform) }} · Last heartbeat {{ $hub->last_seen_at?->diffForHumans() ?? 'never' }}</p>
                                 </div>
                                 <div class="flex flex-wrap gap-2 lg:justify-end">
                                     <form method="POST" action="{{ route('web.gym.smart-attendance-hubs.toggle', $routeParams) }}">
                                         @csrf
                                         <x-action-button type="submit" variant="secondary">{{ $hub->is_active ? 'Disable' : 'Enable' }}</x-action-button>
                                     </form>
-                                    <form method="POST" action="{{ route('web.gym.smart-attendance-hubs.rotate-secret', $routeParams) }}" data-confirm-submit data-confirm-title="Rotate hub secret?" data-confirm-message="The current hub credential will stop working until the device is updated." data-confirm-button="Rotate secret">
-                                        @csrf
-                                        <x-action-button type="submit" variant="secondary">Rotate secret</x-action-button>
-                                    </form>
                                 </div>
                             </div>
 
                             <details class="mt-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
-                                <summary class="cursor-pointer text-sm font-semibold text-slate-900 dark:text-white">Activation flow and gateway URLs</summary>
+                                <summary class="cursor-pointer text-sm font-semibold text-slate-900 dark:text-white">Setup details and credentials</summary>
                                 <div class="mt-4 grid gap-3 text-sm">
+                                    <p class="text-slate-600 dark:text-slate-300">Public ID <code class="break-all">{{ $hub->public_id }}</code> · Hub UUID <code class="break-all">{{ $hub->uuid }}</code></p>
                                     <div>
                                         <div class="text-xs font-semibold uppercase tracking-[.16em] text-slate-500 dark:text-slate-400">Provisioning</div>
                                         <p class="mt-1 text-slate-600 dark:text-slate-300">Enter the hub UUID and the one-time secret shown after create or rotation. The device should activate once, then send heartbeat every 60 seconds.</p>
@@ -127,6 +110,10 @@
                                         <div>iBeacon major <code>{{ ($hub->id >> 16) & 0xffff }}</code> · minor <code>{{ $hub->id & 0xffff }}</code> · measured power <code>-59</code></div>
                                         <p class="mt-1 text-slate-500 dark:text-slate-400">Android and iOS Member apps accept this hardware profile. The authenticated config endpoint returns the same values plus compact V2 service data.</p>
                                     </div>
+                                    <form method="POST" action="{{ route('web.gym.smart-attendance-hubs.rotate-secret', $routeParams) }}" data-confirm-submit data-confirm-title="Rotate hub secret?" data-confirm-message="The current hub credential will stop working until the device is updated." data-confirm-button="Rotate secret">
+                                        @csrf
+                                        <x-action-button type="submit" variant="secondary">Rotate secret</x-action-button>
+                                    </form>
                                 </div>
                             </details>
 
@@ -174,11 +161,12 @@
                 </div>
             </x-premium-card>
 
-            <div class="space-y-6">
-                <x-premium-card class="p-5">
-                    <h2 class="panel-section-title">Create hub</h2>
-                    <p class="panel-section-copy">Use one hub per reception phone, gate device, or ESP32 broadcaster.</p>
-                    <form method="POST" action="{{ route('web.gym.smart-attendance-hubs.store', $scope) }}" class="mt-4 space-y-4">
+            <div class="space-y-4">
+                <details id="create-hub" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900" @if($errors->any()) open @endif>
+                    <summary class="cursor-pointer text-base font-semibold text-slate-950 dark:text-white">Add a hub</summary>
+                    <div class="mt-4 max-w-3xl">
+                        <p class="panel-section-copy">Use one hub per reception phone, gate device, or ESP32 broadcaster.</p>
+                        <form method="POST" action="{{ route('web.gym.smart-attendance-hubs.store', $scope) }}" class="mt-4 space-y-4">
                         @csrf
                         <label class="block">
                             <span class="form-label">Hub name</span>
@@ -208,18 +196,19 @@
                             <input class="form-input" name="firmware_version" value="{{ old('firmware_version') }}" placeholder="Optional">
                         </label>
                         <x-action-button type="submit" class="w-full justify-center">Create hub and show secret</x-action-button>
-                    </form>
-                </x-premium-card>
+                        </form>
+                    </div>
+                </details>
 
-                <x-premium-card class="p-5">
-                    <h2 class="panel-section-title">Setup checklist</h2>
+                <details class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <summary class="cursor-pointer text-base font-semibold text-slate-950 dark:text-white">Setup checklist</summary>
                     <ol class="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300">
                         <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-semibold text-brand-600 dark:bg-brand-500/10 dark:text-brand-200">1</span><span>Create a hub for the correct entrance branch.</span></li>
                         <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-semibold text-brand-600 dark:bg-brand-500/10 dark:text-brand-200">2</span><span>Copy the UUID and one-time secret into the hub device.</span></li>
                         <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-semibold text-brand-600 dark:bg-brand-500/10 dark:text-brand-200">3</span><span>Wait for activation and heartbeat to change the hub to online.</span></li>
                     </ol>
                     <p class="mt-4 rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-500 dark:bg-slate-900/70 dark:text-slate-400">The secret is never shown again after you leave the confirmation message. Rotate the secret if the device was configured incorrectly or moved.</p>
-                </x-premium-card>
+                </details>
             </div>
         </div>
     </div>

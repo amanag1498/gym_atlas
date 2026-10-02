@@ -159,7 +159,8 @@ class SmartAttendanceController extends ChangeNotifier {
     await _restoreAndReconcileSession();
     final accessToken = _accessTokenProvider?.call();
     final selectedGymId = await _selectedGymIdProvider?.call();
-    if (defaultTargetPlatform == TargetPlatform.android &&
+    if ((defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS) &&
         accessToken != null &&
         accessToken.isNotEmpty &&
         selectedGymId != null &&
@@ -209,7 +210,8 @@ class SmartAttendanceController extends ChangeNotifier {
     await _restoreAndReconcileSession();
     final accessToken = _accessTokenProvider?.call();
     final selectedGymId = await _selectedGymIdProvider?.call();
-    if (defaultTargetPlatform == TargetPlatform.android &&
+    if ((defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS) &&
         accessToken != null &&
         accessToken.isNotEmpty &&
         selectedGymId != null &&
@@ -333,13 +335,8 @@ class SmartAttendanceController extends ChangeNotifier {
   }
 
   void _handleDetection(SmartAttendanceDetection detection) {
-    if (detection.isExit) {
-      _detections.add(detection);
-      unawaited(_handleBeaconExit(detection));
-      notifyListeners();
-      return;
-    }
-    if (detection.source == 'android_background_native') {
+    if (detection.source == 'android_background_native' ||
+        detection.source == 'ios_background_native') {
       final previous = _lastDetectionByHub[detection.publicId];
       final now = _clock();
       if (previous == null || now.difference(previous) >= _duplicateWindow) {
@@ -347,7 +344,13 @@ class SmartAttendanceController extends ChangeNotifier {
         _detections.add(detection);
       }
       _logicState =
-          'Android background service detected the Hub and owns attendance sync.';
+          '${defaultTargetPlatform == TargetPlatform.iOS ? 'iOS' : 'Android'} native background scanner detected the Hub and owns attendance sync.';
+      notifyListeners();
+      return;
+    }
+    if (detection.isExit) {
+      _detections.add(detection);
+      unawaited(_handleBeaconExit(detection));
       notifyListeners();
       return;
     }
@@ -832,9 +835,9 @@ class SmartAttendanceController extends ChangeNotifier {
       if (whenInUse.isGranted && !always.isGranted) {
         await Permission.locationAlways.request();
       }
-      // iOS can defer its second-stage "Always" prompt. Start the native
-      // scanner once Bluetooth is granted so CLLocationManager remains armed
-      // and begins beacon monitoring as soon as that authorization changes.
+      // iOS can defer the second-stage Always prompt. Bluetooth discovery
+      // still records an entry; beacon monitoring adds reliable exit wakeups
+      // as soon as iOS grants Always access.
       _bluetoothPermissionStatus = 'granted';
       return true;
     }

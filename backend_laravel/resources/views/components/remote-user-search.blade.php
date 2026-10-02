@@ -62,7 +62,7 @@
 @push('scripts')
     @once
         <script>
-            document.addEventListener('DOMContentLoaded', () => {
+            window.panelOnLoad(() => {
                 const escapeHtml = (value) => {
                     const node = document.createElement('div');
                     node.textContent = value ?? '';
@@ -186,7 +186,7 @@
                     root.addEventListener('remote-user-set', (event) => setSelection(event.detail));
                     document.addEventListener('click', (event) => {
                         if (!root.contains(event.target)) closeResults();
-                    });
+                    }, { signal: window.panelPageController?.signal });
                 });
             });
         </script>

@@ -30,7 +30,7 @@ class SmartAttendanceScanService : Service() {
     private var scanCallback: ScanCallback? = null
     private lateinit var configStore: SmartAttendanceBackgroundConfigStore
     private lateinit var sessionStore: SmartAttendanceNativeSessionStore
-    private val client = SmartAttendanceNativeClient()
+    private lateinit var client: SmartAttendanceNativeClient
     private var worker: ScheduledExecutorService? = null
     @Volatile private var lastDetectionDispatchAt = 0L
     private val firstQualifiedByHub = mutableMapOf<String, Long>()
@@ -41,6 +41,7 @@ class SmartAttendanceScanService : Service() {
         super.onCreate()
         configStore = SmartAttendanceBackgroundConfigStore(this)
         sessionStore = SmartAttendanceNativeSessionStore(this)
+        client = SmartAttendanceNativeClient(this)
         worker = Executors.newSingleThreadScheduledExecutor().also { executor ->
             executor.scheduleAtFixedRate(::finalizeIfNeeded, 1, 1, TimeUnit.MINUTES)
         }
@@ -221,7 +222,7 @@ class SmartAttendanceScanService : Service() {
     private fun notification(): Notification = Notification.Builder(this, CHANNEL_ID)
         .setContentTitle("Gym Atlas Smart Attendance")
         .setContentText("Recording nearby gym presence in the background")
-        .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+        .setSmallIcon(R.drawable.ic_stat_chat)
         .setOngoing(true)
         .build()
 
@@ -231,7 +232,7 @@ class SmartAttendanceScanService : Service() {
             Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("Gym Atlas Smart Attendance")
                 .setContentText(text)
-                .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+                .setSmallIcon(R.drawable.ic_stat_chat)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .build(),

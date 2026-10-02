@@ -672,6 +672,7 @@ Route::prefix('gym')
 
         Route::get('/announcements', [WebGymAnnouncementController::class, 'index'])->name('announcements.index');
         Route::get('/announcements/create', [WebGymAnnouncementController::class, 'create'])->name('announcements.create');
+        Route::get('/announcements/member-options', [WebGymAnnouncementController::class, 'memberOptions'])->name('announcements.member-options');
         Route::post('/announcements', [WebGymAnnouncementController::class, 'store'])->name('announcements.store');
         Route::get('/announcements/{announcement}', [WebGymAnnouncementController::class, 'show'])->name('announcements.show');
         Route::delete('/announcements/{announcement}', [WebGymAnnouncementController::class, 'destroy'])->name('announcements.destroy');

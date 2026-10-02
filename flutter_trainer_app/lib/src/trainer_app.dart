@@ -8,6 +8,7 @@ import 'package:gym_flutter_core/gym_flutter_core.dart'
         AppRuntimeController,
         AppRuntimeGate,
         BrandedStartupLoader,
+        BrandedStartupSplash,
         ChatNotificationService;
 import 'package:provider/provider.dart';
 
@@ -173,16 +174,19 @@ class _TrainerAppState extends State<TrainerApp> {
         debugShowCheckedModeBanner: false,
         title: 'Gym Atlas Coach',
         theme: AppTheme.build(),
-        builder: (context, child) => AppRuntimeGate(
-          controller: _runtimeController,
+        builder: (context, child) => BrandedStartupSplash(
           audience: 'Trainer',
-          child: Consumer<TrainerSessionController>(
-            builder: (context, session, _) => GuideScope(
-              account: session.isAuthenticated && session.hasRequiredConsent
-                  ? 'trainer:${session.user!.id}'
-                  : null,
-              guides: trainerGuides,
-              child: child ?? const SizedBox.shrink(),
+          child: AppRuntimeGate(
+            controller: _runtimeController,
+            audience: 'Trainer',
+            child: Consumer<TrainerSessionController>(
+              builder: (context, session, _) => GuideScope(
+                account: session.isAuthenticated && session.hasRequiredConsent
+                    ? 'trainer:${session.user!.id}'
+                    : null,
+                guides: trainerGuides,
+                child: child ?? const SizedBox.shrink(),
+              ),
             ),
           ),
         ),

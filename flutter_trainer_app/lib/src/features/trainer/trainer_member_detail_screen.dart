@@ -1932,6 +1932,8 @@ class _DietPlansTab extends StatelessWidget {
 }
 
 class _ProgressTab extends StatelessWidget {
+  static const bool _showProgressPhotos = false;
+
   const _ProgressTab({
     required this.progress,
     required this.workoutAnalytics,
@@ -2069,55 +2071,57 @@ class _ProgressTab extends StatelessWidget {
           emptyMessage:
               'Two waist measurements are needed before a trend appears.',
         ),
-        const SizedBox(height: 14),
-        PremiumCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Progress photos',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 12),
-              if (photos.isEmpty)
-                const EmptyStateView(
-                  title: 'No progress photos yet',
-                  message:
-                      'Transformation photos will appear here once the member uploads them.',
-                  icon: Icons.photo_library_outlined,
-                )
-              else
-                SizedBox(
-                  height: 154,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: photos.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 12),
-                    itemBuilder: (_, index) {
-                      final photo = photos[index];
-                      return SizedBox(
-                        width: 140,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            AppNetworkImage(
-                              imageUrl: photo['photo_url']?.toString(),
-                              height: 112,
-                              width: 140,
-                              borderRadius: 20,
-                              fallbackIcon: Icons.photo_camera_back_outlined,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(_prettyDate(photo['captured_on'])),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+        if (_showProgressPhotos) ...[
+          const SizedBox(height: 14),
+          PremiumCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Progress photos',
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
-            ],
+                const SizedBox(height: 12),
+                if (photos.isEmpty)
+                  const EmptyStateView(
+                    title: 'No progress photos yet',
+                    message:
+                        'Transformation photos will appear here once the member uploads them.',
+                    icon: Icons.photo_library_outlined,
+                  )
+                else
+                  SizedBox(
+                    height: 154,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: photos.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 12),
+                      itemBuilder: (_, index) {
+                        final photo = photos[index];
+                        return SizedBox(
+                          width: 140,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              AppNetworkImage(
+                                imageUrl: photo['photo_url']?.toString(),
+                                height: 112,
+                                width: 140,
+                                borderRadius: 20,
+                                fallbackIcon: Icons.photo_camera_back_outlined,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(_prettyDate(photo['captured_on'])),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
+        ],
         const SizedBox(height: 14),
         PremiumCard(
           child: Column(

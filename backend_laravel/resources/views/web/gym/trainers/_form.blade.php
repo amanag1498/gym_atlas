@@ -127,7 +127,7 @@
 @if (! $trainer)
     @push('scripts')
         <script>
-            document.addEventListener('DOMContentLoaded', () => {
+            window.panelOnLoad(() => {
                 const selectedInput = document.getElementById('existing_user_id');
                 const picker = selectedInput?.closest('[data-remote-user-search]');
                 if (!picker || !selectedInput) return;

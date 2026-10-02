@@ -81,7 +81,7 @@
 @if($recipients->isNotEmpty())
     @push('scripts')
         <script>
-            document.addEventListener('DOMContentLoaded', () => {
+            window.panelOnLoad(() => {
                 const builder = document.getElementById(@js($builderId));
                 if (!builder) return;
                 const rows = builder.querySelector('[data-commission-rows]');

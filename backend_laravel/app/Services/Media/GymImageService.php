@@ -2,6 +2,7 @@
 
 namespace App\Services\Media;
 
+use App\Models\Branch;
 use App\Models\Gym;
 use App\Models\GymPhoto;
 use App\Support\Media\StoredImage;
@@ -49,6 +50,32 @@ class GymImageService
         $this->syncSingleRecord($gym, 'logo', $gym->logo_url);
         $this->syncSingleRecord($gym, 'cover', $gym->cover_image_url);
         $this->syncGalleryRecords($gym);
+    }
+
+    public function syncBranchMediaRecords(Branch $branch): void
+    {
+        $existing = $branch->gymPhotos()->where('type', 'gallery')->get()->keyBy('image_path');
+
+        foreach ($branch->photo_urls ?? [] as $index => $url) {
+            $photo = $existing->pull($url);
+            if ($photo) {
+                $photo->forceFill(['sort_order' => $index + 1])->save();
+            } else {
+                $branch->gymPhotos()->create([
+                    'gym_id' => $branch->gym_id,
+                    'image_path' => $url,
+                    'type' => 'gallery',
+                    'sort_order' => $index + 1,
+                ]);
+            }
+        }
+
+        $existing->each(function (GymPhoto $photo): void {
+            if (str_starts_with((string) $photo->image_path, '/storage/')) {
+                $this->deleteManagedImage($photo->image_path);
+            }
+            $photo->delete();
+        });
     }
 
     public function deleteManagedImage(?string $path): void

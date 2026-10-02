@@ -7,7 +7,9 @@ use App\Models\Branch;
 use App\Models\ConsentRecord;
 use App\Models\Gym;
 use App\Models\GymStaff;
+use App\Models\MemberMembership;
 use App\Models\MemberProfile;
+use App\Models\MembershipPlan;
 use App\Models\TrainerProfile;
 use App\Models\User;
 use App\Models\WhatsAppConsent;
@@ -38,6 +40,8 @@ class PlatformUserManagementTest extends TestCase
             'active_role' => RoleName::PlatformAdmin->value,
         ]);
         $admin->assignRole(RoleName::PlatformAdmin->value);
+        $admin->assignRole(RoleName::Trainer->value);
+        $admin->assignRole(RoleName::Member->value);
 
         $gymOwnerPayload = [
             'name' => 'Owner Search',
@@ -95,6 +99,25 @@ class PlatformUserManagementTest extends TestCase
             'active_role' => RoleName::Member->value,
         ]);
         $member->assignRole(RoleName::Member->value);
+        $member->assignRole(RoleName::Trainer->value);
+
+        $plan = MembershipPlan::query()->create([
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'name' => 'Monthly membership',
+            'duration_days' => 30,
+            'plan_price' => 1000,
+        ]);
+        MemberMembership::query()->create([
+            'gym_id' => $gym->id,
+            'branch_id' => $branch->id,
+            'member_id' => $member->id,
+            'membership_plan_id' => $plan->id,
+            'start_date' => today(),
+            'expiry_date' => today()->addDays(30),
+            'default_plan_price' => 1000,
+            'final_payable_amount' => 1000,
+        ]);
 
         MemberProfile::query()->create([
             'user_id' => $member->id,
@@ -178,6 +201,10 @@ class PlatformUserManagementTest extends TestCase
             ->assertSee('Owned Gyms')
             ->assertSee('Owner Gym');
 
+        $this->get(route('web.admin.users.show', $admin))
+            ->assertOk()
+            ->assertSee('platform-users@example.com');
+
         $this->actingAs($admin, 'sanctum')
             ->getJson('/api/platform-admin/users?search=trainer-search@example.com&role=trainer&status=inactive')
             ->assertOk()
@@ -192,6 +219,8 @@ class PlatformUserManagementTest extends TestCase
 
         $this->get(route('web.admin.users.show', $member))
             ->assertOk()
+            ->assertSee('Membership History')
+            ->assertSee('Monthly membership')
             ->assertSee('Member Relationships')
             ->assertSee('Member Identity')
             ->assertSee('10 Sep 1998')

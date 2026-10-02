@@ -1,6 +1,7 @@
 @extends('layouts.panel')
 
 @php
+    $panelFullWidth = true;
     $currentGym = request('gym', $gym->id);
     $currentBranch = request('branch');
     $baseRouteParams = array_filter([
@@ -23,15 +24,14 @@
 @endphp
 
 @section('content')
-    <div class="space-y-6">
-        <section class="panel-hero">
-            <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-                <div class="max-w-3xl">
-                    <p class="text-xs font-semibold uppercase tracking-[0.24em] text-sky-200/80">Gym reports</p>
-                    <h3 class="mt-3 text-3xl font-semibold tracking-tight text-white">{{ $reportTitle }}</h3>
-                    <p class="mt-3 max-w-2xl text-sm text-slate-300">{{ $reportDescription }}</p>
-                </div>
-                <div class="flex flex-wrap gap-3">
+    <div class="w-full min-w-0 space-y-6">
+        <header class="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between dark:border-slate-800">
+            <div class="min-w-0">
+                <p class="text-xs font-semibold uppercase tracking-widest text-indigo-700 dark:text-indigo-300">Gym reports</p>
+                <h2 class="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">{{ $reportTitle }}</h2>
+                <p class="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-400">{{ $reportDescription }}</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
                     <x-action-button
                         as="a"
                         variant="secondary"
@@ -45,23 +45,27 @@
                     >
                         Export Current View
                     </x-action-button>
-                </div>
             </div>
-        </section>
+        </header>
 
-        <div class="grid gap-3 xl:grid-cols-8">
+        <nav aria-label="Report types" class="flex gap-2 overflow-x-auto pb-1">
             @foreach ($reportNavigation as $key => $item)
                 <a
                     href="{{ route($item['route'], array_merge($baseRouteParams, $filterQuery)) }}"
-                    class="rounded-2xl border px-4 py-3 text-sm font-semibold transition {{ $reportKey === $key ? 'border-sky-300 bg-sky-50 text-sky-800 shadow-lg shadow-sky-950/10 dark:border-sky-400/60 dark:bg-sky-500/15 dark:text-white dark:shadow-sky-950/40' : 'border-slate-200 bg-white text-slate-700 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-800 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:border-white/20 dark:hover:bg-white/10 dark:hover:text-white' }}"
+                    @if ($reportKey === $key) aria-current="page" @endif
+                    class="shrink-0 rounded-xl border px-4 py-2.5 text-sm font-semibold transition {{ $reportKey === $key ? 'border-indigo-600 bg-indigo-600 text-white dark:border-indigo-400 dark:bg-indigo-400 dark:text-slate-950' : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:text-indigo-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-indigo-400 dark:hover:text-white' }}"
                 >
                     {{ $item['label'] }}
                 </a>
             @endforeach
-        </div>
+        </nav>
 
-        <x-premium-card class="p-6">
-            <form method="GET" class="grid gap-4 lg:grid-cols-6">
+        <x-premium-card class="min-w-0 p-5 sm:p-6">
+            <div class="mb-5">
+                <h3 class="panel-section-title">Refine this report</h3>
+                <p class="panel-section-copy">Filters also apply to exported files.</p>
+            </div>
+            <form method="GET" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
                 @foreach ($currentReportParams as $field => $value)
                     <input type="hidden" name="{{ $field }}" value="{{ $value }}">
                 @endforeach
@@ -92,39 +96,45 @@
                     :options="$filterOptions['statuses']"
                     :selected="$filters['status']"
                 />
-                <div class="flex items-end gap-3 lg:col-span-6">
+                <div class="flex flex-wrap items-end gap-3 sm:col-span-2 lg:col-span-3 2xl:col-span-6">
                     <x-action-button type="submit">Apply Filters</x-action-button>
                     <x-action-button as="a" variant="secondary" href="{{ route($currentReportRoute, $currentReportParams) }}">Reset</x-action-button>
                 </div>
             </form>
         </x-premium-card>
 
-        <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section aria-label="Report summary" class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             @foreach ($summaryCards as $card)
                 <x-stat-card :label="$card['label']" :value="$card['value']" :hint="$card['hint'] ?? null" tone="sky" />
             @endforeach
         </section>
 
         @if (! empty($chartCards))
-            <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <section aria-label="Additional metrics" class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 @foreach ($chartCards as $card)
                     <x-stat-card :label="$card['label']" :value="$card['value']" :hint="$card['hint'] ?? null" tone="slate" />
                 @endforeach
             </section>
         @endif
 
-        <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <x-action-button as="a" variant="secondary" href="{{ route('web.gym.reports.export', array_merge($baseRouteParams, $filterQuery, ['type' => 'members'])) }}">Export Inactive Members CSV</x-action-button>
-            <x-action-button as="a" variant="secondary" href="{{ route('web.gym.reports.export', array_merge($baseRouteParams, $filterQuery, ['type' => 'dues'])) }}">Export Dues CSV</x-action-button>
-            <x-action-button as="a" variant="secondary" href="{{ route('web.gym.reports.export', array_merge($baseRouteParams, $filterQuery, ['type' => 'expired-members'])) }}">Export Expired Members CSV</x-action-button>
-            <x-action-button as="a" variant="secondary" href="{{ route('web.gym.reports.export', array_merge($baseRouteParams, $filterQuery, ['type' => 'trial-requests'])) }}">Export Trial Requests CSV</x-action-button>
+        <section class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900" aria-labelledby="report-downloads-heading">
+            <h3 id="report-downloads-heading" class="text-base font-semibold text-slate-950 dark:text-white">More exports</h3>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Download related lists using the selected filters.</p>
+            <div class="mt-4 flex flex-wrap gap-2">
+                <x-action-button as="a" variant="secondary" href="{{ route('web.gym.reports.export', array_merge($baseRouteParams, $filterQuery, ['type' => 'members'])) }}">Export Inactive Members CSV</x-action-button>
+                <x-action-button as="a" variant="secondary" href="{{ route('web.gym.reports.export', array_merge($baseRouteParams, $filterQuery, ['type' => 'dues'])) }}">Dues CSV</x-action-button>
+                <x-action-button as="a" variant="secondary" href="{{ route('web.gym.reports.export', array_merge($baseRouteParams, $filterQuery, ['type' => 'expired-members'])) }}">Expired members CSV</x-action-button>
+                <x-action-button as="a" variant="secondary" href="{{ route('web.gym.reports.export', array_merge($baseRouteParams, $filterQuery, ['type' => 'trial-requests'])) }}">Trial requests CSV</x-action-button>
+            </div>
         </section>
 
         <x-table-wrapper>
-            <h3 class="panel-section-title">{{ $reportTitle }}</h3>
-            <p class="panel-section-copy">{{ $reportDescription }}</p>
+            <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+                <h3 class="panel-section-title">{{ $reportTitle }} data</h3>
+                <p class="panel-section-copy">{{ count($rows) }} {{ count($rows) === 1 ? 'record' : 'records' }} for the selected filters</p>
+            </div>
 
-            <div class="mt-6 overflow-x-auto">
+            <div class="overflow-x-auto">
                 <table class="panel-table">
                     <thead>
                         <tr>

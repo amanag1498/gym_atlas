@@ -1,43 +1,63 @@
 @extends('layouts.panel')
 
 @section('content')
+    @php
+        $pageView = $activeTab === 'dues' ? 'dues' : (request('view') === 'ledger' && $activeTab !== 'member' ? 'ledger' : 'collections');
+        $scopeQuery = request()->only(['gym', 'branch']);
+    @endphp
     <div class="space-y-4">
-        <x-premium-card class="p-4">
-            <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <section class="panel-card p-5 sm:p-6" aria-labelledby="payments-workspace-title">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div class="min-w-0">
-                    <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">Finance operations</p>
-                    <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <h1 class="text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">Payments</h1>
-                        <span class="text-sm text-slate-500 dark:text-slate-400">Collections, spends, owner ledger, dues, and billing audit in one workspace.</span>
-                    </div>
+                    <h2 id="payments-workspace-title" class="text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">{{ $activeTab === 'member' ? $pageTitle : ($pageView === 'ledger' ? 'Finance ledger' : ($pageView === 'dues' ? 'Pending dues' : 'Collections')) }}</h2>
+                    <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ $pageView === 'ledger' ? 'Review money in and out, or record a finance entry.' : ($pageView === 'dues' ? 'See balances that still need collection.' : 'Find receipts and review member payments.') }}</p>
                 </div>
-                <div class="flex flex-wrap gap-2">
-                    <x-action-button as="a" :variant="($activeTab ?? 'all') === 'all' ? 'primary' : 'secondary'" href="{{ route('web.gym.payments.index', request()->only(['gym', 'branch'])) }}">All</x-action-button>
-                    <x-action-button as="a" :variant="($activeTab ?? '') === 'dues' ? 'primary' : 'secondary'" href="{{ route('web.gym.dues.index', request()->only(['gym', 'branch'])) }}">Dues</x-action-button>
-                    <x-action-button as="a" :variant="request('payment_status') === 'overdue' ? 'primary' : 'secondary'" href="{{ route('web.gym.payments.index', array_merge(request()->only(['gym', 'branch']), ['payment_status' => 'overdue'])) }}">Overdue</x-action-button>
-                    <x-action-button as="a" variant="secondary" href="{{ route('web.gym.compensation.index', request()->only(['gym', 'branch'])) }}">Salary & Commission</x-action-button>
-                    @if ($canCollectPayments)
-                        <x-action-button as="a" href="{{ route('web.gym.payments.create', request()->only(['gym', 'branch'])) }}">Collect Payment</x-action-button>
-                    @endif
-                </div>
+                @if ($canCollectPayments && $pageView !== 'ledger')
+                    <a href="{{ route('web.gym.payments.create', $scopeQuery) }}" class="panel-btn-primary shrink-0">Collect payment</a>
+                @elseif ($canCollectPayments)
+                    <a href="#record-ledger-entry" class="panel-btn-primary shrink-0" onclick="document.getElementById('record-ledger-entry').open = true">Record an entry</a>
+                @endif
             </div>
-        </x-premium-card>
+            <nav class="mt-5 flex flex-wrap gap-2 border-t border-slate-200 pt-4 dark:border-slate-800" aria-label="Payment views">
+                <a href="{{ $activeTab === 'member' ? url()->current().'?'.http_build_query($scopeQuery) : route('web.gym.payments.index', $scopeQuery) }}" @class(['panel-btn-secondary !px-4 !py-2 text-sm', '!border-brand-300 !bg-brand-50 !text-brand-700 dark:!bg-brand-500/10 dark:!text-brand-300' => $pageView === 'collections']) @if($pageView === 'collections') aria-current="page" @endif>Collections</a>
+                @if ($activeTab !== 'member')
+                    <a href="{{ route('web.gym.dues.index', $scopeQuery) }}" @class(['panel-btn-secondary !px-4 !py-2 text-sm', '!border-brand-300 !bg-brand-50 !text-brand-700 dark:!bg-brand-500/10 dark:!text-brand-300' => $pageView === 'dues']) @if($pageView === 'dues') aria-current="page" @endif>Dues</a>
+                    <a href="{{ route('web.gym.payments.index', $scopeQuery + ['view' => 'ledger']) }}" @class(['panel-btn-secondary !px-4 !py-2 text-sm', '!border-brand-300 !bg-brand-50 !text-brand-700 dark:!bg-brand-500/10 dark:!text-brand-300' => $pageView === 'ledger']) @if($pageView === 'ledger') aria-current="page" @endif>Finance ledger</a>
+                @endif
+                <a href="{{ route('web.gym.compensation.index', $scopeQuery) }}" class="ml-auto self-center text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">Salary & commission →</a>
+            </nav>
+        </section>
 
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
-            <x-stat-card label="Recorded" :value="$summary['recorded_payments']" hint="Filtered payments" tone="sky" />
-            <x-stat-card label="Collected" :value="number_format((float) $summary['collected_amount'], 2)" hint="Captured amount" tone="success" />
-            <x-stat-card label="Monthly" :value="number_format((float) $monthlyCollection, 2)" hint="Current month" tone="info" />
-            <x-stat-card label="Ledger Inflow" :value="number_format((float) $ledgerSummary['inflow'], 2)" hint="Posted inflow" tone="sky" />
-            <x-stat-card label="Ledger Outflow" :value="number_format((float) $ledgerSummary['outflow'], 2)" hint="Posted spend" tone="danger" />
-            <x-stat-card label="Net Cash" :value="number_format((float) $ledgerSummary['net'], 2)" hint="Inflow minus outflow" tone="violet" />
-            <x-stat-card label="Closing Balance" :value="number_format((float) $ledgerSummary['closing_balance'], 2)" hint="Visible ledger balance" tone="emerald" />
-            <x-stat-card label="Manual Entries" :value="$ledgerSummary['manual_entries']" hint="Owner-posted finance rows" tone="amber" />
-            <x-stat-card label="Reversed Rows" :value="$ledgerSummary['reversed_entries']" hint="Corrected ledger entries" tone="neutral" />
-            <x-stat-card label="Open Dues" :value="number_format((float) $summary['pending_due_amount'], 2)" hint="Pending collection" tone="amber" />
-            <x-stat-card label="Overdue Dues" :value="number_format((float) $summary['overdue_due_amount'], 2)" hint="Highest risk" tone="danger" />
+        @if ($pageView === 'ledger')
+        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <x-stat-card label="Inflow" :value="'₹'.number_format((float) $ledgerSummary['inflow'], 2)" hint="Posted receipts" tone="success" />
+            <x-stat-card label="Outflow" :value="'₹'.number_format((float) $ledgerSummary['outflow'], 2)" hint="Posted spend" tone="danger" />
+            <x-stat-card label="Net cash" :value="((float) $ledgerSummary['net'] < 0 ? '-' : '').'₹'.number_format(abs((float) $ledgerSummary['net']), 2)" hint="Inflow minus outflow" tone="violet" />
+            <x-stat-card label="Closing balance" :value="((float) $ledgerSummary['closing_balance'] < 0 ? '-' : '').'₹'.number_format(abs((float) $ledgerSummary['closing_balance']), 2)" hint="Visible ledger balance" tone="emerald" />
         </div>
+        @elseif ($pageView === 'dues')
+        <div class="grid gap-3 sm:grid-cols-3">
+            <x-stat-card label="Open memberships" :value="$pendingDues->total()" hint="Balances to collect" tone="sky" />
+            <x-stat-card label="Open dues" :value="'₹'.number_format((float) $summary['pending_due_amount'], 2)" hint="Total pending" tone="amber" />
+            <x-stat-card label="Overdue" :value="'₹'.number_format((float) $summary['overdue_due_amount'], 2)" hint="Needs attention" tone="danger" />
+        </div>
+        @else
+        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <x-stat-card label="Recorded" :value="$summary['recorded_payments']" hint="Filtered payments" tone="sky" />
+            <x-stat-card label="Collected" :value="'₹'.number_format((float) $summary['collected_amount'], 2)" hint="Captured amount" tone="success" />
+            <x-stat-card label="Open dues" :value="'₹'.number_format((float) $summary['pending_due_amount'], 2)" hint="Pending collection" tone="amber" />
+            <x-stat-card label="Overdue" :value="'₹'.number_format((float) $summary['overdue_due_amount'], 2)" hint="Needs attention" tone="danger" />
+        </div>
+        @endif
 
-        <div class="grid gap-4 xl:grid-cols-3">
+        <details class="panel-card px-5 py-4 sm:px-6">
+            <summary class="cursor-pointer text-sm font-semibold text-slate-800 dark:text-slate-100">More finance metrics and trends</summary>
+            <div class="mt-4 grid gap-3 border-t border-slate-200 pt-4 dark:border-slate-800 sm:grid-cols-2 xl:grid-cols-4">
+                <x-stat-card label="This month" :value="'₹'.number_format((float) $monthlyCollection, 2)" hint="Collection" tone="info" />
+                <x-stat-card label="Manual entries" :value="$ledgerSummary['manual_entries']" hint="Owner-posted rows" tone="amber" />
+                <x-stat-card label="Reversed entries" :value="$ledgerSummary['reversed_entries']" hint="Corrected rows" tone="neutral" />
+            </div>
+        <div class="mt-4 grid gap-4 xl:grid-cols-3">
             @foreach ($auditWindows as $window)
                 <x-premium-card class="p-4">
                     <div class="flex items-start justify-between gap-3">
@@ -76,40 +96,46 @@
                 </x-premium-card>
             @endforeach
         </div>
+        </details>
 
-        <x-premium-card class="overflow-hidden p-0">
-            <div class="border-b border-slate-200 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/70">
-                <h3 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Payment filters</h3>
-            </div>
-            <form method="GET" class="grid gap-3 px-4 py-4 md:grid-cols-2 xl:grid-cols-7">
+        @if ($pageView === 'collections')
+        <section class="panel-card p-4 sm:p-5" aria-label="Find collections">
+            <form method="GET" class="space-y-3">
                 <input type="hidden" name="gym" value="{{ request('gym') }}">
                 @if (request('branch'))
                     <input type="hidden" name="branch" value="{{ request('branch') }}">
                 @endif
-                <x-form-input name="member_search" label="Search Member" :value="request('member_search')" />
-                <x-form-select name="branch_id" label="Branch" :selected="request('branch_id')" :options="['' => 'All branches'] + $branches->pluck('name', 'id')->all()" />
-                <x-form-select name="payment_status" label="Payment State" :selected="request('payment_status')" :options="['' => 'All states', 'paid' => 'Paid', 'partial' => 'Partial', 'unpaid' => 'Unpaid', 'overdue' => 'Overdue']" />
-                <x-form-select name="payment_mode" label="Payment Mode" :selected="request('payment_mode')" :options="['' => 'All modes', 'cash' => 'CASH', 'upi' => 'UPI', 'card' => 'CARD', 'bank' => 'BANK']" />
-                <x-form-input name="start_date" label="Start Date" type="date" :value="request('start_date')" />
-                <x-form-input name="end_date" label="End Date" type="date" :value="request('end_date')" />
-                <div class="flex items-end gap-2">
-                    <x-action-button type="submit">Apply Filters</x-action-button>
-                    <x-action-button as="a" variant="secondary" href="{{ route('web.gym.payments.index', request()->only(['gym', 'branch'])) }}">Reset</x-action-button>
+                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_minmax(180px,220px)_auto] xl:items-end">
+                    <x-form-input name="member_search" label="Search member" :value="request('member_search')" placeholder="Name, email, or phone" />
+                    <x-form-select name="payment_status" label="Payment status" :selected="request('payment_status')" :options="['' => 'All statuses', 'paid' => 'Paid', 'partial' => 'Partial', 'unpaid' => 'Unpaid', 'overdue' => 'Overdue']" />
+                    <div class="flex items-end gap-2"><x-action-button type="submit">Search</x-action-button><a href="{{ $activeTab === 'member' ? url()->current().'?'.http_build_query($scopeQuery) : route('web.gym.payments.index', $scopeQuery) }}" class="panel-btn-secondary">Reset</a></div>
                 </div>
+                <details @if(request()->filled('branch_id') || request()->filled('payment_mode') || request()->filled('start_date') || request()->filled('end_date')) open @endif>
+                    <summary class="cursor-pointer text-sm font-medium text-brand-600 dark:text-brand-400">More filters</summary>
+                    <div class="mt-3 grid gap-3 border-t border-slate-200 pt-3 dark:border-slate-800 sm:grid-cols-2 xl:grid-cols-4">
+                        <x-form-select name="branch_id" label="Branch" :selected="request('branch_id')" :options="['' => 'All branches'] + $branches->pluck('name', 'id')->all()" />
+                        <x-form-select name="payment_mode" label="Payment mode" :selected="request('payment_mode')" :options="['' => 'All modes', 'cash' => 'Cash', 'upi' => 'UPI', 'card' => 'Card', 'bank' => 'Bank']" />
+                        <x-form-input name="start_date" label="From date" type="date" :value="request('start_date')" />
+                        <x-form-input name="end_date" label="To date" type="date" :value="request('end_date')" />
+                    </div>
+                </details>
             </form>
-        </x-premium-card>
+        </section>
+        @endif
 
-        <div class="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,0.75fr)]">
+        @if ($pageView === 'ledger')
+        <div class="space-y-4">
             <x-table-wrapper class="overflow-hidden p-0">
                 <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
                     <div>
-                        <h3 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Owner Finance Ledger</h3>
-                        <p class="text-sm text-slate-500 dark:text-slate-400">Unified inflow and outflow trail with running balance for gym owners and operators.</p>
+                        <h3 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Finance entries</h3>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Money in, money out, and the running balance.</p>
                     </div>
                     <x-action-button as="a" variant="secondary" href="{{ request()->fullUrlWithQuery(['ledger_export' => 'csv']) }}">Export Ledger</x-action-button>
                 </div>
                 <form method="GET" class="grid gap-3 border-b border-slate-200/80 px-4 py-4 md:grid-cols-2 xl:grid-cols-5 dark:border-slate-800">
                     <input type="hidden" name="gym" value="{{ request('gym') }}">
+                    <input type="hidden" name="view" value="ledger">
                     @if (request('branch'))
                         <input type="hidden" name="branch" value="{{ request('branch') }}">
                     @endif
@@ -119,69 +145,47 @@
                     <x-form-select name="ledger_entry_type" label="Entry Type" :selected="request('ledger_entry_type')" :options="['' => 'All', 'membership_collection' => 'Membership collection', 'expense' => 'Expense', 'other_income' => 'Other income', 'refund' => 'Refund', 'adjustment' => 'Adjustment']" />
                     <div class="flex items-end gap-2">
                         <x-action-button type="submit">Apply</x-action-button>
-                        <x-action-button as="a" variant="secondary" href="{{ route('web.gym.payments.index', request()->only(['gym', 'branch'])) }}">Reset</x-action-button>
+                        <x-action-button as="a" variant="secondary" href="{{ route('web.gym.payments.index', $scopeQuery + ['view' => 'ledger']) }}">Reset</x-action-button>
                     </div>
                 </form>
 
                 @if ($ledgerEntries->count() > 0)
                     <div class="overflow-x-auto">
-                        <table class="panel-table min-w-[1260px]">
+                        <table class="panel-table w-full min-w-[760px]">
                             <thead>
                                 <tr>
                                     <th>Entry</th>
-                                    <th>Type</th>
-                                    <th>Direction</th>
+                                    <th>When</th>
                                     <th>Amount</th>
-                                    <th>Balance</th>
-                                    <th>Context</th>
-                                    <th>Recorded By</th>
+                                    <th>Running balance</th>
                                     <th class="text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach ($ledgerEntries as $entry)
                                     @php
-                                        $tone = $entry->direction === 'inflow' ? 'success' : 'danger';
-                                        $impact = (float) ($entry->impact_amount ?? 0);
                                         $runningBalance = (float) ($entry->running_balance ?? 0);
                                         $isManual = $entry->source_type === 'manual';
                                     @endphp
                                     <tr>
                                         <td>
                                             <div class="font-semibold text-slate-950 dark:text-white">{{ $entry->title }}</div>
-                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $entry->description ?: 'No description added' }}</div>
-                                            <div class="mt-2 flex flex-wrap gap-1.5">
-                                                <x-status-badge :label="$isManual ? 'Manual' : 'Payment Sync'" tone="neutral" />
-                                                @if ($entry->reference)
-                                                    <x-status-badge :label="$entry->reference" tone="info" />
-                                                @endif
-                                            </div>
+                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ str($entry->entry_type)->replace('_', ' ')->title() }} · {{ str($entry->category)->replace('_', ' ')->title() }} @if($entry->reference) · {{ $entry->reference }} @endif</div>
+                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $isManual ? 'Manual' : 'Payment sync' }} · By {{ $entry->creator?->name ?? 'System' }}</div>
                                         </td>
                                         <td>
-                                            <div class="font-medium text-slate-900 dark:text-slate-100">{{ str($entry->entry_type)->replace('_', ' ')->title() }}</div>
-                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ str($entry->category)->replace('_', ' ')->title() }}</div>
-                                        </td>
-                                        <td>
-                                            <x-status-badge :label="str($entry->direction)->title()" :tone="$tone" />
-                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ optional($entry->occurred_at)->format('d M Y h:i A') }}</div>
+                                            <div>{{ optional($entry->occurred_at)->format('d M Y') ?: 'No date' }}</div>
+                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $entry->branch?->name ?? 'Gym-wide' }} · {{ strtoupper((string) ($entry->payment_mode ?: 'No mode')) }}</div>
                                         </td>
                                         <td>
                                             <div class="font-semibold {{ $entry->direction === 'inflow' ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300' }}">
                                                 {{ $entry->direction === 'outflow' ? '-' : '+' }}₹{{ number_format((float) $entry->amount, 2) }}
                                             </div>
-                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">Impact {{ $impact >= 0 ? '+' : '-' }}₹{{ number_format(abs($impact), 2) }}</div>
+                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ str($entry->direction)->title() }}</div>
                                         </td>
                                         <td>
-                                            <div class="font-semibold text-slate-950 dark:text-white">₹{{ number_format($runningBalance, 2) }}</div>
+                                            <div class="font-semibold text-slate-950 dark:text-white">{{ $runningBalance < 0 ? '-' : '' }}₹{{ number_format(abs($runningBalance), 2) }}</div>
                                             <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ str($entry->status)->replace('_', ' ')->title() }}</div>
-                                        </td>
-                                        <td class="text-sm text-slate-600 dark:text-slate-300">
-                                            <div>{{ $entry->branch?->name ?? 'Gym-wide' }}</div>
-                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ strtoupper((string) ($entry->payment_mode ?: 'n/a')) }}</div>
-                                        </td>
-                                        <td class="text-sm text-slate-600 dark:text-slate-300">
-                                            <div>{{ $entry->creator?->name ?? 'System' }}</div>
-                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $entry->creator?->email ?? 'No email' }}</div>
                                         </td>
                                         <td>
                                             <div class="flex justify-end gap-2">
@@ -217,12 +221,12 @@
                 @endif
             </x-table-wrapper>
 
-            <div class="space-y-4">
-                <x-premium-card class="p-4">
-                    <h3 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Record Spend / Adjustment</h3>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Owner-side entries for rent, payroll, utility bills, refunds, and manual corrections.</p>
+            <div class="grid gap-4 xl:grid-cols-2">
+                <details id="record-ledger-entry" class="panel-card p-5" @if($errors->any()) open @endif>
+                    <summary class="cursor-pointer text-base font-semibold text-slate-950 dark:text-white">Record an expense, income, refund, or adjustment</summary>
+                    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Add a manual finance entry with its date and reference.</p>
                     @if ($canCollectPayments)
-                        <form action="{{ route('web.gym.payments.ledger-entries.store', request()->only(['gym', 'branch'])) }}" method="POST" class="mt-4 grid gap-4">
+                        <form action="{{ route('web.gym.payments.ledger-entries.store', request()->only(['gym', 'branch'])) }}" method="POST" class="mt-4 grid gap-4 sm:grid-cols-2">
                             @csrf
                             <x-form-select id="ledger_entry_branch_id" name="branch_id" label="Branch" :selected="old('branch_id', request('branch_id', request('branch')))" :options="['' => 'Gym-wide'] + $branches->pluck('name', 'id')->all()" />
                             <x-form-select name="entry_type" label="Entry Type" :selected="old('entry_type', 'expense')" :options="['expense' => 'Expense', 'other_income' => 'Other income', 'refund' => 'Refund', 'adjustment' => 'Adjustment']" />
@@ -233,19 +237,19 @@
                             <x-form-select id="ledger_entry_payment_mode" name="payment_mode" label="Payment Mode" :selected="old('payment_mode')" :options="['' => 'Not specified', 'cash' => 'Cash', 'upi' => 'UPI', 'card' => 'Card', 'bank' => 'Bank']" />
                             <x-form-input name="reference" label="Reference" :value="old('reference')" placeholder="Invoice no, bank ref, voucher" />
                             <x-form-input name="occurred_at" label="Occurred At" type="datetime-local" :value="old('occurred_at', now()->format('Y-m-d\\TH:i'))" />
-                            <div>
+                            <div class="sm:col-span-2">
                                 <label for="description" class="panel-label">Description</label>
                                 <textarea id="description" name="description" class="panel-textarea" rows="4" placeholder="Optional note for why this spend or adjustment was recorded">{{ old('description') }}</textarea>
                             </div>
-                            <x-action-button type="submit" class="w-full justify-center">Record Ledger Entry</x-action-button>
+                            <x-action-button type="submit" class="justify-center sm:col-span-2">Record ledger entry</x-action-button>
                         </form>
                     @else
                         <x-empty-state title="Manual finance entry locked" message="You have view access to ledger data, but posting spend or adjustments requires billing management access." />
                     @endif
-                </x-premium-card>
+                </details>
 
-                <x-premium-card class="p-4">
-                    <h3 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Ledger Category Breakdown</h3>
+                <details class="panel-card p-5">
+                    <summary class="cursor-pointer text-base font-semibold text-slate-950 dark:text-white">Category breakdown</summary>
                     <div class="mt-4 space-y-3">
                         @forelse ($ledgerCategoryBreakdown as $row)
                             <div class="panel-card-muted flex items-center justify-between gap-3 px-4 py-3">
@@ -259,29 +263,29 @@
                             <x-empty-state title="No category data" message="Spend and collection categories will appear here once ledger entries exist." />
                         @endforelse
                     </div>
-                </x-premium-card>
+                </details>
             </div>
         </div>
+        @endif
 
-        <div class="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+        @if ($pageView === 'collections')
+        <div class="space-y-4">
             <x-table-wrapper class="overflow-hidden p-0">
                 <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
                     <div>
-                        <h3 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Collections Ledger</h3>
-                        <p class="text-sm text-slate-500 dark:text-slate-400">Member payment receipts, collector identity, and invoice references.</p>
+                        <h3 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Recent collections</h3>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">{{ $payments->total() }} {{ $payments->total() === 1 ? 'payment' : 'payments' }} in this view</p>
                     </div>
                     <x-action-button as="a" variant="secondary" href="{{ request()->fullUrlWithQuery(['export' => 'csv']) }}">Export CSV</x-action-button>
                 </div>
                 @if ($payments->count() > 0)
                     <div class="overflow-x-auto">
-                        <table class="panel-table min-w-[1180px]">
+                        <table class="panel-table w-full min-w-[760px]">
                             <thead>
                                 <tr>
                                     <th>Member</th>
-                                    <th>Plan</th>
+                                    <th>Payment</th>
                                     <th>Amount</th>
-                                    <th>Mode</th>
-                                    <th>Collector</th>
                                     <th>Receipt</th>
                                     <th class="text-right">Actions</th>
                                 </tr>
@@ -290,12 +294,16 @@
                                 @foreach ($payments as $payment)
                                     <tr>
                                         <td>
-                                            <div class="font-semibold text-slate-950 dark:text-white">{{ $payment->member?->name ?? 'Member' }}</div>
+                                            @if ($payment->member)
+                                                <a href="{{ route('web.gym.members.payments', array_merge($scopeQuery, ['member' => $payment->member_id])) }}" class="font-semibold text-brand-700 hover:underline dark:text-brand-300">{{ $payment->member->name }}</a>
+                                            @else
+                                                <span class="font-semibold text-slate-950 dark:text-white">Member</span>
+                                            @endif
                                             <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $payment->branch?->name ?? 'Branch missing' }}</div>
                                         </td>
                                         <td>
                                             <div class="font-medium text-slate-900 dark:text-slate-100">{{ $payment->membership?->membershipPlan?->name ?? 'Plan' }}</div>
-                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ optional($payment->paid_at)->format('d M Y h:i A') ?: 'No payment date' }}</div>
+                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ optional($payment->paid_at)->format('d M Y, h:i A') ?: 'No payment date' }} · {{ strtoupper((string) ($payment->payment_mode ?? 'Unknown mode')) }}</div>
                                         </td>
                                         <td>
                                             <div class="font-semibold text-slate-950 dark:text-white">₹{{ number_format((float) $payment->amount, 2) }}</div>
@@ -304,23 +312,13 @@
                                             </div>
                                         </td>
                                         <td class="text-sm text-slate-600 dark:text-slate-300">
-                                            <div>{{ strtoupper((string) ($payment->payment_mode ?? '-')) }}</div>
-                                        </td>
-                                        <td class="text-sm text-slate-600 dark:text-slate-300">
-                                            <div>{{ $payment->collector?->name ?? $payment->receiver?->name ?? 'System' }}</div>
-                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $payment->collector?->email ?? $payment->receiver?->email ?? 'Automated record' }}</div>
-                                        </td>
-                                        <td class="text-sm text-slate-600 dark:text-slate-300">
                                             <div>{{ $payment->receipt_number ?? $payment->receipt?->receipt_number ?? 'No receipt' }}</div>
-                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $payment->external_reference ?? 'No external ref' }}</div>
+                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">By {{ $payment->collector?->name ?? $payment->receiver?->name ?? 'System' }}</div>
                                         </td>
                                         <td>
-                                            <div class="flex justify-end gap-2">
+                                            <div class="flex justify-end gap-2 whitespace-nowrap">
                                                 <x-action-button as="a" variant="secondary" href="{{ route('web.gym.payments.show', array_merge(request()->only(['gym', 'branch']), ['payment' => $payment->id])) }}">View</x-action-button>
                                                 <x-action-button as="a" variant="secondary" href="{{ route('web.gym.payments.invoice', array_merge(request()->only(['gym', 'branch']), ['payment' => $payment->id])) }}">Invoice PDF</x-action-button>
-                                                @if ($payment->member)
-                                                    <x-action-button as="a" variant="secondary" href="{{ route('web.gym.members.payments', array_merge(request()->only(['gym', 'branch']), ['member' => $payment->member_id])) }}">History</x-action-button>
-                                                @endif
                                             </div>
                                         </td>
                                     </tr>
@@ -345,9 +343,11 @@
                 @endif
             </x-table-wrapper>
 
-            <div class="space-y-4">
-                <x-premium-card class="p-4">
-                    <h3 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Mode Breakdown</h3>
+            <details class="panel-card p-5">
+                <summary class="cursor-pointer text-sm font-semibold text-slate-950 dark:text-white">Collection breakdown by mode and branch</summary>
+                <div class="mt-4 grid gap-4 border-t border-slate-200 pt-4 dark:border-slate-800 sm:grid-cols-2">
+                <section>
+                    <h3 class="font-semibold text-slate-950 dark:text-white">Payment mode</h3>
                     <div class="mt-4 space-y-3">
                         @forelse ($paymentModeBreakdown as $row)
                             <div class="panel-card-muted flex items-center justify-between gap-3 px-4 py-3">
@@ -361,10 +361,10 @@
                             <x-empty-state title="No mode data" message="Payment mode mix will appear here once transactions exist." />
                         @endforelse
                     </div>
-                </x-premium-card>
+                </section>
 
-                <x-premium-card class="p-4">
-                    <h3 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Branch Collection</h3>
+                <section>
+                    <h3 class="font-semibold text-slate-950 dark:text-white">Branch collection</h3>
                     <div class="mt-4 space-y-3">
                         @forelse ($branchCollections as $row)
                             <div class="panel-card-muted flex items-center justify-between gap-3 px-4 py-3">
@@ -378,18 +378,31 @@
                             <x-empty-state title="No branch collection data" message="Branch-wise collections will appear here once payments exist." />
                         @endforelse
                     </div>
-                </x-premium-card>
-            </div>
+                </section>
+                </div>
+            </details>
         </div>
+        @endif
 
-        <div class="grid gap-4 xl:grid-cols-2">
+        @if ($pageView === 'dues')
+        <div class="space-y-4">
+            <section class="panel-card p-4 sm:p-5" aria-label="Find dues">
+                <form method="GET" class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_minmax(170px,220px)_minmax(170px,220px)_auto] xl:items-end">
+                    @foreach ($scopeQuery as $key => $value)<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endforeach
+                    <x-form-input name="member_search" label="Search member" :value="request('member_search')" placeholder="Name, email, or phone" />
+                    <x-form-select name="payment_status" label="Status" :selected="request('payment_status')" :options="['' => 'All open dues', 'overdue' => 'Overdue', 'partial' => 'Partially paid', 'unpaid' => 'Unpaid']" />
+                    <x-form-select name="branch_id" label="Branch" :selected="request('branch_id')" :options="['' => 'All branches'] + $branches->pluck('name', 'id')->all()" />
+                    <div class="flex items-end gap-2"><x-action-button type="submit">Search</x-action-button><a href="{{ route('web.gym.dues.index', $scopeQuery) }}" class="panel-btn-secondary">Reset</a></div>
+                </form>
+            </section>
             <x-table-wrapper class="overflow-hidden p-0">
                 <div class="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-                    <h3 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Pending Dues</h3>
+                    <h3 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Pending dues</h3>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $pendingDues->total() }} {{ $pendingDues->total() === 1 ? 'membership' : 'memberships' }} with a balance due</p>
                 </div>
                 @if ($pendingDues->count() > 0)
                     <div class="overflow-x-auto">
-                        <table class="panel-table min-w-[900px]">
+                        <table class="panel-table w-full min-w-[720px]">
                             <thead>
                                 <tr>
                                     <th>Member</th>
@@ -404,7 +417,7 @@
                                     <tr>
                                         <td>
                                             <div class="font-semibold text-slate-950 dark:text-white">{{ $membership->member?->name ?? 'Member' }}</div>
-                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $membership->branch?->name ?? 'Branch missing' }}</div>
+                                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $membership->branch?->name ?? 'Branch missing' }} · Membership #{{ $membership->id }}</div>
                                         </td>
                                         <td>{{ $membership->membershipPlan?->name ?? 'Plan' }}</td>
                                         <td><x-status-badge :label="'₹'.number_format((float) $membership->due_amount, 2)" :tone="($membership->payment_status ?? '') === 'overdue' ? 'danger' : 'warning'" /></td>
@@ -412,7 +425,7 @@
                                         <td>
                                             <div class="flex justify-end gap-2">
                                                 @if ($canCollectPayments)
-                                                    <x-action-button as="a" href="{{ route('web.gym.payments.create', array_merge(request()->only(['gym', 'branch']), ['member_id' => $membership->member_id])) }}">Collect Payment</x-action-button>
+                                                    <x-action-button as="a" href="{{ route('web.gym.payments.create', array_merge($scopeQuery, ['member_membership_id' => $membership->id])) }}">Collect payment</x-action-button>
                                                 @endif
                                                 <x-action-button as="a" variant="secondary" href="{{ route('web.gym.members.payments', array_merge(request()->only(['gym', 'branch']), ['member' => $membership->member_id])) }}">History</x-action-button>
                                             </div>
@@ -427,15 +440,17 @@
                         <x-empty-state title="No pending dues" message="No pending collections remain in the current scope." />
                     </div>
                 @endif
+                @if ($pendingDues->hasPages())
+                    <div class="border-t border-slate-200 px-5 py-4 dark:border-slate-800">{{ $pendingDues->links() }}</div>
+                @endif
             </x-table-wrapper>
-
-            <x-premium-card class="p-4">
-                <h3 class="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Payment Edit History</h3>
-                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Collection and payment-status edits are recorded with actor and timestamp.</p>
-                <div class="mt-4">
-                    <x-web.audit-timeline :items="$paymentAuditTimeline" empty-title="No payment edit history yet" empty-message="Payment trust history will appear here once collections or status edits happen." />
-                </div>
-            </x-premium-card>
         </div>
+        @endif
+
+        <details class="panel-card p-5">
+            <summary class="cursor-pointer text-sm font-semibold text-slate-950 dark:text-white">Payment edit history</summary>
+            <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">Collection and status changes with their actor and time.</p>
+            <div class="mt-4"><x-web.audit-timeline :items="$paymentAuditTimeline" empty-title="No payment edit history yet" empty-message="Payment changes will appear here once collections or status edits happen." /></div>
+        </details>
     </div>
 @endsection

@@ -79,7 +79,7 @@ Gym Admin will eventually label the hub **Offline** while the entrance phone has
 
 On Android, background mode runs as a foreground BLE service with an ongoing Smart Attendance notification. The native service validates signal continuity, submits check-in itself, persists the six-hour visit window, updates last presence locally, and submits the last seen time as out time after two hours of absence. It does not depend on Flutter remaining alive. Manufacturer battery policies can still restrict the service. Force-stop disables all Android background work until the Member opens Gym Atlas again.
 
-Dedicated hardware can broadcast the Atlas iBeacon profile returned by its authenticated config endpoint. Both Android and iOS Member apps reconstruct the numeric hub ID from iBeacon major/minor; Android also continues to accept Atlas service-data V1/V2. See `smart-attendance-hardware-hub.md` for the exact radio and gateway contract.
+Dedicated hardware must broadcast the Atlas service UUID in its primary advertisement, BLE V2 service data in its scan response, and the returned iBeacon profile. Android and iOS accept the service profile; iOS additionally uses the iBeacon region so the operating system can wake the native attendance layer for reliable entry and exit while Flutter is suspended. Location permission is requested only after the selected gym reports an active Smart Attendance Hub, and GPS coordinates are not read or stored for attendance. See `smart-attendance-hardware-hub.md` for the exact radio and gateway contract.
 
 ## 4. Use Smart Attendance on an iOS Member phone
 
@@ -91,7 +91,7 @@ Dedicated hardware can broadcast the Atlas iBeacon profile returned by its authe
 6. Open Gym Atlas once after installation and remain nearby for a few seconds while the first presence is recorded.
 7. Confirm the new entry in attendance history and the welcome notification when notifications are enabled.
 
-iOS uses CoreBluetooth background-central mode and state restoration. iOS controls scan frequency and wake-up timing, and force-quitting the app prevents restoration until the Member opens Gym Atlas again.
+iOS uses a Core Bluetooth scan filtered to the Atlas service UUID, `bluetooth-central` background mode, central-manager state restoration, and iBeacon region monitoring. Bluetooth provides direct Hub discovery; Always Location lets iOS deliver the entrance/exit region wakeups needed for reliable out time while Flutter is suspended. Gym Atlas requests these permissions only when the selected gym has an active Smart Attendance Hub and does not read or store GPS coordinates for attendance. Force-quitting the app prevents reliable restoration until the Member opens Gym Atlas again.
 
 ## Attendance session timing
 
@@ -147,7 +147,7 @@ Select **Disable** in Gym Admin, then stop broadcasting or clear saved credentia
 | BLE broadcasting is off | Bluetooth state and BLE advertiser support | Turn on Bluetooth. Use a phone that supports multiple BLE advertisements. |
 | Android Member app does not detect | Nearby devices permission, Bluetooth, selected gym, consent, distance | Grant the required permission, reopen Gym Atlas, and test within a few metres of the hub. |
 | Older Android does not detect | Location permission and location services | Grant location access required by Android 11 and older, then restart scanning. |
-| iPhone does not detect | App foreground state and Bluetooth permission | Keep Gym Atlas open, enable Bluetooth permission in iOS Settings, and approach again. |
+| iPhone does not detect | Bluetooth and Always Location permissions, Atlas service UUID, V2 service data, iBeacon profile, app force-quit state | Enable both permissions, verify both hardware advertisements, open Gym Atlas once after installation or force-quit, and approach again. |
 | API reports inactive/no matching hub | Hub activation state and selected gym | Activate the hub and select the owning gym in the Member app. |
 | Member is rejected | Active profile, membership dates, branch, gym operational access | Correct the membership or branch assignment in Gym Admin. |
 | First check-in works but no second check-in occurs | Same-day duplicate policy and secure success cache | This is expected for the same branch-local attendance day. Test again after the gym day changes or with a fresh eligible member. |

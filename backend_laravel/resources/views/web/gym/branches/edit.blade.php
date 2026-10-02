@@ -11,7 +11,7 @@
                 <x-status-badge :label="$branch->is_active ? 'Active' : 'Inactive'" />
             </div>
 
-            <form action="{{ route('web.gym.branches.update', ['branch' => $branch->id, 'gym' => $gym->id]) }}" method="POST" class="mt-6 space-y-5">
+            <form action="{{ route('web.gym.branches.update', ['branch' => $branch->id, 'gym' => $gym->id]) }}" method="POST" enctype="multipart/form-data" class="mt-6 space-y-5">
                 @csrf
                 @method('PUT')
                 @include('web.gym.branches._form', ['branch' => $branch, 'gym' => $gym, 'facilities' => $facilities, 'cities' => $cities])

@@ -4,23 +4,29 @@ namespace App\Services\Gym;
 
 use App\Models\Branch;
 use App\Models\Gym;
+use App\Services\Media\GymImageService;
 use App\Support\Scheduling\OperatingHours;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class BranchManagementService
 {
+    public function __construct(private readonly GymImageService $gymImageService) {}
+
     /**
      * @param  array<string, mixed>  $data
      */
     public function create(Request $request, Gym $gym, array $data): Branch
     {
+        $data['photo_urls'] = $this->photoUrls($request, $data);
         $payload = $this->buildPayload($gym, $data);
         $facilityIds = Arr::get($data, 'facility_ids', []);
 
         $branch = Branch::query()->create($payload);
         $branch->facilities()->sync($facilityIds);
+        $this->gymImageService->syncBranchMediaRecords($branch);
 
         return $branch->fresh(['facilities', 'cityRecord'])
             ->loadCount([
@@ -33,8 +39,11 @@ class BranchManagementService
     /**
      * @param  array<string, mixed>  $data
      */
-    public function update(Branch $branch, array $data): Branch
+    public function update(Branch $branch, array $data, ?Request $request = null): Branch
     {
+        if ($request) {
+            $data['photo_urls'] = $this->photoUrls($request, $data, $branch);
+        }
         $payload = $this->buildPayload($branch->gym, $data, $branch);
         $facilityIds = Arr::get($data, 'facility_ids');
 
@@ -44,12 +53,37 @@ class BranchManagementService
             $branch->facilities()->sync($facilityIds);
         }
 
+        $this->gymImageService->syncBranchMediaRecords($branch);
+
         return $branch->fresh(['facilities', 'cityRecord'])
             ->loadCount([
                 'memberProfiles',
                 'trainerProfiles',
                 'attendanceLogs as today_check_ins_count' => fn ($query) => $query->whereDate('checked_in_at', today()),
             ]);
+    }
+
+    /** @param array<string, mixed> $data
+     * @return list<string>
+     */
+    private function photoUrls(Request $request, array $data, ?Branch $branch = null): array
+    {
+        $existing = collect(Arr::get($data, 'photo_urls', $branch?->photo_urls ?? []));
+        $removedIndexes = collect(Arr::get($data, 'remove_photo_indexes', []))->map(fn ($index): int => (int) $index);
+        $kept = $existing->reject(fn ($url, $index): bool => $removedIndexes->contains($index))->values();
+        $files = collect($request->file('gallery_images', []));
+
+        if ($kept->count() + $files->count() > 10) {
+            throw ValidationException::withMessages(['gallery_images' => 'A branch can have up to 10 photos. Remove existing photos before adding more.']);
+        }
+
+        return $kept->concat($this->gymImageService->storeGallery($files, 'branches/gallery', [
+            'max_width' => 1600,
+            'max_height' => 1600,
+            'thumb_width' => 640,
+            'thumb_height' => 480,
+            'thumb_mode' => 'crop',
+        ])->pluck('url'))->unique()->values()->all();
     }
 
     public function toggleStatus(Branch $branch): Branch

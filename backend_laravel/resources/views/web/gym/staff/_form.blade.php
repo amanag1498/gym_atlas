@@ -122,7 +122,7 @@
 
 @push('scripts')
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        window.panelOnLoad(() => {
             const existingUserInput = document.getElementById('existing_user_id');
             const existingUserPicker = existingUserInput?.closest('[data-remote-user-search]');
             const existingHint = document.getElementById('existing_staff_hint');

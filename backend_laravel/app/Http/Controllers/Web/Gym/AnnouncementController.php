@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Communication\StoreAnnouncementRequest;
 use App\Models\Announcement;
 use App\Models\Branch;
+use App\Models\Gym;
 use App\Models\Notification;
 use App\Models\User;
 use App\Services\Authorization\ScopedPermissionResolver;
@@ -17,6 +18,7 @@ use App\Services\Members\GymMemberAccessService;
 use App\Services\Notification\NotificationService;
 use App\Services\Web\GymWebPanelService;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -68,16 +70,14 @@ class AnnouncementController extends Controller
                 ->whereIn('id', $this->gymWebPanelService->accessibleBranchIds($request, $gym))
                 ->orderBy('name')
                 ->get(),
-            'notifications' => $this->notificationQuery($request, $gym, $branch?->id)->paginate(12, ['*'], 'notifications_page')->withQueryString(),
             'unreadNotificationsCount' => (clone $this->notificationQuery($request, $gym, $branch?->id))->whereNull('read_at')->count(),
-            'members' => User::query()
-                ->whereHas('memberProfiles', function (Builder $builder) use ($gym, $branch): void {
-                    $builder->where('gym_id', $gym->id)
-                        ->when($branch, fn ($query) => $query->where('branch_id', $branch->id));
-                    $this->gymMemberAccessService->scopeAccessibleProfiles($builder);
-                })
+            'selectedMembers' => $this->eligibleMembersQuery(
+                $request,
+                $gym,
+                (int) old('branch_id', $branch?->id) ?: null,
+            )->whereIn('id', collect(old('member_ids', []))->filter(fn ($id) => is_numeric($id))->map(fn ($id) => (int) $id)->all())
                 ->orderBy('name')
-                ->get(),
+                ->get(['id', 'name', 'email']),
             'canSendAnnouncements' => $this->canSendAnnouncements($request, $gym, $branch?->id),
         ]);
     }
@@ -85,6 +85,61 @@ class AnnouncementController extends Controller
     public function create(Request $request): View
     {
         return $this->index($request);
+    }
+
+    public function memberOptions(Request $request): JsonResponse
+    {
+        $gym = $this->gymWebPanelService->resolveGym($request);
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'min:2', 'max:100'],
+            'branch_id' => ['nullable', 'integer', 'min:1'],
+            'page' => ['nullable', 'integer', 'min:1'],
+        ]);
+        $branchId = isset($validated['branch_id']) ? (int) $validated['branch_id'] : null;
+        if ($branchId !== null) {
+            abort_unless(in_array($branchId, $this->gymWebPanelService->accessibleBranchIds($request, $gym), true), 404);
+        }
+        $this->gymWebPanelService->assertPermission($request, PermissionName::AnnouncementsManage->value, $gym, $branchId);
+        $this->assertSendAnnouncementsAccess($request, $gym, $branchId);
+
+        $members = $this->eligibleMembersQuery($request, $gym, $branchId)
+            ->when(isset($validated['q']), function (Builder $query) use ($validated): void {
+                $term = '%'.trim($validated['q']).'%';
+                $query->where(fn (Builder $member) => $member->where('name', 'like', $term)->orWhere('email', 'like', $term));
+            })
+            ->orderBy('name')
+            ->orderBy('id')
+            ->simplePaginate(20, ['id', 'name', 'email']);
+
+        return response()->json([
+            'data' => $members->getCollection()->map(fn (User $member) => [
+                'id' => $member->id,
+                'name' => $member->name,
+                'email' => $member->email,
+            ])->values(),
+            'next_page' => $members->hasMorePages() ? $members->currentPage() + 1 : null,
+        ]);
+    }
+
+    private function eligibleMembersQuery(Request $request, Gym $gym, ?int $branchId): Builder
+    {
+        $restrictedToBranches = in_array($request->user()?->active_role, [
+            RoleName::BranchManager->value,
+            RoleName::GymStaff->value,
+            RoleName::Trainer->value,
+        ], true);
+        $branchIds = $restrictedToBranches
+            ? $this->gymWebPanelService->accessibleBranchIds($request, $gym)
+            : [];
+
+        return User::query()->whereHas('memberProfiles', function (Builder $query) use ($request, $gym, $branchId, $restrictedToBranches, $branchIds): void {
+            $query->where('gym_id', $gym->id)
+                ->when($branchId, fn (Builder $profile) => $profile->where('branch_id', $branchId))
+                ->when($restrictedToBranches, fn (Builder $profile) => $profile->whereIn('branch_id', $branchIds))
+                ->when($request->user()?->active_role === RoleName::Trainer->value,
+                    fn (Builder $profile) => $profile->where('assigned_trainer_user_id', $request->user()->id));
+            $this->gymMemberAccessService->scopeAccessibleProfiles($query);
+        });
     }
 
     public function show(Request $request, Announcement $announcement): View
@@ -132,7 +187,7 @@ class AnnouncementController extends Controller
         $this->assertSendAnnouncementsAccess($request, $gym, $branchId);
         $this->announcementService->deleteAnnouncement($request->user(), $announcement);
 
-        return redirect()->route('web.gym.announcements.index', request()->only(['gym', 'branch']))
+        return redirect()->route('web.gym.announcements.index', array_merge(request()->only(['gym', 'branch']), ['tab' => 'history']))
             ->with('status', 'Announcement deleted successfully.');
     }
 

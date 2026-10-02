@@ -4,20 +4,22 @@ import 'package:flutter/foundation.dart';
 import 'config.dart';
 
 class MemberApiClient {
-  MemberApiClient({String? token, Future<void> Function()? onUnauthorized})
-    : _dio = Dio(
-        BaseOptions(
-          baseUrl: MemberConfig.apiBaseUrl,
-          headers: <String, Object?>{
-            'Accept': 'application/json',
-            'X-Atlas-App': 'member',
-            'X-Client-Platform': _platformHeader,
-            'X-App-Version-Code': MemberConfig.appBuildNumber.toString(),
-            'X-App-Version': MemberConfig.appVersion,
-          },
-        ),
-      ),
-      _onUnauthorized = onUnauthorized {
+  MemberApiClient({
+    String? token,
+    Future<void> Function(String rejectedToken, Uri requestUri)? onUnauthorized,
+  }) : _dio = Dio(
+         BaseOptions(
+           baseUrl: MemberConfig.apiBaseUrl,
+           headers: <String, Object?>{
+             'Accept': 'application/json',
+             'X-Atlas-App': 'member',
+             'X-Client-Platform': _platformHeader,
+             'X-App-Version-Code': MemberConfig.appBuildNumber.toString(),
+             'X-App-Version': MemberConfig.appVersion,
+           },
+         ),
+       ),
+       _onUnauthorized = onUnauthorized {
     setBearerToken(token);
     _dio.interceptors.add(
       InterceptorsWrapper(
@@ -32,7 +34,17 @@ class MemberApiClient {
         onError: (error, handler) async {
           _logError(error);
           if (error.response?.statusCode == 401) {
-            await _onUnauthorized?.call();
+            final authorization = error.requestOptions.headers['Authorization']
+                ?.toString();
+            final rejectedToken = authorization?.startsWith('Bearer ') == true
+                ? authorization!.substring('Bearer '.length).trim()
+                : null;
+            if (rejectedToken != null && rejectedToken.isNotEmpty) {
+              await _onUnauthorized?.call(
+                rejectedToken,
+                error.requestOptions.uri,
+              );
+            }
           }
           handler.next(error);
         },
@@ -41,7 +53,7 @@ class MemberApiClient {
   }
 
   final Dio _dio;
-  Future<void> Function()? _onUnauthorized;
+  Future<void> Function(String rejectedToken, Uri requestUri)? _onUnauthorized;
 
   static String get _platformHeader {
     if (kIsWeb) return 'web';
@@ -58,7 +70,9 @@ class MemberApiClient {
 
   Dio get dio => _dio;
 
-  void updateUnauthorizedHandler(Future<void> Function()? handler) {
+  void updateUnauthorizedHandler(
+    Future<void> Function(String rejectedToken, Uri requestUri)? handler,
+  ) {
     _onUnauthorized = handler;
   }
 

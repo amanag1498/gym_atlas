@@ -1,5 +1,10 @@
+import { initializeAnnouncementMemberPicker } from './announcement-member-picker';
+import { initializeGymFacilityPicker } from './gym-facility-picker';
+import { initializePanelNavigation } from './panel-navigation';
+
 const themeStorageKey = 'gym-ecosystem-panel-theme';
 const sidebarStorageKey = 'gym-ecosystem-panel-sidebar-collapsed';
+window.panelPageController ??= new AbortController();
 
 const applyTheme = (theme) => {
     const root = document.documentElement;
@@ -34,6 +39,30 @@ const syncMobileSidebarState = () => {
     );
 };
 
+const initializePanelHeader = () => {
+    const bind = (id, callback) => {
+        const button = document.getElementById(id);
+        if (!button || button.dataset.panelBound) return;
+        button.dataset.panelBound = 'true';
+        button.addEventListener('click', callback);
+    };
+
+    bind('theme-toggle', () => {
+        const nextTheme = document.documentElement.classList.contains('dark') ? 'light' : 'dark';
+        localStorage.setItem(themeStorageKey, nextTheme);
+        applyTheme(nextTheme);
+    });
+
+    bind('sidebar-toggle-desktop', () => {
+        const collapsed = !document.body.classList.contains('panel-sidebar-collapsed');
+        localStorage.setItem(sidebarStorageKey, String(collapsed));
+        applySidebarState(collapsed);
+    });
+
+    bind('sidebar-toggle-mobile', () => openMobileSidebar());
+    syncMobileSidebarState();
+};
+
 const initializePanelChrome = () => {
     const savedTheme = localStorage.getItem(themeStorageKey);
     const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -49,22 +78,6 @@ const initializePanelChrome = () => {
 
     const savedSidebarState = localStorage.getItem(sidebarStorageKey) === 'true';
     applySidebarState(savedSidebarState && window.innerWidth >= 1280);
-
-    document.getElementById('theme-toggle')?.addEventListener('click', () => {
-        const nextTheme = document.documentElement.classList.contains('dark') ? 'light' : 'dark';
-        localStorage.setItem(themeStorageKey, nextTheme);
-        applyTheme(nextTheme);
-    });
-
-    document.getElementById('sidebar-toggle-desktop')?.addEventListener('click', () => {
-        const collapsed = !document.body.classList.contains('panel-sidebar-collapsed');
-        localStorage.setItem(sidebarStorageKey, String(collapsed));
-        applySidebarState(collapsed);
-    });
-
-    document.getElementById('sidebar-toggle-mobile')?.addEventListener('click', () => {
-        openMobileSidebar();
-    });
 
     document.getElementById('sidebar-close-mobile')?.addEventListener('click', () => {
         closeMobileSidebar();
@@ -119,7 +132,6 @@ const initializePanelChrome = () => {
         }
     });
 
-    syncMobileSidebarState();
 };
 
 const initializeConfirmationModal = () => {
@@ -131,6 +143,8 @@ const initializeConfirmationModal = () => {
     const modalButton = document.getElementById('confirm-modal-submit');
 
     document.querySelectorAll('[data-confirm-action]').forEach((element) => {
+        if (element.dataset.panelBound) return;
+        element.dataset.panelBound = 'true';
         element.addEventListener('click', (event) => {
             event.preventDefault();
 
@@ -152,6 +166,8 @@ const initializeConfirmationModal = () => {
     });
 
     document.querySelectorAll('[data-confirm-submit]').forEach((form) => {
+        if (form.dataset.panelBound) return;
+        form.dataset.panelBound = 'true';
         form.addEventListener('submit', (event) => {
             if (!modal || !modalForm) {
                 return;
@@ -172,6 +188,8 @@ const initializeConfirmationModal = () => {
     });
 
     document.querySelectorAll('[data-close-confirm-modal]').forEach((button) => {
+        if (button.dataset.panelBound) return;
+        button.dataset.panelBound = 'true';
         button.addEventListener('click', () => modal?.close());
     });
 };
@@ -689,9 +707,17 @@ const initializeLocationPickers = async () => {
     });
 };
 
+const initializePanelPage = () => {
+    initializePanelHeader();
+    initializeConfirmationModal();
+    void initializeLocationPickers();
+    initializeAnnouncementMemberPicker();
+    initializeGymFacilityPicker();
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     initializePanelChrome();
-    initializeConfirmationModal();
     initializePreloader();
-    void initializeLocationPickers();
-});
+    initializePanelPage();
+    initializePanelNavigation(initializePanelPage);
+}, { once: true });

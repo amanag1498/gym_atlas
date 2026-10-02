@@ -1,8 +1,62 @@
 import 'dart:math' as math;
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import 'atlas_brand_lockup.dart';
+/// Keeps the branded animation visible briefly on every cold app launch.
+/// Startup work continues in the child while the splash is on screen.
+class BrandedStartupSplash extends StatefulWidget {
+  const BrandedStartupSplash({
+    super.key,
+    required this.audience,
+    required this.child,
+    this.minimumDuration = const Duration(milliseconds: 1400),
+  });
+
+  final String audience;
+  final Widget child;
+  final Duration minimumDuration;
+
+  @override
+  State<BrandedStartupSplash> createState() => _BrandedStartupSplashState();
+}
+
+class _BrandedStartupSplashState extends State<BrandedStartupSplash> {
+  Timer? _timer;
+  bool _showSplash = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer(widget.minimumDuration, () {
+      if (mounted) setState(() => _showSplash = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 280),
+      child: _showSplash
+          ? BrandedStartupLoader(
+              key: const ValueKey<String>('startup-splash'),
+              audience: widget.audience,
+            )
+          : KeyedSubtree(
+              key: const ValueKey<String>('startup-content'),
+              child: widget.child,
+            ),
+    );
+  }
+}
 
 /// A quiet, branded startup state shared by the Member and Trainer apps.
 class BrandedStartupLoader extends StatefulWidget {
@@ -53,7 +107,7 @@ class _BrandedStartupLoaderState extends State<BrandedStartupLoader>
         : 'Gym Atlas';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F9FF),
+      backgroundColor: const Color(0xFF0F172A),
       body: Semantics(
         label: '$productName is getting ready',
         liveRegion: true,
@@ -105,9 +159,9 @@ class _LoaderBackground extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: <Color>[
-            Color(0xFFF4F7FF),
-            Color(0xFFFFFFFF),
-            Color(0xFFF8F7FF),
+            Color(0xFF0F172A),
+            Color(0xFF132044),
+            Color(0xFF0F172A),
           ],
         ),
       ),
@@ -155,8 +209,15 @@ class _LoaderContent extends StatelessWidget {
                 ),
               ),
               Transform.scale(
-                scale: 0.98 + (pulse * 0.025),
-                child: const AtlasBrandMark(size: 78),
+                scale: 0.96 + (pulse * 0.04),
+                child: Image.asset(
+                  'assets/branding/gym_atlas_mark.png',
+                  package: 'gym_flutter_core',
+                  width: 112,
+                  height: 112,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.high,
+                ),
               ),
             ],
           ),
@@ -166,7 +227,7 @@ class _LoaderContent extends StatelessWidget {
           'GYM ATLAS',
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineSmall?.copyWith(
-            color: const Color(0xFF07152F),
+            color: Colors.white,
             fontWeight: FontWeight.w900,
             letterSpacing: 0.8,
           ),
@@ -178,31 +239,12 @@ class _LoaderContent extends StatelessWidget {
               : 'DISCIPLINE IN MOTION',
           textAlign: TextAlign.center,
           style: theme.textTheme.labelSmall?.copyWith(
-            color: const Color(0xFF3567D9),
+            color: const Color(0xFF9EADFF),
             fontWeight: FontWeight.w800,
             letterSpacing: audience.toLowerCase() == 'trainer' ? 3.2 : 2.2,
           ),
         ),
         const SizedBox(height: 28),
-        Text(
-          'Getting things ready',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.titleLarge?.copyWith(
-            color: const Color(0xFF101828),
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.35,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Preparing your training space',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: const Color(0xFF667085),
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 24),
         _ActivityIndicator(progress: progress),
       ],
     );
@@ -229,8 +271,8 @@ class _ActivityIndicator extends StatelessWidget {
             height: 5,
             decoration: BoxDecoration(
               color: Color.lerp(
-                const Color(0xFFD9DEFF),
-                const Color(0xFF465FFF),
+                const Color(0xFF526183),
+                const Color(0xFFA8B6FF),
                 wave,
               ),
               borderRadius: BorderRadius.circular(999),
@@ -254,8 +296,8 @@ class _ProgressArcPainter extends CustomPainter {
       ..shader = const SweepGradient(
         colors: <Color>[
           Color(0x00465FFF),
-          Color(0x55465FFF),
-          Color(0xFF465FFF),
+          Color(0x885D75FF),
+          Color(0xFFA8B6FF),
           Color(0x0034D5F2),
         ],
         stops: <double>[0, 0.42, 0.78, 1],
@@ -280,7 +322,7 @@ class _BackgroundPainter extends CustomPainter {
       ..shader =
           RadialGradient(
             colors: <Color>[
-              const Color(0xFF465FFF).withValues(alpha: 0.08),
+              const Color(0xFF465FFF).withValues(alpha: 0.13),
               Colors.transparent,
             ],
           ).createShader(
@@ -293,7 +335,7 @@ class _BackgroundPainter extends CustomPainter {
       ..shader =
           RadialGradient(
             colors: <Color>[
-              const Color(0xFF34D5F2).withValues(alpha: 0.055),
+              const Color(0xFF34D5F2).withValues(alpha: 0.075),
               Colors.transparent,
             ],
           ).createShader(

@@ -252,7 +252,7 @@
 @if (! $member)
     @push('scripts')
         <script>
-            document.addEventListener('DOMContentLoaded', () => {
+            window.panelOnLoad(() => {
                 const picker = document.querySelector('[data-remote-user-search] input[name="existing_user_id"]')?.closest('[data-remote-user-search]');
                 const selectedInput = document.getElementById('existing_user_id');
                 if (!picker || !selectedInput) return;
@@ -306,7 +306,7 @@
 
 @push('scripts')
         <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        window.panelOnLoad(() => {
             const branchSelect = document.getElementById('branch_id');
             const trainerSelect = document.getElementById('assigned_trainer_user_id');
             const hint = document.getElementById('trainer_branch_hint');
