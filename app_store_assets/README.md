@@ -1,25 +1,25 @@
 # Gym Atlas App Store release kit
 
 This directory contains the App Store Connect copy, privacy answers, review
-notes, and Apple-compatible 6.9-inch iPhone screenshots for both iOS apps.
+notes, and iPhone screenshots for both iOS apps.
 
 ## Products
 
 | App | Bundle ID | Version | Build | Platform |
 |---|---|---:|---:|---|
-| Gym Atlas | `com.techybugs.gymatlas.member` | `1.0.2` | `12` | iPhone |
-| Gym Atlas Coach | `com.techybugs.gymatlas.trainer` | `1.0.0` | `2` | iPhone |
+| Gym Atlas | `com.techybugs.gymatlas.member` | `1.0.9` | `20` | iPhone |
+| Gym Atlas Coach | `com.techybugs.gymatlas.trainer` | `1.0.6` | `16` | iPhone |
 
 Both projects use automatic signing with Apple Developer Team `9BQZB27JWV`.
 The release archive must be built with the production realtime HTTPS URL.
 
-The verified Member IPA is at
-`flutter_member_app/build/ios/ipa/Gym Atlas.ipa` (29,063,536 bytes),
-with SHA-256
-`565888eb1fe3f5a47842d5269c0bc8c540cd0698994b3093b20a214d256b54f9`.
-It was exported on 22 August 2026 with the App Store provisioning profile,
-production push entitlement, and associated domains for `gymatlas.in` and
-`www.gymatlas.in`.
+The exported Member IPA is at
+`flutter_member_app/build/ios/ipa/Gym Atlas.ipa` (27,110,162 bytes),
+with SHA-256 `b74ca7d953229d40accdc35b2cd177a4343874f048da7e4027a07da5f6de1988`.
+The exported Coach IPA is at
+`flutter_trainer_app/build/ios/ipa/Gym Atlas Coach.ipa` (26,802,118 bytes),
+with SHA-256 `760bca62e85de393f6dc92a8cf70fe7f6667c78b9c98764248eed420421faf47`.
+Both were exported locally with the new `G` app icon; neither was uploaded.
 
 ## Included
 

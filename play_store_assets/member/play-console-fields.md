@@ -72,24 +72,24 @@ is displayed publicly on Google Play.
 - App icon: `../branding/atlas-play-store-icon.png` — 512 × 512 PNG
 - Feature graphic: `feature-graphic-1024x500.png` — 1024 × 500 PNG
 - Phone screenshots, in upload order:
-  1. `screenshots/01-fitness-connected.png`
-  2. `screenshots/02-train-with-plan.png`
-  3. `screenshots/03-see-every-win.png`
-  4. `screenshots/04-coaching-close.png`
+  1. `screenshots-real-ui/01-dashboard.png`
+  2. `screenshots-real-ui/02-activity.png`
+  3. `screenshots-real-ui/03-workouts.png`
+  4. `screenshots-real-ui/04-workout-history.png`
 - Promo video: leave blank
 - 7-inch/10-inch tablet, Chromebook and Wear OS assets: leave blank unless
   those form factors are explicitly added to the release
 
 Screenshot alt text:
 
-1. `Gym Atlas feature illustration showing connected workouts, daily steps, progress and membership access.`
-2. `Gym Atlas feature illustration showing assigned workout plans, set logging and training history.`
-3. `Gym Atlas feature illustration showing body progress, attendance milestones, membership and gym access.`
-4. `Gym Atlas feature illustration showing trainer chat, diet plans, alerts and chat safety controls.`
+1. `Gym Atlas member dashboard with training status and daily snapshot.`
+2. `Gym Atlas member activity screen.`
+3. `Gym Atlas member workout screen.`
+4. `Gym Atlas member workout history.`
 
 ## Release
 
-- Release name: `Gym Atlas 1.0.2 (12)`
+- Release name: `Gym Atlas 1.0.9 (20)`
 - Release notes:
 
 ```text

@@ -1,17 +1,19 @@
 # Final Android release artifacts
 
-Member release built and verified on 22 August 2026. Trainer release last
-verified on 28 July 2026.
+Member and Trainer Android release bundles were rebuilt on 2 October 2026.
+Matching iOS IPAs were also exported locally. Store upload and review are
+separate steps.
 
 ## Gym Atlas
 
-- Version: `1.0.2+12`
+- Version: `1.0.9+20`
 - Package: `com.techybugs.gymatlas.member`
 - AAB:
   `flutter_member_app/build/app/outputs/bundle/release/app-release.aab`
-- Size: `48,751,451 bytes` (`48.8 MB` as reported by Flutter)
-- SHA-256:
-  `517955ff2bf9d544b5c981f53f85752bf3f2a911363f7bbca7b58d50f5aabfe6`
+- Size: `50.4 MB` as reported by Flutter
+- SHA-256: `ff0e04158651e35ded278b7c0bc68fb31f2b81c9f089f4fd5d3dee627930729c`
+- IPA: `flutter_member_app/build/ios/ipa/Gym Atlas.ipa`
+- IPA SHA-256: `b74ca7d953229d40accdc35b2cd177a4343874f048da7e4027a07da5f6de1988`
 - JAR signature verification: `Passed`
 - Upload-key alias: `atlas-member-upload`
 - Upload certificate SHA-1:
@@ -21,13 +23,14 @@ verified on 28 July 2026.
 
 ## Gym Atlas Coach
 
-- Version: `1.0.0+1`
+- Version: `1.0.6+16`
 - Package: `com.techybugs.gymatlas.trainer`
 - AAB:
   `flutter_trainer_app/build/app/outputs/bundle/release/app-release.aab`
-- Size: `46.6 MB`
-- SHA-256:
-  `b8c94a53278492a7ff9b1991f7499ff4d2028c848603382fb074f614ca5c95a1`
+- Size: `48.6 MB` as reported by Flutter
+- SHA-256: `5bacf15fafb3f33b3f99f1dab375da3664889ecc6cdeea531c2130dd6e60fa7e`
+- IPA: `flutter_trainer_app/build/ios/ipa/Gym Atlas Coach.ipa`
+- IPA SHA-256: `760bca62e85de393f6dc92a8cf70fe7f6667c78b9c98764248eed420421faf47`
 - JAR signature verification: `Passed`
 - Upload-key alias: `atlas-trainer-upload`
 - Upload certificate SHA-1:
@@ -42,11 +45,12 @@ certificate.
 ## Store image checksums
 
 - Play icon:
-  `3e3f18d29d837023b2bdd5885ae31db4ca3a1ad957dbcd8449d4342977f0b5c3`
+  `0f4f082465d358bf311a0ff096971d6a1820ff3a705dffbadd6d6d673185bcbe`
 - Member feature graphic:
-  `c13a00bc70769e83f4c8a707432058b8f944096bf4fda338d115cc73f1365ec6`
+  `3bb5d67dc467738875c7d79c3f9bda24356183524c669ce470779456954647c6`
 - Trainer feature graphic:
-  `41a3dd51406c517890bd0e23a0b06e9d967d9db3e61bdc7b905f201fa1829634`
+  `c45a33f061c2204d78a96a4fcafa232c731fe5275cbe7c8119cc79d953851c35`
 
-The icon is 512 × 512, both feature graphics are 1024 × 500 without alpha, and
-all eight selected generated phone visuals are 1080 × 1920 without alpha.
+The icon is 512 × 512 RGBA, both feature graphics are 1024 × 500 without alpha, and
+the eight older generated phone visuals are 1080 × 1920 without alpha. Those
+visuals still show the blue `A` and need refreshing before a `G` branded listing.

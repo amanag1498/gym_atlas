@@ -68,24 +68,24 @@ is displayed publicly on Google Play.
 - App icon: `../branding/atlas-play-store-icon.png` — 512 × 512 PNG
 - Feature graphic: `feature-graphic-1024x500.png` — 1024 × 500 PNG
 - Phone screenshots, in upload order:
-  1. `screenshots/01-coach-with-clarity.png`
-  2. `screenshots/02-build-programs.png`
-  3. `screenshots/03-know-every-client.png`
-  4. `screenshots/04-stay-connected.png`
+  1. `screenshots-real-ui/01-dashboard.png`
+  2. `screenshots-real-ui/02-clients.png`
+  3. `screenshots-real-ui/03-workout-builder.png`
+  4. `screenshots-real-ui/04-notifications.png`
 - Promo video: leave blank
 - 7-inch/10-inch tablet, Chromebook and Wear OS assets: leave blank unless
   those form factors are explicitly added to the release
 
 Screenshot alt text:
 
-1. `Gym Atlas Coach feature illustration showing clients, daily coaching tasks, sessions, plans and follow-ups.`
-2. `Gym Atlas Coach feature illustration showing workout templates, exercise library and program assignment.`
-3. `Gym Atlas Coach feature illustration showing client progress, attendance, workout completion and coaching notes.`
-4. `Gym Atlas Coach feature illustration showing member chat, coaching alerts, reports and blocking controls.`
+1. `Gym Atlas Coach dashboard with client and session information.`
+2. `Gym Atlas Coach client list.`
+3. `Gym Atlas Coach workout builder.`
+4. `Gym Atlas Coach notifications.`
 
 ## Release
 
-- Release name: `Gym Atlas Coach 1.0.0 (1)`
+- Release name: `Gym Atlas Coach 1.0.6 (16)`
 - Release notes:
 
 ```text
