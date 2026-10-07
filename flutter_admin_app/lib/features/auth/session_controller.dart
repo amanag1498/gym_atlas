@@ -37,7 +37,6 @@ class SessionController extends ChangeNotifier {
   String? error;
 
   static const List<String> _allowedRoles = [
-    'platform_admin',
     'gym_owner',
     'branch_manager',
     'gym_staff',
@@ -107,30 +106,7 @@ class SessionController extends ChangeNotifier {
       );
       final firebaseUserCredential = await firebase.FirebaseAuth.instance
           .signInWithCredential(credential);
-      final idToken = await firebaseUserCredential.user?.getIdToken(true);
-      if (idToken == null || idToken.isEmpty) {
-        throw Exception('Firebase ID token was not returned.');
-      }
-
-      final repository = AuthRepository(_apiClient);
-      final session = await repository.signInWithFirebase(
-        idToken: idToken,
-        appType: 'admin',
-      );
-      if (session.token.isEmpty) {
-        throw Exception('Authentication token missing from server response.');
-      }
-
-      _apiClient.setBearerToken(session.token);
-
-      var me = await repository.fetchMe();
-      me = await _ensureAdminRole(repository, me);
-      _ensureEligibleAdmin(me);
-
-      _token = session.token;
-      user = me;
-      await _tokenStorage.writeSession(token: session.token, user: me);
-      await _fcmTokenService.registerToken();
+      await _completeFirebaseLogin(firebaseUserCredential);
     } on DioException catch (exception) {
       await _googleSafeSignOut();
       await _clearLocalState(notify: false);
@@ -141,6 +117,127 @@ class SessionController extends ChangeNotifier {
       error = userFacingError(exception).replaceFirst('Exception: ', '');
     }
 
+    loggingIn = false;
+    notifyListeners();
+  }
+
+  Future<void> loginWithApple() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) {
+      error = 'Sign in with Apple is available on iPhone and iPad.';
+      notifyListeners();
+      return;
+    }
+
+    loggingIn = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      final provider = firebase.AppleAuthProvider()
+        ..addScope('email')
+        ..addScope('name');
+      final credential = await firebase.FirebaseAuth.instance
+          .signInWithProvider(provider);
+      await _completeFirebaseLogin(credential);
+    } on DioException catch (exception) {
+      await _googleSafeSignOut();
+      await _clearLocalState(notify: false);
+      error = _mapAuthError(exception);
+    } on firebase.FirebaseAuthException catch (exception) {
+      await _googleSafeSignOut();
+      await _clearLocalState(notify: false);
+      error = _mapAppleAuthError(exception);
+    } catch (exception) {
+      await _googleSafeSignOut();
+      await _clearLocalState(notify: false);
+      error = userFacingError(exception).replaceFirst('Exception: ', '');
+    }
+
+    loggingIn = false;
+    notifyListeners();
+  }
+
+  Future<void> _completeFirebaseLogin(
+    firebase.UserCredential firebaseUserCredential,
+  ) async {
+    final idToken = await firebaseUserCredential.user?.getIdToken(true);
+    if (idToken == null || idToken.isEmpty) {
+      throw Exception('Firebase ID token was not returned.');
+    }
+
+    final repository = AuthRepository(_apiClient);
+    final session = await repository.signInWithFirebase(idToken: idToken);
+    if (session.token.isEmpty) {
+      throw Exception('Authentication token missing from server response.');
+    }
+    if (session.user.adminRoles.isEmpty) {
+      _apiClient.setBearerToken(session.token);
+      await repository.logout();
+      throw Exception(
+        'This app is only for gym owners, branch managers, and gym staff.',
+      );
+    }
+
+    _apiClient.setBearerToken(session.token);
+    var me = await repository.fetchMe();
+    me = await _ensureAdminRole(repository, me);
+    _ensureEligibleAdmin(me);
+    _token = session.token;
+    user = me;
+    await _tokenStorage.writeSession(token: session.token, user: me);
+    await _fcmTokenService.registerToken();
+  }
+
+  Future<bool> fetchDemoLoginEnabled() async {
+    try {
+      final response = await _apiClient.get(
+        '/public/app-config',
+        queryParameters: {
+          'app_type': 'admin',
+          'platform': defaultTargetPlatform == TargetPlatform.iOS
+              ? 'ios'
+              : 'android',
+        },
+      );
+      return (response['data'] as Map?)?['demo_admin_login_enabled'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> loginWithDemo({
+    required String email,
+    required String accessCode,
+  }) async {
+    loggingIn = true;
+    error = null;
+    notifyListeners();
+    try {
+      final repository = AuthRepository(_apiClient);
+      final session = await repository.signInWithDemo(
+        email: email,
+        accessCode: accessCode,
+      );
+      if (session.token.isEmpty ||
+          session.user.activeRole != 'gym_owner' ||
+          session.user.hasRole('platform_admin')) {
+        throw Exception('Admin reviewer account is unavailable.');
+      }
+      _token = session.token;
+      _apiClient.setBearerToken(session.token);
+      user = session.user;
+      await _tokenStorage.writeSession(
+        token: session.token,
+        user: session.user,
+      );
+      await _fcmTokenService.registerToken();
+    } on DioException catch (exception) {
+      await _clearLocalState(notify: false);
+      error = _mapAuthError(exception);
+    } catch (exception) {
+      await _clearLocalState(notify: false);
+      error = userFacingError(exception).replaceFirst('Exception: ', '');
+    }
     loggingIn = false;
     notifyListeners();
   }
@@ -247,6 +344,23 @@ class SessionController extends ChangeNotifier {
 
   String _mapAuthError(DioException exception) {
     return userFacingError(exception);
+  }
+
+  String _mapAppleAuthError(firebase.FirebaseAuthException exception) {
+    switch (exception.code) {
+      case 'canceled':
+      case 'web-context-canceled':
+      case 'web-context-cancelled':
+        return 'Apple sign-in cancelled.';
+      case 'operation-not-allowed':
+        return 'Sign in with Apple is not enabled yet.';
+      case 'account-exists-with-different-credential':
+        return 'An account already exists for this email. Sign in with Google first.';
+      case 'network-request-failed':
+        return 'Network error. Please check your connection and try again.';
+      default:
+        return 'Apple sign-in failed. Please try again.';
+    }
   }
 }
 

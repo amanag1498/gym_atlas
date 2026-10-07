@@ -8,17 +8,33 @@ class AuthRepository {
 
   Future<AuthSession> signInWithFirebase({
     required String idToken,
-    required String appType,
   }) async {
     final response = await _apiClient.post(
       '/public/auth/firebase/login',
       data: {
         'id_token': idToken,
         'device_name': 'flutter_admin_app',
-        'app_type': appType,
       },
     );
 
+    return AuthSession.fromJson(
+      Map<String, dynamic>.from(response['data'] as Map? ?? const {}),
+    );
+  }
+
+  Future<AuthSession> signInWithDemo({
+    required String email,
+    required String accessCode,
+  }) async {
+    final response = await _apiClient.post(
+      '/public/auth/demo/login',
+      data: {
+        'email': email.trim(),
+        'access_code': accessCode,
+        'device_name': 'flutter_admin_app_demo',
+        'app_type': 'admin',
+      },
+    );
     return AuthSession.fromJson(
       Map<String, dynamic>.from(response['data'] as Map? ?? const {}),
     );

@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 
 import '../core/theme/app_theme.dart';
 import '../features/admin/admin_shell_screen.dart';
-import '../features/admin/platform_workout_books_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/role_selector_screen.dart';
 import '../features/auth/session_controller.dart';
@@ -81,11 +80,6 @@ class _GymAdminAppState extends State<GymAdminApp> {
               initialDestinationTitle: state.uri.queryParameters['section'],
             ),
           ),
-        ),
-        GoRoute(
-          path: '/platform-admin/workout-books',
-          pageBuilder: (context, state) =>
-              _buildPage(state, const PlatformWorkoutBooksScreen()),
         ),
       ],
     );
@@ -188,7 +182,7 @@ class _GymAdminAppState extends State<GymAdminApp> {
       child: MaterialApp.router(
         scaffoldMessengerKey: _messengerKey,
         debugShowCheckedModeBanner: false,
-        title: 'Gym Command',
+        title: 'Gym Atlas Admin',
         theme: AppTheme.build(),
         routerConfig: _router,
       ),

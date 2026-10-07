@@ -32,7 +32,7 @@ class ConfirmationDialog extends StatelessWidget {
               height: 54,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFFEEA4CE), Color(0xFFC58BF2)],
+                  colors: [AppColors.primaryBright, AppColors.primary],
                 ),
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [

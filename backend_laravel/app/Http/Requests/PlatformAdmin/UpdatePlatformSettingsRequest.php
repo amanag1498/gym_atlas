@@ -31,6 +31,9 @@ class UpdatePlatformSettingsRequest extends FormRequest
             'demo_login_enabled' => ['sometimes', 'boolean'],
             'demo_member_login_email' => ['nullable', 'email', 'max:255'],
             'demo_trainer_login_email' => ['nullable', 'email', 'max:255'],
+            'demo_admin_login_enabled' => ['sometimes', 'boolean'],
+            'demo_admin_login_email' => ['nullable', 'email', 'max:255'],
+            'demo_admin_login_code' => ['nullable', 'string', 'min:12', 'max:128'],
             'maintenance_mode_enabled' => ['sometimes', 'boolean'],
             'maintenance_title' => ['sometimes', 'required', 'string', 'max:120'],
             'maintenance_message' => ['sometimes', 'required', 'string', 'max:500'],
@@ -66,6 +69,23 @@ class UpdatePlatformSettingsRequest extends FormRequest
                 } else {
                     $this->validateDemoUser($validator, 'demo_member_login_email', $memberEmail, RoleName::Member->value);
                     $this->validateDemoUser($validator, 'demo_trainer_login_email', $trainerEmail, RoleName::Trainer->value);
+                }
+            }
+
+            if (filter_var($effective['demo_admin_login_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+                $adminEmail = mb_strtolower(trim((string) ($effective['demo_admin_login_email'] ?? '')));
+                if ($adminEmail === '') {
+                    $validator->errors()->add('demo_admin_login_email', 'Choose a dedicated gym owner account for Admin demo login.');
+                } else {
+                    $this->validateDemoUser($validator, 'demo_admin_login_email', $adminEmail, RoleName::GymOwner->value);
+                    $admin = User::query()->whereRaw('LOWER(email) = ?', [$adminEmail])->first();
+                    if ($admin && ($admin->hasRole(RoleName::PlatformAdmin->value) || $admin->active_role !== RoleName::GymOwner->value || ! $admin->is_active)) {
+                        $validator->errors()->add('demo_admin_login_email', 'Use an active gym owner account without platform admin access.');
+                    }
+                }
+                if (trim((string) ($this->input('demo_admin_login_code') ?? '')) === ''
+                    && ! ($effective['demo_admin_login_code_configured'] ?? false)) {
+                    $validator->errors()->add('demo_admin_login_code', 'Set a reviewer access code of at least 12 characters.');
                 }
             }
 

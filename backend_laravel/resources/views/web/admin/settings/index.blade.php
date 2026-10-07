@@ -92,6 +92,24 @@
                         @error('demo_trainer_login_email') <div class="mt-2 text-sm text-rose-600">{{ $message }}</div> @enderror
                     </div>
 
+                    <label class="md:col-span-2 xl:col-span-6 panel-card-muted flex items-start justify-between gap-4 px-4 py-4">
+                        <span><span class="block font-semibold text-slate-950">Enable Admin app demo login</span><span class="mt-1 block text-sm text-slate-500">Allows a dedicated gym owner reviewer account to sign in with its email and access code. This setting is separate from Member and Trainer demo login.</span></span>
+                        <span><input type="hidden" name="demo_admin_login_enabled" value="0"><input type="checkbox" name="demo_admin_login_enabled" value="1" class="mt-1 h-5 w-5 rounded border-slate-300 text-teal-600" @checked(old('demo_admin_login_enabled', $settings['demo_admin_login_enabled'] ?? false))></span>
+                    </label>
+
+                    <div class="xl:col-span-3">
+                        <label class="panel-label" for="demo_admin_login_email">Admin App Demo Email</label>
+                        <input id="demo_admin_login_email" name="demo_admin_login_email" type="email" value="{{ old('demo_admin_login_email', $settings['demo_admin_login_email'] ?? '') }}" class="panel-input" placeholder="reviewer-admin@example.com" autocomplete="off">
+                        <p class="mt-2 text-xs text-slate-500">Use an active, dedicated gym owner account without platform admin access.</p>
+                        @error('demo_admin_login_email') <div class="mt-2 text-sm text-rose-600">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="xl:col-span-3">
+                        <label class="panel-label" for="demo_admin_login_code">Admin Reviewer Access Code</label>
+                        <input id="demo_admin_login_code" name="demo_admin_login_code" type="password" class="panel-input" autocomplete="new-password" placeholder="{{ ($settings['demo_admin_login_code_configured'] ?? false) ? 'Leave blank to keep current code' : 'At least 12 characters' }}">
+                        <p class="mt-2 text-xs text-slate-500">{{ ($settings['demo_admin_login_code_configured'] ?? false) ? 'A code is configured. Enter a new one only to rotate it.' : 'Set a code before enabling Admin demo login.' }}</p>
+                        @error('demo_admin_login_code') <div class="mt-2 text-sm text-rose-600">{{ $message }}</div> @enderror
+                    </div>
+
                     <div class="md:col-span-2 xl:col-span-6 mt-2 border-t border-slate-200 pt-6 dark:border-slate-700">
                         <h4 class="text-base font-semibold text-slate-950 dark:text-white">App availability</h4>
                         <p class="mt-1 text-sm text-slate-500">Block both mobile apps during maintenance or require a minimum Member/Trainer build. App config and platform administration remain available.</p>

@@ -3,6 +3,7 @@
 namespace App\Services\Platform;
 
 use App\Models\PlatformSetting;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 
 class PlatformSettingService
@@ -21,7 +22,11 @@ class PlatformSettingService
             ->mapWithKeys(fn (PlatformSetting $setting) => [$setting->key => $setting->value['value'] ?? null])
             ->all();
 
-        return array_merge($this->defaults(), $stored);
+        unset($stored['demo_admin_login_code_hash']);
+
+        return array_merge($this->defaults(), $stored, [
+            'demo_admin_login_code_configured' => $this->adminDemoCodeHash() !== null,
+        ]);
     }
 
     /**
@@ -34,6 +39,13 @@ class PlatformSettingService
         }
 
         foreach ($values as $key => $value) {
+            if ($key === 'demo_admin_login_code') {
+                if (trim((string) $value) === '') {
+                    continue;
+                }
+                $key = 'demo_admin_login_code_hash';
+                $value = Hash::make((string) $value);
+            }
             PlatformSetting::query()->updateOrCreate(
                 ['key' => $key],
                 ['value' => ['value' => $value]],
@@ -41,6 +53,17 @@ class PlatformSettingService
         }
 
         return $this->all();
+    }
+
+    public function adminDemoCodeHash(): ?string
+    {
+        if (! Schema::hasTable('platform_settings')) {
+            return null;
+        }
+
+        return PlatformSetting::query()
+            ->where('key', 'demo_admin_login_code_hash')
+            ->first()?->value['value'] ?? null;
     }
 
     /**
@@ -62,6 +85,9 @@ class PlatformSettingService
             'demo_login_enabled' => false,
             'demo_member_login_email' => null,
             'demo_trainer_login_email' => null,
+            'demo_admin_login_enabled' => false,
+            'demo_admin_login_email' => null,
+            'demo_admin_login_code_configured' => false,
             'maintenance_mode_enabled' => false,
             'maintenance_title' => 'A quick tune-up is underway',
             'maintenance_message' => 'Atlas is temporarily unavailable while we make things better. Please try again shortly.',
@@ -89,7 +115,7 @@ class PlatformSettingService
     public function publicAppConfig(string $appType, string $platform, int $currentBuild = 0): array
     {
         $values = $this->all();
-        $appType = in_array($appType, ['member', 'trainer'], true) ? $appType : 'member';
+        $appType = in_array($appType, ['member', 'trainer', 'admin'], true) ? $appType : 'member';
         $platform = in_array($platform, ['android', 'ios', 'web', 'desktop'], true) ? $platform : 'android';
         $isStorePlatform = in_array($platform, ['android', 'ios'], true);
         $prefix = "{$appType}_{$platform}";
@@ -99,6 +125,8 @@ class PlatformSettingService
 
         return [
             'demo_login_enabled' => (bool) ($values['demo_login_enabled'] ?? false),
+            'demo_admin_login_enabled' => $appType === 'admin'
+                && (bool) ($values['demo_admin_login_enabled'] ?? false),
             'app_type' => $appType,
             'platform' => $platform,
             'maintenance_mode_enabled' => (bool) ($values['maintenance_mode_enabled'] ?? false),

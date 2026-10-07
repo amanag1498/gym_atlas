@@ -6,7 +6,9 @@ use App\Enums\RoleName;
 use App\Models\PlatformSetting;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
+use App\Services\Platform\PlatformSettingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class DemoLoginTest extends TestCase
@@ -156,6 +158,76 @@ class DemoLoginTest extends TestCase
             'name' => 'trainer-review',
             'abilities' => '["role:trainer"]',
         ]);
+    }
+
+    public function test_admin_demo_requires_separate_switch_and_hashed_code_for_dedicated_gym_owner(): void
+    {
+        $owner = User::factory()->create([
+            'email' => 'admin-reviewer@example.com',
+            'active_role' => RoleName::GymOwner->value,
+            'is_active' => true,
+        ]);
+        $owner->assignRole(RoleName::GymOwner->value);
+        $settings = app(PlatformSettingService::class);
+        $settings->update([
+            'demo_admin_login_email' => 'admin-reviewer@example.com',
+            'demo_admin_login_code' => 'reviewer-access-2026',
+        ]);
+
+        $payload = [
+            'email' => 'admin-reviewer@example.com',
+            'access_code' => 'reviewer-access-2026',
+            'app_type' => 'admin',
+        ];
+        $this->postJson('/api/public/auth/demo/login', $payload)->assertForbidden();
+
+        $settings->update(['demo_admin_login_enabled' => true]);
+        $this->postJson('/api/public/auth/demo/login', array_merge($payload, [
+            'access_code' => 'incorrect-code',
+        ]))->assertForbidden();
+        $this->assertTrue($settings->all()['demo_admin_login_code_configured']);
+        $this->assertTrue(Hash::check('reviewer-access-2026', $settings->adminDemoCodeHash()));
+        $this->assertArrayNotHasKey('demo_admin_login_code_hash', $settings->all());
+        $this->assertArrayNotHasKey('demo_admin_login_code', $settings->all());
+        $this->getJson('/api/public/app-config?app_type=admin&platform=ios')
+            ->assertOk()
+            ->assertJsonPath('data.demo_admin_login_enabled', true)
+            ->assertJsonMissingPath('data.demo_admin_login_email');
+
+        $response = $this->postJson('/api/public/auth/demo/login', $payload)
+            ->assertOk()
+            ->assertJsonPath('data.user.id', $owner->id)
+            ->assertJsonPath('data.user.active_role', RoleName::GymOwner->value);
+        $this->assertNotEmpty($response->json('data.token'));
+        $this->assertDatabaseHas('personal_access_tokens', [
+            'tokenable_id' => $owner->id,
+            'abilities' => '["role:gym_owner"]',
+        ]);
+        $this->withToken($response->json('data.token'))
+            ->getJson('/api/public/me')
+            ->assertOk()
+            ->assertJsonPath('data.active_role', RoleName::GymOwner->value);
+    }
+
+    public function test_admin_demo_rejects_a_platform_admin_even_with_correct_code(): void
+    {
+        $owner = User::factory()->create([
+            'email' => 'admin-reviewer@example.com',
+            'active_role' => RoleName::GymOwner->value,
+            'is_active' => true,
+        ]);
+        $owner->assignRole([RoleName::GymOwner->value, RoleName::PlatformAdmin->value]);
+        app(PlatformSettingService::class)->update([
+            'demo_admin_login_enabled' => true,
+            'demo_admin_login_email' => 'admin-reviewer@example.com',
+            'demo_admin_login_code' => 'reviewer-access-2026',
+        ]);
+
+        $this->postJson('/api/public/auth/demo/login', [
+            'email' => 'admin-reviewer@example.com',
+            'access_code' => 'reviewer-access-2026',
+            'app_type' => 'admin',
+        ])->assertForbidden();
     }
 
     private function setPlatformSetting(string $key, mixed $value): void

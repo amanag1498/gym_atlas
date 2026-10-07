@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_gradients.dart';
+import '../theme/app_colors.dart';
 
 class AnimatedPageWrapper extends StatelessWidget {
   const AnimatedPageWrapper({
@@ -35,7 +36,7 @@ class AnimatedPageWrapper extends StatelessWidget {
             right: -70,
             child: _SoftBlob(
               size: 260,
-              color: const Color(0xFF92A3FD).withValues(alpha: 0.18),
+              color: AppColors.primary.withValues(alpha: 0.10),
             ),
           ),
           Positioned(
@@ -43,7 +44,7 @@ class AnimatedPageWrapper extends StatelessWidget {
             left: -90,
             child: _SoftBlob(
               size: 300,
-              color: const Color(0xFFC58BF2).withValues(alpha: 0.16),
+              color: AppColors.accent.withValues(alpha: 0.08),
             ),
           ),
           SafeArea(

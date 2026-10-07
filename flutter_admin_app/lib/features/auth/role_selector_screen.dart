@@ -67,8 +67,6 @@ class RoleSelectorScreen extends StatelessWidget {
 
   String _descriptionFor(String role) {
     switch (role) {
-      case 'platform_admin':
-        return 'Platform-wide dashboards, gym approvals, facilities, banners, and listings.';
       case 'gym_owner':
         return 'Gym-wide operations, branches, staffing, memberships, billing, attendance, and announcements.';
       case 'branch_manager':

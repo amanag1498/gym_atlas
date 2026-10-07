@@ -16,7 +16,6 @@ import 'admin_repository.dart';
 import 'diet_plans_workspace.dart';
 import 'communications_workspace.dart';
 import 'notification_preferences_sheet.dart';
-import 'platform_workout_books_screen.dart';
 
 Map<String, dynamic> _recordMap(Object? value) {
   return Map<String, dynamic>.from(value as Map? ?? const {});
@@ -31,8 +30,7 @@ bool _isPermissionError(Object? error) {
 }
 
 bool _hasAnyAdminPermission(AppUser appUser, List<String> permissions) {
-  if (appUser.activeRole == 'platform_admin' ||
-      appUser.activeRole == 'gym_owner') {
+  if (appUser.activeRole == 'gym_owner') {
     return true;
   }
   if (appUser.activeRole == 'branch_manager') {
@@ -87,18 +85,14 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
   }
 
   Future<void> _openNotificationPreferences() async {
-    final role = context.read<SessionController>().user?.activeRole ?? '';
     final changed = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => AdminNotificationPreferencesSheet(
-        title: role == 'platform_admin'
-            ? 'Platform alert preferences'
-            : 'Gym operations alert preferences',
-        subtitle: role == 'platform_admin'
-            ? 'Control which platform approvals, support, and moderation alerts reach your operations desk.'
-            : 'Control renewal, dues, lead, and retention alerts for your current operating role.',
+        title: 'Gym operations alert preferences',
+        subtitle:
+            'Control renewal, dues, lead, and retention alerts for your current operating role.',
         onLoad: _repository.fetchNotificationPreferences,
         onSave: _repository.updateNotificationPreferences,
       ),
@@ -110,108 +104,6 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
   }
 
   List<_AdminDestination> _destinations(String role) {
-    if (role == 'platform_admin') {
-      return const [
-        _AdminDestination('Dashboard', Icons.space_dashboard_rounded),
-        _AdminDestination(
-          'Gyms',
-          Icons.approval_rounded,
-          endpoint: '/platform-admin/gyms',
-          formType: _AdminFormType.platformGym,
-        ),
-        _AdminDestination(
-          'Users',
-          Icons.groups_rounded,
-          endpoint: '/platform-admin/users',
-        ),
-        _AdminDestination(
-          'Privacy Requests',
-          Icons.privacy_tip_rounded,
-          endpoint: '/platform-admin/privacy-requests',
-        ),
-        _AdminDestination(
-          'Gym Owners',
-          Icons.badge_rounded,
-          endpoint: '/platform-admin/gym-owners',
-          formType: _AdminFormType.platformGymOwner,
-        ),
-        _AdminDestination(
-          'Trainers',
-          Icons.fitness_center_rounded,
-          endpoint: '/platform-admin/trainers',
-        ),
-        _AdminDestination(
-          'Members',
-          Icons.directions_run_rounded,
-          endpoint: '/platform-admin/members',
-        ),
-        _AdminDestination(
-          'Facilities',
-          Icons.spa_rounded,
-          endpoint: '/platform-admin/facilities',
-          formType: _AdminFormType.platformFacility,
-        ),
-        _AdminDestination(
-          'Cities',
-          Icons.location_city_rounded,
-          endpoint: '/platform-admin/cities',
-        ),
-        _AdminDestination(
-          'Fitness Goals',
-          Icons.flag_circle_rounded,
-          endpoint: '/platform-admin/fitness-goals',
-        ),
-        _AdminDestination(
-          'Trainer Specializations',
-          Icons.military_tech_rounded,
-          endpoint: '/platform-admin/trainer-specializations',
-        ),
-        _AdminDestination(
-          'Banners',
-          Icons.view_day_rounded,
-          endpoint: '/platform-admin/banners',
-        ),
-        _AdminDestination(
-          'Exercises',
-          Icons.fitness_center_rounded,
-          endpoint: '/platform-admin/exercises',
-        ),
-        _AdminDestination(
-          'Workout Books',
-          Icons.menu_book_rounded,
-          endpoint: '/platform-admin/workout-books',
-        ),
-        _AdminDestination('Diet Templates', Icons.restaurant_menu_rounded),
-        _AdminDestination(
-          'Listings',
-          Icons.view_carousel_rounded,
-          endpoint: '/platform-admin/listings',
-        ),
-        _AdminDestination(
-          'Reports',
-          Icons.analytics_rounded,
-          formType: _AdminFormType.platformReports,
-        ),
-        _AdminDestination(
-          'Announcements',
-          Icons.campaign_rounded,
-          endpoint: '/platform-admin/announcements',
-        ),
-        _AdminDestination('Communications', Icons.forum_rounded),
-        _AdminDestination(
-          'Notifications',
-          Icons.notifications_active_rounded,
-          endpoint: '/notifications',
-        ),
-        _AdminDestination('Settings', Icons.settings_rounded),
-        _AdminDestination(
-          'Audit Logs',
-          Icons.history_rounded,
-          endpoint: '/platform-admin/audit-logs',
-        ),
-      ];
-    }
-
     return const [
       _AdminDestination('Dashboard', Icons.space_dashboard_rounded),
       _AdminDestination(
@@ -312,10 +204,6 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
   }
 
   bool _isDestinationAllowed(AppUser user, _AdminDestination destination) {
-    if (user.activeRole == 'platform_admin') {
-      return true;
-    }
-
     if (user.activeRole == 'gym_owner') {
       return true;
     }
@@ -443,12 +331,6 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
               destinations: destinations,
               selectedIndex: safeSelectedIndex,
               onSelected: (value) {
-                final destination = destinations[value];
-                if (destination.title == 'Workout Books' &&
-                    user.activeRole == 'platform_admin') {
-                  context.go('/platform-admin/workout-books');
-                  return;
-                }
                 setState(() => _selectedIndex = value);
               },
             ),
@@ -487,8 +369,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                       repository: _repository,
                       onOpenMemberDetail: _openMemberDetail,
                     )
-                  : selected.title == 'Announcements' &&
-                        user.activeRole != 'platform_admin'
+                  : selected.title == 'Announcements'
                   ? _AnnouncementsWorkspaceSection(
                       key: ValueKey(selected.title),
                       appUser: user,
@@ -500,53 +381,25 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                       appUser: user,
                       repository: _repository,
                     )
-                  : selected.title == 'Workout Books' &&
-                        user.activeRole == 'platform_admin'
-                  ? PlatformWorkoutBooksWorkspace(
-                      key: ValueKey(selected.title),
-                      appUser: user,
-                      repository: _repository,
-                    )
-                  : selected.title == 'Privacy Requests' &&
-                        user.activeRole == 'platform_admin'
-                  ? _PlatformPrivacyRequestsWorkspace(
-                      key: ValueKey(selected.title),
-                      repository: _repository,
-                    )
-                  : (selected.title == 'Diet Templates' &&
-                            user.activeRole == 'platform_admin') ||
-                        (selected.title == 'Diet Plans' &&
-                            user.activeRole != 'platform_admin')
+                  : selected.title == 'Diet Plans'
                   ? DietPlansWorkspace(
                       key: ValueKey(selected.title),
                       appUser: user,
                       repository: _repository,
                     )
-                  : selected.title == 'Notifications' &&
-                        user.activeRole != 'platform_admin'
+                  : selected.title == 'Notifications'
                   ? _NotificationsWorkspaceSection(
                       key: ValueKey(selected.title),
                       appUser: user,
                       repository: _repository,
                     )
-                  : selected.title == 'Reports' &&
-                        user.activeRole != 'platform_admin'
+                  : selected.title == 'Reports'
                   ? _GymReportsWorkspaceSection(
                       key: ValueKey(selected.title),
                       appUser: user,
                       repository: _repository,
                     )
-                  : selected.title == 'Settings' &&
-                        user.activeRole == 'platform_admin'
-                  ? _PlatformSettingsWorkspaceSection(
-                      key: ValueKey(selected.title),
-                      repository: _repository,
-                      onOpenNotificationPreferences:
-                          _openNotificationPreferences,
-                      onOpenSection: _openDashboardSection,
-                    )
-                  : selected.title == 'Settings' &&
-                        user.activeRole != 'platform_admin'
+                  : selected.title == 'Settings'
                   ? _GymSettingsWorkspaceSection(
                       key: ValueKey(selected.title),
                       appUser: user,
@@ -555,8 +408,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                           _openNotificationPreferences,
                       onOpenSection: _openDashboardSection,
                     )
-                  : selected.title == 'Audit Logs' &&
-                        user.activeRole != 'platform_admin'
+                  : selected.title == 'Audit Logs'
                   ? _GymAuditLogsWorkspaceSection(
                       key: ValueKey(selected.title),
                       appUser: user,
@@ -784,14 +636,14 @@ class _AdminFitPageHeader extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
+            colors: [AppColors.primaryBright, AppColors.primary],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(30),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF92A3FD).withValues(alpha: 0.28),
+              color: AppColors.primary.withValues(alpha: 0.28),
               blurRadius: 28,
               offset: const Offset(0, 16),
             ),
@@ -835,50 +687,41 @@ class _AdminFitPageHeader extends StatelessWidget {
                 ],
               ),
             ),
-            _AdminFitHeaderButton(
-              icon: Icons.tune_rounded,
-              onTap: onPreferences,
+            PopupMenuButton<String>(
+              tooltip: 'Admin actions',
+              icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+              onSelected: (action) {
+                switch (action) {
+                  case 'preferences':
+                    onPreferences();
+                    break;
+                  case 'refresh':
+                    onRefresh();
+                    break;
+                  case 'roles':
+                    onRoles?.call();
+                    break;
+                  case 'logout':
+                    onLogout();
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'preferences',
+                  child: Text('Alert preferences'),
+                ),
+                const PopupMenuItem(value: 'refresh', child: Text('Refresh')),
+                if (onRoles != null)
+                  const PopupMenuItem(
+                    value: 'roles',
+                    child: Text('Switch role'),
+                  ),
+                const PopupMenuItem(value: 'logout', child: Text('Log out')),
+              ],
             ),
-            const SizedBox(width: 8),
-            _AdminFitHeaderButton(
-              icon: Icons.refresh_rounded,
-              onTap: onRefresh,
-            ),
-            if (onRoles != null) ...[
-              const SizedBox(width: 8),
-              _AdminFitHeaderButton(
-                icon: Icons.swap_horiz_rounded,
-                onTap: onRoles!,
-              ),
-            ],
-            const SizedBox(width: 8),
-            _AdminFitHeaderButton(icon: Icons.logout_rounded, onTap: onLogout),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _AdminFitHeaderButton extends StatelessWidget {
-  const _AdminFitHeaderButton({required this.icon, required this.onTap});
-
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Icon(icon, color: Colors.white, size: 20),
       ),
     );
   }
@@ -916,7 +759,7 @@ class _AdminFitSectionNav extends StatelessWidget {
               decoration: BoxDecoration(
                 gradient: selected
                     ? const LinearGradient(
-                        colors: [Color(0xFFEEA4CE), Color(0xFFC58BF2)],
+                        colors: [AppColors.primaryBright, AppColors.primary],
                       )
                     : null,
                 color: selected ? null : AppColors.surface,
@@ -927,7 +770,7 @@ class _AdminFitSectionNav extends StatelessWidget {
                 boxShadow: [
                   BoxShadow(
                     color: selected
-                        ? const Color(0xFFC58BF2).withValues(alpha: 0.22)
+                        ? AppColors.primary.withValues(alpha: 0.22)
                         : AppColors.shadow,
                     blurRadius: selected ? 18 : 12,
                     offset: const Offset(0, 8),
@@ -2801,7 +2644,7 @@ class __CollectionSectionState extends State<_CollectionSection> {
                     height: 42,
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFF9DCEFF), Color(0xFF92A3FD)],
+                        colors: [AppColors.primaryBright, AppColors.primary],
                       ),
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -14015,7 +13858,6 @@ class _GymSettingsWorkspaceSectionState
 
 class _PlatformSettingsWorkspaceSection extends StatefulWidget {
   const _PlatformSettingsWorkspaceSection({
-    super.key,
     required this.repository,
     required this.onOpenNotificationPreferences,
     required this.onOpenSection,
@@ -20319,7 +20161,6 @@ class _CollectionState {
 
 class _PlatformPrivacyRequestsWorkspace extends StatefulWidget {
   const _PlatformPrivacyRequestsWorkspace({
-    super.key,
     required this.repository,
   });
 

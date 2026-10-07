@@ -6,13 +6,13 @@ class AppGradients {
   static const pageBackground = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: <Color>[Color(0xFFFFFFFF), Color(0xFFF7F8F8), Color(0xFFEFF4FF)],
+    colors: <Color>[Color(0xFFFFFFFF), Color(0xFFF8FAFC), Color(0xFFEFF4FF)],
   );
 
   static const cardGlow = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: <Color>[Color(0xFFFFFFFF), Color(0xFFF7F8F8)],
+    colors: <Color>[Color(0xFFFFFFFF), Color(0xFFF8FAFC)],
   );
 
   static const primaryButton = LinearGradient(
@@ -24,7 +24,7 @@ class AppGradients {
   static const secondaryButton = LinearGradient(
     begin: Alignment.centerLeft,
     end: Alignment.centerRight,
-    colors: <Color>[AppColors.accentRose, AppColors.accent],
+    colors: <Color>[AppColors.accentPurple, AppColors.primary],
   );
 
   static const statAccent = LinearGradient(

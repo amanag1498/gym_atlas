@@ -15,6 +15,60 @@ class FirebaseLoginTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_admin_app_login_accepts_an_existing_gym_owner_and_rejects_new_accounts(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        $owner = User::factory()->create([
+            'email' => 'owner@example.com',
+            'active_role' => RoleName::GymOwner->value,
+            'is_active' => true,
+        ]);
+        $owner->assignRole(RoleName::GymOwner->value);
+        $member = User::factory()->create([
+            'email' => 'member@example.com',
+            'active_role' => RoleName::Member->value,
+            'is_active' => true,
+        ]);
+        $member->assignRole(RoleName::Member->value);
+        $this->mock(FirebaseTokenVerifier::class, function ($mock): void {
+            $mock->shouldReceive('verify')->times(3)->andReturnUsing(function (string $token): array {
+                $email = match ($token) {
+                    'known.token' => 'owner@example.com',
+                    'member.token' => 'member@example.com',
+                    default => 'unknown@example.com',
+                };
+
+                return [
+                    'sub' => 'firebase-'.$email,
+                    'email' => $email,
+                    'name' => 'Gym Owner',
+                    'email_verified' => true,
+                    'firebase' => ['sign_in_provider' => 'google.com'],
+                ];
+            });
+        });
+
+        $this->postJson('/api/public/auth/firebase/login', [
+            'id_token' => 'known.token',
+            'app_type' => 'admin',
+            'device_name' => 'flutter_admin_app',
+        ])->assertOk()
+            ->assertJsonPath('data.user.id', $owner->id)
+            ->assertJsonPath('data.user.active_role', RoleName::GymOwner->value);
+
+        $this->postJson('/api/public/auth/firebase/login', [
+            'id_token' => 'unknown.token',
+            'app_type' => 'admin',
+        ])->assertUnprocessable();
+        $this->assertDatabaseMissing('users', ['email' => 'unknown@example.com']);
+
+        $this->postJson('/api/public/auth/firebase/login', [
+            'id_token' => 'member.token',
+            'app_type' => 'admin',
+        ])->assertUnprocessable();
+        $this->assertFalse($member->fresh()->hasRole(RoleName::GymOwner->value));
+    }
+
     public function test_it_logs_in_a_user_with_a_verified_firebase_token_and_issues_sanctum_token(): void
     {
         $this->seed(PermissionSeeder::class);

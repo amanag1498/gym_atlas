@@ -30,6 +30,7 @@ class FirebaseAuthService
         $user = $this->resolveUser(
             $idToken,
             'auth.firebase.login',
+            allowAutoProvision: $appType !== 'admin',
             appType: $appType,
         );
 
@@ -117,6 +118,17 @@ class FirebaseAuthService
 
             if (in_array($user->email, config('gym.platform_admin_emails', []), true)) {
                 $user->assignRole(Role::findOrCreate(RoleName::PlatformAdmin->value, 'sanctum'));
+            }
+
+            if ($appType === 'admin' && ! $user->hasAnyRole([
+                RoleName::PlatformAdmin->value,
+                RoleName::GymOwner->value,
+                RoleName::BranchManager->value,
+                RoleName::GymStaff->value,
+            ])) {
+                throw ValidationException::withMessages([
+                    'email' => ['This account does not have Admin app access.'],
+                ]);
             }
 
             $this->activeRoleManager->ensureValidActiveRole($user);

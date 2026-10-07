@@ -10,6 +10,7 @@ use App\Services\Platform\PlatformSettingService;
 use App\Services\Privacy\ConsentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
 class DemoAuthController extends Controller
@@ -22,20 +23,24 @@ class DemoAuthController extends Controller
         $validated = $request->validate([
             'email' => ['required', 'email:rfc', 'max:255'],
             'device_name' => ['nullable', 'string', 'max:100'],
-            'app_type' => ['required', Rule::in([RoleName::Member->value, RoleName::Trainer->value])],
+            'app_type' => ['required', Rule::in([RoleName::Member->value, RoleName::Trainer->value, 'admin'])],
+            'access_code' => ['required_if:app_type,admin', 'nullable', 'string', 'max:128'],
             'accepted_terms' => ['sometimes', 'boolean'],
             'enable_optional_features' => ['sometimes', 'boolean'],
         ]);
 
         $values = $settings->all();
-        if (! (bool) ($values['demo_login_enabled'] ?? false)) {
+        $appType = (string) $validated['app_type'];
+        $adminDemo = $appType === 'admin';
+        if (! (bool) ($values[$adminDemo ? 'demo_admin_login_enabled' : 'demo_login_enabled'] ?? false)) {
             return $this->unavailable();
         }
 
-        $appType = (string) $validated['app_type'];
-        $configuredEmailKey = $appType === RoleName::Trainer->value
-            ? 'demo_trainer_login_email'
-            : 'demo_member_login_email';
+        $configuredEmailKey = $adminDemo
+            ? 'demo_admin_login_email'
+            : ($appType === RoleName::Trainer->value
+                ? 'demo_trainer_login_email'
+                : 'demo_member_login_email');
         $submittedEmail = mb_strtolower(trim((string) $validated['email']));
         $configuredEmail = mb_strtolower(trim((string) ($values[$configuredEmailKey] ?? '')));
 
@@ -49,11 +54,22 @@ class DemoAuthController extends Controller
             return $this->unavailable();
         }
 
+        if ($adminDemo) {
+            $codeHash = $settings->adminDemoCodeHash();
+            if (! $codeHash || ! Hash::check((string) ($validated['access_code'] ?? ''), $codeHash)) {
+                Log::warning('AUTH_DEMO_ADMIN_CODE_REJECTED', ['ip' => $request->ip()]);
+
+                return $this->unavailable();
+            }
+        }
+
         $user = User::query()
             ->whereRaw('LOWER(email) = ?', [$configuredEmail])
             ->first();
 
-        if (! $user || ! $user->hasRole($appType)) {
+        if (! $user || ! $user->hasRole($adminDemo ? RoleName::GymOwner->value : $appType)
+            || ($adminDemo && ($user->hasRole(RoleName::PlatformAdmin->value)
+                || $user->active_role !== RoleName::GymOwner->value))) {
             Log::warning('AUTH_DEMO_USER_UNAVAILABLE', [
                 'app_type' => $appType,
                 'has_user' => (bool) $user,
@@ -92,7 +108,7 @@ class DemoAuthController extends Controller
             );
         }
         $session = [
-            'token' => $user->createToken($deviceName, ['role:'.$appType])->plainTextToken,
+            'token' => $user->createToken($deviceName, ['role:'.($adminDemo ? RoleName::GymOwner->value : $appType)])->plainTextToken,
             'user' => $user->fresh(['roles', 'permissions']),
         ];
 
@@ -107,7 +123,7 @@ class DemoAuthController extends Controller
 
     private function unavailable()
     {
-        return $this->error('Demo login is unavailable for this email.', 403, [
+        return $this->error('Demo login is unavailable.', 403, [
             'code' => 'demo_login_unavailable',
         ]);
     }

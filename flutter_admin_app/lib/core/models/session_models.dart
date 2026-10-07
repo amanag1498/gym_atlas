@@ -23,13 +23,11 @@ class AppUser {
   final List<Map<String, dynamic>> branches;
   final String? avatar;
 
-  bool get isPlatformAdmin => activeRole == 'platform_admin';
   bool get isGymSideAdmin =>
-      ['gym_owner', 'branch_manager', 'gym_staff'].contains(activeRole);
+    ['gym_owner', 'branch_manager', 'gym_staff'].contains(activeRole);
   List<String> get adminRoles => roles
       .where(
         (role) => const [
-          'platform_admin',
           'gym_owner',
           'branch_manager',
           'gym_staff',
