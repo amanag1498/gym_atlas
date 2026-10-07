@@ -52,7 +52,7 @@ export const initializePanelNavigation = (initializePage) => {
         });
     };
 
-    const navigate = async (url, { pop = false, scrollY = 0 } = {}) => {
+    const navigate = async (url, { pop = false, refresh = false, scrollY = 0 } = {}) => {
         currentRequest?.abort();
         const controller = new AbortController();
         currentRequest = controller;
@@ -63,6 +63,7 @@ export const initializePanelNavigation = (initializePage) => {
         try {
             const response = await fetch(url, {
                 credentials: 'same-origin',
+                cache: refresh ? 'no-store' : 'default',
                 headers: { Accept: 'text/html' },
                 signal: controller.signal,
             });
@@ -96,7 +97,7 @@ export const initializePanelNavigation = (initializePage) => {
                 if (modalToken) modalToken.value = token;
             }
 
-            if (!pop) history.pushState(pageState(0), '', response.url);
+            if (!pop && !refresh) history.pushState(pageState(0), '', response.url);
             if (window.innerWidth < 1280 && document.body.classList.contains('panel-sidebar-mobile-open')) {
                 document.getElementById('sidebar-close-mobile')?.click();
             }
@@ -124,8 +125,11 @@ export const initializePanelNavigation = (initializePage) => {
         const destination = new URL(link.href, window.location.href);
         if (destination.origin !== window.location.origin || !destination.pathname.startsWith(routePrefix)) return;
         event.preventDefault();
-        if (destination.href === window.location.href) return;
         saveScroll();
+        if (destination.href === window.location.href) {
+            void navigate(destination.href, { refresh: true });
+            return;
+        }
         void navigate(destination.href);
     });
 
