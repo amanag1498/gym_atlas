@@ -52,6 +52,7 @@ class AdminShellScreen extends StatefulWidget {
 class _AdminShellScreenState extends State<AdminShellScreen> {
   late AdminRepository _repository;
   int _selectedIndex = 0;
+  int _navigationRevision = 0;
   bool _initialDestinationApplied = false;
   bool _loading = true;
   String? _error;
@@ -331,11 +332,20 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
               destinations: destinations,
               selectedIndex: safeSelectedIndex,
               onSelected: (value) {
-                setState(() => _selectedIndex = value);
+                setState(() {
+                  _selectedIndex = value;
+                  _navigationRevision++;
+                });
+                if (destinations[value].title == 'Dashboard') {
+                  _loadDashboard();
+                }
               },
             ),
           Expanded(
             child: Padding(
+              key: ValueKey(
+                'admin-section-${selected.title}-$_navigationRevision',
+              ),
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
               child: destinations.isEmpty
                   ? const EmptyState(
